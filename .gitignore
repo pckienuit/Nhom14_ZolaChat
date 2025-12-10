@@ -133,3 +133,6 @@ backup_react/
 # Markdown files (ignore all except README.md)
 *.md
 !README.md
+
+# Firebase
+google-services.json

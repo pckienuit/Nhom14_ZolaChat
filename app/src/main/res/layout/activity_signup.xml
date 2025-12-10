@@ -81,6 +81,13 @@
         android:textStyle="bold"
         android:backgroundTint="@color/colorPrimary" />
 
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/loginTextView"
         android:layout_width="wrap_content"
