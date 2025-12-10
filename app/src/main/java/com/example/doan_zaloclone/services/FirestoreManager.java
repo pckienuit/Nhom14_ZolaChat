@@ -4,13 +4,19 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.models.User;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.QuerySnapshot;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -166,6 +172,128 @@ public class FirestoreManager {
         return db;
     }
 
+    /**
+     * Tìm kiếm user theo email
+     *
+     * @param email    Email cần tìm
+     * @param listener Callback để xử lý kết quả
+     */
+    public void searchUserByEmail(@NonNull String email,
+                                  @NonNull OnUserSearchListener listener) {
+        db.collection(COLLECTION_USERS)
+                .whereEqualTo("email", email.trim().toLowerCase())
+                .get()
+                .addOnSuccessListener(new OnSuccessListener<QuerySnapshot>() {
+                    @Override
+                    public void onSuccess(QuerySnapshot querySnapshot) {
+                        List<User> users = new ArrayList<>();
+                        for (DocumentSnapshot document : querySnapshot.getDocuments()) {
+                            User user = document.toObject(User.class);
+                            if (user != null) {
+                                users.add(user);
+                            }
+                        }
+                        Log.d(TAG, "Found " + users.size() + " users with email: " + email);
+                        listener.onSuccess(users);
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.e(TAG, "Error searching user by email: " + email, e);
+                        listener.onFailure(e);
+                    }
+                });
+    }
+
+    /**
+     * Kiểm tra xem đã có conversation giữa 2 users chưa
+     *
+     * @param currentUserId ID của user hiện tại
+     * @param otherUserId   ID của user kia
+     * @param listener      Callback để xử lý kết quả
+     */
+    public void findExistingConversation(@NonNull String currentUserId,
+                                        @NonNull String otherUserId,
+                                        @NonNull OnConversationFoundListener listener) {
+        // Tìm conversations có chứa cả 2 user IDs
+        db.collection(COLLECTION_CONVERSATIONS)
+                .whereArrayContains("memberIds", currentUserId)
+                .get()
+                .addOnSuccessListener(new OnSuccessListener<QuerySnapshot>() {
+                    @Override
+                    public void onSuccess(QuerySnapshot querySnapshot) {
+                        // Lọc thêm để tìm conversation có cả 2 users
+                        for (DocumentSnapshot document : querySnapshot.getDocuments()) {
+                            Conversation conversation = document.toObject(Conversation.class);
+                            if (conversation != null && 
+                                conversation.getMemberIds() != null &&
+                                conversation.getMemberIds().contains(otherUserId)) {
+                                // Tìm thấy conversation
+                                Log.d(TAG, "Found existing conversation: " + conversation.getId());
+                                listener.onFound(conversation);
+                                return;
+                            }
+                        }
+                        // Không tìm thấy
+                        Log.d(TAG, "No existing conversation found");
+                        listener.onNotFound();
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.e(TAG, "Error finding conversation", e);
+                        listener.onFailure(e);
+                    }
+                });
+    }
+
+    /**
+     * Tạo conversation mới giữa 2 users
+     *
+     * @param currentUserId   ID của user hiện tại
+     * @param currentUserName Tên của user hiện tại
+     * @param otherUserId     ID của user kia
+     * @param otherUserName   Tên của user kia
+     * @param listener        Callback để xử lý kết quả
+     */
+    public void createConversation(@NonNull String currentUserId,
+                                  @NonNull String currentUserName,
+                                  @NonNull String otherUserId,
+                                  @NonNull String otherUserName,
+                                  @NonNull OnConversationCreatedListener listener) {
+        // Tạo conversation mới
+        DocumentReference newConversationRef = db.collection(COLLECTION_CONVERSATIONS).document();
+        String conversationId = newConversationRef.getId();
+        
+        List<String> memberIds = Arrays.asList(currentUserId, otherUserId);
+        
+        Conversation conversation = new Conversation(
+                conversationId,
+                otherUserName, // Tên hiển thị là tên của user kia
+                "",
+                System.currentTimeMillis(),
+                memberIds
+        );
+
+        newConversationRef.set(conversation)
+                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        Log.d(TAG, "Conversation created successfully: " + conversationId);
+                        listener.onSuccess(conversation);
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.e(TAG, "Error creating conversation", e);
+                        listener.onFailure(e);
+                    }
+                });
+    }
+
     // Callback Interfaces
 
     /**
@@ -182,6 +310,35 @@ public class FirestoreManager {
      */
     public interface OnDeviceTokenUpdatedListener {
         void onSuccess();
+
+        void onFailure(Exception e);
+    }
+
+    /**
+     * Listener cho việc tìm kiếm user
+     */
+    public interface OnUserSearchListener {
+        void onSuccess(List<User> users);
+
+        void onFailure(Exception e);
+    }
+
+    /**
+     * Listener cho việc tìm conversation
+     */
+    public interface OnConversationFoundListener {
+        void onFound(Conversation conversation);
+
+        void onNotFound();
+
+        void onFailure(Exception e);
+    }
+
+    /**
+     * Listener cho việc tạo conversation
+     */
+    public interface OnConversationCreatedListener {
+        void onSuccess(Conversation conversation);
 
         void onFailure(Exception e);
     }

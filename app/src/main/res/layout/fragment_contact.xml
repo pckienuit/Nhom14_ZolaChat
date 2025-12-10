@@ -9,17 +9,80 @@
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Friend Requests"
+        android:text="Contacts"
         android:textSize="24sp"
         android:textStyle="bold"
         android:padding="16dp"
         android:background="@color/colorPrimary"
         android:textColor="@color/white" />
 
+    <!-- Search Section -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:background="@color/white"
+        android:elevation="4dp">
+
+        <EditText
+            android:id="@+id/searchEmailEditText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Search by email..."
+            android:inputType="textEmailAddress"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/searchButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="Search"
+            android:textColor="@color/white"
+            android:backgroundTint="@color/colorPrimary" />
+
+    </LinearLayout>
+
+    <!-- Search Results RecyclerView -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/searchResultsRecyclerView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:visibility="gone"
+        android:clipToPadding="false" />
+
+    <!-- Divider -->
+    <View
+        android:id="@+id/divider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/textSecondary"
+        android:layout_marginTop="8dp"
+        android:visibility="gone" />
+
+    <!-- Friend Requests Section Header -->
+    <TextView
+        android:id="@+id/friendRequestsHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Friend Requests"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:padding="16dp"
+        android:textColor="#000000" />
+
+    <!-- Friend Requests RecyclerView -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/friendRequestsRecyclerView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:paddingTop="8dp"
         android:paddingBottom="8dp"
         android:clipToPadding="false" />
