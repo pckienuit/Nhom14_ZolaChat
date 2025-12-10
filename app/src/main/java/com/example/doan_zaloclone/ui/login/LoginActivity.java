@@ -2,8 +2,10 @@ package com.example.doan_zaloclone.ui.login;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -11,6 +13,8 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.doan_zaloclone.MainActivity;
 import com.example.doan_zaloclone.R;
+import com.example.doan_zaloclone.repository.AuthRepository;
+import com.google.firebase.auth.FirebaseUser;
 
 public class LoginActivity extends AppCompatActivity {
 
@@ -18,10 +22,23 @@ public class LoginActivity extends AppCompatActivity {
     private EditText passwordEditText;
     private Button loginButton;
     private TextView signUpTextView;
+    private ProgressBar progressBar;
+    
+    private AuthRepository authRepository;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Initialize AuthRepository
+        authRepository = new AuthRepository();
+        
+        // Check if user is already logged in
+        if (authRepository.isAuthenticated()) {
+            navigateToMain();
+            return;
+        }
+        
         setContentView(R.layout.activity_login);
 
         initViews();
@@ -33,6 +50,12 @@ public class LoginActivity extends AppCompatActivity {
         passwordEditText = findViewById(R.id.passwordEditText);
         loginButton = findViewById(R.id.loginButton);
         signUpTextView = findViewById(R.id.signUpTextView);
+        progressBar = findViewById(R.id.progressBar);
+        
+        // Hide progress bar initially
+        if (progressBar != null) {
+            progressBar.setVisibility(View.GONE);
+        }
     }
 
     private void setupListeners() {
@@ -63,8 +86,36 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
-        // Demo mode - auto login
-        Toast.makeText(this, "Login successful", Toast.LENGTH_SHORT).show();
+        // Show loading
+        showLoading(true);
+
+        // Firebase login
+        authRepository.login(email, password, new AuthRepository.AuthCallback() {
+            @Override
+            public void onSuccess(FirebaseUser user) {
+                showLoading(false);
+                Toast.makeText(LoginActivity.this, "Login successful", Toast.LENGTH_SHORT).show();
+                navigateToMain();
+            }
+
+            @Override
+            public void onError(String error) {
+                showLoading(false);
+                Toast.makeText(LoginActivity.this, "Login failed: " + error, Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+    
+    private void showLoading(boolean isLoading) {
+        if (progressBar != null) {
+            progressBar.setVisibility(isLoading ? View.VISIBLE : View.GONE);
+        }
+        loginButton.setEnabled(!isLoading);
+        emailEditText.setEnabled(!isLoading);
+        passwordEditText.setEnabled(!isLoading);
+    }
+    
+    private void navigateToMain() {
         Intent intent = new Intent(LoginActivity.this, MainActivity.class);
         startActivity(intent);
         finish();

@@ -1,14 +1,18 @@
 package com.example.doan_zaloclone.ui.login;
 
 import android.os.Bundle;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.example.doan_zaloclone.R;
+import com.example.doan_zaloclone.repository.AuthRepository;
+import com.google.firebase.auth.FirebaseUser;
 
 public class SignUpActivity extends AppCompatActivity {
 
@@ -18,12 +22,18 @@ public class SignUpActivity extends AppCompatActivity {
     private EditText confirmPasswordEditText;
     private Button signUpButton;
     private TextView loginTextView;
+    private ProgressBar progressBar;
+    
+    private AuthRepository authRepository;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_signup);
 
+        // Initialize AuthRepository
+        authRepository = new AuthRepository();
+        
         initViews();
         setupListeners();
     }
@@ -35,6 +45,12 @@ public class SignUpActivity extends AppCompatActivity {
         confirmPasswordEditText = findViewById(R.id.confirmPasswordEditText);
         signUpButton = findViewById(R.id.signUpButton);
         loginTextView = findViewById(R.id.loginTextView);
+        progressBar = findViewById(R.id.progressBar);
+        
+        // Hide progress bar initially
+        if (progressBar != null) {
+            progressBar.setVisibility(View.GONE);
+        }
     }
 
     private void setupListeners() {
@@ -73,8 +89,38 @@ public class SignUpActivity extends AppCompatActivity {
             return;
         }
 
-        // Demo mode
-        Toast.makeText(this, "Sign up successful! Please login.", Toast.LENGTH_SHORT).show();
-        finish();
+        // Show loading
+        showLoading(true);
+
+        // Firebase register
+        authRepository.register(name, email, password, new AuthRepository.AuthCallback() {
+            @Override
+            public void onSuccess(FirebaseUser user) {
+                showLoading(false);
+                Toast.makeText(SignUpActivity.this, 
+                        "Sign up successful! Please login.", 
+                        Toast.LENGTH_SHORT).show();
+                finish();
+            }
+
+            @Override
+            public void onError(String error) {
+                showLoading(false);
+                Toast.makeText(SignUpActivity.this, 
+                        "Sign up failed: " + error, 
+                        Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+    
+    private void showLoading(boolean isLoading) {
+        if (progressBar != null) {
+            progressBar.setVisibility(isLoading ? View.VISIBLE : View.GONE);
+        }
+        signUpButton.setEnabled(!isLoading);
+        nameEditText.setEnabled(!isLoading);
+        emailEditText.setEnabled(!isLoading);
+        passwordEditText.setEnabled(!isLoading);
+        confirmPasswordEditText.setEnabled(!isLoading);
     }
 }
