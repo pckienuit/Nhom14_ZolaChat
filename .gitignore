@@ -75,7 +75,8 @@ captures/
 .externalNativeBuild
 
 # Google Services (e.g. APIs or Firebase)
-google-services.json
+# google-services.json - Đã comment để có thể commit file template
+# Hãy thay thế với file thật từ Firebase Console
 
 # Freeline
 freeline.py
