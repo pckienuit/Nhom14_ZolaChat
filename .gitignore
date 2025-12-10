@@ -128,3 +128,7 @@ Thumbs.db
 
 # Backup
 backup_react/
+
+# Markdown files (ignore all except README.md)
+*.md
+!README.md
