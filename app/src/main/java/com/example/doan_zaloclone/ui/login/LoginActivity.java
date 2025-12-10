@@ -33,14 +33,21 @@ public class LoginActivity extends AppCompatActivity {
         // Initialize AuthRepository
         authRepository = new AuthRepository();
         
-        // Check if user is already logged in
-        if (authRepository.isAuthenticated()) {
+        // Check if coming from logout - don't auto-login
+        boolean fromLogout = getIntent().getBooleanExtra("FROM_LOGOUT", false);
+        
+        if (!fromLogout && authRepository.isAuthenticated()) {
+            // User is logged in, go to main
             navigateToMain();
             return;
         }
         
+        // Show login screen
+        initializeLoginScreen();
+    }
+    
+    private void initializeLoginScreen() {
         setContentView(R.layout.activity_login);
-
         initViews();
         setupListeners();
     }

@@ -59,11 +59,18 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void handleLogout() {
-        authRepository.logout();
-        Intent intent = new Intent(this, LoginActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        startActivity(intent);
-        finish();
+        // Show loading if you want
+        authRepository.logout(new AuthRepository.LogoutCallback() {
+            @Override
+            public void onLogoutComplete() {
+                // Navigate to login only after logout is complete
+                Intent intent = new Intent(MainActivity.this, LoginActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                intent.putExtra("FROM_LOGOUT", true);
+                startActivity(intent);
+                finish();
+            }
+        });
     }
 
     private void setupBottomNavigation() {

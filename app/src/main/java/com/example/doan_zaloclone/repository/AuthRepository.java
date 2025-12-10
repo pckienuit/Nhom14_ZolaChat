@@ -97,6 +97,43 @@ public class AuthRepository {
     /**
      * Logout current user
      */
+    public void logout(LogoutCallback callback) {
+        if (firebaseAuth.getCurrentUser() != null) {
+            String userId = firebaseAuth.getCurrentUser().getUid();
+            
+            // Update online status before logout
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("isOnline", false);
+            updates.put("lastSeen", System.currentTimeMillis());
+            
+            // Try to update Firestore, but don't block logout if it fails
+            firestore.collection("users").document(userId)
+                    .update(updates)
+                    .addOnCompleteListener(task -> {
+                        // Sign out regardless of Firestore update result
+                        firebaseAuth.signOut();
+                        if (callback != null) {
+                            callback.onLogoutComplete();
+                        }
+                    })
+                    .addOnFailureListener(e -> {
+                        // If Firestore fails, still logout from Firebase Auth
+                        firebaseAuth.signOut();
+                        if (callback != null) {
+                            callback.onLogoutComplete();
+                        }
+                    });
+        } else {
+            firebaseAuth.signOut();
+            if (callback != null) {
+                callback.onLogoutComplete();
+            }
+        }
+    }
+    
+    /**
+     * Logout current user (synchronous version)
+     */
     public void logout() {
         if (firebaseAuth.getCurrentUser() != null) {
             String userId = firebaseAuth.getCurrentUser().getUid();
@@ -107,11 +144,10 @@ public class AuthRepository {
             updates.put("lastSeen", System.currentTimeMillis());
             
             firestore.collection("users").document(userId)
-                    .update(updates)
-                    .addOnCompleteListener(task -> firebaseAuth.signOut());
-        } else {
-            firebaseAuth.signOut();
+                    .update(updates);
         }
+        // Force immediate sign out
+        firebaseAuth.signOut();
     }
 
     /**
@@ -127,5 +163,12 @@ public class AuthRepository {
     public interface AuthCallback {
         void onSuccess(FirebaseUser user);
         void onError(String error);
+    }
+    
+    /**
+     * Callback interface for logout operations
+     */
+    public interface LogoutCallback {
+        void onLogoutComplete();
     }
 }
