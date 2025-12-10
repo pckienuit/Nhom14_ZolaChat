@@ -31,9 +31,7 @@ public class SignUpActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_signup);
 
-        // Initialize AuthRepository
         authRepository = new AuthRepository();
-        
         initViews();
         setupListeners();
     }
@@ -47,7 +45,6 @@ public class SignUpActivity extends AppCompatActivity {
         loginTextView = findViewById(R.id.loginTextView);
         progressBar = findViewById(R.id.progressBar);
         
-        // Hide progress bar initially
         if (progressBar != null) {
             progressBar.setVisibility(View.GONE);
         }
@@ -89,10 +86,8 @@ public class SignUpActivity extends AppCompatActivity {
             return;
         }
 
-        // Show loading
         showLoading(true);
 
-        // Firebase register
         authRepository.register(name, email, password, new AuthRepository.AuthCallback() {
             @Override
             public void onSuccess(FirebaseUser user) {

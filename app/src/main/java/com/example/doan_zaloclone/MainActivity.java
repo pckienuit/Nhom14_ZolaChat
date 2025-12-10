@@ -35,7 +35,6 @@ public class MainActivity extends AppCompatActivity {
         
         bottomNavigationView = findViewById(R.id.bottomNavigationView);
         
-        // Load default fragment
         if (savedInstanceState == null) {
             loadFragment(new HomeFragment());
         }
@@ -59,11 +58,9 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void handleLogout() {
-        // Show loading if you want
         authRepository.logout(new AuthRepository.LogoutCallback() {
             @Override
             public void onLogoutComplete() {
-                // Navigate to login only after logout is complete
                 Intent intent = new Intent(MainActivity.this, LoginActivity.class);
                 intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
                 intent.putExtra("FROM_LOGOUT", true);

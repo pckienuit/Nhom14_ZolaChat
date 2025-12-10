@@ -30,19 +30,14 @@ public class LoginActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Initialize AuthRepository
         authRepository = new AuthRepository();
-        
-        // Check if coming from logout - don't auto-login
         boolean fromLogout = getIntent().getBooleanExtra("FROM_LOGOUT", false);
         
         if (!fromLogout && authRepository.isAuthenticated()) {
-            // User is logged in, go to main
             navigateToMain();
             return;
         }
         
-        // Show login screen
         initializeLoginScreen();
     }
     
@@ -59,7 +54,6 @@ public class LoginActivity extends AppCompatActivity {
         signUpTextView = findViewById(R.id.signUpTextView);
         progressBar = findViewById(R.id.progressBar);
         
-        // Hide progress bar initially
         if (progressBar != null) {
             progressBar.setVisibility(View.GONE);
         }
@@ -93,10 +87,8 @@ public class LoginActivity extends AppCompatActivity {
             return;
         }
 
-        // Show loading
         showLoading(true);
 
-        // Firebase login
         authRepository.login(email, password, new AuthRepository.AuthCallback() {
             @Override
             public void onSuccess(FirebaseUser user) {
