@@ -177,42 +177,73 @@ public class FirestoreManager {
     }
 
     /**
-     * Tìm kiếm user theo email
+     * Search users by name or email (partial match)
+     * Uses client-side filtering for flexibility
      *
-     * @param email    Email cần tìm
+     * @param query    Search query (name or email fragment)
      * @param listener Callback để xử lý kết quả
      */
-    public void searchUserByEmail(@NonNull String email,
-                                  @NonNull OnUserSearchListener listener) {
-        String searchEmail = email.trim().toLowerCase();
-        Log.d(TAG, "Searching for user with email: " + searchEmail);
+    public void searchUsers(@NonNull String query,
+                           @NonNull OnUserSearchListener listener) {
+        String searchQuery = query.trim().toLowerCase();
+        Log.d(TAG, "Searching users with query: " + searchQuery);
         
+        if (searchQuery.isEmpty()) {
+            listener.onSuccess(new ArrayList<>());
+            return;
+        }
+        
+        // Fetch all users and filter client-side
         db.collection(COLLECTION_USERS)
-                .whereEqualTo("email", searchEmail)
                 .get()
                 .addOnSuccessListener(new OnSuccessListener<QuerySnapshot>() {
                     @Override
                     public void onSuccess(QuerySnapshot querySnapshot) {
-                        Log.d(TAG, "Search query executed, found " + querySnapshot.size() + " documents");
-                        List<User> users = new ArrayList<>();
+                        Log.d(TAG, "Fetched " + querySnapshot.size() + " total users");
+                        List<User> allUsers = new ArrayList<>();
+                        
+                        // Parse all users
                         for (DocumentSnapshot document : querySnapshot.getDocuments()) {
-                            Log.d(TAG, "Processing document: " + document.getId());
                             User user = document.toObject(User.class);
                             if (user != null) {
-                                Log.d(TAG, "User found: " + user.getName() + " (" + user.getEmail() + ")");
-                                users.add(user);
-                            } else {
-                                Log.w(TAG, "Failed to parse user from document: " + document.getId());
+                                allUsers.add(user);
                             }
                         }
-                        Log.d(TAG, "Returning " + users.size() + " users");
-                        listener.onSuccess(users);
+                        
+                        // Filter by query (name or email contains)
+                        List<User> matchedUsers = new ArrayList<>();
+                        for (User user : allUsers) {
+                            String userName = user.getName() != null ? user.getName().toLowerCase() : "";
+                            String userEmail = user.getEmail() != null ? user.getEmail().toLowerCase() : "";
+                            
+                            if (userName.contains(searchQuery) || userEmail.contains(searchQuery)) {
+                                matchedUsers.add(user);
+                            }
+                        }
+                        
+                        // Sort: exact matches first, then partial matches
+                        matchedUsers.sort((u1, u2) -> {
+                            String name1 = u1.getName() != null ? u1.getName().toLowerCase() : "";
+                            String email1 = u1.getEmail() != null ? u1.getEmail().toLowerCase() : "";
+                            String name2 = u2.getName() != null ? u2.getName().toLowerCase() : "";
+                            String email2 = u2.getEmail() != null ? u2.getEmail().toLowerCase() : "";
+                            
+                            boolean exact1 = name1.equals(searchQuery) || email1.equals(searchQuery);
+                            boolean exact2 = name2.equals(searchQuery) || email2.equals(searchQuery);
+                            
+                            if (exact1 && !exact2) return -1;
+                            if (!exact1 && exact2) return 1;
+                            return name1.compareTo(name2);
+                        });
+                        
+                        Log.d(TAG, "Found " + matchedUsers.size() + " matching users");
+                        listener.onSuccess(matchedUsers);
                     }
                 })
                 .addOnFailureListener(new OnFailureListener() {
                     @Override
                     public void onFailure(@NonNull Exception e) {
-                        Log.e(TAG, "Error searching user by email: " + searchEmail, e);
+                        Log.e(TAG, "Error searching users: " + searchQuery, e);
                         listener.onFailure(e);
                     }
                 });

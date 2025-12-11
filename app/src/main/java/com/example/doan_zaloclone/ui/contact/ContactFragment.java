@@ -93,16 +93,16 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
 
     private void setupSearchListener() {
         searchButton.setOnClickListener(v -> {
-            String email = searchEmailEditText.getText().toString().trim();
-            if (email.isEmpty()) {
-                Toast.makeText(getContext(), "Please enter an email", Toast.LENGTH_SHORT).show();
+            String query = searchEmailEditText.getText().toString().trim();
+            if (query.isEmpty()) {
+                Toast.makeText(getContext(), "Please enter name or email", Toast.LENGTH_SHORT).show();
                 return;
             }
-            searchUserByEmail(email);
+            searchUsers(query);
         });
     }
 
-    private void searchUserByEmail(String email) {
+    private void searchUsers(String query) {
         if (firebaseAuth.getCurrentUser() == null) {
             Toast.makeText(getContext(), "Please login first", Toast.LENGTH_SHORT).show();
             return;
@@ -112,7 +112,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         searchButton.setText("Searching...");
 
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
-        firestoreManager.searchUserByEmail(email, new FirestoreManager.OnUserSearchListener() {
+        firestoreManager.searchUsers(query, new FirestoreManager.OnUserSearchListener() {
             @Override
             public void onSuccess(List<User> users) {
                 if (getActivity() == null) return;
@@ -121,7 +121,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 searchButton.setText("Search");
                 
                 if (users.isEmpty()) {
-                    Toast.makeText(getContext(), "No user found with this email", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(getContext(), "No users found", Toast.LENGTH_SHORT).show();
                     searchResultsRecyclerView.setVisibility(View.GONE);
                     divider.setVisibility(View.GONE);
                 } else {
