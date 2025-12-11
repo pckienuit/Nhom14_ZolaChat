@@ -15,6 +15,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Support for 16KB page size devices
+        ndk {
+            //noinspection ChromeOsAbiSupport
+            abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
+        }
     }
 
     buildTypes {
@@ -48,11 +54,16 @@ dependencies {
     implementation(libs.cardview)
     implementation(libs.glide)
     
+    // ExifInterface for image rotation
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    
+    // Cloudinary for image uploads
+    implementation("com.cloudinary:cloudinary-android:3.0.2")
+    
     // Firebase BoM - quản lý versions tự động
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
-    implementation(libs.firebase.storage)
     implementation(libs.firebase.messaging)
     
     testImplementation(libs.junit)
