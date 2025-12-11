@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.recyclerview)
     implementation(libs.cardview)
     implementation(libs.glide)
+    annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")  // For AppGlideModule
     
     // ExifInterface for image rotation
     implementation("androidx.exifinterface:exifinterface:1.3.7")
