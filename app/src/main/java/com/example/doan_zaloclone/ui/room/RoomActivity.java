@@ -153,6 +153,7 @@ public class RoomActivity extends AppCompatActivity {
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         messagesRecyclerView.setLayoutManager(layoutManager);
+        // Note: Not using setHasFixedSize(true) because messages have variable heights (text vs images)
         messagesRecyclerView.setAdapter(messageAdapter);
     }
 

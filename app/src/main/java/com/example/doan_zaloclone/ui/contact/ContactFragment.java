@@ -76,11 +76,13 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         // Setup friends RecyclerView
         friendsAdapter = new FriendsAdapter(new ArrayList<>(), this);
         friendsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        friendsRecyclerView.setHasFixedSize(true); // Optimize performance
         friendsRecyclerView.setAdapter(friendsAdapter);
         
         // Setup search results RecyclerView
         userAdapter = new UserAdapter(new ArrayList<>(), this);
         searchResultsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        searchResultsRecyclerView.setHasFixedSize(true); // Optimize performance
         searchResultsRecyclerView.setAdapter(userAdapter);
 
         // Setup friend requests RecyclerView
@@ -98,6 +100,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             });
         
         friendRequestsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        friendRequestsRecyclerView.setHasFixedSize(true); // Optimize performance
         friendRequestsRecyclerView.setAdapter(friendRequestAdapter);
     }
 

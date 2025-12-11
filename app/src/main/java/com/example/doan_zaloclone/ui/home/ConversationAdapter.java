@@ -6,6 +6,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.doan_zaloclone.R;
@@ -17,6 +18,10 @@ import java.util.List;
 import java.util.Locale;
 
 public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapter.ViewHolder> {
+
+    // Static SimpleDateFormat to avoid recreation in bind()
+    private static final SimpleDateFormat TIMESTAMP_FORMAT = 
+            new SimpleDateFormat("HH:mm", Locale.getDefault());
 
     private List<Conversation> conversations;
     private OnConversationClickListener listener;
@@ -52,8 +57,10 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
     }
 
     public void updateConversations(List<Conversation> newConversations) {
+        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(
+                new ConversationDiffCallback(this.conversations, newConversations));
         this.conversations = newConversations;
-        notifyDataSetChanged();
+        diffResult.dispatchUpdatesTo(this);
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
@@ -85,14 +92,55 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             nameTextView.setText(displayName);
             lastMessageTextView.setText(conversation.getLastMessage());
             
-            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
-            timestampTextView.setText(sdf.format(new Date(conversation.getTimestamp())));
+            timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(conversation.getTimestamp())));
 
             itemView.setOnClickListener(v -> {
                 if (listener != null) {
                     listener.onConversationClick(conversation);
                 }
             });
+        }
+    }
+    
+    // DiffUtil Callback for efficient list updates
+    private static class ConversationDiffCallback extends DiffUtil.Callback {
+        private final List<Conversation> oldList;
+        private final List<Conversation> newList;
+        
+        public ConversationDiffCallback(List<Conversation> oldList, List<Conversation> newList) {
+            this.oldList = oldList;
+            this.newList = newList;
+        }
+        
+        @Override
+        public int getOldListSize() {
+            return oldList.size();
+        }
+        
+        @Override
+        public int getNewListSize() {
+            return newList.size();
+        }
+        
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            return oldList.get(oldItemPosition).getId().equals(
+                    newList.get(newItemPosition).getId());
+        }
+        
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            Conversation oldConv = oldList.get(oldItemPosition);
+            Conversation newConv = newList.get(newItemPosition);
+            
+            // Compare all relevant display fields
+            boolean nameEquals = (oldConv.getName() == null && newConv.getName() == null) ||
+                                (oldConv.getName() != null && oldConv.getName().equals(newConv.getName()));
+            boolean lastMessageEquals = (oldConv.getLastMessage() == null && newConv.getLastMessage() == null) ||
+                                       (oldConv.getLastMessage() != null && oldConv.getLastMessage().equals(newConv.getLastMessage()));
+            
+            return nameEquals && lastMessageEquals &&
+                   oldConv.getTimestamp() == newConv.getTimestamp();
         }
     }
 }
