@@ -1,10 +1,14 @@
 package com.example.doan_zaloclone.ui.room;
 
+import android.net.Uri;
 import android.os.Bundle;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -34,6 +38,9 @@ public class RoomActivity extends AppCompatActivity {
     private ChatRepository chatRepository;
     private FirebaseAuth firebaseAuth;
     private ListenerRegistration messagesListener;
+    
+    private ImageButton attachImageButton;
+    private ActivityResultLauncher<String> imagePickerLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,6 +52,12 @@ public class RoomActivity extends AppCompatActivity {
         
         chatRepository = new ChatRepository();
         firebaseAuth = FirebaseAuth.getInstance();
+        
+        // Register image picker
+        imagePickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                this::handleImageSelected
+        );
 
         initViews();
         setupToolbar();
@@ -59,6 +72,7 @@ public class RoomActivity extends AppCompatActivity {
         messagesRecyclerView = findViewById(R.id.messagesRecyclerView);
         messageEditText = findViewById(R.id.messageEditText);
         sendButton = findViewById(R.id.sendButton);
+        attachImageButton = findViewById(R.id.attachImageButton);
     }
 
     private void setupToolbar() {
@@ -102,6 +116,37 @@ public class RoomActivity extends AppCompatActivity {
 
     private void setupListeners() {
         sendButton.setOnClickListener(v -> handleSendMessage());
+        attachImageButton.setOnClickListener(v -> openImagePicker());
+    }
+    
+    private void openImagePicker() {
+        imagePickerLauncher.launch("image/*");
+    }
+    
+    private void handleImageSelected(Uri imageUri) {
+        if (imageUri == null || firebaseAuth.getCurrentUser() == null) {
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        Toast.makeText(this, "Uploading image...", Toast.LENGTH_SHORT).show();
+        
+        chatRepository.uploadImageAndSendMessage(conversationId, imageUri, currentUserId,
+                new ChatRepository.SendMessageCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Image sent!", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Failed to send image: " + error, Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
     }
 
     private void handleSendMessage() {

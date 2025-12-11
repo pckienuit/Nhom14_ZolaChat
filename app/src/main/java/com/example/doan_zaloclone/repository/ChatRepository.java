@@ -6,6 +6,13 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 
+import android.net.Uri;
+import android.util.Log;
+
+import com.cloudinary.android.MediaManager;
+import com.cloudinary.android.callback.ErrorInfo;
+import com.cloudinary.android.callback.UploadCallback;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -109,6 +116,63 @@ public class ChatRepository {
                     // Log error but don't block message sending
                     // In production, you might want to handle this differently
                 });
+    }
+
+    /**
+     * Upload image to Cloudinary and send as message
+     * @param conversationId ID of the conversation
+     * @param imageUri Local URI of the image to upload
+     * @param senderId ID of the sender
+     * @param callback Callback for success/error
+     */
+    public void uploadImageAndSendMessage(String conversationId, Uri imageUri, String senderId, SendMessageCallback callback) {
+        try {
+            // Upload to Cloudinary (signed - no preset needed)
+            MediaManager.get().upload(imageUri)
+                    .option("folder", "zalo_chat/" + conversationId)
+                    .callback(new UploadCallback() {
+                        @Override
+                        public void onStart(String requestId) {
+                            Log.d("Cloudinary", "Upload started");
+                        }
+
+                        @Override
+                        public void onProgress(String requestId, long bytes, long totalBytes) {
+                            // Optional: track upload progress
+                        }
+
+                        @Override
+                        public void onSuccess(String requestId, Map resultData) {
+                            // Get the secure URL from Cloudinary response
+                            String imageUrl = (String) resultData.get("secure_url");
+                            
+                            // Create IMAGE type message with Cloudinary URL
+                            Message imageMessage = new Message(
+                                    null,
+                                    senderId,
+                                    imageUrl,
+                                    Message.TYPE_IMAGE,
+                                    System.currentTimeMillis()
+                            );
+                            
+                            // Send message to Firestore
+                            sendMessage(conversationId, imageMessage, callback);
+                        }
+
+                        @Override
+                        public void onError(String requestId, ErrorInfo error) {
+                            callback.onError("Upload failed: " + error.getDescription());
+                        }
+
+                        @Override
+                        public void onReschedule(String requestId, ErrorInfo error) {
+                            Log.d("Cloudinary", "Upload rescheduled");
+                        }
+                    })
+                    .dispatch();
+        } catch (Exception e) {
+            callback.onError("Failed to start upload: " + e.getMessage());
+        }
     }
 
     /**
