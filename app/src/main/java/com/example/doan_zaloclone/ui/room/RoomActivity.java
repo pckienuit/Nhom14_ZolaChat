@@ -1,5 +1,7 @@
 package com.example.doan_zaloclone.ui.room;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -17,6 +19,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.content.ContextCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -61,6 +64,7 @@ public class RoomActivity extends AppCompatActivity {
     private ImageButton sendImagesButton;
     private ImagePickerAdapter imagePickerAdapter;
     private List<Uri> selectedPhotos = new ArrayList<>();
+    private ActivityResultLauncher<String> permissionLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,6 +76,18 @@ public class RoomActivity extends AppCompatActivity {
         
         chatRepository = new ChatRepository();
         firebaseAuth = FirebaseAuth.getInstance();
+        
+        // Register permission launcher
+        permissionLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(),
+                isGranted -> {
+                    if (isGranted) {
+                        loadAndShowImagePicker();
+                    } else {
+                        Toast.makeText(this, "Cần quyền truy cập ảnh để chọn ảnh", Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
 
         initViews();
         setupToolbar();
@@ -139,12 +155,26 @@ public class RoomActivity extends AppCompatActivity {
 
     private void setupListeners() {
         sendButton.setOnClickListener(v -> handleSendMessage());
-        attachImageButton.setOnClickListener(v -> showImagePicker());
+        attachImageButton.setOnClickListener(v -> requestPermissionAndShowPicker());
         backButton.setOnClickListener(v -> hideImagePicker());
         sendImagesButton.setOnClickListener(v -> handleSendImages());
     }
     
-    private void showImagePicker() {
+    private void requestPermissionAndShowPicker() {
+        // Check if permission is already granted
+        String permission = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+                ? Manifest.permission.READ_MEDIA_IMAGES
+                : Manifest.permission.READ_EXTERNAL_STORAGE;
+        
+        if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) {
+            loadAndShowImagePicker();
+        } else {
+            // Request permission
+            permissionLauncher.launch(permission);
+        }
+    }
+    
+    private void loadAndShowImagePicker() {
         // Load photos from device
         List<Uri> photos = MediaStoreHelper.loadPhotos(this);
         
@@ -269,7 +299,7 @@ public class RoomActivity extends AppCompatActivity {
     
     private void openImagePicker() {
         // Old method - no longer used
-        showImagePicker();
+        requestPermissionAndShowPicker();
     }
     
     private void handleImageSelected(Uri imageUri) {
