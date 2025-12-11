@@ -342,4 +342,51 @@ public class FirestoreManager {
 
         void onFailure(Exception e);
     }
+
+    /**
+     * Listener cho việc lắng nghe conversations realtime
+     */
+    public interface OnConversationsChangedListener {
+        void onConversationsChanged(List<Conversation> conversations);
+
+        void onFailure(Exception e);
+    }
+
+    /**
+     * Lắng nghe conversations của user realtime
+     *
+     * @param userId   ID của user
+     * @param listener Callback để xử lý kết quả
+     * @return ListenerRegistration để cleanup
+     */
+    public com.google.firebase.firestore.ListenerRegistration listenToConversations(
+            @NonNull String userId,
+            @NonNull OnConversationsChangedListener listener) {
+        return db.collection(COLLECTION_CONVERSATIONS)
+                .whereArrayContains("memberIds", userId)
+                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
+                .addSnapshotListener(new com.google.firebase.firestore.EventListener<QuerySnapshot>() {
+                    @Override
+                    public void onEvent(QuerySnapshot querySnapshot,
+                                      com.google.firebase.firestore.FirebaseFirestoreException e) {
+                        if (e != null) {
+                            Log.e(TAG, "Error listening to conversations", e);
+                            listener.onFailure(e);
+                            return;
+                        }
+
+                        if (querySnapshot != null) {
+                            List<Conversation> conversations = new ArrayList<>();
+                            for (DocumentSnapshot document : querySnapshot.getDocuments()) {
+                                Conversation conversation = document.toObject(Conversation.class);
+                                if (conversation != null) {
+                                    conversations.add(conversation);
+                                }
+                            }
+                            Log.d(TAG, "Loaded " + conversations.size() + " conversations for user: " + userId);
+                            listener.onConversationsChanged(conversations);
+                        }
+                    }
+                });
+    }
 }
