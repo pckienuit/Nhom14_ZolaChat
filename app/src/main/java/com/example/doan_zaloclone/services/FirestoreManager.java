@@ -581,6 +581,80 @@ public class FirestoreManager {
                 });
     }
 
+    /**
+     * Get list of friends for a user
+     * Queries accepted friend requests and fetches user details
+     */
+    public void getFriends(@NonNull String userId,
+                          @NonNull OnFriendsLoadedListener listener) {
+        Log.d(TAG, "Loading friends for user: " + userId);
+        
+        // Query friend requests where user is involved and status is ACCEPTED
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("status", "ACCEPTED")
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    List<String> friendIds = new ArrayList<>();
+                    
+                    // Extract friend IDs
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        String fromUserId = doc.getString("fromUserId");
+                        String toUserId = doc.getString("toUserId");
+                        
+                        if (userId.equals(fromUserId)) {
+                            friendIds.add(toUserId);
+                        } else if (userId.equals(toUserId)) {
+                            friendIds.add(fromUserId);
+                        }
+                    }
+                    
+                    if (friendIds.isEmpty()) {
+                        Log.d(TAG, "No friends found");
+                        listener.onFriendsLoaded(new ArrayList<>());
+                        return;
+                    }
+                    
+                    // Fetch user details for each friend
+                    List<User> friends = new ArrayList<>();
+                    int[] fetchedCount = {0};
+                    
+                    for (String friendId : friendIds) {
+                        db.collection(COLLECTION_USERS)
+                                .document(friendId)
+                                .get()
+                                .addOnSuccessListener(userDoc -> {
+                                    User friend = userDoc.toObject(User.class);
+                                    if (friend != null) {
+                                        friends.add(friend);
+                                    }
+                                    
+                                    fetchedCount[0]++;
+                                    if (fetchedCount[0] == friendIds.size()) {
+                                        // All friends fetched
+                                        friends.sort((f1, f2) -> {
+                                            String name1 = f1.getName() != null ? f1.getName() : "";
+                                            String name2 = f2.getName() != null ? f2.getName() : "";
+                                            return name1.compareTo(name2);
+                                        });
+                                        Log.d(TAG, "Loaded " + friends.size() + " friends");
+                                        listener.onFriendsLoaded(friends);
+                                    }
+                                })
+                                .addOnFailureListener(e -> {
+                                    Log.w(TAG, "Failed to fetch friend: " + friendId, e);
+                                    fetchedCount[0]++;
+                                    if (fetchedCount[0] == friendIds.size()) {
+                                        listener.onFriendsLoaded(friends);
+                                    }
+                                });
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error loading friends", e);
+                    listener.onFailure(e);
+                });
+    }
+
     // Callback Interfaces for Friend Requests
 
     public interface OnFriendRequestListener {
@@ -595,6 +669,11 @@ public class FirestoreManager {
 
     public interface OnFriendRequestStatusListener {
         void onStatus(String status);
+        void onFailure(Exception e);
+    }
+    
+    public interface OnFriendsLoadedListener {
+        void onFriendsLoaded(List<User> friends);
         void onFailure(Exception e);
     }
 }

@@ -2,6 +2,7 @@ package com.example.doan_zaloclone.ui.contact;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -26,16 +27,18 @@ import com.google.firebase.auth.FirebaseAuth;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ContactFragment extends Fragment implements UserAdapter.OnUserActionListener {
+public class ContactFragment extends Fragment implements UserAdapter.OnUserActionListener, FriendsAdapter.OnFriendClickListener {
 
     private EditText searchEmailEditText;
     private Button searchButton;
     private RecyclerView searchResultsRecyclerView;
     private RecyclerView friendRequestsRecyclerView;
+    private RecyclerView friendsRecyclerView;
     private View divider;
 
     private UserAdapter userAdapter;
     private FriendRequestAdapter friendRequestAdapter;
+    private FriendsAdapter friendsAdapter;
     
     private FirestoreManager firestoreManager;
     private FirebaseAuth firebaseAuth;
@@ -54,6 +57,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         initViews(view);
         setupRecyclerViews();
         setupSearchListener();
+        loadFriends();
         loadFriendRequests();
         
         return view;
@@ -64,10 +68,16 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         searchButton = view.findViewById(R.id.searchButton);
         searchResultsRecyclerView = view.findViewById(R.id.searchResultsRecyclerView);
         friendRequestsRecyclerView = view.findViewById(R.id.friendRequestsRecyclerView);
+        friendsRecyclerView = view.findViewById(R.id.friendsRecyclerView);
         divider = view.findViewById(R.id.divider);
     }
 
     private void setupRecyclerViews() {
+        // Setup friends RecyclerView
+        friendsAdapter = new FriendsAdapter(new ArrayList<>(), this);
+        friendsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        friendsRecyclerView.setAdapter(friendsAdapter);
+        
         // Setup search results RecyclerView
         userAdapter = new UserAdapter(new ArrayList<>(), this);
         searchResultsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
@@ -266,6 +276,8 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 public void onSuccess() {
                     if (getActivity() != null) {
                         Toast.makeText(getContext(), "Accepted friend request from " + request.getFromUserName(), Toast.LENGTH_SHORT).show();
+                        // Reload friends list
+                        loadFriends();
                     }
                 }
 
@@ -333,6 +345,42 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         searchEmailEditText.setText("");
         searchResultsRecyclerView.setVisibility(View.GONE);
         divider.setVisibility(View.GONE);
+    }
+
+    private void loadFriends() {
+        if (firebaseAuth.getCurrentUser() == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        Log.d("ContactFragment", "Loading friends for user: " + currentUserId);
+        
+        firestoreManager.getFriends(currentUserId, new FirestoreManager.OnFriendsLoadedListener() {
+            @Override
+            public void onFriendsLoaded(List<User> friends) {
+                if (getActivity() != null) {
+                    Log.d("ContactFragment", "Friends loaded: " + friends.size());
+                    friendsAdapter.updateFriends(friends);
+                    
+                    if (friends.isEmpty()) {
+                        Log.d("ContactFragment", "No friends found - make sure you have ACCEPTED friend requests");
+                    }
+                }
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                if (getActivity() != null) {
+                    Log.e("ContactFragment", "Error loading friends", e);
+                    Toast.makeText(getContext(), "Error loading friends: " + e.getMessage(), 
+                            Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+    }
+
+    @Override
+    public void onMessageClick(User friend) {
+        // Open conversation with friend
+        onUserClick(friend);
     }
 
     private void loadFriendRequests() {
