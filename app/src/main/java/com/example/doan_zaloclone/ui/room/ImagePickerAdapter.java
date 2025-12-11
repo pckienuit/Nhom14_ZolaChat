@@ -21,6 +21,9 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     private static final int TYPE_CAMERA = 0;
     private static final int TYPE_PHOTO = 1;
     
+    // Payload constant for partial updates
+    public static final String PAYLOAD_SELECTION = "selection";
+    
     private final List<Uri> allPhotos;
     private final List<Uri> selectedPhotos = new ArrayList<>();
     private final OnItemClickListener listener;
@@ -61,6 +64,21 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             ((PhotoViewHolder) holder).bind(photoUri, position);
         } else if (holder instanceof CameraViewHolder) {
             ((CameraViewHolder) holder).bind();
+        }
+    }
+    
+    // Override with payloads to handle partial updates
+    @Override
+    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position, @NonNull List<Object> payloads) {
+        if (!payloads.isEmpty() && payloads.contains(PAYLOAD_SELECTION)) {
+            // Only update selection state, don't reload image
+            if (holder instanceof PhotoViewHolder) {
+                Uri photoUri = allPhotos.get(position - 1);
+                ((PhotoViewHolder) holder).updateSelectionState(photoUri);
+            }
+        } else {
+            // Full bind
+            super.onBindViewHolder(holder, position, payloads);
         }
     }
     
@@ -110,13 +128,40 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         }
         
         public void bind(Uri photoUri, int position) {
-            // Load photo with Glide
+            // Load photo with Glide (only on full bind)
             Glide.with(itemView.getContext())
                     .load(photoUri)
                     .centerCrop()
                     .into(photoImageView);
             
-            // Check if selected
+            // Update selection state
+            updateSelectionState(photoUri);
+            
+            // Handle click
+            itemView.setOnClickListener(v -> {
+                int selectionIndex = selectedPhotos.indexOf(photoUri);
+                boolean wasSelected = selectionIndex != -1;
+                
+                if (wasSelected) {
+                    // Deselect
+                    selectedPhotos.remove(photoUri);
+                } else {
+                    // Select
+                    selectedPhotos.add(photoUri);
+                }
+                
+                // Update all items to refresh selection numbers
+                // Start from position 1 (skip camera)
+                notifyItemRangeChanged(1, allPhotos.size(), PAYLOAD_SELECTION);
+                
+                if (listener != null) {
+                    listener.onPhotoClick(photoUri, position);
+                }
+            });
+        }
+        
+        // Update only selection state without reloading image
+        public void updateSelectionState(Uri photoUri) {
             int selectionIndex = selectedPhotos.indexOf(photoUri);
             boolean isSelected = selectionIndex != -1;
             
@@ -130,22 +175,6 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             } else {
                 selectionNumber.setVisibility(View.GONE);
             }
-            
-            // Handle click
-            itemView.setOnClickListener(v -> {
-                if (isSelected) {
-                    // Deselect
-                    selectedPhotos.remove(photoUri);
-                } else {
-                    // Select
-                    selectedPhotos.add(photoUri);
-                }
-                notifyDataSetChanged(); // Refresh to update numbers
-                
-                if (listener != null) {
-                    listener.onPhotoClick(photoUri, position);
-                }
-            });
         }
     }
 }

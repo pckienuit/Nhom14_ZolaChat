@@ -7,6 +7,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.doan_zaloclone.R;
@@ -24,6 +25,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private static final int VIEW_TYPE_RECEIVED = 2;
     private static final int VIEW_TYPE_IMAGE_SENT = 3;
     private static final int VIEW_TYPE_IMAGE_RECEIVED = 4;
+    
+    // Static SimpleDateFormat to avoid recreation in bind()
+    private static final SimpleDateFormat TIMESTAMP_FORMAT = 
+            new SimpleDateFormat("HH:mm", Locale.getDefault());
 
     private List<Message> messages;
     private String currentUserId;
@@ -94,8 +99,9 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
 
     public void updateMessages(List<Message> newMessages) {
+        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new MessageDiffCallback(this.messages, newMessages));
         this.messages = newMessages;
-        notifyDataSetChanged();
+        diffResult.dispatchUpdatesTo(this);
     }
 
     public List<Message> getMessages() {
@@ -114,8 +120,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
         public void bind(Message message) {
             messageTextView.setText(message.getContent());
-            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
-            timestampTextView.setText(sdf.format(new Date(message.getTimestamp())));
+            timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
         }
     }
 
@@ -131,8 +136,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
         public void bind(Message message) {
             messageTextView.setText(message.getContent());
-            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
-            timestampTextView.setText(sdf.format(new Date(message.getTimestamp())));
+            timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
         }
     }
     
@@ -150,8 +154,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             Glide.with(itemView.getContext())
                     .load(message.getContent())
                     .into(messageImageView);
-            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
-            timestampTextView.setText(sdf.format(new Date(message.getTimestamp())));
+            timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
         }
     }
     
@@ -169,8 +172,47 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             Glide.with(itemView.getContext())
                     .load(message.getContent())
                     .into(messageImageView);
-            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());
-            timestampTextView.setText(sdf.format(new Date(message.getTimestamp())));
+            timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+        }
+    }
+    
+    // DiffUtil Callback for efficient list updates
+    private static class MessageDiffCallback extends DiffUtil.Callback {
+        private final List<Message> oldList;
+        private final List<Message> newList;
+        
+        public MessageDiffCallback(List<Message> oldList, List<Message> newList) {
+            this.oldList = oldList;
+            this.newList = newList;
+        }
+        
+        @Override
+        public int getOldListSize() {
+            return oldList.size();
+        }
+        
+        @Override
+        public int getNewListSize() {
+            return newList.size();
+        }
+        
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            // Compare message IDs
+            return oldList.get(oldItemPosition).getId().equals(
+                    newList.get(newItemPosition).getId());
+        }
+        
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            Message oldMessage = oldList.get(oldItemPosition);
+            Message newMessage = newList.get(newItemPosition);
+            
+            // Compare all relevant fields
+            return oldMessage.getContent().equals(newMessage.getContent()) &&
+                   oldMessage.getSenderId().equals(newMessage.getSenderId()) &&
+                   oldMessage.getTimestamp() == newMessage.getTimestamp() &&
+                   oldMessage.getType().equals(newMessage.getType());
         }
     }
 }

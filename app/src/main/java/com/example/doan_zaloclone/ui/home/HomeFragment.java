@@ -71,6 +71,7 @@ public class HomeFragment extends Fragment {
         }, currentUserId);
         
         conversationsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
+        conversationsRecyclerView.setHasFixedSize(true); // Optimize RecyclerView performance
         conversationsRecyclerView.setAdapter(conversationAdapter);
     }
 

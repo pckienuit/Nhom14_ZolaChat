@@ -7,6 +7,7 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.doan_zaloclone.R;
@@ -49,8 +50,10 @@ public class FriendRequestAdapter extends RecyclerView.Adapter<FriendRequestAdap
     }
 
     public void updateRequests(List<FriendRequest> newRequests) {
+        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(
+                new FriendRequestDiffCallback(this.requests, newRequests));
         this.requests = newRequests;
-        notifyDataSetChanged();
+        diffResult.dispatchUpdatesTo(this);
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
@@ -82,6 +85,42 @@ public class FriendRequestAdapter extends RecyclerView.Adapter<FriendRequestAdap
                     listener.onReject(request);
                 }
             });
+        }
+    }
+    
+    // DiffUtil Callback for efficient list updates
+    private static class FriendRequestDiffCallback extends DiffUtil.Callback {
+        private final List<FriendRequest> oldList;
+        private final List<FriendRequest> newList;
+        
+        public FriendRequestDiffCallback(List<FriendRequest> oldList, List<FriendRequest> newList) {
+            this.oldList = oldList;
+            this.newList = newList;
+        }
+        
+        @Override
+        public int getOldListSize() {
+            return oldList.size();
+        }
+        
+        @Override
+        public int getNewListSize() {
+            return newList.size();
+        }
+        
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            return oldList.get(oldItemPosition).getId().equals(
+                    newList.get(newItemPosition).getId());
+        }
+        
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            FriendRequest oldReq = oldList.get(oldItemPosition);
+            FriendRequest newReq = newList.get(newItemPosition);
+            
+            return oldReq.getName().equals(newReq.getName()) &&
+                   oldReq.getEmail().equals(newReq.getEmail());
         }
     }
 }

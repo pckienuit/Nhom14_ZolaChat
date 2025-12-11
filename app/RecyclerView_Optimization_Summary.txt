@@ -1,0 +1,84 @@
+# RecyclerView Optimization - Dev Notes
+
+Date: 11/12/2025
+
+## Changes Summary
+
+Optimized 5 RecyclerView adapters + 4 RecyclerView configs:
+- DiffUtil implementation → better list updates
+- Static SimpleDateFormat → reduced GC
+- Payload updates → no image reload on selection
+- setHasFixedSize(true) → optimized measurement
+
+## Modified Files
+
+### Adapters (all with DiffUtil)
+1. **MessageAdapter.java** - 4 view types, static TIMESTAMP_FORMAT
+2. **ConversationAdapter.java** - static TIMESTAMP_FORMAT
+3. **UserAdapter.java** - notifyItemChanged() for status updates
+4. **FriendRequestAdapter.java**
+5. **ImagePickerAdapter.java** - PAYLOAD_SELECTION for optimized updates
+
+### Fragments/Activities
+6. **HomeFragment.java** - setHasFixedSize(true)
+7. **ContactFragment.java** - setHasFixedSize(true) x3
+8. **RoomActivity.java** - comment added (variable heights)
+
+## Key Code Changes
+
+### DiffUtil Pattern (all adapters)
+```java
+private static class XxxDiffCallback extends DiffUtil.Callback {
+    @Override
+    public boolean areItemsTheSame(int old, int new) {
+        return oldList.get(old).getId().equals(newList.get(new).getId());
+    }
+    @Override
+    public boolean areContentsTheSame(int old, int new) {
+        // Compare relevant fields
+    }
+}
+
+public void updateXxx(List<Xxx> newList) {
+    DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new XxxDiffCallback(this.list, newList));
+    this.list = newList;
+    diff.dispatchUpdatesTo(this);
+}
+```
+
+### Static Format
+```java
+private static final SimpleDateFormat TIMESTAMP_FORMAT = 
+    new SimpleDateFormat("HH:mm", Locale.getDefault());
+```
+
+### Payload Update (ImagePickerAdapter)
+```java
+public static final String PAYLOAD_SELECTION = "selection";
+
+@Override
+public void onBindViewHolder(ViewHolder h, int pos, List<Object> payloads) {
+    if (payloads.contains(PAYLOAD_SELECTION)) {
+        ((PhotoViewHolder) h).updateSelectionState(photoUri);
+    } else {
+        super.onBindViewHolder(h, pos, payloads);
+    }
+}
+```
+
+## Performance Impact
+
+Before → After:
+- notifyDataSetChanged() → DiffUtil (smart updates)
+- New SimpleDateFormat each bind → Static reuse
+- Full grid refresh on selection → Payload update only
+- Unnecessary measurement → setHasFixedSize optimization
+
+## Testing
+All features verified working:
+- 4 message types (text/image sent/received)
+- Multi-selection with numbered badges
+- Friend request status updates
+- Glide image loading
+
+No functionality removed. All callbacks preserved.

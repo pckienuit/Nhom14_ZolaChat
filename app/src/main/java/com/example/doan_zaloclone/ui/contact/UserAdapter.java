@@ -7,6 +7,7 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.doan_zaloclone.R;
@@ -53,13 +54,21 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
     }
 
     public void updateUsers(List<User> newUsers) {
+        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(
+                new UserDiffCallback(this.users, newUsers));
         this.users = newUsers;
-        notifyDataSetChanged();
+        diffResult.dispatchUpdatesTo(this);
     }
 
     public void updateFriendRequestStatus(String userId, String status) {
         friendRequestStatus.put(userId, status);
-        notifyDataSetChanged();
+        // Find and update only the affected item
+        for (int i = 0; i < users.size(); i++) {
+            if (users.get(i).getId().equals(userId)) {
+                notifyItemChanged(i);
+                break;
+            }
+        }
     }
 
     class UserViewHolder extends RecyclerView.ViewHolder {
@@ -120,6 +129,42 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
                 statusBadge.setVisibility(View.VISIBLE);
                 statusBadge.setText("Friends");
             }
+        }
+    }
+    
+    // DiffUtil Callback for efficient list updates
+    private static class UserDiffCallback extends DiffUtil.Callback {
+        private final List<User> oldList;
+        private final List<User> newList;
+        
+        public UserDiffCallback(List<User> oldList, List<User> newList) {
+            this.oldList = oldList;
+            this.newList = newList;
+        }
+        
+        @Override
+        public int getOldListSize() {
+            return oldList.size();
+        }
+        
+        @Override
+        public int getNewListSize() {
+            return newList.size();
+        }
+        
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            return oldList.get(oldItemPosition).getId().equals(
+                    newList.get(newItemPosition).getId());
+        }
+        
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            User oldUser = oldList.get(oldItemPosition);
+            User newUser = newList.get(newItemPosition);
+            
+            return oldUser.getName().equals(newUser.getName()) &&
+                   oldUser.getEmail().equals(newUser.getEmail());
         }
     }
 }
