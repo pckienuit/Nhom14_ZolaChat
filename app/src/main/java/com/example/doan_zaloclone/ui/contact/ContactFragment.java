@@ -336,9 +336,18 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     }
 
     private void openChatRoom(Conversation conversation) {
+        if (firebaseAuth.getCurrentUser() == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
         Intent intent = new Intent(getActivity(), RoomActivity.class);
         intent.putExtra("conversationId", conversation.getId());
-        intent.putExtra("conversationName", conversation.getName());
+        
+        // Get proper conversation name
+        String conversationName = conversation.getName();
+        if (conversationName == null || conversationName.isEmpty()) {
+            conversationName = conversation.getOtherUserName(currentUserId);
+        }
+        intent.putExtra("conversationName", conversationName);
         startActivity(intent);
         
         // Clear search

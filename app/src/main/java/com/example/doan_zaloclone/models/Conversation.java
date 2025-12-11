@@ -9,6 +9,7 @@ public class Conversation {
     private String lastMessage;
     private long timestamp;
     private List<String> memberIds; // List userId để query conversations của user
+    private java.util.Map<String, String> memberNames; // Map userId -> userName để hiển thị
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Conversation() {
@@ -93,5 +94,30 @@ public class Conversation {
 
     public boolean hasMember(String userId) {
         return this.memberIds != null && this.memberIds.contains(userId);
+    }
+    
+    public java.util.Map<String, String> getMemberNames() {
+        return memberNames;
+    }
+    
+    public void setMemberNames(java.util.Map<String, String> memberNames) {
+        this.memberNames = memberNames;
+    }
+    
+    /**
+     * Helper method to get the other user's name in a 1-on-1 conversation
+     * @param currentUserId The current user's ID
+     * @return The other user's name, or empty string if not found
+     */
+    public String getOtherUserName(String currentUserId) {
+        if (memberNames != null && memberIds != null) {
+            for (String memberId : memberIds) {
+                if (!memberId.equals(currentUserId)) {
+                    String name = memberNames.get(memberId);
+                    return name != null ? name : "";
+                }
+            }
+        }
+        return "";
     }
 }

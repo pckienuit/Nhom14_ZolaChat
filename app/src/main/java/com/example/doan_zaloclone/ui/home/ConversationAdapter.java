@@ -20,14 +20,16 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
 
     private List<Conversation> conversations;
     private OnConversationClickListener listener;
+    private String currentUserId;
 
     public interface OnConversationClickListener {
         void onConversationClick(Conversation conversation);
     }
 
-    public ConversationAdapter(List<Conversation> conversations, OnConversationClickListener listener) {
+    public ConversationAdapter(List<Conversation> conversations, OnConversationClickListener listener, String currentUserId) {
         this.conversations = conversations;
         this.listener = listener;
+        this.currentUserId = currentUserId;
     }
 
     @NonNull
@@ -41,7 +43,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Conversation conversation = conversations.get(position);
-        holder.bind(conversation, listener);
+        holder.bind(conversation, listener, currentUserId);
     }
 
     @Override
@@ -66,8 +68,21 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
         }
 
-        public void bind(Conversation conversation, OnConversationClickListener listener) {
-            nameTextView.setText(conversation.getName());
+        public void bind(Conversation conversation, OnConversationClickListener listener, String currentUserId) {
+            // For 1-on-1 conversations, display the other user's name
+            String displayName;
+            if (conversation.getName() == null || conversation.getName().isEmpty()) {
+                // Try to get from memberNames
+                displayName = conversation.getOtherUserName(currentUserId);
+                if (displayName.isEmpty()) {
+                    displayName = "Đang tải..."; // Fallback if name not available
+                }
+            } else {
+                // Use the conversation name (for group chats)
+                displayName = conversation.getName();
+            }
+            
+            nameTextView.setText(displayName);
             lastMessageTextView.setText(conversation.getLastMessage());
             
             SimpleDateFormat sdf = new SimpleDateFormat("HH:mm", Locale.getDefault());

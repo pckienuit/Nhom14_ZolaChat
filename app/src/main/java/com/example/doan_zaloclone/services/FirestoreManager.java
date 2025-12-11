@@ -312,19 +312,39 @@ public class FirestoreManager {
         
         List<String> memberIds = Arrays.asList(currentUserId, otherUserId);
         
-        Conversation conversation = new Conversation(
-                conversationId,
-                otherUserName, // Tên hiển thị là tên của user kia
-                "",
-                System.currentTimeMillis(),
-                memberIds
-        );
+        // Create conversation data with memberNames
+        Map<String, Object> conversationData = new HashMap<>();
+        conversationData.put("id", conversationId);
+        conversationData.put("memberIds", memberIds);
+        
+        // Store member names for easier access
+        Map<String, String> memberNames = new HashMap<>();
+        memberNames.put(currentUserId, currentUserName);
+        memberNames.put(otherUserId, otherUserName);
+        conversationData.put("memberNames", memberNames);
+        
+        // For 1-1 chats, name is left empty
+        conversationData.put("name", "");
+        conversationData.put("lastMessage", "");
+        conversationData.put("timestamp", System.currentTimeMillis());
 
-        newConversationRef.set(conversation)
+        newConversationRef.set(conversationData)
                 .addOnSuccessListener(new OnSuccessListener<Void>() {
                     @Override
                     public void onSuccess(Void aVoid) {
-                        Log.d(TAG, "Conversation created successfully: " + conversationId);
+                        Log.d(TAG, "Conversation created successfully: " + conversationId + 
+                             " between " + currentUserName + " and " + otherUserName);
+                        
+                        // Create conversation object for callback
+                        Conversation conversation = new Conversation(
+                                conversationId,
+                                "",
+                                "",
+                                System.currentTimeMillis(),
+                                memberIds
+                        );
+                        conversation.setMemberNames(memberNames);
+                        
                         listener.onSuccess(conversation);
                     }
                 })
@@ -528,6 +548,7 @@ public class FirestoreManager {
 
     /**
      * Create conversation when friends accept request
+     * Fetches both users' details to properly set conversation info
      */
     private void createFriendConversation(String user1Id, String user2Id, 
                                          String user1Name, OnFriendRequestListener listener) {
@@ -542,25 +563,63 @@ public class FirestoreManager {
 
             @Override
             public void onNotFound() {
-                // Create new conversation
-                DocumentReference convRef = db.collection(COLLECTION_CONVERSATIONS).document();
-                
-                Map<String, Object> conversationData = new HashMap<>();
-                conversationData.put("id", convRef.getId());
-                conversationData.put("memberIds", Arrays.asList(user1Id, user2Id));
-                conversationData.put("name", "");  // Will be set by app
-                conversationData.put("lastMessage", "Bạn đã kết bạn với " + user1Name);
-                conversationData.put("timestamp", System.currentTimeMillis());
-                
-                convRef.set(conversationData)
-                        .addOnSuccessListener(aVoid -> {
-                            Log.d(TAG, "Friend conversation created: " + convRef.getId());
-                            listener.onSuccess();
-                        })
-                        .addOnFailureListener(e -> {
-                            Log.w(TAG, "Failed to create conversation, but friendship accepted", e);
-                            listener.onSuccess();  // Still success since friendship is accepted
-                        });
+                // Fetch both users' full details
+                db.collection(COLLECTION_USERS).document(user1Id).get()
+                    .addOnSuccessListener(user1Doc -> {
+                        db.collection(COLLECTION_USERS).document(user2Id).get()
+                            .addOnSuccessListener(user2Doc -> {
+                                User user1 = user1Doc.toObject(User.class);
+                                User user2 = user2Doc.toObject(User.class);
+                                
+                                if (user1 == null || user2 == null) {
+                                    Log.e(TAG, "Failed to fetch user details for conversation");
+                                    listener.onFailure(new Exception("User details not found"));
+                                    return;
+                                }
+                                
+                                // Create new conversation with proper user info
+                                DocumentReference convRef = db.collection(COLLECTION_CONVERSATIONS).document();
+                                
+                                // For a 1-1 conversation, we store it as a single conversation object
+                                // The app will display the OTHER user's name based on who's viewing
+                                Map<String, Object> conversationData = new HashMap<>();
+                                conversationData.put("id", convRef.getId());
+                                conversationData.put("memberIds", Arrays.asList(user1Id, user2Id));
+                                
+                                // Store member names for easier access
+                                Map<String, String> memberNames = new HashMap<>();
+                                memberNames.put(user1Id, user1.getName());
+                                memberNames.put(user2Id, user2.getName());
+                                conversationData.put("memberNames", memberNames);
+                                
+                                // For 1-1 chats, name is typically left empty or set as the conversation ID
+                                // The UI will display the other user's name
+                                conversationData.put("name", "");
+                                
+                                // Set a friendly first message
+                                conversationData.put("lastMessage", "Các bạn đã là bạn bè. Hãy bắt đầu trò chuyện!");
+                                conversationData.put("timestamp", System.currentTimeMillis());
+                                
+                                convRef.set(conversationData)
+                                        .addOnSuccessListener(aVoid -> {
+                                            Log.d(TAG, "Friend conversation created: " + convRef.getId() + 
+                                                 " between " + user1.getName() + " and " + user2.getName());
+                                            listener.onSuccess();
+                                        })
+                                        .addOnFailureListener(e -> {
+                                            Log.w(TAG, "Failed to create conversation, but friendship accepted", e);
+                                            listener.onSuccess();  // Still success since friendship is accepted
+                                        });
+                            })
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG, "Failed to fetch user2 details", e);
+                                listener.onFailure(e);
+                            });
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "Failed to fetch user1 details", e);
+                        listener.onFailure(e);
+                    });
             }
 
             @Override
