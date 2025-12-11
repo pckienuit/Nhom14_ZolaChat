@@ -128,10 +128,11 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         }
         
         public void bind(Uri photoUri, int position) {
-            // Load photo with Glide (only on full bind)
+            // Load photo with Glide (only on full bind) - OPTIMIZED
             Glide.with(itemView.getContext())
                     .load(photoUri)
                     .centerCrop()
+                    .thumbnail(0.1f)  // Show 10% thumbnail first for faster initial load
                     .into(photoImageView);
             
             // Update selection state
