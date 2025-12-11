@@ -27,6 +27,7 @@ public class FirestoreManager {
     private static final String TAG = "FirestoreManager";
     private static final String COLLECTION_USERS = "users";
     private static final String COLLECTION_CONVERSATIONS = "conversations";
+    private static final String COLLECTION_FRIEND_REQUESTS = "friendRequests";
 
     private final FirebaseFirestore db;
     private static FirestoreManager instance;
@@ -389,5 +390,169 @@ public class FirestoreManager {
                         }
                     }
                 });
+    }
+
+    // ===================== FRIEND REQUEST METHODS =====================
+
+    /**
+     * Send friend request to another user
+     */
+    public void sendFriendRequest(@NonNull String fromUserId,
+                                  @NonNull String fromUserName,
+                                  @NonNull String fromUserEmail,
+                                  @NonNull String toUserId,
+                                  @NonNull OnFriendRequestListener listener) {
+        // Check if request already exists
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("fromUserId", fromUserId)
+                .whereEqualTo("toUserId", toUserId)
+                .whereIn("status", Arrays.asList("PENDING", "ACCEPTED"))
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    if (!querySnapshot.isEmpty()) {
+                        listener.onFailure(new Exception("Friend request already exists"));
+                        return;
+                    }
+
+                    // Create new friend request
+                    DocumentReference requestRef = db.collection(COLLECTION_FRIEND_REQUESTS).document();
+                    Map<String, Object> requestData = new HashMap<>();
+                    requestData.put("id", requestRef.getId());
+                    requestData.put("fromUserId", fromUserId);
+                    requestData.put("toUserId", toUserId);
+                    requestData.put("fromUserName", fromUserName);
+                    requestData.put("fromUserEmail", fromUserEmail);
+                    requestData.put("status", "PENDING");
+                    requestData.put("timestamp", System.currentTimeMillis());
+
+                    requestRef.set(requestData)
+                            .addOnSuccessListener(aVoid -> {
+                                Log.d(TAG, "Friend request sent: " + requestRef.getId());
+                                listener.onSuccess();
+                            })
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG, "Error sending friend request", e);
+                                listener.onFailure(e);
+                            });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error checking existing request", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Accept friend request
+     */
+    public void acceptFriendRequest(@NonNull String requestId,
+                                    @NonNull OnFriendRequestListener listener) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("status", "ACCEPTED");
+
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .document(requestId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Friend request accepted: " + requestId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error accepting friend request", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Reject friend request
+     */
+    public void rejectFriendRequest(@NonNull String requestId,
+                                    @NonNull OnFriendRequestListener listener) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("status", "REJECTED");
+
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .document(requestId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Friend request rejected: " + requestId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error rejecting friend request", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Listen to incoming friend requests realtime
+     */
+    public com.google.firebase.firestore.ListenerRegistration listenToFriendRequests(
+            @NonNull String userId,
+            @NonNull OnFriendRequestsChangedListener listener) {
+        return db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("toUserId", userId)
+                .whereEqualTo("status", "PENDING")
+                .addSnapshotListener((querySnapshot, e) -> {
+                    if (e != null) {
+                        Log.e(TAG, "Error listening to friend requests", e);
+                        listener.onFailure(e);
+                        return;
+                    }
+
+                    if (querySnapshot != null) {
+                        List<com.example.doan_zaloclone.models.FriendRequest> requests = new ArrayList<>();
+                        for (DocumentSnapshot document : querySnapshot.getDocuments()) {
+                            com.example.doan_zaloclone.models.FriendRequest request = 
+                                document.toObject(com.example.doan_zaloclone.models.FriendRequest.class);
+                            if (request != null) {
+                                requests.add(request);
+                            }
+                        }
+                        Log.d(TAG, "Loaded " + requests.size() + " pending friend requests");
+                        listener.onFriendRequestsChanged(requests);
+                    }
+                });
+    }
+
+    /**
+     * Check friend request status between two users
+     */
+    public void checkFriendRequestStatus(@NonNull String fromUserId,
+                                        @NonNull String toUserId,
+                                        @NonNull OnFriendRequestStatusListener listener) {
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("fromUserId", fromUserId)
+                .whereEqualTo("toUserId", toUserId)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    if (querySnapshot.isEmpty()) {
+                        listener.onStatus("NONE");
+                    } else {
+                        DocumentSnapshot doc = querySnapshot.getDocuments().get(0);
+                        String status = doc.getString("status");
+                        listener.onStatus(status != null ? status : "NONE");
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error checking friend request status", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    // Callback Interfaces for Friend Requests
+
+    public interface OnFriendRequestListener {
+        void onSuccess();
+        void onFailure(Exception e);
+    }
+
+    public interface OnFriendRequestsChangedListener {
+        void onFriendRequestsChanged(List<com.example.doan_zaloclone.models.FriendRequest> requests);
+        void onFailure(Exception e);
+    }
+
+    public interface OnFriendRequestStatusListener {
+        void onStatus(String status);
+        void onFailure(Exception e);
     }
 }
