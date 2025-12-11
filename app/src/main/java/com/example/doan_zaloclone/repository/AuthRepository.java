@@ -96,7 +96,6 @@ public class AuthRepository {
                     callback.onError(errorMessage);
                 });
     }
-    }
 
     /**
      * Logout current user

@@ -93,7 +93,7 @@ public class FirestoreManager {
                     @Override
                     public void onSuccess(Void aVoid) {
                         Log.d(TAG, "User created successfully: " + userId + " with email: " + normalizedEmail);
-                        listener.onSuccess();
+                        listener.onSuccess(user);
                     }
                 })
                 .addOnFailureListener(new OnFailureListener() {
