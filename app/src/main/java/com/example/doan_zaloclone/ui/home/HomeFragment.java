@@ -53,12 +53,22 @@ public class HomeFragment extends Fragment {
     }
 
     private void setupRecyclerView() {
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+            ? firebaseAuth.getCurrentUser().getUid() 
+            : "";
+            
         conversationAdapter = new ConversationAdapter(new ArrayList<>(), conversation -> {
             Intent intent = new Intent(getActivity(), RoomActivity.class);
             intent.putExtra("conversationId", conversation.getId());
-            intent.putExtra("conversationName", conversation.getName());
+            
+            // Pass the other user's name for display
+            String conversationName = conversation.getName();
+            if (conversationName == null || conversationName.isEmpty()) {
+                conversationName = conversation.getOtherUserName(currentUserId);
+            }
+            intent.putExtra("conversationName", conversationName);
             startActivity(intent);
-        });
+        }, currentUserId);
         
         conversationsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         conversationsRecyclerView.setAdapter(conversationAdapter);

@@ -53,6 +53,11 @@ public class RoomActivity extends AppCompatActivity {
     private FirebaseAuth firebaseAuth;
     private ListenerRegistration messagesListener;
     
+    // Message limits for non-friends
+    private boolean areFriends = false;
+    private String otherUserId = "";
+    private List<Message> messages = new ArrayList<>();
+    
     // Image picker UI
     private ImageButton attachImageButton;
     private FrameLayout imagePickerContainer;
@@ -92,8 +97,24 @@ public class RoomActivity extends AppCompatActivity {
         initViews();
         setupToolbar();
         setupRecyclerView();
+        
+        // Check network connectivity
+        checkNetworkConnectivity();
+        
         loadMessages();
         setupListeners();
+    }
+    
+    private void checkNetworkConnectivity() {
+        if (!com.example.doan_zaloclone.utils.NetworkUtils.isNetworkAvailable(this)) {
+            String networkType = com.example.doan_zaloclone.utils.NetworkUtils.getNetworkType(this);
+            android.util.Log.w("RoomActivity", "No network connection. Type: " + networkType);
+            Toast.makeText(this, 
+                "Không có kết nối mạng. Một số chức năng có thể không hoạt động.", 
+                Toast.LENGTH_LONG).show();
+        } else {
+            android.util.Log.d("RoomActivity", "Network is available");
+        }
     }
 
     private void initViews() {
@@ -139,7 +160,8 @@ public class RoomActivity extends AppCompatActivity {
         // Listen to real-time message updates from Firestore
         messagesListener = chatRepository.listenToMessages(conversationId, new ChatRepository.MessagesListener() {
             @Override
-            public void onMessagesChanged(java.util.List<Message> messages) {
+            public void onMessagesChanged(java.util.List<Message> newMessages) {
+                messages = newMessages; // Store for counting
                 messageAdapter.updateMessages(messages);
                 if (messageAdapter.getItemCount() > 0) {
                     messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
@@ -151,6 +173,72 @@ public class RoomActivity extends AppCompatActivity {
                 Toast.makeText(RoomActivity.this, "Error loading messages: " + error, Toast.LENGTH_SHORT).show();
             }
         });
+        
+        // Check friendship status
+        extractOtherUserIdAndCheckFriendship();
+    }
+    
+    private void extractOtherUserIdAndCheckFriendship() {
+        // Get current user
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        // Extract other user from conversation name or intent
+        // For now, we need to fetch conversation to get memberIds
+        com.example.doan_zaloclone.services.FirestoreManager.getInstance()
+            .getFirestore()
+            .collection("conversations")
+            .document(conversationId)
+            .get()
+            .addOnSuccessListener(doc -> {
+                if (doc.exists()) {
+                    List<String> memberIds = (List<String>) doc.get("memberIds");
+                    if (memberIds != null) {
+                        for (String memberId : memberIds) {
+                            if (!memberId.equals(currentUserId)) {
+                                otherUserId = memberId;
+                                checkFriendship();
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+    }
+    
+    private void checkFriendship() {
+        if (otherUserId.isEmpty()) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        com.example.doan_zaloclone.services.FirestoreManager.getInstance().checkFriendship(
+            currentUserId, 
+            otherUserId,
+            new com.example.doan_zaloclone.services.FirestoreManager.OnFriendshipCheckListener() {
+                @Override
+                public void onResult(boolean friends) {
+                    areFriends = friends;
+                    android.util.Log.d("RoomActivity", "Friendship status with " + otherUserId + ": " + areFriends);
+                }
+                
+                @Override
+                public void onFailure(Exception e) {
+                    android.util.Log.e("RoomActivity", "Error checking friendship", e);
+                    areFriends = false;
+                }
+            }
+        );
+    }
+    
+    private int countMyMessages() {
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        int count = 0;
+        
+        for (Message msg : messages) {
+            if (currentUserId.equals(msg.getSenderId())) {
+                count++;
+            }
+        }
+        
+        return count;
     }
 
     private void setupListeners() {
@@ -175,9 +263,22 @@ public class RoomActivity extends AppCompatActivity {
     }
     
     private void loadAndShowImagePicker() {
-        // Load photos from device
-        List<Uri> photos = MediaStoreHelper.loadPhotos(this);
+        // Show loading indicator
+        Toast.makeText(this, "Đang tải ảnh...", Toast.LENGTH_SHORT).show();
         
+        // Load photos in background thread to prevent ANR
+        new Thread(() -> {
+            // Load photos from device (limited to 100 most recent)
+            List<Uri> photos = MediaStoreHelper.loadPhotos(this, 100);
+            
+            // Update UI on main thread
+            runOnUiThread(() -> {
+                setupImagePickerUI(photos);
+            });
+        }).start();
+    }
+    
+    private void setupImagePickerUI(List<Uri> photos) {
         // Setup adapter
         imagePickerAdapter = new ImagePickerAdapter(photos, new ImagePickerAdapter.OnItemClickListener() {
             @Override
@@ -383,6 +484,23 @@ public class RoomActivity extends AppCompatActivity {
         if (firebaseAuth.getCurrentUser() == null) {
             Toast.makeText(this, "You must be logged in to send messages", Toast.LENGTH_SHORT).show();
             return;
+        }
+        
+        // CHECK MESSAGE LIMIT FOR NON-FRIENDS
+        if (!areFriends) {
+            int myMessageCount = countMyMessages();
+            
+            if (myMessageCount >= 3) {
+                Toast.makeText(this, 
+                    "Bạn cần kết bạn để tiếp tục nhắn tin", 
+                    Toast.LENGTH_LONG).show();
+                return; // Block sending
+            }
+            
+            int remaining = 3 - myMessageCount;
+            Toast.makeText(this, 
+                "Còn " + remaining + " tin nhắn. Hãy kết bạn để tiếp tục!", 
+                Toast.LENGTH_SHORT).show();
         }
         
         // Disable send button while sending

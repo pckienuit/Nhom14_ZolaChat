@@ -1,8 +1,8 @@
-# Firebase Data Seeder
+# Firebase Scripts
 
-Python script to populate Firestore with demo data for development and testing.
+Collection of Python scripts for Firebase management.
 
-## Requirements
+## Prerequisites
 
 - Python 3.7+
 - firebase-admin package
@@ -20,138 +20,90 @@ pip install -r requirements.txt
 3. Save the JSON file as `serviceAccountKey.json` in this directory
 4. Never commit this file to Git (already in .gitignore)
 
-## Usage
+---
 
+## Scripts
+
+### 1. sync_auth_to_firestore.py
+
+Syncs all users from Firebase Authentication to Firestore users collection.
+
+**Use case**: When you have users in Authentication but not in Firestore.
+
+**Usage**:
+```bash
+python sync_auth_to_firestore.py
+```
+
+**What it does**:
+- Fetches all users from Firebase Authentication
+- Creates/updates corresponding documents in Firestore `users` collection
+- Normalizes emails to lowercase for consistent searching
+- Preserves existing device tokens
+
+**Output**:
+```
+✓ Created: John Doe (john@example.com)
+✓ Updated: Jane Smith (jane@example.com)
+
+Sync Summary:
+  Created: 5 users
+  Updated: 2 users
+  Total:   7 users
+```
+
+---
+
+### 2. seed_firebase_data.py
+
+Seeds demo data to Firestore for development and testing.
+
+**Use case**: Testing with demo conversations and messages.
+
+**Usage**:
 ```bash
 python seed_firebase_data.py
 ```
 
-### Step-by-step:
+When prompted:
+- Enter your Firebase Auth UID (or skip for demo user001)
+- Choose yes/no to clear existing data
 
-1. **Get your Firebase Auth UID**
-   - Option 1: Firebase Console > Authentication > Users tab > Copy UID
-   - Option 2: Check Android Logcat when you login to the app
+**Data created**:
+- 4 demo users (user002-005)
+- 4 conversations with you as member
+- 15 messages across conversations
 
-2. **Run the script**
-   ```bash
-   python seed_firebase_data.py
-   ```
+---
 
-3. **Enter your UID when prompted**
-   ```
-   Enter your Firebase Auth UID (or press Enter to skip):
-   > kO2Oy3j2kNVzyj06eiFdeFEBlwA2
-   ```
+## Common Workflows
 
-4. **Choose whether to clear existing data**
-   ```
-   Clear existing data before seeding? (yes/no)
-   > yes
-   ```
-
-## What the Script Does
-
-### If you provide your real UID:
-- Replaces `user001` with your real UID in all conversations
-- Creates conversations where YOU are one of the members
-- Creates messages where YOU are the sender
-- You will see these conversations immediately in the app
-
-### If you skip UID:
-- Uses placeholder `user001` for all conversations
-- You won't see conversations unless `user001` exists in your app
-
-## Data Created
-
-### Users (4)
-- user002: Trần Thị Bích (tranthibich@example.com)
-- user003: Lê Hoàng Châu (lehoangchau@example.com)
-- user004: Phạm Minh Đức (phamminhduc@example.com)
-- user005: Hoàng Thu Hà (hoangthuha@example.com)
-
-Note: user001 is skipped when using real UID
-
-### Conversations (4)
-Each conversation between you (real UID) and another user:
-- Your UID + user002
-- Your UID + user003
-- Your UID + user004
-- Your UID + user005
-
-Each conversation includes:
-- memberIds array with your UID
-- lastMessage
-- timestamp (sorted newest first)
-
-### Messages (15 total)
-3-4 messages per conversation with:
-- Messages from you (your UID as senderId)
-- Messages from the other user
-- Proper timestamps
-
-## Example
-
+### New Developer Setup
 ```bash
-$ python seed_firebase_data.py
+# 1. Install dependencies
+pip install -r requirements.txt
 
-Enter your Firebase Auth UID (or press Enter to skip):
-> kO2Oy3j2kNVzyj06eiFdeFEBlwA2
+# 2. Sync real users from Authentication
+python sync_auth_to_firestore.py
 
-Using UID: kO2Oy3j2kNVzyj06eiFdeFEBlwA2
-
-Clear existing data before seeding? (yes/no)
-> yes
-
-Initializing Firebase Admin SDK...
-Initialized.
-
-Clearing collection: users
-Deleted 5 documents
-
-Clearing collection: conversations
-Deleted 4 documents
-
-Seeding users...
-  Skipped: Nguyễn Văn An (using real Firebase Auth user)
-  Created: Trần Thị Bích
-  Created: Lê Hoàng Châu
-  Created: Phạm Minh Đức
-  Created: Hoàng Thu Hà
-Done
-
-Seeding conversations...
-  Created: Trần Thị Bích (members: ['kO2Oy3j2kNVzyj06eiFdeFEBlwA2', 'user002'])
-  Created: Lê Hoàng Châu (members: ['kO2Oy3j2kNVzyj06eiFdeFEBlwA2', 'user003'])
-  Created: Phạm Minh Đức (members: ['kO2Oy3j2kNVzyj06eiFdeFEBlwA2', 'user004'])
-  Created: Hoàng Thu Hà (members: ['kO2Oy3j2kNVzyj06eiFdeFEBlwA2', 'user005'])
-Done
-
-Seeding messages...
-Done: 15 messages
-
-Seeding completed successfully
-You can now open the app and see conversations!
+# 3. Add demo data for testing
+python seed_firebase_data.py
 ```
 
-## Customization
-
-Edit these variables in `seed_firebase_data.py`:
-- `DEMO_USERS` - List of demo users
-- `DEMO_CONVERSATIONS` - List of conversations
-- `DEMO_MESSAGES` - Messages for each conversation
-
-## Firestore Structure
-
+### Production Deployment
+```bash
+# Only sync real users, no demo data
+python sync_auth_to_firestore.py
 ```
-/users/{userId}
-  - id, name, email, avatarUrl, devices
 
-/conversations/{conversationId}
-  - id, name, lastMessage, timestamp, memberIds
-  
-  /messages/{messageId}
-    - id, senderId, content, type, timestamp
+### Testing Environment
+```bash
+# Clear and reseed with demo data
+python seed_firebase_data.py
+# Choose 'yes' when asked to clear data
 ```
+
+---
 
 ## Troubleshooting
 
@@ -167,8 +119,6 @@ pip install firebase-admin
 **File not found**
 - Ensure serviceAccountKey.json is in scripts/ directory
 
-**No conversations showing in app**
-- Make sure you entered the correct UID
-- Check that UID matches the user logged into the app
-- Verify memberIds in Firestore contains your UID
-- Check Android Logcat for any errors
+**No users found in Authentication**
+- Users must register through the app first
+- Or create them in Firebase Console > Authentication
