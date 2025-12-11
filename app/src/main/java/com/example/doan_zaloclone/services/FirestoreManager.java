@@ -484,24 +484,91 @@ public class FirestoreManager {
     }
 
     /**
-     * Accept friend request
+     * Accept friend request and auto-create conversation
      */
     public void acceptFriendRequest(@NonNull String requestId,
                                     @NonNull OnFriendRequestListener listener) {
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("status", "ACCEPTED");
-
+        // First get the request details
         db.collection(COLLECTION_FRIEND_REQUESTS)
                 .document(requestId)
-                .update(updates)
-                .addOnSuccessListener(aVoid -> {
-                    Log.d(TAG, "Friend request accepted: " + requestId);
-                    listener.onSuccess();
+                .get()
+                .addOnSuccessListener(requestDoc -> {
+                    if (!requestDoc.exists()) {
+                        listener.onFailure(new Exception("Request not found"));
+                        return;
+                    }
+                    
+                    String fromUserId = requestDoc.getString("fromUserId");
+                    String toUserId = requestDoc.getString("toUserId");
+                    String fromUserName = requestDoc.getString("fromUserName");
+                    
+                    // Update status to ACCEPTED
+                    Map<String, Object> updates = new HashMap<>();
+                    updates.put("status", "ACCEPTED");
+                    
+                    db.collection(COLLECTION_FRIEND_REQUESTS)
+                            .document(requestId)
+                            .update(updates)
+                            .addOnSuccessListener(aVoid -> {
+                                Log.d(TAG, "Friend request accepted: " + requestId);
+                                
+                                // Create conversation
+                                createFriendConversation(fromUserId, toUserId, fromUserName, listener);
+                            })
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG, "Error accepting friend request", e);
+                                listener.onFailure(e);
+                            });
                 })
                 .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error accepting friend request", e);
+                    Log.e(TAG, "Error fetching request", e);
                     listener.onFailure(e);
                 });
+    }
+
+    /**
+     * Create conversation when friends accept request
+     */
+    private void createFriendConversation(String user1Id, String user2Id, 
+                                         String user1Name, OnFriendRequestListener listener) {
+        // Check if conversation already exists
+        findExistingConversation(user1Id, user2Id, new OnConversationFoundListener() {
+            @Override
+            public void onFound(Conversation conversation) {
+                // Conversation exists, just notify success
+                Log.d(TAG, "Conversation already exists: " + conversation.getId());
+                listener.onSuccess();
+            }
+
+            @Override
+            public void onNotFound() {
+                // Create new conversation
+                DocumentReference convRef = db.collection(COLLECTION_CONVERSATIONS).document();
+                
+                Map<String, Object> conversationData = new HashMap<>();
+                conversationData.put("id", convRef.getId());
+                conversationData.put("memberIds", Arrays.asList(user1Id, user2Id));
+                conversationData.put("name", "");  // Will be set by app
+                conversationData.put("lastMessage", "Bạn đã kết bạn với " + user1Name);
+                conversationData.put("timestamp", System.currentTimeMillis());
+                
+                convRef.set(conversationData)
+                        .addOnSuccessListener(aVoid -> {
+                            Log.d(TAG, "Friend conversation created: " + convRef.getId());
+                            listener.onSuccess();
+                        })
+                        .addOnFailureListener(e -> {
+                            Log.w(TAG, "Failed to create conversation, but friendship accepted", e);
+                            listener.onSuccess();  // Still success since friendship is accepted
+                        });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                Log.w(TAG, "Error checking existing conversation", e);
+                listener.onSuccess();  // Still success
+            }
+        });
     }
 
     /**
@@ -672,8 +739,43 @@ public class FirestoreManager {
         void onFailure(Exception e);
     }
     
+    /**
+     * Check if two users are friends
+     */
+    public void checkFriendship(@NonNull String user1Id,
+                               @NonNull String user2Id,
+                               @NonNull OnFriendshipCheckListener listener) {
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("status", "ACCEPTED")
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    boolean areFriends = false;
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        String from = doc.getString("fromUserId");
+                        String to = doc.getString("toUserId");
+                        
+                        if ((user1Id.equals(from) && user2Id.equals(to)) ||
+                            (user1Id.equals(to) && user2Id.equals(from))) {
+                            areFriends = true;
+                            break;
+                        }
+                    }
+                    Log.d(TAG, "Friendship check: " + user1Id + " and " + user2Id + " = " + areFriends);
+                    listener.onResult(areFriends);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error checking friendship", e);
+                    listener.onFailure(e);
+                });
+    }
+    
     public interface OnFriendsLoadedListener {
         void onFriendsLoaded(List<User> friends);
+        void onFailure(Exception e);
+    }
+    
+    public interface OnFriendshipCheckListener {
+        void onResult(boolean areFriends);
         void onFailure(Exception e);
     }
 }
