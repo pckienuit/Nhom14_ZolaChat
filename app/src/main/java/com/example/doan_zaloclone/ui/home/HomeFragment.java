@@ -72,6 +72,7 @@ public class HomeFragment extends Fragment {
         }
         
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        android.util.Log.d("HomeFragment", "Current User ID: " + currentUserId);
         
         // Listen to conversations from Firestore
         conversationsListener = firestoreManager.listenToConversations(currentUserId, 
@@ -79,6 +80,7 @@ public class HomeFragment extends Fragment {
                 @Override
                 public void onConversationsChanged(List<Conversation> conversations) {
                     if (getActivity() != null) {
+                        android.util.Log.d("HomeFragment", "Received " + conversations.size() + " conversations");
                         conversationAdapter.updateConversations(conversations);
                     }
                 }
@@ -86,6 +88,7 @@ public class HomeFragment extends Fragment {
                 @Override
                 public void onFailure(Exception e) {
                     if (getActivity() != null) {
+                        android.util.Log.e("HomeFragment", "Error loading conversations", e);
                         Toast.makeText(getContext(), 
                             "Error loading conversations: " + e.getMessage(), 
                             Toast.LENGTH_SHORT).show();

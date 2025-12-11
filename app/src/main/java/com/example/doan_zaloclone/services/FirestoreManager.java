@@ -364,11 +364,10 @@ public class FirestoreManager {
             @NonNull OnConversationsChangedListener listener) {
         return db.collection(COLLECTION_CONVERSATIONS)
                 .whereArrayContains("memberIds", userId)
-                .orderBy("timestamp", com.google.firebase.firestore.Query.Direction.DESCENDING)
                 .addSnapshotListener(new com.google.firebase.firestore.EventListener<QuerySnapshot>() {
                     @Override
                     public void onEvent(QuerySnapshot querySnapshot,
-                                      com.google.firebase.firestore.FirebaseFirestoreException e) {
+                                        com.google.firebase.firestore.FirebaseFirestoreException e) {
                         if (e != null) {
                             Log.e(TAG, "Error listening to conversations", e);
                             listener.onFailure(e);
@@ -383,6 +382,8 @@ public class FirestoreManager {
                                     conversations.add(conversation);
                                 }
                             }
+                            // Sort by timestamp descending (newest first)
+                            conversations.sort((c1, c2) -> Long.compare(c2.getTimestamp(), c1.getTimestamp()));
                             Log.d(TAG, "Loaded " + conversations.size() + " conversations for user: " + userId);
                             listener.onConversationsChanged(conversations);
                         }
