@@ -2,13 +2,18 @@ package com.example.doan_zaloclone.ui.room;
 
 import android.net.Uri;
 import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.widget.SwitchCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -18,6 +23,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Message;
 import com.example.doan_zaloclone.repository.ChatRepository;
+import com.example.doan_zaloclone.utils.ImageUtils;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.ListenerRegistration;
 
@@ -128,25 +134,70 @@ public class RoomActivity extends AppCompatActivity {
             return;
         }
         
+        // Show preview dialog instead of uploading immediately
+        showImagePreviewDialog(imageUri);
+    }
+    
+    private void showImagePreviewDialog(Uri imageUri) {
+        // Inflate dialog layout
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_image_preview, null);
+        
+        ImageView previewImageView = dialogView.findViewById(R.id.previewImageView);
+        SwitchCompat compressionSwitch = dialogView.findViewById(R.id.compressionSwitch);
+        
+        // Load image preview
+        previewImageView.setImageURI(imageUri);
+        
+        // Create dialog
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(dialogView)
+                .setCancelable(true)
+                .create();
+        
+        // Handle cancel button
+        dialogView.findViewById(R.id.cancelButton).setOnClickListener(v -> dialog.dismiss());
+        
+        // Handle send button
+        dialogView.findViewById(R.id.sendButton).setOnClickListener(v -> {
+            dialog.dismiss();
+            boolean shouldCompress = compressionSwitch.isChecked();
+            uploadImage(imageUri, shouldCompress);
+        });
+        
+        dialog.show();
+    }
+    
+    private void uploadImage(Uri imageUri, boolean shouldCompress) {
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
         Toast.makeText(this, "Uploading image...", Toast.LENGTH_SHORT).show();
         
-        chatRepository.uploadImageAndSendMessage(conversationId, imageUri, currentUserId,
-                new ChatRepository.SendMessageCallback() {
-                    @Override
-                    public void onSuccess() {
-                        runOnUiThread(() -> {
-                            Toast.makeText(RoomActivity.this, "Image sent!", Toast.LENGTH_SHORT).show();
-                        });
-                    }
+        try {
+            // Compress if enabled
+            Uri finalImageUri = imageUri;
+            if (shouldCompress) {
+                finalImageUri = ImageUtils.compressImage(this, imageUri);
+            }
+            
+            Uri uploadUri = finalImageUri;
+            chatRepository.uploadImageAndSendMessage(conversationId, uploadUri, currentUserId,
+                    new ChatRepository.SendMessageCallback() {
+                        @Override
+                        public void onSuccess() {
+                            runOnUiThread(() -> {
+                                Toast.makeText(RoomActivity.this, "Image sent!", Toast.LENGTH_SHORT).show();
+                            });
+                        }
 
-                    @Override
-                    public void onError(String error) {
-                        runOnUiThread(() -> {
-                            Toast.makeText(RoomActivity.this, "Failed to send image: " + error, Toast.LENGTH_SHORT).show();
-                        });
-                    }
-                });
+                        @Override
+                        public void onError(String error) {
+                            runOnUiThread(() -> {
+                                Toast.makeText(RoomActivity.this, "Failed to send image: " + error, Toast.LENGTH_SHORT).show();
+                            });
+                        }
+                    });
+        } catch (Exception e) {
+            Toast.makeText(this, "Failed to process image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void handleSendMessage() {

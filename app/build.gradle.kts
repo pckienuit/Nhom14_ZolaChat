@@ -54,6 +54,9 @@ dependencies {
     implementation(libs.cardview)
     implementation(libs.glide)
     
+    // ExifInterface for image rotation
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    
     // Cloudinary for image uploads
     implementation("com.cloudinary:cloudinary-android:3.0.2")
     
