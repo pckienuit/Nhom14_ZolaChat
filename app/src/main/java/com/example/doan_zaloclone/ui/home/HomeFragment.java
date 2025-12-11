@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -15,6 +16,9 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.ui.room.RoomActivity;
 import com.example.doan_zaloclone.models.Conversation;
+import com.example.doan_zaloclone.services.FirestoreManager;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,12 +27,19 @@ public class HomeFragment extends Fragment {
 
     private RecyclerView conversationsRecyclerView;
     private ConversationAdapter conversationAdapter;
+    
+    private FirestoreManager firestoreManager;
+    private FirebaseAuth firebaseAuth;
+    private ListenerRegistration conversationsListener;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, 
                            @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_home, container, false);
+        
+        firestoreManager = FirestoreManager.getInstance();
+        firebaseAuth = FirebaseAuth.getInstance();
         
         initViews(view);
         setupRecyclerView();
@@ -54,12 +65,45 @@ public class HomeFragment extends Fragment {
     }
 
     private void loadConversations() {
-        // Demo data
-        List<Conversation> conversations = new ArrayList<>();
-        conversations.add(new Conversation("1", "User Test 1", "Chào bạn!", System.currentTimeMillis()));
-        conversations.add(new Conversation("2", "User Test 2", "Hẹn gặp lại!", System.currentTimeMillis()));
-        conversations.add(new Conversation("3", "User Test 3", "Cảm ơn bạn", System.currentTimeMillis()));
+        // Check if user is logged in
+        if (firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(getContext(), "Please login first", Toast.LENGTH_SHORT).show();
+            return;
+        }
         
-        conversationAdapter.updateConversations(conversations);
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        android.util.Log.d("HomeFragment", "Current User ID: " + currentUserId);
+        
+        // Listen to conversations from Firestore
+        conversationsListener = firestoreManager.listenToConversations(currentUserId, 
+            new FirestoreManager.OnConversationsChangedListener() {
+                @Override
+                public void onConversationsChanged(List<Conversation> conversations) {
+                    if (getActivity() != null) {
+                        android.util.Log.d("HomeFragment", "Received " + conversations.size() + " conversations");
+                        conversationAdapter.updateConversations(conversations);
+                    }
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    if (getActivity() != null) {
+                        android.util.Log.e("HomeFragment", "Error loading conversations", e);
+                        Toast.makeText(getContext(), 
+                            "Error loading conversations: " + e.getMessage(), 
+                            Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
+    }
+    
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        // Clean up Firestore listener
+        if (conversationsListener != null) {
+            conversationsListener.remove();
+        }
     }
 }
+

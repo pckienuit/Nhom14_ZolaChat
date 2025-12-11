@@ -1,12 +1,17 @@
 package com.example.doan_zaloclone.ui.room;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.ImageButton;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -14,6 +19,7 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.SwitchCompat;
+import androidx.core.content.ContextCompat;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
@@ -24,10 +30,12 @@ import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Message;
 import com.example.doan_zaloclone.repository.ChatRepository;
 import com.example.doan_zaloclone.utils.ImageUtils;
+import com.example.doan_zaloclone.utils.MediaStoreHelper;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class RoomActivity extends AppCompatActivity {
 
@@ -45,8 +53,18 @@ public class RoomActivity extends AppCompatActivity {
     private FirebaseAuth firebaseAuth;
     private ListenerRegistration messagesListener;
     
+    // Image picker UI
     private ImageButton attachImageButton;
-    private ActivityResultLauncher<String> imagePickerLauncher;
+    private FrameLayout imagePickerContainer;
+    private LinearLayout normalInputLayout;
+    private LinearLayout imageInputLayout;
+    private ImageButton backButton;
+    private Spinner qualitySpinner;
+    private TextView selectedCountTextView;
+    private ImageButton sendImagesButton;
+    private ImagePickerAdapter imagePickerAdapter;
+    private List<Uri> selectedPhotos = new ArrayList<>();
+    private ActivityResultLauncher<String> permissionLauncher;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,10 +77,16 @@ public class RoomActivity extends AppCompatActivity {
         chatRepository = new ChatRepository();
         firebaseAuth = FirebaseAuth.getInstance();
         
-        // Register image picker
-        imagePickerLauncher = registerForActivityResult(
-                new ActivityResultContracts.GetContent(),
-                this::handleImageSelected
+        // Register permission launcher
+        permissionLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(),
+                isGranted -> {
+                    if (isGranted) {
+                        loadAndShowImagePicker();
+                    } else {
+                        Toast.makeText(this, "Cần quyền truy cập ảnh để chọn ảnh", Toast.LENGTH_SHORT).show();
+                    }
+                }
         );
 
         initViews();
@@ -79,6 +103,15 @@ public class RoomActivity extends AppCompatActivity {
         messageEditText = findViewById(R.id.messageEditText);
         sendButton = findViewById(R.id.sendButton);
         attachImageButton = findViewById(R.id.attachImageButton);
+        
+        // Image picker views
+        imagePickerContainer = findViewById(R.id.imagePickerContainer);
+        normalInputLayout = findViewById(R.id.normalInputLayout);
+        imageInputLayout = findViewById(R.id.imageInputLayout);
+        backButton = findViewById(R.id.backButton);
+        qualitySpinner = findViewById(R.id.qualitySpinner);
+        selectedCountTextView = findViewById(R.id.selectedCountTextView);
+        sendImagesButton = findViewById(R.id.sendImagesButton);
     }
 
     private void setupToolbar() {
@@ -122,14 +155,155 @@ public class RoomActivity extends AppCompatActivity {
 
     private void setupListeners() {
         sendButton.setOnClickListener(v -> handleSendMessage());
-        attachImageButton.setOnClickListener(v -> openImagePicker());
+        attachImageButton.setOnClickListener(v -> requestPermissionAndShowPicker());
+        backButton.setOnClickListener(v -> hideImagePicker());
+        sendImagesButton.setOnClickListener(v -> handleSendImages());
+    }
+    
+    private void requestPermissionAndShowPicker() {
+        // Check if permission is already granted
+        String permission = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+                ? Manifest.permission.READ_MEDIA_IMAGES
+                : Manifest.permission.READ_EXTERNAL_STORAGE;
+        
+        if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) {
+            loadAndShowImagePicker();
+        } else {
+            // Request permission
+            permissionLauncher.launch(permission);
+        }
+    }
+    
+    private void loadAndShowImagePicker() {
+        // Load photos from device
+        List<Uri> photos = MediaStoreHelper.loadPhotos(this);
+        
+        // Setup adapter
+        imagePickerAdapter = new ImagePickerAdapter(photos, new ImagePickerAdapter.OnItemClickListener() {
+            @Override
+            public void onCameraClick() {
+                Toast.makeText(RoomActivity.this, "Camera feature coming soon", Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onPhotoClick(Uri photoUri, int position) {
+                updateImageModeUI();
+            }
+        });
+        
+        // Inflate bottom sheet layout
+        View bottomSheetView = LayoutInflater.from(this)
+                .inflate(R.layout.bottom_sheet_image_picker, imagePickerContainer, false);
+        RecyclerView photosRecyclerView = bottomSheetView.findViewById(R.id.photosRecyclerView);
+        photosRecyclerView.setAdapter(imagePickerAdapter);
+        
+        // Add to container and show
+        imagePickerContainer.removeAllViews();
+        imagePickerContainer.addView(bottomSheetView);
+        imagePickerContainer.setVisibility(View.VISIBLE);
+        
+        // Switch to image mode
+        switchToImageMode();
+    }
+    
+    private void hideImagePicker() {
+        imagePickerContainer.setVisibility(View.GONE);
+        imagePickerContainer.removeAllViews();
+        if (imagePickerAdapter != null) {
+            imagePickerAdapter.clearSelection();
+        }
+        switchToNormalMode();
+    }
+    
+    private void switchToImageMode() {
+        normalInputLayout.setVisibility(View.GONE);
+        imageInputLayout.setVisibility(View.VISIBLE);
+        updateImageModeUI();
+    }
+    
+    private void switchToNormalMode() {
+        imageInputLayout.setVisibility(View.GONE);
+        normalInputLayout.setVisibility(View.VISIBLE);
+    }
+    
+    private void updateImageModeUI() {
+        if (imagePickerAdapter != null) {
+            selectedPhotos = imagePickerAdapter.getSelectedPhotos();
+            int count = selectedPhotos.size();
+            selectedCountTextView.setText(count + " ảnh đã chọn");
+        }
+    }
+    
+    private void handleSendImages() {
+        if (selectedPhotos.isEmpty()) {
+            Toast.makeText(this, "Vui lòng chọn ít nhất 1 ảnh", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Get quality setting
+        int qualityIndex = qualitySpinner.getSelectedItemPosition();
+        
+        Toast.makeText(this, "Đang gửi " + selectedPhotos.size() + " ảnh...", Toast.LENGTH_SHORT).show();
+        
+        // Upload each image
+        for (Uri photoUri : selectedPhotos) {
+            uploadSingleImage(photoUri, qualityIndex);
+        }
+        
+        // Hide picker
+        hideImagePicker();
+    }
+    
+    private void uploadSingleImage(Uri imageUri, int qualityIndex) {
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        try {
+            Uri finalImageUri = imageUri;
+            
+            // Compress based on quality setting
+            if (qualityIndex == 0) {
+                // HD - no compression
+            } else if (qualityIndex == 1) {
+                // Standard - 1080p, 85%
+                finalImageUri = ImageUtils.compressImage(this, imageUri, 85);
+            } else if (qualityIndex == 2) {
+                // Low - 720p, 75%
+                finalImageUri = compressImageLowQuality(imageUri);
+            }
+            
+            Uri uploadUri = finalImageUri;
+            chatRepository.uploadImageAndSendMessage(conversationId, uploadUri, currentUserId,
+                    new ChatRepository.SendMessageCallback() {
+                        @Override
+                        public void onSuccess() {
+                            // Silent success for batch upload
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            runOnUiThread(() -> {
+                                Toast.makeText(RoomActivity.this, "Lỗi gửi ảnh: " + error, Toast.LENGTH_SHORT).show();
+                            });
+                        }
+                    });
+        } catch (Exception e) {
+            Toast.makeText(this, "Lỗi xử lý ảnh: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    private Uri compressImageLowQuality(Uri imageUri) throws Exception {
+        // For low quality, we could further resize to 720px
+        // For now, use same method with lower quality
+        return ImageUtils.compressImage(this, imageUri, 75);
     }
     
     private void openImagePicker() {
-        imagePickerLauncher.launch("image/*");
+        // Old method - no longer used
+        requestPermissionAndShowPicker();
     }
     
     private void handleImageSelected(Uri imageUri) {
+        // Old method - no longer used
         if (imageUri == null || firebaseAuth.getCurrentUser() == null) {
             return;
         }

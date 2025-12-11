@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="image_quality_options">
+        <item>HD (Gốc)</item>
+        <item>Chuẩn (1080p)</item>
+        <item>Thấp (720p)</item>
+    </string-array>
+</resources>
