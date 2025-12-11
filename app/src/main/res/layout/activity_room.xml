@@ -35,51 +35,120 @@
         android:padding="16dp"
         android:clipToPadding="false"
         app:layout_constraintTop_toBottomOf="@id/toolbar"
-        app:layout_constraintBottom_toTopOf="@id/messageInputLayout"
+        app:layout_constraintBottom_toTopOf="@id/inputContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <LinearLayout
-        android:id="@+id/messageInputLayout"
+    <!-- Container for input layouts -->
+    <FrameLayout
+        android:id="@+id/inputContainer"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp"
-        android:background="@color/white"
-        android:elevation="4dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/imagePickerContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <ImageButton
-            android:id="@+id/attachImageButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
-            android:src="@drawable/ic_image"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:tint="@color/colorPrimary"
-            android:contentDescription="Attach image" />
-
-        <EditText
-            android:id="@+id/messageEditText"
-            android:layout_width="0dp"
+        <!-- Normal input layout (default) -->
+        <LinearLayout
+            android:id="@+id/normalInputLayout"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="Type a message..."
-            android:padding="12dp"
-            android:background="@drawable/message_input_background"
-            android:maxLines="4" />
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:background="@color/white"
+            android:elevation="4dp"
+            android:visibility="visible">
 
-        <ImageButton
-            android:id="@+id/sendButton"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginStart="8dp"
-            android:src="@drawable/ic_send"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:tint="@color/colorPrimary" />
+            <ImageButton
+                android:id="@+id/attachImageButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:src="@drawable/ic_image"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="@color/colorPrimary"
+                android:contentDescription="Attach image" />
 
-    </LinearLayout>
+            <EditText
+                android:id="@+id/messageEditText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="Type a message..."
+                android:padding="12dp"
+                android:background="@drawable/message_input_background"
+                android:maxLines="4" />
+
+            <ImageButton
+                android:id="@+id/sendButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="8dp"
+                android:src="@drawable/ic_send"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="@color/colorPrimary" />
+
+        </LinearLayout>
+
+        <!-- Image mode input layout (hidden by default) -->
+        <LinearLayout
+            android:id="@+id/imageInputLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="8dp"
+            android:background="@color/white"
+            android:elevation="4dp"
+            android:visibility="gone"
+            android:gravity="center_vertical">
+
+            <ImageButton
+                android:id="@+id/backButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_arrow_back"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="@color/colorPrimary"
+                android:contentDescription="Back" />
+
+            <Spinner
+                android:id="@+id/qualitySpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="8dp"
+                android:entries="@array/image_quality_options" />
+
+            <TextView
+                android:id="@+id/selectedCountTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:text="0 ảnh"
+                android:textSize="14sp"
+                android:textColor="#666666" />
+
+            <ImageButton
+                android:id="@+id/sendImagesButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@drawable/ic_send"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="@color/colorPrimary"
+                android:contentDescription="Send images" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <!-- Container for image picker bottom sheet -->
+    <FrameLayout
+        android:id="@+id/imagePickerContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
