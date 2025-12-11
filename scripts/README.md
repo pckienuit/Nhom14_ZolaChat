@@ -26,27 +26,112 @@ pip install -r requirements.txt
 python seed_firebase_data.py
 ```
 
-When prompted:
-- Press Enter to keep existing data
-- Type "yes" to clear all existing data before seeding
+### Step-by-step:
+
+1. **Get your Firebase Auth UID**
+   - Option 1: Firebase Console > Authentication > Users tab > Copy UID
+   - Option 2: Check Android Logcat when you login to the app
+
+2. **Run the script**
+   ```bash
+   python seed_firebase_data.py
+   ```
+
+3. **Enter your UID when prompted**
+   ```
+   Enter your Firebase Auth UID (or press Enter to skip):
+   > kO2Oy3j2kNVzyj06eiFdeFEBlwA2
+   ```
+
+4. **Choose whether to clear existing data**
+   ```
+   Clear existing data before seeding? (yes/no)
+   > yes
+   ```
+
+## What the Script Does
+
+### If you provide your real UID:
+- Replaces `user001` with your real UID in all conversations
+- Creates conversations where YOU are one of the members
+- Creates messages where YOU are the sender
+- You will see these conversations immediately in the app
+
+### If you skip UID:
+- Uses placeholder `user001` for all conversations
+- You won't see conversations unless `user001` exists in your app
 
 ## Data Created
 
-### Users (5)
-- user001: Nguyễn Văn An (nguyenvanan@example.com)
+### Users (4)
 - user002: Trần Thị Bích (tranthibich@example.com)
 - user003: Lê Hoàng Châu (lehoangchau@example.com)
 - user004: Phạm Minh Đức (phamminhduc@example.com)
 - user005: Hoàng Thu Hà (hoangthuha@example.com)
 
+Note: user001 is skipped when using real UID
+
 ### Conversations (4)
-Each conversation between user001 and another user, includes:
-- memberIds array
+Each conversation between you (real UID) and another user:
+- Your UID + user002
+- Your UID + user003
+- Your UID + user004
+- Your UID + user005
+
+Each conversation includes:
+- memberIds array with your UID
 - lastMessage
-- timestamp
+- timestamp (sorted newest first)
 
 ### Messages (15 total)
-3-4 messages per conversation with proper timestamps.
+3-4 messages per conversation with:
+- Messages from you (your UID as senderId)
+- Messages from the other user
+- Proper timestamps
+
+## Example
+
+```bash
+$ python seed_firebase_data.py
+
+Enter your Firebase Auth UID (or press Enter to skip):
+> kO2Oy3j2kNVzyj06eiFdeFEBlwA2
+
+Using UID: kO2Oy3j2kNVzyj06eiFdeFEBlwA2
+
+Clear existing data before seeding? (yes/no)
+> yes
+
+Initializing Firebase Admin SDK...
+Initialized.
+
+Clearing collection: users
+Deleted 5 documents
+
+Clearing collection: conversations
+Deleted 4 documents
+
+Seeding users...
+  Skipped: Nguyễn Văn An (using real Firebase Auth user)
+  Created: Trần Thị Bích
+  Created: Lê Hoàng Châu
+  Created: Phạm Minh Đức
+  Created: Hoàng Thu Hà
+Done
+
+Seeding conversations...
+  Created: Trần Thị Bích (members: ['kO2Oy3j2kNVzyj06eiFdeFEBlwA2', 'user002'])
+  Created: Lê Hoàng Châu (members: ['kO2Oy3j2kNVzyj06eiFdeFEBlwA2', 'user003'])
+  Created: Phạm Minh Đức (members: ['kO2Oy3j2kNVzyj06eiFdeFEBlwA2', 'user004'])
+  Created: Hoàng Thu Hà (members: ['kO2Oy3j2kNVzyj06eiFdeFEBlwA2', 'user005'])
+Done
+
+Seeding messages...
+Done: 15 messages
+
+Seeding completed successfully
+You can now open the app and see conversations!
+```
 
 ## Customization
 
@@ -81,3 +166,9 @@ pip install firebase-admin
 
 **File not found**
 - Ensure serviceAccountKey.json is in scripts/ directory
+
+**No conversations showing in app**
+- Make sure you entered the correct UID
+- Check that UID matches the user logged into the app
+- Verify memberIds in Firestore contains your UID
+- Check Android Logcat for any errors

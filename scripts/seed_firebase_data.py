@@ -7,10 +7,11 @@ Seeds demo data to Firestore for development/testing
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime, timedelta
+import sys
 
 SERVICE_ACCOUNT_KEY = "serviceAccountKey.json"
 
-# Demo data
+# Demo users (these are placeholders, user001 will be replaced with real UID)
 DEMO_USERS = [
     {"id": "user001", "name": "Nguyễn Văn An", "email": "nguyenvanan@example.com", "avatarUrl": "", "devices": {}},
     {"id": "user002", "name": "Trần Thị Bích", "email": "tranthibich@example.com", "avatarUrl": "", "devices": {}},
@@ -53,11 +54,12 @@ DEMO_MESSAGES = {
 
 
 class FirebaseSeeder:
-    def __init__(self, service_account_path):
+    def __init__(self, service_account_path, real_user_id=None):
         print("Initializing Firebase Admin SDK...")
         cred = credentials.Certificate(service_account_path)
         firebase_admin.initialize_app(cred)
         self.db = firestore.client()
+        self.real_user_id = real_user_id
         print("Initialized.\n")
 
     def clear_collection(self, collection_name):
@@ -72,9 +74,14 @@ class FirebaseSeeder:
     def seed_users(self):
         print("Seeding users...")
         for user in DEMO_USERS:
+            # Skip user001 if we're using real UID (already exists in Firebase Auth)
+            if user["id"] == "user001" and self.real_user_id:
+                print(f"  Skipped: {user['name']} (using real Firebase Auth user)")
+                continue
+            
             self.db.collection("users").document(user["id"]).set(user)
             print(f"  Created: {user['name']}")
-        print(f"Done: {len(DEMO_USERS)} users\n")
+        print(f"Done\n")
 
     def seed_conversations(self):
         print("Seeding conversations...")
@@ -82,17 +89,23 @@ class FirebaseSeeder:
         
         for i, conv in enumerate(DEMO_CONVERSATIONS):
             timestamp = int((base_time - timedelta(hours=i)).timestamp() * 1000)
+            
+            # Replace user001 with real UID in memberIds
+            member_ids = conv["memberIds"].copy()
+            if self.real_user_id:
+                member_ids = [self.real_user_id if uid == "user001" else uid for uid in member_ids]
+            
             conv_data = {
                 "id": conv["id"],
                 "name": conv["name"],
                 "lastMessage": conv["lastMessage"],
                 "timestamp": timestamp,
-                "memberIds": conv["memberIds"]
+                "memberIds": member_ids
             }
             self.db.collection("conversations").document(conv["id"]).set(conv_data)
-            print(f"  Created: {conv['name']}")
+            print(f"  Created: {conv['name']} (members: {member_ids})")
         
-        print(f"Done: {len(DEMO_CONVERSATIONS)} conversations\n")
+        print(f"Done\n")
 
     def seed_messages(self):
         print("Seeding messages...")
@@ -101,8 +114,14 @@ class FirebaseSeeder:
         for conv_id, messages in DEMO_MESSAGES.items():
             for i, msg_data in enumerate(messages):
                 timestamp = int((base_time - timedelta(minutes=len(messages)-i)).timestamp() * 1000)
+                
+                # Replace user001 with real UID in senderId
+                sender_id = msg_data["senderId"]
+                if self.real_user_id and sender_id == "user001":
+                    sender_id = self.real_user_id
+                
                 message = {
-                    "senderId": msg_data["senderId"],
+                    "senderId": sender_id,
                     "content": msg_data["content"],
                     "type": msg_data["type"],
                     "timestamp": timestamp
@@ -115,10 +134,14 @@ class FirebaseSeeder:
         print(f"Done: {total} messages\n")
 
     def run(self, clear_existing=False):
-        print("=" * 50)
+        print("=" * 60)
         print("Firebase Data Seeder")
-        print("=" * 50)
+        print("=" * 60)
         print()
+        
+        if self.real_user_id:
+            print(f"Using real Firebase Auth UID: {self.real_user_id}")
+            print(f"This will replace 'user001' in all conversations\n")
         
         if clear_existing:
             self.clear_collection("users")
@@ -128,14 +151,14 @@ class FirebaseSeeder:
         self.seed_conversations()
         self.seed_messages()
         
-        print("=" * 50)
+        print("=" * 60)
         print("Seeding completed successfully")
-        print("=" * 50)
+        print("=" * 60)
+        print("\nYou can now open the app and see conversations!")
 
 
 def main():
     import os
-    import sys
     
     if not os.path.exists(SERVICE_ACCOUNT_KEY):
         print("ERROR: serviceAccountKey.json not found")
@@ -144,12 +167,31 @@ def main():
         print("> Generate new private key\n")
         sys.exit(1)
     
+    print("=" * 60)
+    print("Firebase Data Seeder Setup")
+    print("=" * 60)
+    print()
+    print("Do you want to use your real Firebase Auth UID?")
+    print("Get your UID from:")
+    print("  - Firebase Console > Authentication > Users")
+    print("  - Or from Android Logcat when you login")
+    print()
+    print("Enter your Firebase Auth UID (or press Enter to skip):")
+    real_uid = input("> ").strip()
+    
+    if not real_uid:
+        real_uid = None
+        print("\nNo UID provided. Using placeholder 'user001'")
+        print("Note: You won't see conversations unless user001 exists in your app\n")
+    else:
+        print(f"\nUsing UID: {real_uid}\n")
+    
     print("Clear existing data before seeding? (yes/no)")
     choice = input("> ").strip().lower()
     clear_existing = choice == 'yes'
     print()
     
-    seeder = FirebaseSeeder(SERVICE_ACCOUNT_KEY)
+    seeder = FirebaseSeeder(SERVICE_ACCOUNT_KEY, real_uid)
     seeder.run(clear_existing=clear_existing)
 
 
