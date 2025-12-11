@@ -72,10 +72,13 @@ public class AuthRepository {
      * Save user information to Firestore
      */
     private void saveUserToFirestore(String userId, String name, String email, AuthCallback callback) {
+        // Normalize email to lowercase for consistent searching
+        String normalizedEmail = email.trim().toLowerCase();
+        
         Map<String, Object> user = new HashMap<>();
         user.put("userId", userId);
         user.put("name", name);
-        user.put("email", email);
+        user.put("email", normalizedEmail);  // Save lowercase email
         user.put("createdAt", System.currentTimeMillis());
         user.put("isOnline", true);
         user.put("lastSeen", System.currentTimeMillis());
@@ -92,6 +95,7 @@ public class AuthRepository {
                             : "Failed to save user data";
                     callback.onError(errorMessage);
                 });
+    }
     }
 
     /**

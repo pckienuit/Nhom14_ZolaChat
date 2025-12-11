@@ -74,23 +74,26 @@ public class FirestoreManager {
                               @NonNull String name,
                               String deviceToken,
                               @NonNull OnUserCreatedListener listener) {
-        // Tạo User object
-        User user = new User(userId, name, email, ""); // avatarUrl rỗng ban đầu
+        // Normalize email to lowercase for consistent searching
+        String normalizedEmail = email.trim().toLowerCase();
+        
+        // Create User object
+        User user = new User(userId, name, normalizedEmail, ""); // avatarUrl empty initially
 
-        // Thêm device token nếu có
+        // Add device token if available
         if (deviceToken != null && !deviceToken.isEmpty()) {
             user.addDevice(deviceToken);
         }
 
-        // Lưu vào Firestore
+        // Save to Firestore
         db.collection(COLLECTION_USERS)
                 .document(userId)
                 .set(user)
                 .addOnSuccessListener(new OnSuccessListener<Void>() {
                     @Override
                     public void onSuccess(Void aVoid) {
-                        Log.d(TAG, "User created successfully: " + userId);
-                        listener.onSuccess(user);
+                        Log.d(TAG, "User created successfully: " + userId + " with email: " + normalizedEmail);
+                        listener.onSuccess();
                     }
                 })
                 .addOnFailureListener(new OnFailureListener() {
@@ -181,27 +184,35 @@ public class FirestoreManager {
      */
     public void searchUserByEmail(@NonNull String email,
                                   @NonNull OnUserSearchListener listener) {
+        String searchEmail = email.trim().toLowerCase();
+        Log.d(TAG, "Searching for user with email: " + searchEmail);
+        
         db.collection(COLLECTION_USERS)
-                .whereEqualTo("email", email.trim().toLowerCase())
+                .whereEqualTo("email", searchEmail)
                 .get()
                 .addOnSuccessListener(new OnSuccessListener<QuerySnapshot>() {
                     @Override
                     public void onSuccess(QuerySnapshot querySnapshot) {
+                        Log.d(TAG, "Search query executed, found " + querySnapshot.size() + " documents");
                         List<User> users = new ArrayList<>();
                         for (DocumentSnapshot document : querySnapshot.getDocuments()) {
+                            Log.d(TAG, "Processing document: " + document.getId());
                             User user = document.toObject(User.class);
                             if (user != null) {
+                                Log.d(TAG, "User found: " + user.getName() + " (" + user.getEmail() + ")");
                                 users.add(user);
+                            } else {
+                                Log.w(TAG, "Failed to parse user from document: " + document.getId());
                             }
                         }
-                        Log.d(TAG, "Found " + users.size() + " users with email: " + email);
+                        Log.d(TAG, "Returning " + users.size() + " users");
                         listener.onSuccess(users);
                     }
                 })
                 .addOnFailureListener(new OnFailureListener() {
                     @Override
                     public void onFailure(@NonNull Exception e) {
-                        Log.e(TAG, "Error searching user by email: " + email, e);
+                        Log.e(TAG, "Error searching user by email: " + searchEmail, e);
                         listener.onFailure(e);
                     }
                 });
