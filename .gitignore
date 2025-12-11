@@ -136,3 +136,4 @@ backup_react/
 
 # Firebase
 google-services.json
+serviceAccountKey.json
