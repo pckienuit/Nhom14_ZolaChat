@@ -4,34 +4,53 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class Conversation {
+    public static final String TYPE_FRIEND = "FRIEND";
+    public static final String TYPE_GROUP = "GROUP";
+    
     private String id;
     private String name;
     private String lastMessage;
     private long timestamp;
-    private List<String> memberIds; // List userId để query conversations của user
-    private java.util.Map<String, String> memberNames; // Map userId -> userName để hiển thị
+    private List<String> memberIds;
+    private java.util.Map<String, String> memberNames;
+    
+    private String type;
+    private String adminId;
+    private String avatarUrl;
 
-    // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Conversation() {
         this.memberIds = new ArrayList<>();
+        this.type = TYPE_FRIEND;
     }
 
-    // Constructor cũ (backward compatible)
     public Conversation(String id, String name, String lastMessage, long timestamp) {
         this.id = id;
         this.name = name;
         this.lastMessage = lastMessage;
         this.timestamp = timestamp;
         this.memberIds = new ArrayList<>();
+        this.type = TYPE_FRIEND;
     }
 
-    // Constructor đầy đủ
     public Conversation(String id, String name, String lastMessage, long timestamp, List<String> memberIds) {
         this.id = id;
         this.name = name;
         this.lastMessage = lastMessage;
         this.timestamp = timestamp;
         this.memberIds = memberIds != null ? memberIds : new ArrayList<>();
+        this.type = TYPE_FRIEND;
+    }
+    
+    public Conversation(String id, String name, String lastMessage, long timestamp, 
+                       List<String> memberIds, String type, String adminId, String avatarUrl) {
+        this.id = id;
+        this.name = name;
+        this.lastMessage = lastMessage;
+        this.timestamp = timestamp;
+        this.memberIds = memberIds != null ? memberIds : new ArrayList<>();
+        this.type = type != null ? type : TYPE_FRIEND;
+        this.adminId = adminId;
+        this.avatarUrl = avatarUrl;
     }
 
     // Getters
@@ -54,8 +73,19 @@ public class Conversation {
     public List<String> getMemberIds() {
         return memberIds;
     }
+    
+    public String getType() {
+        return type;
+    }
+    
+    public String getAdminId() {
+        return adminId;
+    }
+    
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
 
-    // Setters (cần cho Firestore)
     public void setId(String id) {
         this.id = id;
     }
@@ -75,8 +105,19 @@ public class Conversation {
     public void setMemberIds(List<String> memberIds) {
         this.memberIds = memberIds;
     }
+    
+    public void setType(String type) {
+        this.type = type;
+    }
+    
+    public void setAdminId(String adminId) {
+        this.adminId = adminId;
+    }
+    
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
+    }
 
-    // Helper methods
     public void addMember(String userId) {
         if (this.memberIds == null) {
             this.memberIds = new ArrayList<>();
@@ -104,11 +145,18 @@ public class Conversation {
         this.memberNames = memberNames;
     }
     
-    /**
-     * Helper method to get the other user's name in a 1-on-1 conversation
-     * @param currentUserId The current user's ID
-     * @return The other user's name, or empty string if not found
-     */
+    public boolean isGroupChat() {
+        return TYPE_GROUP.equals(type);
+    }
+    
+    public boolean isFriendChat() {
+        return TYPE_FRIEND.equals(type);
+    }
+    
+    public boolean isAdmin(String userId) {
+        return userId != null && userId.equals(adminId);
+    }
+    
     public String getOtherUserName(String currentUserId) {
         android.util.Log.d("Conversation", "getOtherUserName called - currentUserId: " + currentUserId +
                           ", memberNames: " + memberNames + 
@@ -139,11 +187,15 @@ public class Conversation {
                java.util.Objects.equals(name, that.name) &&
                java.util.Objects.equals(lastMessage, that.lastMessage) &&
                java.util.Objects.equals(memberIds, that.memberIds) &&
-               java.util.Objects.equals(memberNames, that.memberNames);
+               java.util.Objects.equals(memberNames, that.memberNames) &&
+               java.util.Objects.equals(type, that.type) &&
+               java.util.Objects.equals(adminId, that.adminId) &&
+               java.util.Objects.equals(avatarUrl, that.avatarUrl);
     }
     
     @Override
     public int hashCode() {
-        return java.util.Objects.hash(id, name, lastMessage, timestamp, memberIds, memberNames);
+        return java.util.Objects.hash(id, name, lastMessage, timestamp, memberIds, memberNames, 
+                                      type, adminId, avatarUrl);
     }
 }

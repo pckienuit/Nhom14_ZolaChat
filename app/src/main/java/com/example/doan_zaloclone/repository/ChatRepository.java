@@ -1,6 +1,8 @@
 package com.example.doan_zaloclone.repository;
 
+import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.models.Message;
+import com.example.doan_zaloclone.services.FirestoreManager;
 import com.example.doan_zaloclone.utils.Resource;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
@@ -30,10 +32,12 @@ import java.util.Map;
 public class ChatRepository {
 
     private final FirebaseFirestore firestore;
+    private final FirestoreManager firestoreManager;
     private ListenerRegistration messagesListener;
 
     public ChatRepository() {
         this.firestore = FirebaseFirestore.getInstance();
+        this.firestoreManager = FirestoreManager.getInstance();
     }
 
     /**
@@ -274,6 +278,59 @@ public class ChatRepository {
             messagesListener.remove();
             messagesListener = null;
         }
+    }
+
+    /**
+     * Create a group conversation (LiveData version)
+     * @param adminId ID of the user creating the group (becomes admin)
+     * @param groupName Name of the group
+     * @param memberIds List of member IDs including admin
+     * @return LiveData containing Resource with the created Conversation
+     */
+    public LiveData<Resource<Conversation>> createGroup(@NonNull String adminId,
+                                                        @NonNull String groupName,
+                                                        @NonNull List<String> memberIds) {
+        MutableLiveData<Resource<Conversation>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        // Validate inputs
+        if (groupName.trim().isEmpty()) {
+            result.setValue(Resource.error("Tên nhóm không được để trống"));
+            return result;
+        }
+        
+        if (memberIds.size() < 2) {
+            result.setValue(Resource.error("Nhóm phải có ít nhất 2 thành viên"));
+            return result;
+        }
+        
+        if (!memberIds.contains(adminId)) {
+            result.setValue(Resource.error("Admin phải là thành viên của nhóm"));
+            return result;
+        }
+        
+        // Call FirestoreManager to create group
+        firestoreManager.createGroupConversation(
+            adminId,
+            groupName,
+            memberIds,
+            new FirestoreManager.OnConversationCreatedListener() {
+                @Override
+                public void onSuccess(Conversation conversation) {
+                    result.setValue(Resource.success(conversation));
+                }
+                
+                @Override
+                public void onFailure(Exception e) {
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Không thể tạo nhóm";
+                    result.setValue(Resource.error(errorMessage));
+                }
+            }
+        );
+        
+        return result;
     }
 
     /**

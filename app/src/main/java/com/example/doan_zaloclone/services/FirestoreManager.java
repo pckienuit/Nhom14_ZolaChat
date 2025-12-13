@@ -324,7 +324,8 @@ public class FirestoreManager {
         memberNames.put(otherUserId, otherUserName);
         conversationData.put("memberNames", memberNames);
         
-        // For 1-1 chats, name is left empty
+        // For 1-1 chats, name is left empty, type is FRIEND
+        conversationData.put("type", Conversation.TYPE_FRIEND);
         conversationData.put("name", "");
         conversationData.put("lastMessage", "");
         conversationData.put("timestamp", System.currentTimeMillis());
@@ -345,6 +346,7 @@ public class FirestoreManager {
                                 memberIds
                         );
                         conversation.setMemberNames(memberNames);
+                        conversation.setType(Conversation.TYPE_FRIEND);
                         
                         listener.onSuccess(conversation);
                     }
@@ -353,6 +355,83 @@ public class FirestoreManager {
                     @Override
                     public void onFailure(@NonNull Exception e) {
                         Log.e(TAG, "Error creating conversation", e);
+                        listener.onFailure(e);
+                    }
+                });
+    }
+
+    /**
+     * Tạo group conversation (multi-member chat)
+     * Always creates new conversation (no duplicate check)
+     *
+     * @param adminId     ID of the group creator (becomes admin)
+     * @param groupName   Name of the group
+     * @param memberIds   List of member IDs including admin
+     * @param listener    Callback để xử lý kết quả
+     */
+    public void createGroupConversation(@NonNull String adminId,
+                                       @NonNull String groupName,
+                                       @NonNull List<String> memberIds,
+                                       @NonNull OnConversationCreatedListener listener) {
+        // Validate input
+        if (groupName.trim().isEmpty()) {
+            listener.onFailure(new IllegalArgumentException("Group name cannot be empty"));
+            return;
+        }
+        
+        if (memberIds.size() < 2) {
+            listener.onFailure(new IllegalArgumentException("Group must have at least 2 members"));
+            return;
+        }
+        
+        if (!memberIds.contains(adminId)) {
+            listener.onFailure(new IllegalArgumentException("Admin must be in member list"));
+            return;
+        }
+        
+        // Create new conversation document
+        DocumentReference newConversationRef = db.collection(COLLECTION_CONVERSATIONS).document();
+        String conversationId = newConversationRef.getId();
+        
+        // Build conversation data
+        Map<String, Object> conversationData = new HashMap<>();
+        conversationData.put("id", conversationId);
+        conversationData.put("type", Conversation.TYPE_GROUP);
+        conversationData.put("name", groupName.trim());
+        conversationData.put("adminId", adminId);
+        conversationData.put("memberIds", memberIds);
+        conversationData.put("lastMessage", "Nhóm được tạo");
+        conversationData.put("timestamp", System.currentTimeMillis());
+        conversationData.put("avatarUrl", ""); // Empty initially, can be updated later
+        
+        // Save to Firestore
+        newConversationRef.set(conversationData)
+                .addOnSuccessListener(new OnSuccessListener<Void>() {
+                    @Override
+                    public void onSuccess(Void aVoid) {
+                        Log.d(TAG, "Group conversation created: " + conversationId + 
+                             " with name: " + groupName + ", admin: " + adminId + 
+                             ", members: " + memberIds.size());
+                        
+                        // Create conversation object for callback
+                        Conversation conversation = new Conversation(
+                                conversationId,
+                                groupName,
+                                "Nhóm được tạo",
+                                System.currentTimeMillis(),
+                                memberIds,
+                                Conversation.TYPE_GROUP,
+                                adminId,
+                                ""
+                        );
+                        
+                        listener.onSuccess(conversation);
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        Log.e(TAG, "Error creating group conversation", e);
                         listener.onFailure(e);
                     }
                 });
