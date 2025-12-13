@@ -81,8 +81,51 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             if (conversation.getName() == null || conversation.getName().isEmpty()) {
                 // Try to get from memberNames
                 displayName = conversation.getOtherUserName(currentUserId);
-                if (displayName.isEmpty()) {
-                    displayName = "Đang tải..."; // Fallback if name not available
+                
+                android.util.Log.d("ConversationAdapter", "Conversation " + conversation.getId() + 
+                                  " - memberNames: " + (conversation.getMemberNames() != null ? conversation.getMemberNames().size() : "null") +
+                                  ", memberIds: " + (conversation.getMemberIds() != null ? conversation.getMemberIds().size() : "null") +
+                                  ", displayName: " + displayName);
+                
+                // If name is "User" (placeholder), fetch real name from Firestore
+                if (displayName != null && displayName.equals("User")) {
+                    // Find other user ID
+                    if (conversation.getMemberIds() != null && conversation.getMemberIds().size() == 2) {
+                        for (String memberId : conversation.getMemberIds()) {
+                            if (!memberId.equals(currentUserId)) {
+                                // Fetch real name from Firestore
+                                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                    .collection("users")
+                                    .document(memberId)
+                                    .get()
+                                    .addOnSuccessListener(doc -> {
+                                        if (doc.exists()) {
+                                            com.example.doan_zaloclone.models.User user = 
+                                                doc.toObject(com.example.doan_zaloclone.models.User.class);
+                                            if (user != null && user.getName() != null) {
+                                                android.util.Log.d("ConversationAdapter", "Fetched real name: " + user.getName());
+                                                nameTextView.setText(user.getName());
+                                            }
+                                        }
+                                    });
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (displayName == null || displayName.isEmpty()) {
+                    // Fallback: try to get other user ID
+                    if (conversation.getMemberIds() != null && conversation.getMemberIds().size() == 2) {
+                        for (String memberId : conversation.getMemberIds()) {
+                            if (!memberId.equals(currentUserId)) {
+                                displayName = "User " + memberId.substring(0, Math.min(8, memberId.length()));
+                                break;
+                            }
+                        }
+                    } else {
+                        displayName = "Conversation";
+                    }
                 }
             } else {
                 // Use the conversation name (for group chats)

@@ -110,14 +110,22 @@ public class Conversation {
      * @return The other user's name, or empty string if not found
      */
     public String getOtherUserName(String currentUserId) {
+        android.util.Log.d("Conversation", "getOtherUserName called - currentUserId: " + currentUserId +
+                          ", memberNames: " + memberNames + 
+                          ", memberIds: " + memberIds);
+        
         if (memberNames != null && memberIds != null) {
             for (String memberId : memberIds) {
+                android.util.Log.d("Conversation", "Checking memberId: " + memberId + 
+                                  ", equals currentUserId: " + memberId.equals(currentUserId));
                 if (!memberId.equals(currentUserId)) {
                     String name = memberNames.get(memberId);
+                    android.util.Log.d("Conversation", "Found other user - memberId: " + memberId + ", name: " + name);
                     return name != null ? name : "";
                 }
             }
         }
+        android.util.Log.d("Conversation", "No other user found, returning empty");
         return "";
     }
 }

@@ -142,7 +142,78 @@ public class RoomActivity extends AppCompatActivity {
             getSupportActionBar().setDisplayShowTitleEnabled(false);
         }
         toolbar.setNavigationOnClickListener(v -> finish());
-        titleTextView.setText(conversationName);
+        
+        // Set initial name
+        titleTextView.setText(conversationName != null ? conversationName : "Conversation");
+        
+        // If name is "User" (placeholder), fetch real name from conversation memberNames
+        if (conversationName == null || conversationName.equals("User")) {
+            fetchAndDisplayRealName();
+        }
+    }
+    
+    private void fetchAndDisplayRealName() {
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+                ? firebaseAuth.getCurrentUser().getUid() 
+                : null;
+        
+        if (currentUserId == null) return;
+        
+        com.example.doan_zaloclone.services.FirestoreManager.getInstance()
+            .getFirestore()
+            .collection("conversations")
+            .document(conversationId)
+            .get()
+            .addOnSuccessListener(doc -> {
+                if (doc.exists()) {
+                    // Try to get from memberNames first
+                    java.util.Map<String, Object> memberNames = 
+                        (java.util.Map<String, Object>) doc.get("memberNames");
+                    List<String> memberIds = (List<String>) doc.get("memberIds");
+                    
+                    String realName = null;
+                    
+                    if (memberNames != null && memberIds != null) {
+                        for (String memberId : memberIds) {
+                            if (!memberId.equals(currentUserId)) {
+                                realName = (String) memberNames.get(memberId);
+                                break;
+                            }
+                        }
+                    }
+                    
+                    // If still "User" or null, fetch from users collection
+                    if (realName == null || realName.equals("User")) {
+                        if (memberIds != null) {
+                            for (String memberId : memberIds) {
+                                if (!memberId.equals(currentUserId)) {
+                                    fetchUserName(memberId);
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        titleTextView.setText(realName);
+                    }
+                }
+            });
+    }
+    
+    private void fetchUserName(String userId) {
+        com.example.doan_zaloclone.services.FirestoreManager.getInstance()
+            .getFirestore()
+            .collection("users")
+            .document(userId)
+            .get()
+            .addOnSuccessListener(doc -> {
+                if (doc.exists()) {
+                    com.example.doan_zaloclone.models.User user = 
+                        doc.toObject(com.example.doan_zaloclone.models.User.class);
+                    if (user != null && user.getName() != null) {
+                        titleTextView.setText(user.getName());
+                    }
+                }
+            });
     }
 
     private void setupRecyclerView() {
