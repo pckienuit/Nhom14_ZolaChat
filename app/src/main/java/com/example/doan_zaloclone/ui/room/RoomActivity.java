@@ -31,8 +31,10 @@ import com.example.doan_zaloclone.models.Message;
 import com.example.doan_zaloclone.repository.ChatRepository;
 import com.example.doan_zaloclone.utils.ImageUtils;
 import com.example.doan_zaloclone.utils.MediaStoreHelper;
+import com.example.doan_zaloclone.viewmodel.RoomViewModel;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.ListenerRegistration;
+import androidx.lifecycle.ViewModelProvider;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -49,9 +51,9 @@ public class RoomActivity extends AppCompatActivity {
     private String conversationId;
     private String conversationName;
     
-    private ChatRepository chatRepository;
+    private RoomViewModel roomViewModel;
+    private ChatRepository chatRepository; // For backward compatibility with image uploads
     private FirebaseAuth firebaseAuth;
-    private ListenerRegistration messagesListener;
     
     // Message limits for non-friends
     private boolean areFriends = false;
@@ -79,8 +81,12 @@ public class RoomActivity extends AppCompatActivity {
         conversationId = getIntent().getStringExtra("conversationId");
         conversationName = getIntent().getStringExtra("conversationName");
         
-        chatRepository = new ChatRepository();
+        // Initialize ViewModel
+        roomViewModel = new ViewModelProvider(this).get(RoomViewModel.class);
+        chatRepository = new ChatRepository(); // For legacy image upload operations
         firebaseAuth = FirebaseAuth.getInstance();
+        
+        observeViewModel();
         
         // Register permission launcher
         permissionLauncher = registerForActivityResult(
@@ -228,24 +234,28 @@ public class RoomActivity extends AppCompatActivity {
         messagesRecyclerView.setAdapter(messageAdapter);
     }
 
-    private void loadMessages() {
-        // Listen to real-time message updates from Firestore
-        messagesListener = chatRepository.listenToMessages(conversationId, new ChatRepository.MessagesListener() {
-            @Override
-            public void onMessagesChanged(java.util.List<Message> newMessages) {
-                messages = newMessages; // Store for counting
-                messageAdapter.updateMessages(messages);
-                if (messageAdapter.getItemCount() > 0) {
-                    messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
+    private void observeViewModel() {
+        // Observe messages via ViewModel
+        roomViewModel.getMessages(conversationId).observe(this, resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                messages = resource.getData(); // Store for counting
+                if (messages != null) {
+                    messageAdapter.updateMessages(messages);
+                    if (messageAdapter.getItemCount() > 0) {
+                        messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
+                    }
                 }
-            }
-
-            @Override
-            public void onError(String error) {
-                Toast.makeText(RoomActivity.this, "Error loading messages: " + error, Toast.LENGTH_SHORT).show();
+            } else if (resource.isError()) {
+                Toast.makeText(this, "Error loading messages: " + resource.getMessage(), 
+                    Toast.LENGTH_SHORT).show();
             }
         });
-        
+    }
+    
+    private void loadMessages() {
+        // Messages are automatically loaded via ViewModel observer
         // Check friendship status
         extractOtherUserIdAndCheckFriendship();
     }
@@ -281,23 +291,15 @@ public class RoomActivity extends AppCompatActivity {
         if (otherUserId.isEmpty()) return;
         
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
-        com.example.doan_zaloclone.services.FirestoreManager.getInstance().checkFriendship(
-            currentUserId, 
-            otherUserId,
-            new com.example.doan_zaloclone.services.FirestoreManager.OnFriendshipCheckListener() {
-                @Override
-                public void onResult(boolean friends) {
-                    areFriends = friends;
-                    android.util.Log.d("RoomActivity", "Friendship status with " + otherUserId + ": " + areFriends);
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    android.util.Log.e("RoomActivity", "Error checking friendship", e);
-                    areFriends = false;
-                }
+        roomViewModel.checkFriendship(currentUserId, otherUserId).observe(this, resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                areFriends = resource.getData();
+                android.util.Log.d("RoomActivity", "Friendship status with " + otherUserId + ": " + areFriends);
+            } else if (resource != null && resource.isError()) {
+                android.util.Log.e("RoomActivity", "Error checking friendship: " + resource.getMessage());
+                areFriends = false;
             }
-        );
+        });
     }
     
     private int countMyMessages() {
@@ -588,33 +590,19 @@ public class RoomActivity extends AppCompatActivity {
                 System.currentTimeMillis()
         );
         
-        // Send message to Firestore
-        chatRepository.sendMessage(conversationId, newMessage, new ChatRepository.SendMessageCallback() {
-            @Override
-            public void onSuccess() {
-                // Clear input and re-enable button
-                runOnUiThread(() -> {
-                    messageEditText.setText("");
-                    sendButton.setEnabled(true);
-                });
-            }
-
-            @Override
-            public void onError(String error) {
-                runOnUiThread(() -> {
-                    Toast.makeText(RoomActivity.this, "Failed to send: " + error, Toast.LENGTH_SHORT).show();
-                    sendButton.setEnabled(true);
-                });
-            }
-        });
+        // Send message via ViewModel
+        roomViewModel.sendMessage(conversationId, newMessage);
+        
+        // Clear input immediately for better UX
+        messageEditText.setText("");
+        
+        // Re-enable button after a short delay
+        sendButton.postDelayed(() -> sendButton.setEnabled(true), 500);
     }
     
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Clean up Firestore listener
-        if (messagesListener != null) {
-            messagesListener.remove();
-        }
+        // ViewModel will automatically clean up listeners
     }
 }

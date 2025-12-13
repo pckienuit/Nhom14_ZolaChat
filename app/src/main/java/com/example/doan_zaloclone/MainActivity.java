@@ -4,23 +4,25 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
+import androidx.lifecycle.ViewModelProvider;
 
-import com.example.doan_zaloclone.repository.AuthRepository;
 import com.example.doan_zaloclone.ui.contact.ContactFragment;
 import com.example.doan_zaloclone.ui.home.HomeFragment;
 import com.example.doan_zaloclone.ui.login.LoginActivity;
+import com.example.doan_zaloclone.viewmodel.MainViewModel;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends AppCompatActivity {
 
     private BottomNavigationView bottomNavigationView;
     private Toolbar toolbar;
-    private AuthRepository authRepository;
+    private MainViewModel mainViewModel;
     
     // Cache fragments to preserve state
     private HomeFragment homeFragment;
@@ -31,7 +33,8 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        authRepository = new AuthRepository();
+        // Initialize ViewModel
+        mainViewModel = new ViewModelProvider(this).get(MainViewModel.class);
         
         toolbar = findViewById(R.id.toolbar);
         if (toolbar != null) {
@@ -46,6 +49,28 @@ public class MainActivity extends AppCompatActivity {
         }
 
         setupBottomNavigation();
+        observeViewModel();
+    }
+    
+    private void observeViewModel() {
+        // Observe logout state
+        mainViewModel.getLogoutState().observe(this, resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                // Logout successful, navigate to login
+                Intent intent = new Intent(MainActivity.this, LoginActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                intent.putExtra("FROM_LOGOUT", true);
+                startActivity(intent);
+                finish();
+            } else if (resource.isError()) {
+                // Show error message
+                Toast.makeText(this, 
+                    "Logout failed: " + resource.getMessage(), 
+                    Toast.LENGTH_SHORT).show();
+            }
+        });
     }
     
     @Override
@@ -64,16 +89,8 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void handleLogout() {
-        authRepository.logout(new AuthRepository.LogoutCallback() {
-            @Override
-            public void onLogoutComplete() {
-                Intent intent = new Intent(MainActivity.this, LoginActivity.class);
-                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                intent.putExtra("FROM_LOGOUT", true);
-                startActivity(intent);
-                finish();
-            }
-        });
+        // Trigger logout operation via ViewModel
+        mainViewModel.logout();
     }
 
     private void setupBottomNavigation() {

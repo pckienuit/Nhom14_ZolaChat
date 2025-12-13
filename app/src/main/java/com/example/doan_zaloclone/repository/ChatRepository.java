@@ -1,6 +1,7 @@
 package com.example.doan_zaloclone.repository;
 
 import com.example.doan_zaloclone.models.Message;
+import com.example.doan_zaloclone.utils.Resource;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
@@ -8,6 +9,10 @@ import com.google.firebase.firestore.Query;
 
 import android.net.Uri;
 import android.util.Log;
+
+import androidx.annotation.NonNull;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
 
 import com.cloudinary.android.MediaManager;
 import com.cloudinary.android.callback.ErrorInfo;
@@ -20,17 +25,45 @@ import java.util.Map;
 
 /**
  * Repository class for handling chat/messaging operations with Firestore
+ * Now supports both LiveData (for ViewModels) and callbacks (for backward compatibility)
  */
 public class ChatRepository {
 
     private final FirebaseFirestore firestore;
+    private ListenerRegistration messagesListener;
 
     public ChatRepository() {
         this.firestore = FirebaseFirestore.getInstance();
     }
 
     /**
-     * Send a message to a conversation
+     * Send a message to a conversation (LiveData version)
+     * @param conversationId ID of the conversation
+     * @param message Message object to send (ID will be auto-generated)
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> sendMessageLiveData(@NonNull String conversationId, 
+                                                             @NonNull Message message) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        sendMessage(conversationId, message, new SendMessageCallback() {
+            @Override
+            public void onSuccess() {
+                result.setValue(Resource.success(true));
+            }
+            
+            @Override
+            public void onError(String error) {
+                result.setValue(Resource.error(error));
+            }
+        });
+        
+        return result;
+    }
+
+    /**
+     * Send a message to a conversation (callback version - for backward compatibility)
      * @param conversationId ID of the conversation
      * @param message Message object to send (ID will be auto-generated)
      * @param callback Callback for success/error
@@ -70,7 +103,37 @@ public class ChatRepository {
     }
 
     /**
-     * Listen to messages in a conversation (real-time updates)
+     * Listen to messages in a conversation with real-time updates (LiveData version)
+     * @param conversationId ID of the conversation
+     * @return LiveData containing Resource with list of messages
+     */
+    public LiveData<Resource<List<Message>>> getMessagesLiveData(@NonNull String conversationId) {
+        MutableLiveData<Resource<List<Message>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        // Remove previous listener if exists
+        if (messagesListener != null) {
+            messagesListener.remove();
+        }
+        
+        // Set up real-time listener
+        messagesListener = listenToMessages(conversationId, new MessagesListener() {
+            @Override
+            public void onMessagesChanged(List<Message> messages) {
+                result.setValue(Resource.success(messages));
+            }
+            
+            @Override
+            public void onError(String error) {
+                result.setValue(Resource.error(error));
+            }
+        });
+        
+        return result;
+    }
+
+    /**
+     * Listen to messages in a conversation (callback version - for backward compatibility)
      * @param conversationId ID of the conversation
      * @param listener Listener for message updates
      * @return ListenerRegistration for cleanup
@@ -119,7 +182,35 @@ public class ChatRepository {
     }
 
     /**
-     * Upload image to Cloudinary and send as message
+     * Upload image to Cloudinary and send as message (LiveData version)
+     * @param conversationId ID of the conversation
+     * @param imageUri Local URI of the image to upload
+     * @param senderId ID of the sender
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> uploadImageAndSendMessageLiveData(@NonNull String conversationId,
+                                                                          @NonNull Uri imageUri,
+                                                                          @NonNull String senderId) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        uploadImageAndSendMessage(conversationId, imageUri, senderId, new SendMessageCallback() {
+            @Override
+            public void onSuccess() {
+                result.setValue(Resource.success(true));
+            }
+            
+            @Override
+            public void onError(String error) {
+                result.setValue(Resource.error(error));
+            }
+        });
+        
+        return result;
+    }
+
+    /**
+     * Upload image to Cloudinary and send as message (callback version)
      * @param conversationId ID of the conversation
      * @param imageUri Local URI of the image to upload
      * @param senderId ID of the sender
@@ -172,6 +263,16 @@ public class ChatRepository {
                     .dispatch();
         } catch (Exception e) {
             callback.onError("Failed to start upload: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Clean up listeners when repository is no longer needed
+     */
+    public void cleanup() {
+        if (messagesListener != null) {
+            messagesListener.remove();
+            messagesListener = null;
         }
     }
 
