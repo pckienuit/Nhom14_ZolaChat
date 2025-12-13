@@ -34,6 +34,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
 
     private EditText searchEmailEditText;
     private Button searchButton;
+    private Button createGroupButton;
     private RecyclerView searchResultsRecyclerView;
     private RecyclerView friendRequestsRecyclerView;
     private RecyclerView friendsRecyclerView;
@@ -80,6 +81,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     private void initViews(View view) {
         searchEmailEditText = view.findViewById(R.id.searchEmailEditText);
         searchButton = view.findViewById(R.id.searchButton);
+        createGroupButton = view.findViewById(R.id.createGroupButton);
         searchResultsRecyclerView = view.findViewById(R.id.searchResultsRecyclerView);
         friendRequestsRecyclerView = view.findViewById(R.id.friendRequestsRecyclerView);
         friendsRecyclerView = view.findViewById(R.id.friendsRecyclerView);
@@ -216,6 +218,11 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 return;
             }
             searchUsers(query);
+        });
+        
+        createGroupButton.setOnClickListener(v -> {
+            Intent intent = new Intent(getActivity(), com.example.doan_zaloclone.ui.group.CreateGroupActivity.class);
+            startActivity(intent);
         });
     }
 

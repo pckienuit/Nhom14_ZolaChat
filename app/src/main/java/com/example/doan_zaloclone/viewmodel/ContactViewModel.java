@@ -70,6 +70,22 @@ public class ContactViewModel extends BaseViewModel {
     }
     
     /**
+     * Load friends list for a user (forces reload)
+     * @param userId ID of the user
+     */
+    public void loadFriends(@NonNull String userId) {
+        friends = friendRepository.getFriends(userId);
+    }
+    
+    /**
+     * Get friends LiveData (for observing in activities)
+     * @return LiveData of friends list
+     */
+    public LiveData<Resource<List<User>>> getFriendsLiveData() {
+        return friends;
+    }
+    
+    /**
      * Get friend requests for a user
      * @param userId ID of the user
      */
