@@ -84,7 +84,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         // Setup friends RecyclerView
         friendsAdapter = new FriendsAdapter(new ArrayList<>(), this);
         friendsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        friendsRecyclerView.setHasFixedSize(true); // Optimize performance
+        // Don't use setHasFixedSize(true) with wrap_content - it prevents remeasure
         friendsRecyclerView.setAdapter(friendsAdapter);
         
         // Setup search results RecyclerView
@@ -396,6 +396,9 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 if (getActivity() != null) {
                     Log.d("ContactFragment", "Friends loaded: " + friends.size());
                     friendsAdapter.updateFriends(friends);
+                    
+                    // Force RecyclerView to remeasure with wrap_content
+                    friendsRecyclerView.requestLayout();
                     
                     if (friends.isEmpty()) {
                         Log.d("ContactFragment", "No friends found - make sure you have ACCEPTED friend requests");
