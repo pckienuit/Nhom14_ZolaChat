@@ -67,69 +67,100 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
         private TextView nameTextView;
         private TextView lastMessageTextView;
         private TextView timestampTextView;
+        private TextView memberCountTextView;
+        private android.widget.ImageView groupIconImageView;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             nameTextView = itemView.findViewById(R.id.nameTextView);
             lastMessageTextView = itemView.findViewById(R.id.lastMessageTextView);
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
+            memberCountTextView = itemView.findViewById(R.id.memberCountTextView);
+            groupIconImageView = itemView.findViewById(R.id.groupIconImageView);
         }
 
         public void bind(Conversation conversation, OnConversationClickListener listener, String currentUserId) {
-            // For 1-on-1 conversations, display the other user's name
-            String displayName;
-            if (conversation.getName() == null || conversation.getName().isEmpty()) {
-                // Try to get from memberNames
-                displayName = conversation.getOtherUserName(currentUserId);
-                
-                android.util.Log.d("ConversationAdapter", "Conversation " + conversation.getId() + 
-                                  " - memberNames: " + (conversation.getMemberNames() != null ? conversation.getMemberNames().size() : "null") +
-                                  ", memberIds: " + (conversation.getMemberIds() != null ? conversation.getMemberIds().size() : "null") +
-                                  ", displayName: " + displayName);
-                
-                // If name is "User" (placeholder), fetch real name from Firestore
-                if (displayName != null && displayName.equals("User")) {
-                    // Find other user ID
-                    if (conversation.getMemberIds() != null && conversation.getMemberIds().size() == 2) {
-                        for (String memberId : conversation.getMemberIds()) {
-                            if (!memberId.equals(currentUserId)) {
-                                // Fetch real name from Firestore
-                                com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                    .collection("users")
-                                    .document(memberId)
-                                    .get()
-                                    .addOnSuccessListener(doc -> {
-                                        if (doc.exists()) {
-                                            com.example.doan_zaloclone.models.User user = 
-                                                doc.toObject(com.example.doan_zaloclone.models.User.class);
-                                            if (user != null && user.getName() != null) {
-                                                android.util.Log.d("ConversationAdapter", "Fetched real name: " + user.getName());
-                                                nameTextView.setText(user.getName());
-                                            }
-                                        }
-                                    });
-                                break;
-                            }
-                        }
-                    }
+            // Check if this is a group chat
+            boolean isGroupChat = conversation.isGroupChat();
+            
+            // Show/hide group indicator
+            if (groupIconImageView != null) {
+                groupIconImageView.setVisibility(isGroupChat ? View.VISIBLE : View.GONE);
+            }
+            
+            // Show member count for groups
+            if (memberCountTextView != null) {
+                if (isGroupChat && conversation.getMemberIds() != null) {
+                    int memberCount = conversation.getMemberIds().size();
+                    memberCountTextView.setText("(" + memberCount + ")");
+                    memberCountTextView.setVisibility(View.VISIBLE);
+                } else {
+                    memberCountTextView.setVisibility(View.GONE);
                 }
-                
+            }
+            
+            // Display name logic
+            String displayName;
+            if (isGroupChat) {
+                // For group chats, use the conversation name
+                displayName = conversation.getName();
                 if (displayName == null || displayName.isEmpty()) {
-                    // Fallback: try to get other user ID
-                    if (conversation.getMemberIds() != null && conversation.getMemberIds().size() == 2) {
-                        for (String memberId : conversation.getMemberIds()) {
-                            if (!memberId.equals(currentUserId)) {
-                                displayName = "User " + memberId.substring(0, Math.min(8, memberId.length()));
-                                break;
-                            }
-                        }
-                    } else {
-                        displayName = "Conversation";
-                    }
+                    displayName = "Nhóm chat";
                 }
             } else {
-                // Use the conversation name (for group chats)
-                displayName = conversation.getName();
+                // For 1-on-1 conversations, display the other user's name
+                if (conversation.getName() == null || conversation.getName().isEmpty()) {
+                    // Try to get from memberNames
+                    displayName = conversation.getOtherUserName(currentUserId);
+                    
+                    android.util.Log.d("ConversationAdapter", "Conversation " + conversation.getId() + 
+                                      " - memberNames: " + (conversation.getMemberNames() != null ? conversation.getMemberNames().size() : "null") +
+                                      ", memberIds: " + (conversation.getMemberIds() != null ? conversation.getMemberIds().size() : "null") +
+                                      ", displayName: " + displayName);
+                    
+                    // If name is "User" (placeholder), fetch real name from Firestore
+                    if (displayName != null && displayName.equals("User")) {
+                        // Find other user ID
+                        if (conversation.getMemberIds() != null && conversation.getMemberIds().size() == 2) {
+                            for (String memberId : conversation.getMemberIds()) {
+                                if (!memberId.equals(currentUserId)) {
+                                    // Fetch real name from Firestore
+                                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                        .collection("users")
+                                        .document(memberId)
+                                        .get()
+                                        .addOnSuccessListener(doc -> {
+                                            if (doc.exists()) {
+                                                com.example.doan_zaloclone.models.User user = 
+                                                    doc.toObject(com.example.doan_zaloclone.models.User.class);
+                                                if (user != null && user.getName() != null) {
+                                                    android.util.Log.d("ConversationAdapter", "Fetched real name: " + user.getName());
+                                                    nameTextView.setText(user.getName());
+                                                }
+                                            }
+                                        });
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (displayName == null || displayName.isEmpty()) {
+                        // Fallback: try to get other user ID
+                        if (conversation.getMemberIds() != null && conversation.getMemberIds().size() == 2) {
+                            for (String memberId : conversation.getMemberIds()) {
+                                if (!memberId.equals(currentUserId)) {
+                                    displayName = "User " + memberId.substring(0, Math.min(8, memberId.length()));
+                                    break;
+                                }
+                            }
+                        } else {
+                            displayName = "Conversation";
+                        }
+                    }
+                } else {
+                    displayName = conversation.getName();
+                }
             }
             
             nameTextView.setText(displayName);

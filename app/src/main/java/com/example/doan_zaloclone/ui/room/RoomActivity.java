@@ -282,6 +282,24 @@ public class RoomActivity extends AppCompatActivity {
                     
                     android.util.Log.d("RoomActivity", "Conversation type: " + conversationType);
                     
+                    // Update MessageAdapter for group chat
+                    boolean isGroup = "GROUP".equals(conversationType);
+                    if (messageAdapter != null) {
+                        messageAdapter.setGroupChat(isGroup);
+                    }
+                    
+                    // Update toolbar for group chat
+                    if (isGroup) {
+                        List<String> memberIds = (List<String>) doc.get("memberIds");
+                        if (memberIds != null) {
+                            int memberCount = memberIds.size();
+                            String groupName = doc.getString("name");
+                            if (groupName != null) {
+                                titleTextView.setText(groupName + " (" + memberCount + ")");
+                            }
+                        }
+                    }
+                    
                     // Only check friendship for 1-1 chats
                     if ("FRIEND".equals(conversationType)) {
                         List<String> memberIds = (List<String>) doc.get("memberIds");
