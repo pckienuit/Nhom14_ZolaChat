@@ -7,11 +7,13 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.User;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHolder> {
@@ -24,7 +26,7 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
     }
 
     public FriendsAdapter(List<User> friends, OnFriendClickListener listener) {
-        this.friends = friends;
+        this.friends = friends != null ? friends : new ArrayList<>();
         this.listener = listener;
     }
 
@@ -47,8 +49,17 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
     }
 
     public void updateFriends(List<User> newFriends) {
-        this.friends = newFriends;
-        notifyDataSetChanged();
+        if (newFriends == null) newFriends = new ArrayList<>();
+        
+        android.util.Log.d("FriendsAdapter", "updateFriends - Old size: " + this.friends.size() + 
+                          ", New size: " + newFriends.size());
+        
+        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(
+                new FriendsDiffCallback(this.friends, newFriends));
+        this.friends = new ArrayList<>(newFriends); // Create new copy
+        diffResult.dispatchUpdatesTo(this);
+        
+        android.util.Log.d("FriendsAdapter", "updateFriends completed - Current size: " + this.friends.size());
     }
 
     class ViewHolder extends RecyclerView.ViewHolder {
@@ -81,6 +92,56 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
             } else {
                 friendAvatar.setText("F");
             }
+        }
+    }
+    
+    // DiffUtil Callback for efficient list updates
+    private static class FriendsDiffCallback extends DiffUtil.Callback {
+        private final List<User> oldList;
+        private final List<User> newList;
+        
+        public FriendsDiffCallback(List<User> oldList, List<User> newList) {
+            this.oldList = oldList;
+            this.newList = newList;
+        }
+        
+        @Override
+        public int getOldListSize() {
+            return oldList.size();
+        }
+        
+        @Override
+        public int getNewListSize() {
+            return newList.size();
+        }
+        
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            User oldUser = oldList.get(oldItemPosition);
+            User newUser = newList.get(newItemPosition);
+            
+            // Null safety check
+            if (oldUser == null || newUser == null) {
+                return false;
+            }
+            if (oldUser.getId() == null || newUser.getId() == null) {
+                return false;
+            }
+            
+            return oldUser.getId().equals(newUser.getId());
+        }
+        
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            User oldUser = oldList.get(oldItemPosition);
+            User newUser = newList.get(newItemPosition);
+            
+            // Null safety check
+            if (oldUser == null || newUser == null) {
+                return false;
+            }
+            
+            return oldUser.equals(newUser);
         }
     }
 }

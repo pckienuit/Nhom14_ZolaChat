@@ -22,9 +22,6 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
             new SimpleDateFormat("HH:mm", Locale.getDefault());
-    
-    // Cache fetched names to prevent refetching (static to persist across adapter instances)
-    private static final java.util.Map<String, String> NAME_CACHE = new java.util.HashMap<>();
 
     private List<Conversation> conversations;
     private OnConversationClickListener listener;
@@ -96,38 +93,21 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
                     if (conversation.getMemberIds() != null && conversation.getMemberIds().size() == 2) {
                         for (String memberId : conversation.getMemberIds()) {
                             if (!memberId.equals(currentUserId)) {
-                                // Check cache first
-                                String cachedName = NAME_CACHE.get(memberId);
-                                if (cachedName != null) {
-                                    android.util.Log.d("ConversationAdapter", "Using cached name: " + cachedName);
-                                    nameTextView.setText(cachedName);
-                                    displayName = cachedName; // Update displayName for later setText
-                                } else {
-                                    // Fetch real name from Firestore only if not cached
-                                    String otherUserId = memberId;
-                                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                                        .collection("users")
-                                        .document(memberId)
-                                        .get()
-                                        .addOnSuccessListener(doc -> {
-                                            if (doc.exists()) {
-                                                com.example.doan_zaloclone.models.User user = 
-                                                    doc.toObject(com.example.doan_zaloclone.models.User.class);
-                                                if (user != null && user.getName() != null) {
-                                                    android.util.Log.d("ConversationAdapter", "Fetched real name: " + user.getName());
-                                                    
-                                                    // Cache the name
-                                                    NAME_CACHE.put(otherUserId, user.getName());
-                                                    
-                                                    // Update UI
-                                                    nameTextView.setText(user.getName());
-                                                    
-                                                    // Update Firestore to fix permanently
-                                                    updateConversationMemberName(conversation.getId(), otherUserId, user.getName());
-                                                }
+                                // Fetch real name from Firestore
+                                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                    .collection("users")
+                                    .document(memberId)
+                                    .get()
+                                    .addOnSuccessListener(doc -> {
+                                        if (doc.exists()) {
+                                            com.example.doan_zaloclone.models.User user = 
+                                                doc.toObject(com.example.doan_zaloclone.models.User.class);
+                                            if (user != null && user.getName() != null) {
+                                                android.util.Log.d("ConversationAdapter", "Fetched real name: " + user.getName());
+                                                nameTextView.setText(user.getName());
                                             }
-                                        });
-                                }
+                                        }
+                                    });
                                 break;
                             }
                         }
@@ -162,20 +142,6 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
                     listener.onConversationClick(conversation);
                 }
             });
-        }
-        
-        private void updateConversationMemberName(String conversationId, String userId, String userName) {
-            // Update memberNames in Firestore so we don't need to fetch again
-            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                .collection("conversations")
-                .document(conversationId)
-                .update("memberNames." + userId, userName)
-                .addOnSuccessListener(aVoid -> {
-                    android.util.Log.d("ConversationAdapter", "Updated memberName in Firestore");
-                })
-                .addOnFailureListener(e -> {
-                    android.util.Log.w("ConversationAdapter", "Failed to update memberName", e);
-                });
         }
     }
     

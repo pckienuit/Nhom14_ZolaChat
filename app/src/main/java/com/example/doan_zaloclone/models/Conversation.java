@@ -128,4 +128,22 @@ public class Conversation {
         android.util.Log.d("Conversation", "No other user found, returning empty");
         return "";
     }
+    
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Conversation that = (Conversation) o;
+        return timestamp == that.timestamp &&
+               java.util.Objects.equals(id, that.id) &&
+               java.util.Objects.equals(name, that.name) &&
+               java.util.Objects.equals(lastMessage, that.lastMessage) &&
+               java.util.Objects.equals(memberIds, that.memberIds) &&
+               java.util.Objects.equals(memberNames, that.memberNames);
+    }
+    
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(id, name, lastMessage, timestamp, memberIds, memberNames);
+    }
 }

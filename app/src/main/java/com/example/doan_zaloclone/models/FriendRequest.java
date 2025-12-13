@@ -96,4 +96,24 @@ public class FriendRequest {
     public String getEmail() {
         return fromUserEmail;
     }
+    
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        FriendRequest that = (FriendRequest) o;
+        return timestamp == that.timestamp &&
+               java.util.Objects.equals(id, that.id) &&
+               java.util.Objects.equals(fromUserId, that.fromUserId) &&
+               java.util.Objects.equals(toUserId, that.toUserId) &&
+               java.util.Objects.equals(fromUserName, that.fromUserName) &&
+               java.util.Objects.equals(fromUserEmail, that.fromUserEmail) &&
+               java.util.Objects.equals(status, that.status);
+    }
+    
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(id, fromUserId, toUserId, fromUserName, 
+                                      fromUserEmail, status, timestamp);
+    }
 }
