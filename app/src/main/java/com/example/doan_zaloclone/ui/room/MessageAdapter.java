@@ -32,10 +32,23 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
     private List<Message> messages;
     private String currentUserId;
+    private boolean isGroupChat;
 
     public MessageAdapter(List<Message> messages, String currentUserId) {
         this.messages = messages;
         this.currentUserId = currentUserId;
+        this.isGroupChat = false;
+    }
+    
+    public MessageAdapter(List<Message> messages, String currentUserId, boolean isGroupChat) {
+        this.messages = messages;
+        this.currentUserId = currentUserId;
+        this.isGroupChat = isGroupChat;
+    }
+    
+    public void setGroupChat(boolean isGroupChat) {
+        this.isGroupChat = isGroupChat;
+        notifyDataSetChanged();
     }
 
     @Override
@@ -85,11 +98,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         if (holder instanceof SentMessageViewHolder) {
             ((SentMessageViewHolder) holder).bind(message);
         } else if (holder instanceof ReceivedMessageViewHolder) {
-            ((ReceivedMessageViewHolder) holder).bind(message);
+            ((ReceivedMessageViewHolder) holder).bind(message, isGroupChat);
         } else if (holder instanceof ImageSentViewHolder) {
             ((ImageSentViewHolder) holder).bind(message);
         } else if (holder instanceof ImageReceivedViewHolder) {
-            ((ImageReceivedViewHolder) holder).bind(message);
+            ((ImageReceivedViewHolder) holder).bind(message, isGroupChat);
         }
     }
 
@@ -127,16 +140,46 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     static class ReceivedMessageViewHolder extends RecyclerView.ViewHolder {
         private TextView messageTextView;
         private TextView timestampTextView;
+        private TextView senderNameTextView;
 
         public ReceivedMessageViewHolder(@NonNull View itemView) {
             super(itemView);
             messageTextView = itemView.findViewById(R.id.messageTextView);
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
+            senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
         }
 
-        public void bind(Message message) {
+        public void bind(Message message, boolean isGroupChat) {
             messageTextView.setText(message.getContent());
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            
+            // Show sender name only in group chats
+            if (senderNameTextView != null) {
+                if (isGroupChat) {
+                    senderNameTextView.setVisibility(View.VISIBLE);
+                    // Fetch sender name from Firestore
+                    String senderId = message.getSenderId();
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .document(senderId)
+                        .get()
+                        .addOnSuccessListener(doc -> {
+                            if (doc.exists()) {
+                                String senderName = doc.getString("name");
+                                if (senderName != null) {
+                                    senderNameTextView.setText(senderName);
+                                } else {
+                                    senderNameTextView.setText("User");
+                                }
+                            }
+                        })
+                        .addOnFailureListener(e -> {
+                            senderNameTextView.setText("User");
+                        });
+                } else {
+                    senderNameTextView.setVisibility(View.GONE);
+                }
+            }
         }
     }
     
@@ -161,18 +204,48 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     static class ImageReceivedViewHolder extends RecyclerView.ViewHolder {
         private ImageView messageImageView;
         private TextView timestampTextView;
+        private TextView senderNameTextView;
 
         public ImageReceivedViewHolder(@NonNull View itemView) {
             super(itemView);
             messageImageView = itemView.findViewById(R.id.messageImageView);
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
+            senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
         }
 
-        public void bind(Message message) {
+        public void bind(Message message, boolean isGroupChat) {
             Glide.with(itemView.getContext())
                     .load(message.getContent())
                     .into(messageImageView);
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            
+            // Show sender name only in group chats
+            if (senderNameTextView != null) {
+                if (isGroupChat) {
+                    senderNameTextView.setVisibility(View.VISIBLE);
+                    // Fetch sender name from Firestore
+                    String senderId = message.getSenderId();
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .document(senderId)
+                        .get()
+                        .addOnSuccessListener(doc -> {
+                            if (doc.exists()) {
+                                String senderName = doc.getString("name");
+                                if (senderName != null) {
+                                    senderNameTextView.setText(senderName);
+                                } else {
+                                    senderNameTextView.setText("User");
+                                }
+                            }
+                        })
+                        .addOnFailureListener(e -> {
+                            senderNameTextView.setText("User");
+                        });
+                } else {
+                    senderNameTextView.setVisibility(View.GONE);
+                }
+            }
         }
     }
     

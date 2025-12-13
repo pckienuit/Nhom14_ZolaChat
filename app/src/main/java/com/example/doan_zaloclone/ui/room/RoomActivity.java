@@ -55,9 +55,10 @@ public class RoomActivity extends AppCompatActivity {
     private ChatRepository chatRepository; // For backward compatibility with image uploads
     private FirebaseAuth firebaseAuth;
     
-    // Message limits for non-friends
+    // Message limits for non-friends (only for 1-1 chats)
     private boolean areFriends = false;
     private String otherUserId = "";
+    private String conversationType = ""; // "FRIEND" or "GROUP"
     private List<Message> messages = new ArrayList<>();
     
     // Image picker UI
@@ -151,6 +152,13 @@ public class RoomActivity extends AppCompatActivity {
         
         // Set initial name
         titleTextView.setText(conversationName != null ? conversationName : "Conversation");
+        
+        // Add click listener to open group info
+        titleTextView.setOnClickListener(v -> {
+            if ("GROUP".equals(conversationType)) {
+                openGroupInfo();
+            }
+        });
         
         // If name is "User" (placeholder), fetch real name from conversation memberNames
         if (conversationName == null || conversationName.equals("User")) {
@@ -273,15 +281,48 @@ public class RoomActivity extends AppCompatActivity {
             .get()
             .addOnSuccessListener(doc -> {
                 if (doc.exists()) {
-                    List<String> memberIds = (List<String>) doc.get("memberIds");
-                    if (memberIds != null) {
-                        for (String memberId : memberIds) {
-                            if (!memberId.equals(currentUserId)) {
-                                otherUserId = memberId;
-                                checkFriendship();
-                                break;
+                    // Get conversation type
+                    conversationType = doc.getString("type");
+                    if (conversationType == null) {
+                        conversationType = "FRIEND"; // Default for old conversations
+                    }
+                    
+                    android.util.Log.d("RoomActivity", "Conversation type: " + conversationType);
+                    
+                    // Update MessageAdapter for group chat
+                    boolean isGroup = "GROUP".equals(conversationType);
+                    if (messageAdapter != null) {
+                        messageAdapter.setGroupChat(isGroup);
+                    }
+                    
+                    // Update toolbar for group chat
+                    if (isGroup) {
+                        List<String> memberIds = (List<String>) doc.get("memberIds");
+                        if (memberIds != null) {
+                            int memberCount = memberIds.size();
+                            String groupName = doc.getString("name");
+                            if (groupName != null) {
+                                titleTextView.setText(groupName + " (" + memberCount + ")");
                             }
                         }
+                    }
+                    
+                    // Only check friendship for 1-1 chats
+                    if ("FRIEND".equals(conversationType)) {
+                        List<String> memberIds = (List<String>) doc.get("memberIds");
+                        if (memberIds != null) {
+                            for (String memberId : memberIds) {
+                                if (!memberId.equals(currentUserId)) {
+                                    otherUserId = memberId;
+                                    checkFriendship();
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        // For group chats, no message limit
+                        areFriends = true; // Treat as friends to bypass limit
+                        android.util.Log.d("RoomActivity", "Group chat - no message limit");
                     }
                 }
             });
@@ -560,8 +601,8 @@ public class RoomActivity extends AppCompatActivity {
             return;
         }
         
-        // CHECK MESSAGE LIMIT FOR NON-FRIENDS
-        if (!areFriends) {
+        // CHECK MESSAGE LIMIT FOR NON-FRIENDS (ONLY FOR 1-1 CHATS)
+        if ("FRIEND".equals(conversationType) && !areFriends) {
             int myMessageCount = countMyMessages();
             
             if (myMessageCount >= 3) {
@@ -576,6 +617,7 @@ public class RoomActivity extends AppCompatActivity {
                 "Còn " + remaining + " tin nhắn. Hãy kết bạn để tiếp tục!", 
                 Toast.LENGTH_SHORT).show();
         }
+        // No limit for group chats
         
         // Disable send button while sending
         sendButton.setEnabled(false);
@@ -598,6 +640,13 @@ public class RoomActivity extends AppCompatActivity {
         
         // Re-enable button after a short delay
         sendButton.postDelayed(() -> sendButton.setEnabled(true), 500);
+    }
+    
+    private void openGroupInfo() {
+        android.content.Intent intent = new android.content.Intent(this, 
+                com.example.doan_zaloclone.ui.group.GroupInfoActivity.class);
+        intent.putExtra("conversationId", conversationId);
+        startActivity(intent);
     }
     
     @Override

@@ -9,6 +9,18 @@
     android:layout_marginStart="8dp"
     android:layout_marginEnd="48dp"
     android:layout_gravity="start">
+    
+    <TextView
+        android:id="@+id/senderNameTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Sender Name"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:textColor="@color/primary"
+        android:layout_marginStart="4dp"
+        android:layout_marginBottom="2dp"
+        android:visibility="gone" />
 
     <androidx.cardview.widget.CardView
         xmlns:app="http://schemas.android.com/apk/res-auto"
