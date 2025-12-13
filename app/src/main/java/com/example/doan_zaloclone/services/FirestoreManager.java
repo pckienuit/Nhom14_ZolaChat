@@ -206,6 +206,7 @@ public class FirestoreManager {
                         for (DocumentSnapshot document : querySnapshot.getDocuments()) {
                             User user = document.toObject(User.class);
                             if (user != null) {
+                                user.setId(document.getId());  // Set document ID
                                 allUsers.add(user);
                             }
                         }

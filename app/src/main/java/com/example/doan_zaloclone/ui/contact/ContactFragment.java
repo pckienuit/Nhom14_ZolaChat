@@ -8,6 +8,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -37,6 +38,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     private RecyclerView friendRequestsRecyclerView;
     private RecyclerView friendsRecyclerView;
     private View divider;
+    private TextView friendRequestsHeader;
 
     private UserAdapter userAdapter;
     private FriendRequestAdapter friendRequestAdapter;
@@ -82,6 +84,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         friendRequestsRecyclerView = view.findViewById(R.id.friendRequestsRecyclerView);
         friendsRecyclerView = view.findViewById(R.id.friendsRecyclerView);
         divider = view.findViewById(R.id.divider);
+        friendRequestsHeader = view.findViewById(R.id.friendRequestsHeader);
     }
 
     private void setupRecyclerViews() {
@@ -186,6 +189,15 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                     Log.d("ContactFragment", "Friend requests loaded: " + requests.size());
                     friendRequestAdapter.updateRequests(requests);
                     friendRequestsRecyclerView.requestLayout();
+                    
+                    // Show/hide friend requests section based on count
+                    if (requests.isEmpty()) {
+                        friendRequestsHeader.setVisibility(View.GONE);
+                        friendRequestsRecyclerView.setVisibility(View.GONE);
+                    } else {
+                        friendRequestsHeader.setVisibility(View.VISIBLE);
+                        friendRequestsRecyclerView.setVisibility(View.VISIBLE);
+                    }
                 }
             } else if (resource.isError()) {
                 if (getContext() != null) {

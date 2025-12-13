@@ -64,7 +64,8 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
         friendRequestStatus.put(userId, status);
         // Find and update only the affected item
         for (int i = 0; i < users.size(); i++) {
-            if (users.get(i).getId().equals(userId)) {
+            User user = users.get(i);
+            if (user != null && user.getId() != null && user.getId().equals(userId)) {
                 notifyItemChanged(i);
                 break;
             }
