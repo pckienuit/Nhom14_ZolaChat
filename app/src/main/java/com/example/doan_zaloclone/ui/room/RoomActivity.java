@@ -153,6 +153,13 @@ public class RoomActivity extends AppCompatActivity {
         // Set initial name
         titleTextView.setText(conversationName != null ? conversationName : "Conversation");
         
+        // Add click listener to open group info
+        titleTextView.setOnClickListener(v -> {
+            if ("GROUP".equals(conversationType)) {
+                openGroupInfo();
+            }
+        });
+        
         // If name is "User" (placeholder), fetch real name from conversation memberNames
         if (conversationName == null || conversationName.equals("User")) {
             fetchAndDisplayRealName();
@@ -633,6 +640,13 @@ public class RoomActivity extends AppCompatActivity {
         
         // Re-enable button after a short delay
         sendButton.postDelayed(() -> sendButton.setEnabled(true), 500);
+    }
+    
+    private void openGroupInfo() {
+        android.content.Intent intent = new android.content.Intent(this, 
+                com.example.doan_zaloclone.ui.group.GroupInfoActivity.class);
+        intent.putExtra("conversationId", conversationId);
+        startActivity(intent);
     }
     
     @Override

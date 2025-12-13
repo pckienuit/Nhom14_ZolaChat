@@ -437,6 +437,119 @@ public class FirestoreManager {
                 });
     }
 
+    /**
+     * Update group name
+     */
+    public void updateGroupName(@NonNull String conversationId,
+                               @NonNull String newName,
+                               @NonNull OnGroupUpdatedListener listener) {
+        if (newName.trim().isEmpty()) {
+            listener.onFailure(new IllegalArgumentException("Group name cannot be empty"));
+            return;
+        }
+
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update("name", newName.trim())
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Group name updated: " + conversationId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error updating group name", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Update group avatar URL
+     */
+    public void updateGroupAvatar(@NonNull String conversationId,
+                                 @NonNull String avatarUrl,
+                                 @NonNull OnGroupUpdatedListener listener) {
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update("avatarUrl", avatarUrl)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Group avatar updated: " + conversationId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error updating group avatar", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Add members to group
+     */
+    public void addGroupMembers(@NonNull String conversationId,
+                               @NonNull List<String> newMemberIds,
+                               @NonNull OnGroupUpdatedListener listener) {
+        if (newMemberIds.isEmpty()) {
+            listener.onFailure(new IllegalArgumentException("No members to add"));
+            return;
+        }
+
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update("memberIds", com.google.firebase.firestore.FieldValue.arrayUnion(newMemberIds.toArray()))
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Members added to group: " + conversationId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error adding members to group", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Remove member from group
+     */
+    public void removeGroupMember(@NonNull String conversationId,
+                                 @NonNull String memberId,
+                                 @NonNull OnGroupUpdatedListener listener) {
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update("memberIds", com.google.firebase.firestore.FieldValue.arrayRemove(memberId))
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Member removed from group: " + conversationId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error removing member from group", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Leave group (remove self from members)
+     */
+    public void leaveGroup(@NonNull String conversationId,
+                          @NonNull String userId,
+                          @NonNull OnGroupUpdatedListener listener) {
+        removeGroupMember(conversationId, userId, listener);
+    }
+
+    /**
+     * Delete group conversation
+     */
+    public void deleteGroup(@NonNull String conversationId,
+                           @NonNull OnGroupUpdatedListener listener) {
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .delete()
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Group deleted: " + conversationId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error deleting group", e);
+                    listener.onFailure(e);
+                });
+    }
+
     // Callback Interfaces
 
     /**
@@ -491,6 +604,15 @@ public class FirestoreManager {
      */
     public interface OnConversationsChangedListener {
         void onConversationsChanged(List<Conversation> conversations);
+
+        void onFailure(Exception e);
+    }
+
+    /**
+     * Listener for group update operations
+     */
+    public interface OnGroupUpdatedListener {
+        void onSuccess();
 
         void onFailure(Exception e);
     }

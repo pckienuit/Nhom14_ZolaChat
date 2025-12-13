@@ -56,6 +56,18 @@
             android:exported="false"
             android:parentActivityName=".MainActivity" />
             
+        <!-- Group Info Activity -->
+        <activity
+            android:name=".ui.group.GroupInfoActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.room.RoomActivity" />
+            
+        <!-- Add Group Member Activity -->
+        <activity
+            android:name=".ui.group.AddGroupMemberActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.group.GroupInfoActivity" />
+            
     </application>
 
 </manifest>
