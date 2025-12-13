@@ -841,8 +841,97 @@ public class FirestoreManager {
         void onFailure(Exception e);
     }
     
+    /**
+     * Listener for realtime friend list updates
+     */
+    public interface OnFriendsChangedListener {
+        void onFriendsChanged(List<User> friends);
+        void onFailure(Exception e);
+    }
+    
     public interface OnFriendshipCheckListener {
         void onResult(boolean areFriends);
         void onFailure(Exception e);
+    }
+    
+    /**
+     * Listen to friends list with realtime updates
+     * Sets up a snapshot listener on friend requests with ACCEPTED status
+     */
+    public com.google.firebase.firestore.ListenerRegistration listenToFriends(
+            @NonNull String userId,
+            @NonNull OnFriendsChangedListener listener) {
+        return db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("status", "ACCEPTED")
+                .addSnapshotListener((querySnapshot, e) -> {
+                    if (e != null) {
+                        Log.e(TAG, "Error listening to friends", e);
+                        listener.onFailure(e);
+                        return;
+                    }
+
+                    if (querySnapshot != null) {
+                        // Use Set to avoid duplicates
+                        java.util.Set<String> friendIdsSet = new java.util.HashSet<>();
+                        
+                        // Extract friend IDs
+                        for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                            String fromUserId = doc.getString("fromUserId");
+                            String toUserId = doc.getString("toUserId");
+                            
+                            if (userId.equals(fromUserId)) {
+                                friendIdsSet.add(toUserId);
+                            } else if (userId.equals(toUserId)) {
+                                friendIdsSet.add(fromUserId);
+                            }
+                        }
+                        
+                        List<String> friendIds = new ArrayList<>(friendIdsSet);
+                        
+                        if (friendIds.isEmpty()) {
+                            Log.d(TAG, "No friends found (realtime)");
+                            listener.onFriendsChanged(new ArrayList<>());
+                            return;
+                        }
+                        
+                        Log.d(TAG, "Found " + friendIds.size() + " unique friend(s) (realtime)");
+                        
+                        // Fetch user details for each friend
+                        List<User> friends = new ArrayList<>();
+                        int[] fetchedCount = {0};
+                        
+                        for (String friendId : friendIds) {
+                            db.collection(COLLECTION_USERS)
+                                    .document(friendId)
+                                    .get()
+                                    .addOnSuccessListener(userDoc -> {
+                                        User friend = userDoc.toObject(User.class);
+                                        if (friend != null) {
+                                            friend.setId(userDoc.getId());
+                                            friends.add(friend);
+                                        }
+                                        
+                                        fetchedCount[0]++;
+                                        if (fetchedCount[0] == friendIds.size()) {
+                                            // All friends fetched, sort and notify
+                                            friends.sort((f1, f2) -> {
+                                                String name1 = f1.getName() != null ? f1.getName() : "";
+                                                String name2 = f2.getName() != null ? f2.getName() : "";
+                                                return name1.compareTo(name2);
+                                            });
+                                            Log.d(TAG, "Loaded " + friends.size() + " friends (realtime)");
+                                            listener.onFriendsChanged(friends);
+                                        }
+                                    })
+                                    .addOnFailureListener(error -> {
+                                        Log.w(TAG, "Failed to fetch friend: " + friendId, error);
+                                        fetchedCount[0]++;
+                                        if (fetchedCount[0] == friendIds.size()) {
+                                            listener.onFriendsChanged(friends);
+                                        }
+                                    });
+                        }
+                    }
+                });
     }
 }

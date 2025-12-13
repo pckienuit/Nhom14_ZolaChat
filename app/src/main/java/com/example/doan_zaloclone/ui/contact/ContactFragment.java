@@ -327,8 +327,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 if (getActivity() != null) {
                     Toast.makeText(getContext(), "Accepted friend request from " + request.getFromUserName(), 
                         Toast.LENGTH_SHORT).show();
-                    // Reload friends list
-                    loadFriends();
+                    // Friends list will auto-update via realtime listener
                 }
             } else if (resource.isError()) {
                 if (getContext() != null) {

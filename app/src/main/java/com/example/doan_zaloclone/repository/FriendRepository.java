@@ -20,6 +20,7 @@ public class FriendRepository {
     
     private final FirestoreManager firestoreManager;
     private ListenerRegistration friendRequestsListener;
+    private ListenerRegistration friendsListener;  // Track friends listener
     
     public FriendRepository() {
         this.firestoreManager = FirestoreManager.getInstance();
@@ -152,20 +153,27 @@ public class FriendRepository {
         MutableLiveData<Resource<List<User>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
         
-        firestoreManager.getFriends(userId, new FirestoreManager.OnFriendsLoadedListener() {
-            @Override
-            public void onFriendsLoaded(List<User> friends) {
-                result.setValue(Resource.success(friends));
-            }
-            
-            @Override
-            public void onFailure(Exception e) {
-                String errorMessage = e.getMessage() != null 
-                        ? e.getMessage() 
-                        : "Failed to load friends";
-                result.setValue(Resource.error(errorMessage));
-            }
-        });
+        // Remove previous listener if exists
+        if (friendsListener != null) {
+            friendsListener.remove();
+        }
+        
+        // Set up real-time listener for friends
+        friendsListener = firestoreManager.listenToFriends(userId, 
+            new FirestoreManager.OnFriendsChangedListener() {
+                @Override
+                public void onFriendsChanged(List<User> friends) {
+                    result.setValue(Resource.success(friends));
+                }
+                
+                @Override
+                public void onFailure(Exception e) {
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Failed to load friends";
+                    result.setValue(Resource.error(errorMessage));
+                }
+            });
         
         return result;
     }
@@ -271,6 +279,10 @@ public class FriendRepository {
         if (friendRequestsListener != null) {
             friendRequestsListener.remove();
             friendRequestsListener = null;
+        }
+        if (friendsListener != null) {
+            friendsListener.remove();
+            friendsListener = null;
         }
     }
 }
