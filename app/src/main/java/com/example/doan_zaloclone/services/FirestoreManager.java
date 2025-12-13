@@ -721,7 +721,8 @@ public class FirestoreManager {
                 .whereEqualTo("status", "ACCEPTED")
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
-                    List<String> friendIds = new ArrayList<>();
+                    // Use Set to avoid duplicates (in case of multiple requests between same users)
+                    java.util.Set<String> friendIdsSet = new java.util.HashSet<>();
                     
                     // Extract friend IDs
                     for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
@@ -729,17 +730,21 @@ public class FirestoreManager {
                         String toUserId = doc.getString("toUserId");
                         
                         if (userId.equals(fromUserId)) {
-                            friendIds.add(toUserId);
+                            friendIdsSet.add(toUserId);
                         } else if (userId.equals(toUserId)) {
-                            friendIds.add(fromUserId);
+                            friendIdsSet.add(fromUserId);
                         }
                     }
+                    
+                    List<String> friendIds = new ArrayList<>(friendIdsSet);
                     
                     if (friendIds.isEmpty()) {
                         Log.d(TAG, "No friends found");
                         listener.onFriendsLoaded(new ArrayList<>());
                         return;
                     }
+                    
+                    Log.d(TAG, "Found " + friendIds.size() + " unique friend(s)");
                     
                     // Fetch user details for each friend
                     List<User> friends = new ArrayList<>();
