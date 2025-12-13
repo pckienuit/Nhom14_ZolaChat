@@ -50,10 +50,12 @@ public class FriendRequestAdapter extends RecyclerView.Adapter<FriendRequestAdap
     }
 
     public void updateRequests(List<FriendRequest> newRequests) {
+        android.util.Log.d("FriendRequestAdapter", "updateRequests called. Old size: " + this.requests.size() + ", New size: " + newRequests.size());
         DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(
                 new FriendRequestDiffCallback(this.requests, newRequests));
         this.requests = newRequests;
         diffResult.dispatchUpdatesTo(this);
+        android.util.Log.d("FriendRequestAdapter", "updateRequests completed. Current size: " + this.requests.size());
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
@@ -71,8 +73,14 @@ public class FriendRequestAdapter extends RecyclerView.Adapter<FriendRequestAdap
         }
 
         public void bind(FriendRequest request, FriendRequestListener listener) {
-            nameTextView.setText(request.getName());
-            emailTextView.setText(request.getEmail());
+            String name = request.getName();
+            String email = request.getEmail();
+            
+            android.util.Log.d("FriendRequestAdapter", "Binding request - Name: " + name + ", Email: " + email + 
+                              ", FromUserName: " + request.getFromUserName() + ", FromUserEmail: " + request.getFromUserEmail());
+            
+            nameTextView.setText(name != null ? name : "Unknown User");
+            emailTextView.setText(email != null ? email : "No email");
 
             acceptButton.setOnClickListener(v -> {
                 if (listener != null) {
@@ -110,8 +118,15 @@ public class FriendRequestAdapter extends RecyclerView.Adapter<FriendRequestAdap
         
         @Override
         public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-            return oldList.get(oldItemPosition).getId().equals(
-                    newList.get(newItemPosition).getId());
+            String oldId = oldList.get(oldItemPosition).getId();
+            String newId = newList.get(newItemPosition).getId();
+            
+            if (oldId == null || newId == null) {
+                android.util.Log.e("FriendRequestAdapter", "Null ID detected! oldId=" + oldId + ", newId=" + newId);
+                return false;
+            }
+            
+            return oldId.equals(newId);
         }
         
         @Override

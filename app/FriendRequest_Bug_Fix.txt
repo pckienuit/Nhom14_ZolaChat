@@ -1,0 +1,80 @@
+# Friend Request Display Bug Fix - Dev Notes
+
+Date: 13/12/2025
+
+## Bug Summary
+Friend requests không hiển thị trong Contact tab sau khi optimize RecyclerView với DiffUtil, mặc dù data được load thành công từ Firebase.
+
+## Root Cause
+RecyclerView với `android:layout_height="wrap_content"` + `setHasFixedSize(true)` không tự động re-measure khi DiffUtil thêm items vào adapter. RecyclerView giữ nguyên height = 0 dù adapter đã có data.
+
+## Files Modified
+
+### 1. FirestoreManager.java (Line 676)
+**Issue:** Document ID khong duoc set khi convert Firestore document -> FriendRequest object
+**Fix:** 
+```java
+FriendRequest request = document.toObject(FriendRequest.class);
+if (request != null) {
+    request.setId(document.getId());  // Added this line
+    requests.add(request);
+}
+```
+
+### 2. ContactFragment.java (Lines 102-104)
+**Issue:** `setHasFixedSize(true)` conflict voi `wrap_content`, ngan remeasure
+**Fix:**
+```java
+// BEFORE
+friendRequestsRecyclerView.setHasFixedSize(true);
+
+// AFTER
+// Removed setHasFixedSize(true) - it prevents remeasure with wrap_content
+```
+
+### 3. ContactFragment.java (Lines 408-418)
+**Issue:** RecyclerView khong remeasure sau DiffUtil update
+**Fix:**
+```java
+public void onFriendRequestsChanged(List<FriendRequest> requests) {
+    if (getActivity() != null) {
+        friendRequestAdapter.updateRequests(requests);
+        friendRequestsRecyclerView.requestLayout();  // Force remeasure
+    }
+}
+```
+
+### 4. FriendRequestAdapter.java (Lines 52-58, 111-121)
+**Added:** Debug logging va null safety checks
+```java
+// Added logging to track adapter updates
+Log.d("FriendRequestAdapter", "updateRequests called. Old size: " + ...);
+
+// Added null check in DiffUtil
+if (oldId == null || newId == null) {
+    Log.e("FriendRequestAdapter", "Null ID detected!");
+    return false;
+}
+```
+
+## Key Learnings
+
+### DON'T use setHasFixedSize(true) when:
+- RecyclerView has `layout_height="wrap_content"`
+- Item count changes dynamically
+- Using DiffUtil for updates
+
+### DO use setHasFixedSize(true) when:
+- RecyclerView has fixed height (match_parent, specific dp)
+- Item count doesn't affect RecyclerView size
+- Performance is critical and layout is stable
+
+## Testing
+[PASS] Friend requests now display correctly
+[PASS] DiffUtil updates work properly
+[PASS] Accept/Reject actions functional
+[PASS] No null pointer exceptions
+
+## Performance Impact
+Minimal - removed one optimization flag but added necessary remeasure. 
+Friend request list is typically small (<10 items) so performance impact negligible.
