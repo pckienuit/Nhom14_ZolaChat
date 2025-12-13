@@ -673,6 +673,7 @@ public class FirestoreManager {
                             com.example.doan_zaloclone.models.FriendRequest request = 
                                 document.toObject(com.example.doan_zaloclone.models.FriendRequest.class);
                             if (request != null) {
+                                request.setId(document.getId());  // Set document ID for DiffUtil comparison
                                 requests.add(request);
                             }
                         }

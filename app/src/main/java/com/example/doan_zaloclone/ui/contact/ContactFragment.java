@@ -100,7 +100,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             });
         
         friendRequestsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        friendRequestsRecyclerView.setHasFixedSize(true); // Optimize performance
+        // Note: Don't use setHasFixedSize(true) with wrap_content - it prevents remeasure
         friendRequestsRecyclerView.setAdapter(friendRequestAdapter);
     }
 
@@ -408,7 +408,14 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 @Override
                 public void onFriendRequestsChanged(List<FriendRequest> requests) {
                     if (getActivity() != null) {
+                        android.util.Log.d("ContactFragment", "onFriendRequestsChanged: " + requests.size() + " requests");
                         friendRequestAdapter.updateRequests(requests);
+                        
+                        // Force RecyclerView to remeasure with wrap_content
+                        friendRequestsRecyclerView.requestLayout();
+                        
+                        android.util.Log.d("ContactFragment", "RecyclerView visibility: " + friendRequestsRecyclerView.getVisibility() + 
+                                          ", childCount: " + friendRequestsRecyclerView.getChildCount());
                     }
                 }
 
