@@ -73,8 +73,14 @@ public class FriendRequestAdapter extends RecyclerView.Adapter<FriendRequestAdap
         }
 
         public void bind(FriendRequest request, FriendRequestListener listener) {
-            nameTextView.setText(request.getName());
-            emailTextView.setText(request.getEmail());
+            String name = request.getName();
+            String email = request.getEmail();
+            
+            android.util.Log.d("FriendRequestAdapter", "Binding request - Name: " + name + ", Email: " + email + 
+                              ", FromUserName: " + request.getFromUserName() + ", FromUserEmail: " + request.getFromUserEmail());
+            
+            nameTextView.setText(name != null ? name : "Unknown User");
+            emailTextView.setText(email != null ? email : "No email");
 
             acceptButton.setOnClickListener(v -> {
                 if (listener != null) {

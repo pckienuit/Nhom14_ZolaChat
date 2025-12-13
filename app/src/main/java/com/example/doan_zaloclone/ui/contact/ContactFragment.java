@@ -242,34 +242,51 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         }
 
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
-        String currentUserName = firebaseAuth.getCurrentUser().getDisplayName() != null
-                ? firebaseAuth.getCurrentUser().getDisplayName()
-                : "User";
-        String currentUserEmail = firebaseAuth.getCurrentUser().getEmail() != null
-                ? firebaseAuth.getCurrentUser().getEmail()
-                : "";
-
-        firestoreManager.sendFriendRequest(
-                currentUserId,
-                currentUserName,
-                currentUserEmail,
-                user.getId(),
-                new FirestoreManager.OnFriendRequestListener() {
-                    @Override
-                    public void onSuccess() {
-                        if (getActivity() != null) {
-                            Toast.makeText(getContext(), "Friend request sent to " + user.getName(), Toast.LENGTH_SHORT).show();
-                            userAdapter.updateFriendRequestStatus(user.getId(), "PENDING");
-                        }
+        
+        // Fetch current user's name from Firestore instead of Auth (Auth displayName is often null)
+        firestoreManager.getFirestore().collection("users").document(currentUserId)
+            .get()
+            .addOnSuccessListener(documentSnapshot -> {
+                String currentUserName = "User";
+                String currentUserEmail = firebaseAuth.getCurrentUser().getEmail() != null
+                        ? firebaseAuth.getCurrentUser().getEmail()
+                        : "";
+                
+                if (documentSnapshot.exists()) {
+                    User currentUser = documentSnapshot.toObject(User.class);
+                    if (currentUser != null && currentUser.getName() != null) {
+                        currentUserName = currentUser.getName();
                     }
+                }
+                
+                android.util.Log.d("ContactFragment", "Sending friend request - Name: " + currentUserName + 
+                                  ", Email: " + currentUserEmail);
 
-                    @Override
-                    public void onFailure(Exception e) {
-                        if (getActivity() != null) {
-                            Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                });
+                firestoreManager.sendFriendRequest(
+                        currentUserId,
+                        currentUserName,
+                        currentUserEmail,
+                        user.getId(),
+                        new FirestoreManager.OnFriendRequestListener() {
+                            @Override
+                            public void onSuccess() {
+                                if (getActivity() != null) {
+                                    Toast.makeText(getContext(), "Friend request sent to " + user.getName(), Toast.LENGTH_SHORT).show();
+                                    userAdapter.updateFriendRequestStatus(user.getId(), "PENDING");
+                                }
+                            }
+
+                            @Override
+                            public void onFailure(Exception e) {
+                                if (getActivity() != null) {
+                                    Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                                }
+                            }
+                        });
+            })
+            .addOnFailureListener(e -> {
+                Toast.makeText(getContext(), "Error fetching user info", Toast.LENGTH_SHORT).show();
+            });
     }
 
     private void acceptFriendRequest(FriendRequest request) {
