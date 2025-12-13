@@ -427,8 +427,43 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
 
     @Override
     public void onMessageClick(User friend) {
-        // Open conversation with friend
         onUserClick(friend);
+    }
+
+    @Override
+    public void onUnfriendClick(User friend) {
+        showUnfriendConfirmationDialog(friend);
+    }
+
+    private void showUnfriendConfirmationDialog(User friend) {
+        if (getContext() == null) return;
+        
+        new androidx.appcompat.app.AlertDialog.Builder(getContext())
+            .setTitle("Confirm Unfriend")
+            .setMessage("Are you sure you want to remove " + friend.getName() + " from your friends?")
+            .setPositiveButton("Remove", (dialog, which) -> {
+                String currentUserId = firebaseAuth.getCurrentUser() != null 
+                    ? firebaseAuth.getCurrentUser().getUid() 
+                    : "";
+                removeFriend(currentUserId, friend.getId());
+            })
+            .setNegativeButton("Cancel", null)
+            .show();
+    }
+
+    private void removeFriend(String currentUserId, String friendId) {
+        contactViewModel.removeFriend(currentUserId, friendId)
+            .observe(getViewLifecycleOwner(), resource -> {
+                if (resource == null) return;
+                
+                if (resource.isSuccess()) {
+                    Toast.makeText(getContext(), "Friend removed successfully", 
+                        Toast.LENGTH_SHORT).show();
+                } else if (resource.isError()) {
+                    Toast.makeText(getContext(), "Error: " + resource.getMessage(), 
+                        Toast.LENGTH_SHORT).show();
+                }
+            });
     }
 
     private void loadFriendRequests() {

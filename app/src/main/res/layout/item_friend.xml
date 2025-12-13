@@ -53,15 +53,35 @@
 
         </LinearLayout>
 
-        <Button
-            android:id="@+id/messageButton"
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Nhắn tin"
-            android:textSize="12sp"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:backgroundTint="@color/colorPrimary"/>
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/messageButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Nhắn tin"
+                android:textSize="12sp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:backgroundTint="@color/colorPrimary"/>
+
+            <Button
+                android:id="@+id/unfriendButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Xóa"
+                android:textSize="11sp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:backgroundTint="#D32F2F"
+                android:textColor="@color/white"/>
+
+        </LinearLayout>
 
     </LinearLayout>
 

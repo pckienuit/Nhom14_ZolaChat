@@ -855,6 +855,73 @@ public class FirestoreManager {
         void onFailure(Exception e);
     }
     
+    public interface OnFriendRemovedListener {
+        void onSuccess();
+        void onFailure(Exception e);
+    }
+    
+    /**
+     * Remove a friend (unfriend)
+     * Updates the friend request status from ACCEPTED to REMOVED
+     * Conversation is preserved to maintain chat history
+     * 
+     * @param user1Id First user ID
+     * @param user2Id Second user ID
+     * @param listener Callback for result
+     */
+    public void removeFriend(@NonNull String user1Id,
+                            @NonNull String user2Id,
+                            @NonNull OnFriendRemovedListener listener) {
+        Log.d(TAG, "Removing friend relationship between: " + user1Id + " and " + user2Id);
+        
+        // Find the accepted friend request between the two users
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("status", "ACCEPTED")
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    boolean found = false;
+                    
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        String fromUserId = doc.getString("fromUserId");
+                        String toUserId = doc.getString("toUserId");
+                        
+                        // Check if this is the friend request between the two users
+                        if ((user1Id.equals(fromUserId) && user2Id.equals(toUserId)) ||
+                            (user1Id.equals(toUserId) && user2Id.equals(fromUserId))) {
+                            
+                            // Update status to REMOVED (preserve for history)
+                            Map<String, Object> updates = new HashMap<>();
+                            updates.put("status", "REMOVED");
+                            updates.put("removedAt", System.currentTimeMillis());
+                            
+                            db.collection(COLLECTION_FRIEND_REQUESTS)
+                                    .document(doc.getId())
+                                    .update(updates)
+                                    .addOnSuccessListener(aVoid -> {
+                                        Log.d(TAG, "Friend removed successfully: " + doc.getId());
+                                        listener.onSuccess();
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        Log.e(TAG, "Error removing friend", e);
+                                        listener.onFailure(e);
+                                    });
+                            
+                            found = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!found) {
+                        Log.w(TAG, "No friend relationship found between users");
+                        listener.onFailure(new Exception("Không tìm thấy mối quan hệ bạn bè"));
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error finding friend request", e);
+                    listener.onFailure(e);
+                });
+    }
+    
     /**
      * Listen to friends list with realtime updates
      * Sets up a snapshot listener on friend requests with ACCEPTED status

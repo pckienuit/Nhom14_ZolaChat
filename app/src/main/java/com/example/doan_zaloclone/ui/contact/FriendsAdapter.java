@@ -23,6 +23,7 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
 
     public interface OnFriendClickListener {
         void onMessageClick(User friend);
+        void onUnfriendClick(User friend);
     }
 
     public FriendsAdapter(List<User> friends, OnFriendClickListener listener) {
@@ -67,6 +68,7 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
         private TextView friendName;
         private TextView friendEmail;
         private Button messageButton;
+        private Button unfriendButton;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -74,11 +76,19 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
             friendName = itemView.findViewById(R.id.friendName);
             friendEmail = itemView.findViewById(R.id.friendEmail);
             messageButton = itemView.findViewById(R.id.messageButton);
+            unfriendButton = itemView.findViewById(R.id.unfriendButton);
 
             messageButton.setOnClickListener(v -> {
                 int position = getAdapterPosition();
                 if (position != RecyclerView.NO_POSITION && listener != null) {
                     listener.onMessageClick(friends.get(position));
+                }
+            });
+            
+            unfriendButton.setOnClickListener(v -> {
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION && listener != null) {
+                    listener.onUnfriendClick(friends.get(position));
                 }
             });
         }

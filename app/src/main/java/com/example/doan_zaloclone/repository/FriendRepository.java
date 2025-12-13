@@ -273,6 +273,36 @@ public class FriendRepository {
     }
     
     /**
+     * Remove a friend (unfriend)
+     * @param userId1 First user ID
+     * @param userId2 Second user ID
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> removeFriend(@NonNull String userId1,
+                                                     @NonNull String userId2) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        firestoreManager.removeFriend(userId1, userId2, 
+            new FirestoreManager.OnFriendRemovedListener() {
+                @Override
+                public void onSuccess() {
+                    result.setValue(Resource.success(true));
+                }
+                
+                @Override
+                public void onFailure(Exception e) {
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Failed to remove friend";
+                    result.setValue(Resource.error(errorMessage));
+                }
+            });
+        
+        return result;
+    }
+    
+    /**
      * Clean up listeners when repository is no longer needed
      */
     public void cleanup() {

@@ -128,6 +128,18 @@ public class ContactViewModel extends BaseViewModel {
         return conversationRepository.findExistingConversation(currentUserId, otherUserId);
     }
     
+    
+    /**
+     * Remove a friend (unfriend)
+     * @param userId1 First user ID
+     * @param userId2 Second user ID
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> removeFriend(@NonNull String userId1,
+                                                     @NonNull String userId2) {
+        return friendRepository.removeFriend(userId1, userId2);
+    }
+    
     @Override
     protected void onCleared() {
         super.onCleared();
