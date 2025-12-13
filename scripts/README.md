@@ -76,6 +76,55 @@ When prompted:
 
 ---
 
+### 3. cleanup_firestore.py
+
+⚠️ **DESTRUCTIVE TOOL** - Deletes all friend requests and conversations.
+
+**Use case**: Clean up test data, reset database state.
+
+**Usage**:
+```bash
+python cleanup_firestore.py
+```
+
+**Confirmation required**:
+```
+⚠️  WARNING: DESTRUCTIVE OPERATION
+This will permanently delete:
+  • All friend requests
+  • All conversations
+  • All messages
+
+Type 'DELETE' to confirm: DELETE
+```
+
+**What it deletes**:
+- All documents in `friendRequests` collection
+- All documents in `conversations` collection
+- All messages subcollections within conversations
+
+**Output**:
+```
+✅ Firebase initialized successfully
+
+🗑️  Deleting collection: friendRequests
+   Deleted 15 documents...
+✅ Total deleted from friendRequests: 15
+
+🗑️  Deleting collection: conversations
+   └─ Deleted 23 messages from conversation abc123...
+   Deleted 5 documents...
+✅ Total deleted from conversations: 5
+
+═══════════════════════════════════════════════
+✅ CLEANUP COMPLETED SUCCESSFULLY
+   Friend requests deleted: 15
+   Conversations deleted:   5
+═══════════════════════════════════════════════
+```
+
+---
+
 ## Common Workflows
 
 ### New Developer Setup
@@ -101,6 +150,13 @@ python sync_auth_to_firestore.py
 # Clear and reseed with demo data
 python seed_firebase_data.py
 # Choose 'yes' when asked to clear data
+```
+
+### Database Reset
+```bash
+# Delete ALL friend requests and conversations
+python cleanup_firestore.py
+# Type 'DELETE' to confirm
 ```
 
 ---
