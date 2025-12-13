@@ -8,6 +8,7 @@ import android.view.MenuItem;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentTransaction;
 
 import com.example.doan_zaloclone.repository.AuthRepository;
 import com.example.doan_zaloclone.ui.contact.ContactFragment;
@@ -20,6 +21,10 @@ public class MainActivity extends AppCompatActivity {
     private BottomNavigationView bottomNavigationView;
     private Toolbar toolbar;
     private AuthRepository authRepository;
+    
+    // Cache fragments to preserve state
+    private HomeFragment homeFragment;
+    private ContactFragment contactFragment;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,7 +41,8 @@ public class MainActivity extends AppCompatActivity {
         bottomNavigationView = findViewById(R.id.bottomNavigationView);
         
         if (savedInstanceState == null) {
-            loadFragment(new HomeFragment());
+            // Show home fragment on first launch
+            showFragment(0);
         }
 
         setupBottomNavigation();
@@ -72,27 +78,53 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupBottomNavigation() {
         bottomNavigationView.setOnItemSelectedListener(item -> {
-            Fragment selectedFragment = null;
             int itemId = item.getItemId();
 
             if (itemId == R.id.nav_home) {
-                selectedFragment = new HomeFragment();
+                showFragment(0);
+                return true;
             } else if (itemId == R.id.nav_contact) {
-                selectedFragment = new ContactFragment();
-            }
-
-            if (selectedFragment != null) {
-                loadFragment(selectedFragment);
+                showFragment(1);
                 return true;
             }
             return false;
         });
     }
 
-    private void loadFragment(Fragment fragment) {
-        getSupportFragmentManager()
-            .beginTransaction()
-            .replace(R.id.fragmentContainer, fragment)
-            .commit();
+    private void showFragment(int position) {
+        FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        
+        // Disable default animations to prevent flicker
+        transaction.setCustomAnimations(0, 0);
+        
+        // Hide all fragments first
+        if (homeFragment != null) {
+            transaction.hide(homeFragment);
+        }
+        if (contactFragment != null) {
+            transaction.hide(contactFragment);
+        }
+        
+        // Show or create the selected fragment
+        switch (position) {
+            case 0: // Home
+                if (homeFragment == null) {
+                    homeFragment = new HomeFragment();
+                    transaction.add(R.id.fragmentContainer, homeFragment, "HOME");
+                } else {
+                    transaction.show(homeFragment);
+                }
+                break;
+            case 1: // Contact
+                if (contactFragment == null) {
+                    contactFragment = new ContactFragment();
+                    transaction.add(R.id.fragmentContainer, contactFragment, "CONTACT");
+                } else {
+                    transaction.show(contactFragment);
+                }
+                break;
+        }
+        
+        transaction.commit();
     }
 }

@@ -92,4 +92,20 @@ public class User {
     public boolean hasDevice(String deviceToken) {
         return this.devices != null && this.devices.containsKey(deviceToken);
     }
+    
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        User user = (User) o;
+        return java.util.Objects.equals(id, user.id) &&
+               java.util.Objects.equals(name, user.name) &&
+               java.util.Objects.equals(email, user.email) &&
+               java.util.Objects.equals(avatarUrl, user.avatarUrl);
+    }
+    
+    @Override
+    public int hashCode() {
+        return java.util.Objects.hash(id, name, email, avatarUrl);
+    }
 }

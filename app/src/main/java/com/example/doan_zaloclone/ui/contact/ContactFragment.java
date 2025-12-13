@@ -49,6 +49,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
                            @Nullable Bundle savedInstanceState) {
+        Log.d("ContactFragment", "onCreateView called");
         View view = inflater.inflate(R.layout.fragment_contact, container, false);
         
         firestoreManager = FirestoreManager.getInstance();
@@ -57,10 +58,17 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         initViews(view);
         setupRecyclerViews();
         setupSearchListener();
-        loadFriends();
         loadFriendRequests();
         
         return view;
+    }
+    
+    @Override
+    public void onResume() {
+        super.onResume();
+        Log.d("ContactFragment", "onResume called - loading friends");
+        // Load friends when fragment becomes visible (critical for show/hide pattern)
+        loadFriends();
     }
 
     private void initViews(View view) {
