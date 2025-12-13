@@ -13,6 +13,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -22,6 +23,7 @@ import com.example.doan_zaloclone.models.FriendRequest;
 import com.example.doan_zaloclone.models.User;
 import com.example.doan_zaloclone.ui.room.RoomActivity;
 import com.example.doan_zaloclone.services.FirestoreManager;
+import com.example.doan_zaloclone.viewmodel.ContactViewModel;
 import com.google.firebase.auth.FirebaseAuth;
 
 import java.util.ArrayList;
@@ -40,10 +42,9 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     private FriendRequestAdapter friendRequestAdapter;
     private FriendsAdapter friendsAdapter;
     
-    private FirestoreManager firestoreManager;
+    private ContactViewModel contactViewModel;
     private FirebaseAuth firebaseAuth;
-    
-    private com.google.firebase.firestore.ListenerRegistration friendRequestsListener;
+    private FirestoreManager firestoreManager; // Still needed for some legacy operations
 
     @Nullable
     @Override
@@ -52,12 +53,15 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         Log.d("ContactFragment", "onCreateView called");
         View view = inflater.inflate(R.layout.fragment_contact, container, false);
         
-        firestoreManager = FirestoreManager.getInstance();
+        // Initialize ViewModel
+        contactViewModel = new ViewModelProvider(this).get(ContactViewModel.class);
         firebaseAuth = FirebaseAuth.getInstance();
+        firestoreManager = FirestoreManager.getInstance(); // For legacy operations
         
         initViews(view);
         setupRecyclerViews();
         setupSearchListener();
+        observeViewModel();
         loadFriendRequests();
         
         return view;
@@ -84,13 +88,12 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         // Setup friends RecyclerView
         friendsAdapter = new FriendsAdapter(new ArrayList<>(), this);
         friendsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        // Don't use setHasFixedSize(true) with wrap_content - it prevents remeasure
         friendsRecyclerView.setAdapter(friendsAdapter);
         
         // Setup search results RecyclerView
         userAdapter = new UserAdapter(new ArrayList<>(), this);
         searchResultsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        searchResultsRecyclerView.setHasFixedSize(true); // Optimize performance
+        searchResultsRecyclerView.setHasFixedSize(true);
         searchResultsRecyclerView.setAdapter(userAdapter);
 
         // Setup friend requests RecyclerView
@@ -108,8 +111,89 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             });
         
         friendRequestsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        // Note: Don't use setHasFixedSize(true) with wrap_content - it prevents remeasure
         friendRequestsRecyclerView.setAdapter(friendRequestAdapter);
+    }
+    
+    private void observeViewModel() {
+        // Observe search results
+        contactViewModel.getSearchResults().observe(getViewLifecycleOwner(), resource -> {
+            if (resource == null || resource.getData() == null) {
+                searchResultsRecyclerView.setVisibility(View.GONE);
+                divider.setVisibility(View.GONE);
+                return;
+            }
+            
+            if (resource.isSuccess()) {
+                List<User> users = resource.getData();
+                String currentUserId = firebaseAuth.getCurrentUser() != null 
+                    ? firebaseAuth.getCurrentUser().getUid() 
+                    : "";
+                
+                // Filter out current user
+                List<User> filteredUsers = new ArrayList<>();
+                for (User user : users) {
+                    if (!currentUserId.equals(user.getId())) {
+                        filteredUsers.add(user);
+                    }
+                }
+                
+                if (!filteredUsers.isEmpty()) {
+                    userAdapter.updateUsers(filteredUsers);
+                    searchResultsRecyclerView.setVisibility(View.VISIBLE);
+                    divider.setVisibility(View.VISIBLE);
+                    
+                    // Check friend request status for each user
+                    for (User user : filteredUsers) {
+                        checkFriendRequestStatus(currentUserId, user.getId());
+                    }
+                }
+            } else if (resource.isError()) {
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Error: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        
+        // Observe friends list
+        String currentUserId = firebaseAuth.getCurrentUser() != null  
+            ? firebaseAuth.getCurrentUser().getUid() 
+            : "";
+        contactViewModel.getFriends(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                List<User> friends = resource.getData();
+                if (friends != null) {
+                    Log.d("ContactFragment", "Friends loaded: " + friends.size());
+                    friendsAdapter.updateFriends(friends);
+                    friendsRecyclerView.requestLayout();
+                }
+            } else if (resource.isError()) {
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Error loading friends: " + resource.getMessage(), 
+                        Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        
+        // Observe friend requests
+        contactViewModel.getFriendRequests(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                List<FriendRequest> requests = resource.getData();
+                if (requests != null) {
+                    Log.d("ContactFragment", "Friend requests loaded: " + requests.size());
+                    friendRequestAdapter.updateRequests(requests);
+                    friendRequestsRecyclerView.requestLayout();
+                }
+            } else if (resource.isError()) {
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Error loading friend requests: " + resource.getMessage(), 
+                        Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
     }
 
     private void setupSearchListener() {
@@ -131,74 +215,23 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         
         searchButton.setEnabled(false);
         searchButton.setText("Searching...");
-
-        String currentUserId = firebaseAuth.getCurrentUser().getUid();
-        firestoreManager.searchUsers(query, new FirestoreManager.OnUserSearchListener() {
-            @Override
-            public void onSuccess(List<User> users) {
-                if (getActivity() == null) return;
-                
-                searchButton.setEnabled(true);
-                searchButton.setText("Search");
-                
-                if (users.isEmpty()) {
-                    Toast.makeText(getContext(), "No users found", Toast.LENGTH_SHORT).show();
-                    searchResultsRecyclerView.setVisibility(View.GONE);
-                    divider.setVisibility(View.GONE);
-                } else {
-                    // Filter out current user
-                    List<User> filteredUsers = new ArrayList<>();
-                    for (User user : users) {
-                        if (!currentUserId.equals(user.getId())) {
-                            filteredUsers.add(user);
-                        }
-                    }
-
-                    if (filteredUsers.isEmpty()) {
-                        Toast.makeText(getContext(), "Cannot add yourself", Toast.LENGTH_SHORT).show();
-                        searchResultsRecyclerView.setVisibility(View.GONE);
-                        divider.setVisibility(View.GONE);
-                    } else {
-                        userAdapter.updateUsers(filteredUsers);
-                        searchResultsRecyclerView.setVisibility(View.VISIBLE);
-                        divider.setVisibility(View.VISIBLE);
-                        
-                        // Check friend request status for each user
-                        for (User user : filteredUsers) {
-                            checkFriendRequestStatus(currentUserId, user.getId());
-                        }
-                        
-                        Toast.makeText(getContext(), "Found " + filteredUsers.size() + " user(s)", Toast.LENGTH_SHORT).show();
-                    }
-                }
-            }
-
-            @Override
-            public void onFailure(Exception e) {
-                if (getActivity() == null) return;
-                
-                searchButton.setEnabled(true);
-                searchButton.setText("Search");
-                Toast.makeText(getContext(), "Error searching: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-            }
-        });
+        
+        // Use ViewModel to search
+        contactViewModel.searchUsers(query);
+        
+        // Reset button state after a delay (search is asynchronous)
+        searchButton.postDelayed(() -> {
+            searchButton.setEnabled(true);
+            searchButton.setText("Search");
+        }, 1000);
     }
 
     private void checkFriendRequestStatus(String fromUserId, String toUserId) {
-        firestoreManager.checkFriendRequestStatus(fromUserId, toUserId,
-            new FirestoreManager.OnFriendRequestStatusListener() {
-                @Override
-                public void onStatus(String status) {
-                    if (getActivity() != null) {
-                        userAdapter.updateFriendRequestStatus(toUserId, status);
-                    }
-                }
-
-                @Override
-                public void onFailure(Exception e) {
-                    // Silently fail - will show default "Add Friend" button
-                }
-            });
+        contactViewModel.checkFriendRequestStatus(fromUserId, toUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                userAdapter.updateFriendRequestStatus(toUserId, resource.getData());
+            }
+        });
     }
 
     @Override
@@ -211,35 +244,32 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         Toast.makeText(getContext(), "Opening chat with " + user.getName() + "...", Toast.LENGTH_SHORT).show();
 
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
-        String currentUserName = firebaseAuth.getCurrentUser().getDisplayName() != null 
-                ? firebaseAuth.getCurrentUser().getDisplayName() 
-                : "User";
         
-        // Check if conversation already exists
-        firestoreManager.findExistingConversation(currentUserId, user.getId(), 
-            new FirestoreManager.OnConversationFoundListener() {
-                @Override
-                public void onFound(Conversation conversation) {
+        // Use ViewModel to find existing conversation
+        contactViewModel.findExistingConversation(currentUserId, user.getId()).observe(this, resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                Conversation conversation = resource.getData();
+                if (conversation != null) {
+                    // Found existing conversation
                     if (getActivity() != null) {
                         Toast.makeText(getContext(), "Opening existing chat", Toast.LENGTH_SHORT).show();
                         openChatRoom(conversation);
                     }
+                } else {
+                    // No conversation found, create new one
+                    String currentUserName = firebaseAuth.getCurrentUser().getDisplayName() != null 
+                        ? firebaseAuth.getCurrentUser().getDisplayName() 
+                        : "User";
+                    createNewConversation(currentUserId, currentUserName, user);
                 }
-
-                @Override
-                public void onNotFound() {
-                    if (getActivity() != null) {
-                        createNewConversation(currentUserId, currentUserName, user);
-                    }
+            } else if (resource.isError()) {
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Error: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
                 }
-
-                @Override
-                public void onFailure(Exception e) {
-                    if (getActivity() != null) {
-                        Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    }
-                }
-            });
+            }
+        });
     }
 
     @Override
@@ -251,14 +281,11 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
 
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
         
-        // Fetch current user's name from Firestore instead of Auth (Auth displayName is often null)
+        // Fetch current user's name from Firestore
         firestoreManager.getFirestore().collection("users").document(currentUserId)
             .get()
             .addOnSuccessListener(documentSnapshot -> {
                 String currentUserName = "User";
-                String currentUserEmail = firebaseAuth.getCurrentUser().getEmail() != null
-                        ? firebaseAuth.getCurrentUser().getEmail()
-                        : "";
                 
                 if (documentSnapshot.exists()) {
                     User currentUser = documentSnapshot.toObject(User.class);
@@ -267,30 +294,25 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                     }
                 }
                 
-                android.util.Log.d("ContactFragment", "Sending friend request - Name: " + currentUserName + 
-                                  ", Email: " + currentUserEmail);
-
-                firestoreManager.sendFriendRequest(
-                        currentUserId,
-                        currentUserName,
-                        currentUserEmail,
-                        user.getId(),
-                        new FirestoreManager.OnFriendRequestListener() {
-                            @Override
-                            public void onSuccess() {
-                                if (getActivity() != null) {
-                                    Toast.makeText(getContext(), "Friend request sent to " + user.getName(), Toast.LENGTH_SHORT).show();
-                                    userAdapter.updateFriendRequestStatus(user.getId(), "PENDING");
-                                }
+                // Use ViewModel to send friend request
+                String finalUserName = currentUserName;
+                contactViewModel.sendFriendRequest(currentUserId, user.getId(), finalUserName)
+                    .observe(this, resource -> {
+                        if (resource == null) return;
+                        
+                        if (resource.isSuccess()) {
+                            if (getActivity() != null) {
+                                Toast.makeText(getContext(), "Friend request sent to " + user.getName(), 
+                                    Toast.LENGTH_SHORT).show();
+                                userAdapter.updateFriendRequestStatus(user.getId(), "PENDING");
                             }
-
-                            @Override
-                            public void onFailure(Exception e) {
-                                if (getActivity() != null) {
-                                    Toast.makeText(getContext(), "Error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                                }
+                        } else if (resource.isError()) {
+                            if (getContext() != null) {
+                                Toast.makeText(getContext(), "Error: " + resource.getMessage(), 
+                                    Toast.LENGTH_SHORT).show();
                             }
-                        });
+                        }
+                    });
             })
             .addOnFailureListener(e -> {
                 Toast.makeText(getContext(), "Error fetching user info", Toast.LENGTH_SHORT).show();
@@ -298,43 +320,41 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     }
 
     private void acceptFriendRequest(FriendRequest request) {
-        firestoreManager.acceptFriendRequest(request.getId(),
-            new FirestoreManager.OnFriendRequestListener() {
-                @Override
-                public void onSuccess() {
-                    if (getActivity() != null) {
-                        Toast.makeText(getContext(), "Accepted friend request from " + request.getFromUserName(), Toast.LENGTH_SHORT).show();
-                        // Reload friends list
-                        loadFriends();
-                    }
+        contactViewModel.acceptFriendRequest(request).observe(this, resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                if (getActivity() != null) {
+                    Toast.makeText(getContext(), "Accepted friend request from " + request.getFromUserName(), 
+                        Toast.LENGTH_SHORT).show();
+                    // Reload friends list
+                    loadFriends();
                 }
-
-                @Override
-                public void onFailure(Exception e) {
-                    if (getActivity() != null) {
-                        Toast.makeText(getContext(), "Error accepting request: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    }
+            } else if (resource.isError()) {
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Error accepting request: " + resource.getMessage(), 
+                        Toast.LENGTH_SHORT).show();
                 }
-            });
+            }
+        });
     }
 
     private void rejectFriendRequest(FriendRequest request) {
-        firestoreManager.rejectFriendRequest(request.getId(),
-            new FirestoreManager.OnFriendRequestListener() {
-                @Override
-                public void onSuccess() {
-                    if (getActivity() != null) {
-                        Toast.makeText(getContext(), "Rejected friend request from " + request.getFromUserName(), Toast.LENGTH_SHORT).show();
-                    }
+        contactViewModel.rejectFriendRequest(request).observe(this, resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                if (getActivity() != null) {
+                    Toast.makeText(getContext(), "Rejected friend request from " + request.getFromUserName(), 
+                        Toast.LENGTH_SHORT).show();
                 }
-
-                @Override
-                public void onFailure(Exception e) {
-                    if (getActivity() != null) {
-                        Toast.makeText(getContext(), "Error rejecting request: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    }
+            } else if (resource.isError()) {
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Error rejecting request: " + resource.getMessage(), 
+                        Toast.LENGTH_SHORT).show();
                 }
-            });
+            }
+        });
     }
 
     private void createNewConversation(String currentUserId, String currentUserName, User otherUser) {
@@ -380,8 +400,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         
         // Clear search
         searchEmailEditText.setText("");
-        searchResultsRecyclerView.setVisibility(View.GONE);
-        divider.setVisibility(View.GONE);
+        contactViewModel.clearSearchResults();
     }
 
     private void loadFriends() {
@@ -390,31 +409,9 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
         Log.d("ContactFragment", "Loading friends for user: " + currentUserId);
         
-        firestoreManager.getFriends(currentUserId, new FirestoreManager.OnFriendsLoadedListener() {
-            @Override
-            public void onFriendsLoaded(List<User> friends) {
-                if (getActivity() != null) {
-                    Log.d("ContactFragment", "Friends loaded: " + friends.size());
-                    friendsAdapter.updateFriends(friends);
-                    
-                    // Force RecyclerView to remeasure with wrap_content
-                    friendsRecyclerView.requestLayout();
-                    
-                    if (friends.isEmpty()) {
-                        Log.d("ContactFragment", "No friends found - make sure you have ACCEPTED friend requests");
-                    }
-                }
-            }
-
-            @Override
-            public void onFailure(Exception e) {
-                if (getActivity() != null) {
-                    Log.e("ContactFragment", "Error loading friends", e);
-                    Toast.makeText(getContext(), "Error loading friends: " + e.getMessage(), 
-                            Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
+        // Friends are automatically loaded via ViewModel observer
+        // Just refresh if needed
+        contactViewModel.getFriends(currentUserId);
     }
 
     @Override
@@ -424,44 +421,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     }
 
     private void loadFriendRequests() {
-        if (firebaseAuth.getCurrentUser() == null) {
-            return;
-        }
-
-        String currentUserId = firebaseAuth.getCurrentUser().getUid();
-        
-        // Listen to friend requests realtime
-        friendRequestsListener = firestoreManager.listenToFriendRequests(currentUserId,
-            new FirestoreManager.OnFriendRequestsChangedListener() {
-                @Override
-                public void onFriendRequestsChanged(List<FriendRequest> requests) {
-                    if (getActivity() != null) {
-                        android.util.Log.d("ContactFragment", "onFriendRequestsChanged: " + requests.size() + " requests");
-                        friendRequestAdapter.updateRequests(requests);
-                        
-                        // Force RecyclerView to remeasure with wrap_content
-                        friendRequestsRecyclerView.requestLayout();
-                        
-                        android.util.Log.d("ContactFragment", "RecyclerView visibility: " + friendRequestsRecyclerView.getVisibility() + 
-                                          ", childCount: " + friendRequestsRecyclerView.getChildCount());
-                    }
-                }
-
-                @Override
-                public void onFailure(Exception e) {
-                    if (getActivity() != null) {
-                        Toast.makeText(getContext(), "Error loading friend requests: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    }
-                }
-            });
-    }
-
-    @Override
-    public void onDestroyView() {
-        super.onDestroyView();
-        // Clean up listener
-        if (friendRequestsListener != null) {
-            friendRequestsListener.remove();
-        }
+        // Friend requests are automatically loaded via ViewModel observer
+        // The observer in observeViewModel() handles the real-time updates
     }
 }

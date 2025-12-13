@@ -1,0 +1,132 @@
+TOM TAT THAY DOI KIEN TRUC MVVM - DO AN ZALO CLONE
+====================================================
+
+1. TONG QUAN
+------------
+- Chuyen doi tu kien truc truyen thong sang MVVM (Model-View-ViewModel)
+- Muc tieu: Tach biet logic nghiep vu khoi UI, de bao tri va mo rong
+- Ap dung cho toan bo Activities va Fragments
+
+2. CAC THANH PHAN CHINH
+-----------------------
+
+2.1. Model Layer
+- User.java
+- Message.java
+- Conversation.java
+- FriendRequest.java
+
+2.2. Repository Layer (Trung gian giua ViewModel va Data Source)
+- FriendRepository.java: Xu ly logic ban be, loi moi ket ban
+- ChatRepository.java: Xu ly logic tin nhan, hoi thoai
+- UserRepository.java: Xu ly thong tin nguoi dung
+
+2.3. ViewModel Layer
+- MainViewModel.java: Quan ly trang thai chung cua ung dung
+- FriendViewModel.java: Quan ly danh sach ban be va loi moi
+- ChatViewModel.java: Quan ly hoi thoai va tin nhan
+
+2.4. View Layer (Activities/Fragments)
+- MainActivity
+- ContactFragment
+- ChatFragment
+- ConversationFragment
+- FriendRequestFragment
+
+2.5. Utils
+- Resource.java: Wrapper class de xu ly trang thai (Loading, Success, Error)
+
+3. THAY DOI CHINH
+-----------------
+
+3.1. Loai bo truy cap truc tiep FirestoreManager tu UI
+- Truoc: Activity/Fragment -> FirestoreManager
+- Sau: Activity/Fragment -> ViewModel -> Repository -> FirestoreManager
+
+3.2. Su dung LiveData de quan sat du lieu
+- ViewModel expose LiveData cho View
+- View observe LiveData va cap nhat UI khi co thay doi
+- Tu dong quan ly lifecycle, tranh memory leak
+
+3.3. Xu ly trang thai voi Resource class
+- Loading: Hien thi progress indicator
+- Success: Hien thi du lieu
+- Error: Hien thi thong bao loi
+
+3.4. Tach biet trach nhiem
+- View: Chi xu ly hien thi UI
+- ViewModel: Xu ly logic presentation, luu trang thai UI
+- Repository: Xu ly logic lay du lieu, truy xuat database/network
+- Model: Dinh nghia cau truc du lieu
+
+4. LAM VIEC VOI MVVM
+--------------------
+
+4.1. Khoi tao ViewModel trong Activity/Fragment:
+viewModel = new ViewModelProvider(this).get(MainViewModel.class);
+
+4.2. Observe LiveData:
+viewModel.getFriends().observe(this, resource -> {
+    if (resource instanceof Resource.Loading) {
+        // Hien thi loading
+    } else if (resource instanceof Resource.Success) {
+        // Cap nhat UI voi du lieu
+    } else if (resource instanceof Resource.Error) {
+        // Hien thi loi
+    }
+});
+
+4.3. Goi action tu View:
+viewModel.loadFriends(userId);
+viewModel.acceptFriendRequest(requestId);
+
+5. LUU Y QUAN TRONG
+-------------------
+- ViewModel KHONG BAO GIO giu reference toi View/Activity/Fragment
+- Su dung AndroidViewModel neu can Context (Application context)
+- LiveData tu dong quan ly lifecycle, an toan voi rotation
+- Repository la Single Source of Truth cho du lieu
+- Tat ca thao tac bat dong bo xu ly trong Repository/ViewModel
+
+6. FILE DA THAY DOI
+-------------------
+- Tao moi: FriendRepository.java, ChatRepository.java, UserRepository.java
+- Tao moi: MainViewModel.java, FriendViewModel.java, ChatViewModel.java
+- Tao moi: Resource.java
+- Cap nhat: MainActivity.java, ContactFragment.java, ChatFragment.java
+- Cap nhat: ConversationFragment.java, FriendRequestFragment.java
+
+7. KICH BAN SU DUNG THUC TE
+----------------------------
+
+7.1. Load danh sach ban be:
+- User mo ContactFragment
+- Fragment goi viewModel.loadFriends(userId)
+- ViewModel goi repository.getFriends(userId)
+- Repository truy van Firestore
+- Ket qua tra ve qua LiveData
+- Fragment observe va cap nhat RecyclerView
+
+7.2. Chap nhan loi moi ket ban:
+- User nhan nut Accept
+- Fragment goi viewModel.acceptFriendRequest(requestId, currentUserId)
+- ViewModel goi repository.acceptFriendRequest()
+- Repository cap nhat Firestore va tao conversation moi
+- Ket qua tra ve qua LiveData
+- Fragment observe va cap nhat UI
+
+8. KIEM THU
+-----------
+- Test ViewModel logic doc lap voi UI
+- Mock Repository de test ViewModel
+- Test LiveData transformations
+- Kiem tra xu ly trang thai Loading/Success/Error
+
+9. KET LUAN
+-----------
+Viec migrate sang MVVM giup:
+- Code de doc, de bao tri hon
+- Tach biet ro rang giua cac layer
+- De dang viet unit test
+- Quan ly lifecycle tot hon
+- Tai su dung code hieu qua
