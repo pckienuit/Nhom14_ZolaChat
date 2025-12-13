@@ -442,6 +442,7 @@ public class FirestoreManager {
                             for (DocumentSnapshot document : querySnapshot.getDocuments()) {
                                 Conversation conversation = document.toObject(Conversation.class);
                                 if (conversation != null) {
+                                    conversation.setId(document.getId());  // Set document ID
                                     conversations.add(conversation);
                                 }
                             }
@@ -757,6 +758,7 @@ public class FirestoreManager {
                                 .addOnSuccessListener(userDoc -> {
                                     User friend = userDoc.toObject(User.class);
                                     if (friend != null) {
+                                        friend.setId(userDoc.getId());  // Set document ID
                                         friends.add(friend);
                                     }
                                     
