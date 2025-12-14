@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp"
+    android:height="40dp"
+    android:viewportWidth="40"
+    android:viewportHeight="40">
+    
+    <!-- Background - PowerPoint orange/red -->
+    <path
+        android:pathData="M8,4 L32,4 A4,4 0 0,1 36,8 L36,32 A4,4 0 0,1 32,36 L8,36 A4,4 0 0,1 4,32 L4,8 A4,4 0 0,1 8,4 Z"
+        android:fillColor="#FF9800"/>
+    
+    <!-- P letter in white -->
+    <path
+        android:pathData="M14,17 L19,17 Q22,17 22,20 Q22,23 19,23 L16,23 L16,27 L14,27 Z M16,19 L16,21 L19,21 Q20,21 20,20 Q20,19 19,19 Z"
+        android:fillColor="#FFFFFF"/>
+</vector>

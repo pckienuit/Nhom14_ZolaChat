@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp"
+    android:height="40dp"
+    android:viewportWidth="40"
+    android:viewportHeight="40">
+    
+    <!-- Background - Word blue -->
+    <path
+        android:pathData="M8,4 L32,4 A4,4 0 0,1 36,8 L36,32 A4,4 0 0,1 32,36 L8,36 A4,4 0 0,1 4,32 L4,8 A4,4 0 0,1 8,4 Z"
+        android:fillColor="#2196F3"/>
+    
+    <!-- W letter in white -->
+    <path
+        android:pathData="M10,17 L12,17 L14,24 L16,17 L18,17 L20,24 L22,17 L24,17 L21,27 L19,27 L17,20 L15,27 L13,27 Z"
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"/>
+</vector>

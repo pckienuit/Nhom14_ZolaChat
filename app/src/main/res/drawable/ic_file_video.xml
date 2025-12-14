@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp"
+    android:height="40dp"
+    android:viewportWidth="40"
+    android:viewportHeight="40">
+    
+    <!-- Background - Video red -->
+    <path
+        android:pathData="M8,4 L32,4 A4,4 0 0,1 36,8 L36,32 A4,4 0 0,1 32,36 L8,36 A4,4 0 0,1 4,32 L4,8 A4,4 0 0,1 8,4 Z"
+        android:fillColor="#F44336"/>
+    
+    <!-- Play icon -->
+    <path
+        android:pathData="M15,13 L15,27 L27,20 Z"
+        android:fillColor="#FFFFFF"/>
+</vector>
