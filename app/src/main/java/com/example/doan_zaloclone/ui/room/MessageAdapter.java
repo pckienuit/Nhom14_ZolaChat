@@ -288,6 +288,27 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             // Set appropriate icon based on file type
             int iconResId = com.example.doan_zaloclone.utils.FileUtils.getFileIcon(message.getFileMimeType());
             fileIcon.setImageResource(iconResId);
+            
+            // Add click listener to open file
+            itemView.setOnClickListener(v -> openFile(message));
+        }
+        
+        private void openFile(Message message) {
+            try {
+                android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                android.net.Uri fileUri = android.net.Uri.parse(message.getContent());
+                intent.setDataAndType(fileUri, message.getFileMimeType());
+                intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                itemView.getContext().startActivity(intent);
+            } catch (android.content.ActivityNotFoundException e) {
+                android.widget.Toast.makeText(itemView.getContext(), 
+                    "Không tìm thấy ứng dụng để mở file này", 
+                    android.widget.Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                android.widget.Toast.makeText(itemView.getContext(), 
+                    "Lỗi mở file: " + e.getMessage(), 
+                    android.widget.Toast.LENGTH_SHORT).show();
+            }
         }
     }
     
@@ -313,6 +334,27 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             // Set appropriate icon based on file type
             int iconResId = com.example.doan_zaloclone.utils.FileUtils.getFileIcon(message.getFileMimeType());
             fileIcon.setImageResource(iconResId);
+            
+            // Add click listener to open file
+            itemView.setOnClickListener(v -> openFile(message));
+        }
+        
+        private void openFile(Message message) {
+            try {
+                android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                android.net.Uri fileUri = android.net.Uri.parse(message.getContent());
+                intent.setDataAndType(fileUri, message.getFileMimeType());
+                intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                itemView.getContext().startActivity(intent);
+            } catch (android.content.ActivityNotFoundException e) {
+                android.widget.Toast.makeText(itemView.getContext(), 
+                    "Không tìm thấy ứng dụng để mở file này", 
+                    android.widget.Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                android.widget.Toast.makeText(itemView.getContext(), 
+                    "Lỗi mở file: " + e.getMessage(), 
+                    android.widget.Toast.LENGTH_SHORT).show();
+            }
         }
     }
     

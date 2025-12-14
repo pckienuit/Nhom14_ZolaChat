@@ -758,19 +758,8 @@ public class RoomActivity extends AppCompatActivity {
     // ============ FILE HANDLING METHODS ============
     
     private void launchFilePicker() {
-        // Show option dialog: single file or multiple files
-        new androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Chọn file")
-                .setItems(new String[]{"Một file", "Nhiều files"}, (dialog, which) -> {
-                    if (which == 0) {
-                        // Single file
-                        com.example.doan_zaloclone.utils.FilePickerHelper.launchFilePicker(filePickerLauncher);
-                    } else {
-                        // Multiple files
-                        com.example.doan_zaloclone.utils.FilePickerHelper.launchMultipleFilePicker(multipleFilePickerLauncher);
-                    }
-                })
-                .show();
+        // Default to multi-file picker (can still select just 1 file)
+        com.example.doan_zaloclone.utils.FilePickerHelper.launchMultipleFilePicker(multipleFilePickerLauncher);
     }
     
     private void handleFileSelected(Uri fileUri) {
