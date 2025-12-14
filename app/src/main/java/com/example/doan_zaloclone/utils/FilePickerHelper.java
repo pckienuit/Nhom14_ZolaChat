@@ -48,6 +48,15 @@ public class FilePickerHelper {
     }
     
     /**
+     * Launch multiple file picker with specific MIME type
+     * @param launcher ActivityResultLauncher for GetMultipleContents contract
+     * @param mimeType MIME type filter
+     */
+    public static void launchMultipleFilePickerWithType(ActivityResultLauncher<String> launcher, String mimeType) {
+        launcher.launch(mimeType);
+    }
+    
+    /**
      * Create intent for file picker (alternative approach without ActivityResultLauncher)
      * Use this with startActivityForResult if needed
      * @param mimeType MIME type filter

@@ -82,10 +82,16 @@ public class RoomActivity extends AppCompatActivity {
     
     // File picker
     private ActivityResultLauncher<String> filePickerLauncher;
+    private ActivityResultLauncher<String> multipleFilePickerLauncher;
     private Uri selectedFileUri;
     private String selectedFileName;
     private long selectedFileSize;
     private String selectedFileMimeType;
+    
+    // File preview (for multiple files)
+    private FrameLayout filePickerBottomSheet;
+    private FilePreviewAdapter filePreviewAdapter;
+    private List<FilePreviewAdapter.FileItem> selectedFilesForPreview = new ArrayList<>();
 
 
     @Override
@@ -121,6 +127,16 @@ public class RoomActivity extends AppCompatActivity {
                 uri -> {
                     if (uri != null) {
                         handleFileSelected(uri);
+                    }
+                }
+        );
+        
+        // Register multiple file picker launcher
+        multipleFilePickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetMultipleContents(),
+                uris -> {
+                    if (uris != null && !uris.isEmpty()) {
+                        handleMultipleFilesSelected(uris);
                     }
                 }
         );
@@ -742,7 +758,19 @@ public class RoomActivity extends AppCompatActivity {
     // ============ FILE HANDLING METHODS ============
     
     private void launchFilePicker() {
-        com.example.doan_zaloclone.utils.FilePickerHelper.launchFilePicker(filePickerLauncher);
+        // Show option dialog: single file or multiple files
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Chọn file")
+                .setItems(new String[]{"Một file", "Nhiều files"}, (dialog, which) -> {
+                    if (which == 0) {
+                        // Single file
+                        com.example.doan_zaloclone.utils.FilePickerHelper.launchFilePicker(filePickerLauncher);
+                    } else {
+                        // Multiple files
+                        com.example.doan_zaloclone.utils.FilePickerHelper.launchMultipleFilePicker(multipleFilePickerLauncher);
+                    }
+                })
+                .show();
     }
     
     private void handleFileSelected(Uri fileUri) {
@@ -802,6 +830,133 @@ public class RoomActivity extends AppCompatActivity {
                 }
         );
     }
+    
+    private void handleMultipleFilesSelected(List<Uri> uris) {
+        selectedFilesForPreview.clear();
+        
+        // Process each URI and create FileItem
+        for (Uri uri : uris) {
+            String name = com.example.doan_zaloclone.utils.FileUtils.getFileName(this, uri);
+            long size = com.example.doan_zaloclone.utils.FileUtils.getFileSize(this, uri);
+            String mimeType = com.example.doan_zaloclone.utils.FileUtils.getMimeType(this, uri);
+            
+            selectedFilesForPreview.add(new FilePreviewAdapter.FileItem(uri, name, size, mimeType));
+        }
+        
+        // Show file preview bottom sheet
+        showFilePreviewBottomSheet();
+    }
+    
+    private void showFilePreviewBottomSheet() {
+        // Inflate bottom sheet
+        View bottomSheetView = LayoutInflater.from(this)
+                .inflate(R.layout.bottom_sheet_file_picker, actionMenuContainer, false);
+        
+        // Setup RecyclerView with FilePreviewAdapter
+        RecyclerView filesRecyclerView = bottomSheetView.findViewById(R.id.filesRecyclerView);
+        filesRecyclerView.setLayoutManager(new androidx.recyclerview.widget.LinearLayoutManager(this));
+        
+        TextView selectedCountTextView = bottomSheetView.findViewById(R.id.selectedCountTextView);
+        if (selectedCountTextView == null) {
+            // If TextView doesn't exist in layout, we'll handle it differently
+            android.widget.Button sendButton = bottomSheetView.findViewById(R.id.sendFileButton);
+            sendButton.setText("Gửi (" + selectedFilesForPreview.size() + " files)");
+        }
+        
+        filePreviewAdapter = new FilePreviewAdapter(selectedFilesForPreview, selectedCount -> {
+            // Update button text when selection changes
+            android.widget.Button sendButton = bottomSheetView.findViewById(R.id.sendFileButton);
+            sendButton.setText("Gửi (" + selectedCount + " files)");
+            sendButton.setEnabled(selectedCount > 0);
+        });
+        filesRecyclerView.setAdapter(filePreviewAdapter);
+        
+        // Setup buttons
+        android.widget.Button cancelButton = bottomSheetView.findViewById(R.id.cancelButton);
+        android.widget.Button sendButton = bottomSheetView.findViewById(R.id.sendFileButton);
+        
+        cancelButton.setOnClickListener(v -> hideFilePreviewBottomSheet());
+        sendButton.setOnClickListener(v -> {
+            hideFilePreviewBottomSheet();
+            uploadAndSendMultipleFiles();
+        });
+        
+        // Show bottom sheet
+        actionMenuContainer.removeAllViews();
+        actionMenuContainer.addView(bottomSheetView);
+        actionMenuContainer.setVisibility(View.VISIBLE);
+    }
+    
+    private void hideFilePreviewBottomSheet() {
+        actionMenuContainer.setVisibility(View.GONE);
+        actionMenuContainer.removeAllViews();
+    }
+    
+    private void uploadAndSendMultipleFiles() {
+        if (firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Lỗi: Người dùng chưa đăng nhập", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        List<FilePreviewAdapter.FileItem> filesToSend = filePreviewAdapter.getSelectedFiles();
+        if (filesToSend.isEmpty()) {
+            Toast.makeText(this, "Chưa chọn file nào", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        Toast.makeText(this, "Đang gửi " + filesToSend.size() + " files...", Toast.LENGTH_SHORT).show();
+        
+        // Upload each file sequentially
+        uploadFilesSequentially(filesToSend, currentUserId, 0, filesToSend.size());
+    }
+    
+    private void uploadFilesSequentially(List<FilePreviewAdapter.FileItem> files, String userId, 
+                                         int currentIndex, int total) {
+        if (currentIndex >= files.size()) {
+            // All files uploaded
+            runOnUiThread(() -> {
+                Toast.makeText(this, "Đã gửi tất cả " + total + " files!", Toast.LENGTH_SHORT).show();
+            });
+            return;
+        }
+        
+        FilePreviewAdapter.FileItem file = files.get(currentIndex);
+        int fileNumber = currentIndex + 1;
+        
+        chatRepository.uploadFileAndSendMessage(
+                conversationId,
+                file.uri,
+                userId,
+                file.name,
+                file.size,
+                file.mimeType,
+                new ChatRepository.SendMessageCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, 
+                                "Đã gửi file " + fileNumber + "/" + total, 
+                                Toast.LENGTH_SHORT).show();
+                        });
+                        // Upload next file
+                        uploadFilesSequentially(files, userId, currentIndex + 1, total);
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, 
+                                "Lỗi gửi file " + fileNumber + ": " + error, 
+                                Toast.LENGTH_LONG).show();
+                        });
+                        // Continue with next file despite error
+                        uploadFilesSequentially(files, userId, currentIndex + 1, total);
+                    }
+                }
+        );
+    }
+    
     
     private void openGroupInfo() {
         android.content.Intent intent = new android.content.Intent(this, 
