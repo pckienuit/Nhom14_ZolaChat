@@ -60,6 +60,16 @@
             android:visibility="visible">
 
             <ImageButton
+                android:id="@+id/moreActionsButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="8dp"
+                android:src="@drawable/ic_more_horiz"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="@color/colorPrimary"
+                android:contentDescription="More actions" />
+
+            <ImageButton
                 android:id="@+id/attachImageButton"
                 android:layout_width="48dp"
                 android:layout_height="48dp"
@@ -144,6 +154,16 @@
     <!-- Container for image picker bottom sheet -->
     <FrameLayout
         android:id="@+id/imagePickerContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintBottom_toTopOf="@id/actionMenuContainer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Container for action menu bottom sheet -->
+    <FrameLayout
+        android:id="@+id/actionMenuContainer"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:visibility="gone"
