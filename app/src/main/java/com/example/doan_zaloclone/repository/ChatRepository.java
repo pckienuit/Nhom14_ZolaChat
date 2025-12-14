@@ -102,7 +102,14 @@ public class ChatRepository {
         messageRef.set(messageData)
                 .addOnSuccessListener(aVoid -> {
                     // Update conversation's lastMessage
-                    updateConversationLastMessage(conversationId, message.getContent(), message.getTimestamp());
+                    String lastMessageText = message.getContent();
+                    
+                    // For file messages, show user-friendly text instead of URL
+                    if (Message.TYPE_FILE.equals(message.getType())) {
+                        lastMessageText = "Bạn đã gửi một file";
+                    }
+                    
+                    updateConversationLastMessage(conversationId, lastMessageText, message.getTimestamp());
                     callback.onSuccess();
                 })
                 .addOnFailureListener(e -> {

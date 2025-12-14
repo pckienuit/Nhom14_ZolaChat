@@ -29,7 +29,7 @@
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:src="@drawable/ic_document"
-                android:tint="@color/white"
+                android:tint="@color/colorPrimary"
                 android:layout_gravity="center_vertical"
                 android:contentDescription="File" />
 
@@ -48,8 +48,8 @@
                     android:text="document.pdf"
                     android:textSize="14sp"
                     android:textStyle="bold"
-                    android:textColor="@color/white"
-                    android:maxLines="2"
+                    android:textColor="#333333"
+                    android:maxLines="1"
                     android:ellipsize="end" />
 
                 <TextView
@@ -57,9 +57,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="1.5 MB"
+                    android:text="PDF - 1.5 MB"
                     android:textSize="11sp"
-                    android:textColor="#E0E0E0" />
+                    android:textColor="#666666" />
 
             </LinearLayout>
 

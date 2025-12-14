@@ -282,7 +282,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
         public void bind(Message message) {
             fileName.setText(message.getFileName());
-            fileSize.setText(message.getFormattedFileSize());
+            
+            // Display "FileType - Size" format
+            String fileType = com.example.doan_zaloclone.utils.FileTypeUtils.getFileTypeLabel(message.getFileMimeType());
+            String sizeFormatted = message.getFormattedFileSize();
+            fileSize.setText(fileType + " - " + sizeFormatted);
+            
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
             
             // Set appropriate icon based on file type
@@ -328,7 +333,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
         public void bind(Message message) {
             fileName.setText(message.getFileName());
-            fileSize.setText(message.getFormattedFileSize());
+            
+            // Display "FileType - Size" format
+            String fileType = com.example.doan_zaloclone.utils.FileTypeUtils.getFileTypeLabel(message.getFileMimeType());
+            String sizeFormatted = message.getFormattedFileSize();
+            fileSize.setText(fileType + " - " + sizeFormatted);
+            
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
             
             // Set appropriate icon based on file type
