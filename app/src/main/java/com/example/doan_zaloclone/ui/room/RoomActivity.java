@@ -73,6 +73,20 @@ public class RoomActivity extends AppCompatActivity {
     private ImagePickerAdapter imagePickerAdapter;
     private List<Uri> selectedPhotos = new ArrayList<>();
     private ActivityResultLauncher<String> permissionLauncher;
+    
+    // Action menu UI
+    private ImageButton moreActionsButton;
+    private FrameLayout actionMenuContainer;
+    private com.example.doan_zaloclone.ui.room.actions.QuickActionAdapter quickActionAdapter;
+    private com.example.doan_zaloclone.ui.room.actions.QuickActionManager quickActionManager;
+    
+    // File picker
+    private ActivityResultLauncher<String> filePickerLauncher;
+    private Uri selectedFileUri;
+    private String selectedFileName;
+    private long selectedFileSize;
+    private String selectedFileMimeType;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -97,6 +111,16 @@ public class RoomActivity extends AppCompatActivity {
                         loadAndShowImagePicker();
                     } else {
                         Toast.makeText(this, "Cần quyền truy cập ảnh để chọn ảnh", Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
+        
+        // Register file picker launcher
+        filePickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                uri -> {
+                    if (uri != null) {
+                        handleFileSelected(uri);
                     }
                 }
         );
@@ -140,6 +164,13 @@ public class RoomActivity extends AppCompatActivity {
         qualitySpinner = findViewById(R.id.qualitySpinner);
         selectedCountTextView = findViewById(R.id.selectedCountTextView);
         sendImagesButton = findViewById(R.id.sendImagesButton);
+        
+        // Action menu views
+        moreActionsButton = findViewById(R.id.moreActionsButton);
+        actionMenuContainer = findViewById(R.id.actionMenuContainer);
+        
+        // Initialize QuickActionManager
+        quickActionManager = com.example.doan_zaloclone.ui.room.actions.QuickActionManager.getInstance();
     }
 
     private void setupToolbar() {
@@ -359,6 +390,7 @@ public class RoomActivity extends AppCompatActivity {
     private void setupListeners() {
         sendButton.setOnClickListener(v -> handleSendMessage());
         attachImageButton.setOnClickListener(v -> requestPermissionAndShowPicker());
+        moreActionsButton.setOnClickListener(v -> showActionMenu());
         backButton.setOnClickListener(v -> hideImagePicker());
         sendImagesButton.setOnClickListener(v -> handleSendImages());
     }
@@ -640,6 +672,135 @@ public class RoomActivity extends AppCompatActivity {
         
         // Re-enable button after a short delay
         sendButton.postDelayed(() -> sendButton.setEnabled(true), 500);
+    }
+    
+    // ============ ACTION MENU METHODS ============
+    
+    private void showActionMenu() {
+        // Hide keyboard
+        android.view.inputmethod.InputMethodManager imm = 
+            (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+        if (imm != null && getCurrentFocus() != null) {
+            imm.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
+        }
+        
+        // Setup adapter with actions
+        quickActionAdapter = new com.example.doan_zaloclone.ui.room.actions.QuickActionAdapter(
+            quickActionManager.getActions(),
+            this::handleQuickAction
+        );
+        
+        // Inflate bottom sheet
+        View menuView = LayoutInflater.from(this)
+                .inflate(R.layout.bottom_sheet_action_menu, actionMenuContainer, false);
+        RecyclerView actionsRecyclerView = menuView.findViewById(R.id.actionsRecyclerView);
+        actionsRecyclerView.setAdapter(quickActionAdapter);
+        
+        // Show menu
+        actionMenuContainer.removeAllViews();
+        actionMenuContainer.addView(menuView);
+        actionMenuContainer.setVisibility(View.VISIBLE);
+    }
+    
+    private void hideActionMenu() {
+        actionMenuContainer.setVisibility(View.GONE);
+        actionMenuContainer.removeAllViews();
+    }
+    
+    private void handleQuickAction(com.example.doan_zaloclone.ui.room.actions.QuickAction action) {
+        hideActionMenu();
+        
+        action.execute(this, new com.example.doan_zaloclone.ui.room.actions.QuickActionCallback() {
+            @Override
+            public void onShowUI() {
+                // Launch file picker
+                launchFilePicker();
+            }
+            
+            @Override
+            public void onCancel() {
+                Toast.makeText(RoomActivity.this, "Đã hủy", Toast.LENGTH_SHORT).show();
+            }
+            
+            @Override
+            public void onFilesSelected(List<Uri> fileUris) {
+                // Handle multiple files (future enhancement)
+            }
+            
+            @Override
+            public void onError(String error) {
+                Toast.makeText(RoomActivity.this, error, Toast.LENGTH_SHORT).show();
+            }
+            
+            @Override
+            public void onSuccess() {
+                Toast.makeText(RoomActivity.this, "Thành công!", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    
+    // ============ FILE HANDLING METHODS ============
+    
+    private void launchFilePicker() {
+        com.example.doan_zaloclone.utils.FilePickerHelper.launchFilePicker(filePickerLauncher);
+    }
+    
+    private void handleFileSelected(Uri fileUri) {
+        // Extract file metadata
+        selectedFileUri = fileUri;
+        selectedFileName = com.example.doan_zaloclone.utils.FileUtils.getFileName(this, fileUri);
+        selectedFileSize = com.example.doan_zaloclone.utils.FileUtils.getFileSize(this, fileUri);
+        selectedFileMimeType = com.example.doan_zaloclone.utils.FileUtils.getMimeType(this, fileUri);
+        
+        // Show confirmation and upload
+        String fileSizeFormatted = com.example.doan_zaloclone.utils.FileUtils.formatFileSize(selectedFileSize);
+        String message = "Gửi file: " + selectedFileName + " (" + fileSizeFormatted + ")?";
+        
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Xác nhận gửi file")
+                .setMessage(message)
+                .setPositiveButton("Gửi", (dialog, which) -> uploadAndSendFile())
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+    
+    private void uploadAndSendFile() {
+        if (selectedFileUri == null || firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Lỗi: Không thể gửi file", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        Toast.makeText(this, "Đang gửi file...", Toast.LENGTH_SHORT).show();
+        
+        chatRepository.uploadFileAndSendMessage(
+                conversationId,
+                selectedFileUri,
+                currentUserId,
+                selectedFileName,
+                selectedFileSize,
+                selectedFileMimeType,
+                new ChatRepository.SendMessageCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Đã gửi file!", Toast.LENGTH_SHORT).show();
+                            // Clear selection
+                            selectedFileUri = null;
+                            selectedFileName = null;
+                            selectedFileSize = 0;
+                            selectedFileMimeType = null;
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi gửi file: " + error, Toast.LENGTH_LONG).show();
+                        });
+                    }
+                }
+        );
     }
     
     private void openGroupInfo() {
