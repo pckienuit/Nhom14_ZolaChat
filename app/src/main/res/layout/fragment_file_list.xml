@@ -6,7 +6,17 @@
     android:orientation="vertical"
     android:background="@color/white">
 
-    <!-- Search and Filter Section -->
+    <!-- Toolbar with Search Icon -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/white"
+        android:elevation="4dp"
+        app:title="@string/search_files"
+        app:titleTextColor="@android:color/black" />
+
+    <!-- Filter Chips Section -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -15,21 +25,10 @@
         android:background="@color/white"
         android:elevation="2dp">
 
-        <!-- SearchView -->
-        <androidx.appcompat.widget.SearchView
-            android:id="@+id/searchView"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/rounded_background"
-            android:queryHint="@string/search_files"
-            app:iconifiedByDefault="false"
-            app:queryBackground="@android:color/transparent" />
-
         <!-- Filter Chips -->
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
             android:scrollbars="none">
 
             <com.google.android.material.chip.ChipGroup

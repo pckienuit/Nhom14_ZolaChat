@@ -12,12 +12,17 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.SearchView;
+import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.FileCategory;
@@ -56,6 +61,8 @@ public class FileListFragment extends Fragment {
     private FileCategory category;
     private String conversationId;
     
+    // UI components
+    private Toolbar toolbar;
     private RecyclerView recyclerView;
     private SwipeRefreshLayout swipeRefresh;
     private View emptyStateLayout;
@@ -65,7 +72,7 @@ public class FileListFragment extends Fragment {
     private FileAdapter adapter;
     
     // Filter UI components
-    private SearchView searchView;
+    private SearchView searchView; // Will be from menu
     private Chip senderFilterChip;
     private Chip dateFilterChip;
     private Chip clearFiltersChip;
@@ -91,6 +98,7 @@ public class FileListFragment extends Fragment {
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setHasOptionsMenu(true); // Enable options menu
         if (getArguments() != null) {
             int categoryPosition = getArguments().getInt(ARG_CATEGORY);
             category = FileCategory.fromPosition(categoryPosition);
@@ -110,10 +118,10 @@ public class FileListFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         
         initViews(view);
+        setupToolbar();
         setupViewModel();
         setupRecyclerView();
         setupSwipeRefresh();
-        setupSearchView();
         setupFilterChips();
         observeData();
         
@@ -125,16 +133,21 @@ public class FileListFragment extends Fragment {
     }
     
     private void initViews(View view) {
+        toolbar = view.findViewById(R.id.toolbar);
         recyclerView = view.findViewById(R.id.recyclerView);
         swipeRefresh = view.findViewById(R.id.swipeRefresh);
         emptyStateLayout = view.findViewById(R.id.emptyStateLayout);
         progressBar = view.findViewById(R.id.progressBar);
         
-        // Filter UI
-        searchView = view.findViewById(R.id.searchView);
+        // Filter UI (searchView will be initialized from menu)
         senderFilterChip = view.findViewById(R.id.senderFilterChip);
         dateFilterChip = view.findViewById(R.id.dateFilterChip);
         clearFiltersChip = view.findViewById(R.id.clearFiltersChip);
+    }
+    
+    private void setupToolbar() {
+        toolbar.inflateMenu(R.menu.menu_file_list);
+        toolbar.setOnMenuItemClickListener(this::onOptionsItemSelected);
     }
     
     private void setupViewModel() {
@@ -194,7 +207,31 @@ public class FileListFragment extends Fragment {
         });
     }
     
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.action_search) {
+            return true; // Handled by SearchView
+        }
+        return false;
+    }
+    
+    @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        inflater.inflate(R.menu.menu_file_list, menu);
+        
+        MenuItem searchItem = menu.findItem(R.id.action_search);
+        if (searchItem != null) {
+            searchView = (SearchView) searchItem.getActionView();
+            setupSearchView();
+        }
+        
+        super.onCreateOptionsMenu(menu, inflater);
+    }
+    
     private void setupSearchView() {
+        if (searchView == null) return;
+        
+        searchView.setQueryHint(getString(R.string.search_files));
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String query) {
@@ -367,7 +404,10 @@ public class FileListFragment extends Fragment {
     }
     
     private void clearAllFilters() {
-        searchView.setQuery("", false);
+        if (searchView != null) {
+            searchView.setQuery("", false);
+            searchView.setIconified(true); // Collapse search
+        }
         selectedSenderIds.clear();
         filterStartDate = null;
         filterEndDate = null;
@@ -417,7 +457,7 @@ public class FileListFragment extends Fragment {
     }
     
     private void updateClearFiltersVisibility() {
-        String query = searchView.getQuery().toString();
+        String query = (searchView != null) ? searchView.getQuery().toString() : "";
         boolean hasFilters = !query.isEmpty() || !selectedSenderIds.isEmpty() 
                 || filterStartDate != null || filterEndDate != null;
         clearFiltersChip.setVisibility(hasFilters ? View.VISIBLE : View.GONE);

@@ -211,6 +211,17 @@ public class FileItem {
     }
     
     /**
+     * Check if this is an image file
+     */
+    public boolean isImage() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String type = message.getType();
+        return Message.TYPE_IMAGE.equals(type) || 
+               (mimeType != null && mimeType.startsWith("image/"));
+    }
+    
+    /**
      * Get file type label (e.g., "PDF", "DOC", "MP4")
      */
     public String getFileTypeLabel() {

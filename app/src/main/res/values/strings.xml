@@ -29,4 +29,9 @@
     <string name="select_date_range">Chọn khoảng thời gian</string>
     <string name="from_date">Từ ngày</string>
     <string name="to_date">Đến ngày</string>
+    
+    <!-- Media Filter Strings -->
+    <string name="all">Tất cả</string>
+    <string name="images">Ảnh</string>
+    <string name="videos">Video</string>
 </resources>
