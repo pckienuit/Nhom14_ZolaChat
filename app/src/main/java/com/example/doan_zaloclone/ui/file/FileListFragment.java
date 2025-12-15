@@ -174,7 +174,10 @@ public class FileListFragment extends Fragment {
     private void handleResourceUpdate(com.example.doan_zaloclone.utils.Resource<java.util.List<FileItem>> resource) {
         if (resource == null) return;
         
+        android.util.Log.d("FileListFragment", "========== FRAGMENT UPDATE [" + category + "] ==========");
+        
         if (resource.isLoading()) {
+            android.util.Log.d("FileListFragment", category + ": Loading...");
             showLoading(true);
             swipeRefresh.setRefreshing(false);
         } else if (resource.isSuccess()) {
@@ -183,10 +186,20 @@ public class FileListFragment extends Fragment {
             isLoading = false;
             
             java.util.List<FileItem> files = resource.getData();
+            android.util.Log.d("FileListFragment", category + ": Received " + 
+                (files != null ? files.size() : "null") + " items");
+            
             if (files != null && !files.isEmpty()) {
+                android.util.Log.d("FileListFragment", category + ": Updating adapter with items:");
+                for (FileItem item : files) {
+                    android.util.Log.d("FileListFragment", "  - " + item.getDisplayName() + 
+                        " (category=" + item.getCategoryType() + ")");
+                }
                 showEmptyState(false);
                 adapter.updateFiles(files);
+                android.util.Log.d("FileListFragment", category + ": Adapter item count = " + adapter.getItemCount());
             } else {
+                android.util.Log.d("FileListFragment", category + ": No items, showing empty state");
                 showEmptyState(true);
             }
         } else if (resource.isError()) {
@@ -195,6 +208,7 @@ public class FileListFragment extends Fragment {
             isLoading = false;
             
             String errorMsg = resource.getMessage();
+            android.util.Log.e("FileListFragment", category + ": Error - " + errorMsg);
             if (errorMsg != null && getContext() != null) {
                 Toast.makeText(getContext(), errorMsg, Toast.LENGTH_SHORT).show();
             }

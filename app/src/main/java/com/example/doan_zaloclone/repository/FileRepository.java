@@ -64,16 +64,34 @@ public class FileRepository {
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
                     List<Message> messages = new ArrayList<>();
+                    android.util.Log.d(TAG, "========== LOADING FILES FOR CONVERSATION ==========");
+                    android.util.Log.d(TAG, "Query returned " + querySnapshot.size() + " documents");
+                    
                     for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
                         Message message = doc.toObject(Message.class);
                         if (message != null) {
                             message.setId(doc.getId());
                             messages.add(message);
+                            
+                            // Log every message to understand what we're getting
+                            android.util.Log.d(TAG, "Message: id=" + message.getId() + 
+                                ", type=" + message.getType() + 
+                                ", mimeType=" + message.getFileMimeType() + 
+                                ", fileName=" + message.getFileName() +
+                                ", content=" + (message.getContent() != null ? 
+                                    message.getContent().substring(0, Math.min(50, message.getContent().length())) : "null"));
                         }
                     }
                     
+                    android.util.Log.d(TAG, "Total messages parsed: " + messages.size());
+                    
                     // Convert to FileItems and enrich with sender info
                     enrichWithSenderInfo(messages, enrichedItems -> {
+                        android.util.Log.d(TAG, "Final enriched items: " + enrichedItems.size());
+                        for (FileItem item : enrichedItems) {
+                            android.util.Log.d(TAG, "  -> FileItem: " + item.getDisplayName() + 
+                                ", category=" + item.getCategoryType());
+                        }
                         result.setValue(Resource.success(enrichedItems));
                     }, error -> {
                         result.setValue(Resource.error(error, null));
@@ -140,6 +158,9 @@ public class FileRepository {
      * @return Map of FileCategory to List of FileItems
      */
     public Map<FileCategory, List<FileItem>> categorizeFiles(@NonNull List<FileItem> fileItems) {
+        android.util.Log.d(TAG, "========== CATEGORIZING FILES ==========");
+        android.util.Log.d(TAG, "Total items to categorize: " + fileItems.size());
+        
         Map<FileCategory, List<FileItem>> categorized = new HashMap<>();
         categorized.put(FileCategory.MEDIA, new ArrayList<>());
         categorized.put(FileCategory.FILES, new ArrayList<>());
@@ -147,11 +168,17 @@ public class FileRepository {
         
         for (FileItem item : fileItems) {
             FileCategory category = item.getCategoryType();
+            android.util.Log.d(TAG, "Item '" + item.getDisplayName() + "' categorized as: " + category);
+            
             List<FileItem> categoryList = categorized.get(category);
             if (categoryList != null) {
                 categoryList.add(item);
             }
         }
+        
+        android.util.Log.d(TAG, "MEDIA: " + categorized.get(FileCategory.MEDIA).size() + " items");
+        android.util.Log.d(TAG, "FILES: " + categorized.get(FileCategory.FILES).size() + " items");
+        android.util.Log.d(TAG, "LINKS: " + categorized.get(FileCategory.LINKS).size() + " items");
         
         return categorized;
     }
@@ -204,14 +231,20 @@ public class FileRepository {
             if (Message.TYPE_IMAGE.equals(message.getType()) ||
                 Message.TYPE_FILE.equals(message.getType())) {
                 relevantMessages.add(message);
+                android.util.Log.d(TAG, "Kept message: type=" + message.getType() + 
+                    ", mimeType=" + message.getFileMimeType() + 
+                    ", fileName=" + message.getFileName());
             } else if (Message.TYPE_TEXT.equals(message.getType())) {
                 // Only include text messages with URLs
                 String content = message.getContent();
                 if (content != null && URL_PATTERN.matcher(content).find()) {
                     relevantMessages.add(message);
+                    android.util.Log.d(TAG, "Kept TEXT message with URL: " + content.substring(0, Math.min(50, content.length())));
                 }
             }
         }
+        
+        android.util.Log.d(TAG, "Filtered " + messages.size() + " messages down to " + relevantMessages.size() + " relevant messages");
         
         // If no relevant messages after filtering
         if (relevantMessages.isEmpty()) {
