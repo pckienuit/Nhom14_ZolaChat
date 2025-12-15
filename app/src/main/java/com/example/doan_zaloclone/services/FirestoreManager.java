@@ -267,14 +267,15 @@ public class FirestoreManager {
                 .addOnSuccessListener(new OnSuccessListener<QuerySnapshot>() {
                     @Override
                     public void onSuccess(QuerySnapshot querySnapshot) {
-                        // Lọc thêm để tìm conversation có cả 2 users
+                        // Lọc thêm để tìm conversation có cả 2 users VÀ là loại FRIEND
                         for (DocumentSnapshot document : querySnapshot.getDocuments()) {
                             Conversation conversation = document.toObject(Conversation.class);
                             if (conversation != null && 
                                 conversation.getMemberIds() != null &&
-                                conversation.getMemberIds().contains(otherUserId)) {
-                                // Tìm thấy conversation
-                                Log.d(TAG, "Found existing conversation: " + conversation.getId());
+                                conversation.getMemberIds().contains(otherUserId) &&
+                                Conversation.TYPE_FRIEND.equals(conversation.getType())) {
+                                // Tìm thấy friend conversation (not group)
+                                Log.d(TAG, "Found existing friend conversation: " + conversation.getId());
                                 listener.onFound(conversation);
                                 return;
                             }
