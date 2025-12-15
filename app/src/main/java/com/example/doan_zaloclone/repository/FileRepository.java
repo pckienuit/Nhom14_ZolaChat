@@ -197,12 +197,34 @@ public class FileRepository {
             return;
         }
         
-        // Collect unique sender IDs
+        // Filter messages to only include relevant types
+        // Exclude TEXT messages that don't contain URLs
+        List<Message> relevantMessages = new ArrayList<>();
+        for (Message message : messages) {
+            if (Message.TYPE_IMAGE.equals(message.getType()) ||
+                Message.TYPE_FILE.equals(message.getType())) {
+                relevantMessages.add(message);
+            } else if (Message.TYPE_TEXT.equals(message.getType())) {
+                // Only include text messages with URLs
+                String content = message.getContent();
+                if (content != null && URL_PATTERN.matcher(content).find()) {
+                    relevantMessages.add(message);
+                }
+            }
+        }
+        
+        // If no relevant messages after filtering
+        if (relevantMessages.isEmpty()) {
+            onSuccess.onEnriched(new ArrayList<>());
+            return;
+        }
+        
+        // Collect unique sender IDs from relevant messages
         Map<String, String> senderNames = new HashMap<>();
         Map<String, String> senderAvatars = new HashMap<>();
         List<String> uniqueSenderIds = new ArrayList<>();
         
-        for (Message message : messages) {
+        for (Message message : relevantMessages) {
             String senderId = message.getSenderId();
             if (senderId != null && !uniqueSenderIds.contains(senderId)) {
                 uniqueSenderIds.add(senderId);
@@ -216,7 +238,7 @@ public class FileRepository {
         if (uniqueSenderIds.isEmpty()) {
             // No senders to fetch
             List<FileItem> fileItems = new ArrayList<>();
-            for (Message message : messages) {
+            for (Message message : relevantMessages) {
                 fileItems.add(new FileItem(message, "Unknown", null));
             }
             onSuccess.onEnriched(fileItems);
@@ -243,7 +265,7 @@ public class FileRepository {
                         if (pendingRequests[0] == 0 && !hasError[0]) {
                             // All requests completed, create FileItems
                             List<FileItem> fileItems = new ArrayList<>();
-                            for (Message message : messages) {
+                            for (Message message : relevantMessages) {
                                 String senderName = senderNames.get(message.getSenderId());
                                 String senderAvatar = senderAvatars.get(message.getSenderId());
                                 fileItems.add(new FileItem(
@@ -264,7 +286,7 @@ public class FileRepository {
                             hasError[0] = true;
                             // Continue with partial data
                             List<FileItem> fileItems = new ArrayList<>();
-                            for (Message message : messages) {
+                            for (Message message : relevantMessages) {
                                 String senderName = senderNames.get(message.getSenderId());
                                 String senderAvatar = senderAvatars.get(message.getSenderId());
                                 fileItems.add(new FileItem(
