@@ -137,30 +137,45 @@ public class FileUtils {
         
         // Image files
         if (mimeType.startsWith("image/")) {
-            return R.drawable.ic_image;
+            return R.drawable.ic_file_image;
+        }
+        
+        // Video files
+        if (mimeType.startsWith("video/")) {
+            return R.drawable.ic_file_video;
         }
         
         // PDF files
         if (mimeType.equals("application/pdf")) {
-            return R.drawable.ic_document;
+            return R.drawable.ic_file_pdf;
         }
         
         // Word documents
         if (mimeType.equals("application/msword") || 
             mimeType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document")) {
-            return R.drawable.ic_document;
+            return R.drawable.ic_file_word;
         }
         
         // Excel spreadsheets
         if (mimeType.equals("application/vnd.ms-excel") || 
             mimeType.equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
-            return R.drawable.ic_document;
+            return R.drawable.ic_file_excel;
         }
         
         // PowerPoint presentations
         if (mimeType.equals("application/vnd.ms-powerpoint") || 
             mimeType.equals("application/vnd.openxmlformats-officedocument.presentationml.presentation")) {
-            return R.drawable.ic_document;
+            return R.drawable.ic_file_powerpoint;
+        }
+        
+        // Archive files (zip, rar, 7z, etc.)
+        if (mimeType.equals("application/zip") || 
+            mimeType.equals("application/x-zip-compressed") ||
+            mimeType.equals("application/x-rar-compressed") ||
+            mimeType.equals("application/x-7z-compressed") ||
+            mimeType.equals("application/x-tar") ||
+            mimeType.equals("application/gzip")) {
+            return R.drawable.ic_file_archive;
         }
         
         // Text files
