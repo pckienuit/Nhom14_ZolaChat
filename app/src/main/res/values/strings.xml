@@ -18,4 +18,15 @@
     <string name="no_results">Không tìm thấy kết quả</string>
     <string name="sender_filter_title">Chọn người gửi</string>
     <string name="files_count">%d file</string>
+    
+    <!-- Time Filter Strings -->
+    <string name="time_filter_title">Lọc theo thời gian</string>
+    <string name="preset_options">Tùy chọn nhanh</string>
+    <string name="yesterday">Hôm qua</string>
+    <string name="last_week">Tuần trước</string>
+    <string name="last_month">Tháng trước</string>
+    <string name="custom">Tùy chọn</string>
+    <string name="select_date_range">Chọn khoảng thời gian</string>
+    <string name="from_date">Từ ngày</string>
+    <string name="to_date">Đến ngày</string>
 </resources>

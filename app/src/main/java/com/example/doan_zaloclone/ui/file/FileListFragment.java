@@ -74,6 +74,7 @@ public class FileListFragment extends Fragment {
     private Set<String> selectedSenderIds = new HashSet<>();
     private Long filterStartDate = null;
     private Long filterEndDate = null;
+    private TimeFilterDialog.TimeFilterPreset currentTimePreset = TimeFilterDialog.TimeFilterPreset.NONE;
     
     private boolean isLoading = false;
     private boolean isInitialLoad = true;
@@ -347,25 +348,22 @@ public class FileListFragment extends Fragment {
     }
     
     private void showDateRangePickerDialog() {
-        Calendar calendar = Calendar.getInstance();
-        
-        // Show start date picker
-        new DatePickerDialog(requireContext(), (view, year, month, dayOfMonth) -> {
-            Calendar startCal = Calendar.getInstance();
-            startCal.set(year, month, dayOfMonth, 0, 0, 0);
-            filterStartDate = startCal.getTimeInMillis();
+        TimeFilterDialog dialog = TimeFilterDialog.newInstance();
+        dialog.setTimeFilterListener((preset, startDate, endDate) -> {
+            currentTimePreset = preset;
+            filterStartDate = startDate;
+            filterEndDate = endDate;
             
-            // Show end date picker
-            new DatePickerDialog(requireContext(), (view2, year2, month2, dayOfMonth2) -> {
-                Calendar endCal = Calendar.getInstance();
-                endCal.set(year2, month2, dayOfMonth2, 23, 59, 59);
-                filterEndDate = endCal.getTimeInMillis();
-                
-                viewModel.setDateRange(filterStartDate, filterEndDate);
-                updateDateChipText();
-                updateClearFiltersVisibility();
-            }, year, month, dayOfMonth).show();
-        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show();
+            if (startDate != null && endDate != null) {
+                viewModel.setDateRange(startDate, endDate);
+            } else {
+                viewModel.setDateRange(null, null);
+            }
+            
+            updateDateChipText();
+            updateClearFiltersVisibility();
+        });
+        dialog.show(getParentFragmentManager(), "TimeFilterDialog");
     }
     
     private void clearAllFilters() {
@@ -373,6 +371,7 @@ public class FileListFragment extends Fragment {
         selectedSenderIds.clear();
         filterStartDate = null;
         filterEndDate = null;
+        currentTimePreset = TimeFilterDialog.TimeFilterPreset.NONE;
         
         viewModel.clearFilters();
         updateSenderChipText();
@@ -391,7 +390,25 @@ public class FileListFragment extends Fragment {
     
     private void updateDateChipText() {
         if (filterStartDate != null || filterEndDate != null) {
-            dateFilterChip.setText(getString(R.string.filter_by_date) + " ✓");
+            String presetText = "";
+            switch (currentTimePreset) {
+                case YESTERDAY:
+                    presetText = getString(R.string.yesterday);
+                    break;
+                case LAST_WEEK:
+                    presetText = getString(R.string.last_week);
+                    break;
+                case LAST_MONTH:
+                    presetText = getString(R.string.last_month);
+                    break;
+                case CUSTOM:
+                    presetText = getString(R.string.custom);
+                    break;
+                default:
+                    presetText = "✓";
+                    break;
+            }
+            dateFilterChip.setText(getString(R.string.filter_by_date) + " (" + presetText + ")");
             dateFilterChip.setChecked(true);
         } else {
             dateFilterChip.setText(R.string.filter_by_date);
