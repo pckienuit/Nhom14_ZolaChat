@@ -25,6 +25,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private static final int VIEW_TYPE_RECEIVED = 2;
     private static final int VIEW_TYPE_IMAGE_SENT = 3;
     private static final int VIEW_TYPE_IMAGE_RECEIVED = 4;
+    private static final int VIEW_TYPE_FILE_SENT = 5;
+    private static final int VIEW_TYPE_FILE_RECEIVED = 6;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -56,10 +58,13 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         Message message = messages.get(position);
         boolean isSent = message.getSenderId().equals(currentUserId);
         boolean isImage = Message.TYPE_IMAGE.equals(message.getType());
+        boolean isFile = Message.TYPE_FILE.equals(message.getType());
         
         if (isSent) {
+            if (isFile) return VIEW_TYPE_FILE_SENT;
             return isImage ? VIEW_TYPE_IMAGE_SENT : VIEW_TYPE_SENT;
         } else {
+            if (isFile) return VIEW_TYPE_FILE_RECEIVED;
             return isImage ? VIEW_TYPE_IMAGE_RECEIVED : VIEW_TYPE_RECEIVED;
         }
     }
@@ -85,6 +90,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_image_received, parent, false);
                 return new ImageReceivedViewHolder(view);
+            case VIEW_TYPE_FILE_SENT:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_file_sent, parent, false);
+                return new FileMessageSentViewHolder(view);
+            case VIEW_TYPE_FILE_RECEIVED:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_file_received, parent, false);
+                return new FileMessageReceivedViewHolder(view);
             default:
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_sent, parent, false);
@@ -103,6 +116,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((ImageSentViewHolder) holder).bind(message);
         } else if (holder instanceof ImageReceivedViewHolder) {
             ((ImageReceivedViewHolder) holder).bind(message, isGroupChat);
+        } else if (holder instanceof FileMessageSentViewHolder) {
+            ((FileMessageSentViewHolder) holder).bind(message);
+        } else if (holder instanceof FileMessageReceivedViewHolder) {
+            ((FileMessageReceivedViewHolder) holder).bind(message);
         }
     }
 
@@ -245,6 +262,108 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 } else {
                     senderNameTextView.setVisibility(View.GONE);
                 }
+            }
+        }
+    }
+    
+    static class FileMessageSentViewHolder extends RecyclerView.ViewHolder {
+        private ImageView fileIcon;
+        private TextView fileName;
+        private TextView fileSize;
+        private TextView timestampTextView;
+
+        public FileMessageSentViewHolder(@NonNull View itemView) {
+            super(itemView);
+            fileIcon = itemView.findViewById(R.id.fileIcon);
+            fileName = itemView.findViewById(R.id.fileName);
+            fileSize = itemView.findViewById(R.id.fileSize);
+            timestampTextView = itemView.findViewById(R.id.timestampTextView);
+        }
+
+        public void bind(Message message) {
+            fileName.setText(message.getFileName());
+            
+            // Display "FileType - Size" format
+            String fileType = com.example.doan_zaloclone.utils.FileTypeUtils.getFileTypeLabel(message.getFileMimeType());
+            String sizeFormatted = message.getFormattedFileSize();
+            fileSize.setText(fileType + " - " + sizeFormatted);
+            
+            timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            
+            // Set appropriate icon based on file type
+            int iconResId = com.example.doan_zaloclone.utils.FileUtils.getFileIcon(message.getFileMimeType());
+            fileIcon.setImageResource(iconResId);
+            
+            // Add click listener to open file
+            itemView.setOnClickListener(v -> openFile(message));
+        }
+        
+        private void openFile(Message message) {
+            try {
+                android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                android.net.Uri fileUri = android.net.Uri.parse(message.getContent());
+                intent.setDataAndType(fileUri, message.getFileMimeType());
+                intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                itemView.getContext().startActivity(intent);
+            } catch (android.content.ActivityNotFoundException e) {
+                android.widget.Toast.makeText(itemView.getContext(), 
+                    "Không tìm thấy ứng dụng để mở file này", 
+                    android.widget.Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                android.widget.Toast.makeText(itemView.getContext(), 
+                    "Lỗi mở file: " + e.getMessage(), 
+                    android.widget.Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+    
+    static class FileMessageReceivedViewHolder extends RecyclerView.ViewHolder {
+        private ImageView fileIcon;
+        private TextView fileName;
+        private TextView fileSize;
+        private TextView timestampTextView;
+
+        public FileMessageReceivedViewHolder(@NonNull View itemView) {
+            super(itemView);
+            fileIcon = itemView.findViewById(R.id.fileIcon);
+            fileName = itemView.findViewById(R.id.fileName);
+            fileSize = itemView.findViewById(R.id.fileSize);
+            timestampTextView = itemView.findViewById(R.id.timestampTextView);
+        }
+
+        public void bind(Message message) {
+            fileName.setText(message.getFileName());
+            
+            // Display "FileType - Size" format
+            String fileType = com.example.doan_zaloclone.utils.FileTypeUtils.getFileTypeLabel(message.getFileMimeType());
+            String sizeFormatted = message.getFormattedFileSize();
+            fileSize.setText(fileType + " - " + sizeFormatted);
+            
+            timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            
+            // Set appropriate icon based on file type
+            int iconResId = com.example.doan_zaloclone.utils.FileUtils.getFileIcon(message.getFileMimeType());
+            fileIcon.setImageResource(iconResId);
+            
+            // Add click listener to open file
+            itemView.setOnClickListener(v -> openFile(message));
+        }
+        
+        private void openFile(Message message) {
+            try {
+                android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                android.net.Uri fileUri = android.net.Uri.parse(message.getContent());
+                intent.setDataAndType(fileUri, message.getFileMimeType());
+                intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                itemView.getContext().startActivity(intent);
+            } catch (android.content.ActivityNotFoundException e) {
+                android.widget.Toast.makeText(itemView.getContext(), 
+                    "Không tìm thấy ứng dụng để mở file này", 
+                    android.widget.Toast.LENGTH_SHORT).show();
+            } catch (Exception e) {
+                android.widget.Toast.makeText(itemView.getContext(), 
+                    "Lỗi mở file: " + e.getMessage(), 
+                    android.widget.Toast.LENGTH_SHORT).show();
             }
         }
     }

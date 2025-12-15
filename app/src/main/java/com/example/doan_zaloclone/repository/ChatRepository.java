@@ -90,12 +90,26 @@ public class ChatRepository {
         messageData.put("content", message.getContent());
         messageData.put("type", message.getType());
         messageData.put("timestamp", message.getTimestamp());
+        
+        // Add file metadata if this is a file message
+        if (Message.TYPE_FILE.equals(message.getType())) {
+            messageData.put("fileName", message.getFileName());
+            messageData.put("fileSize", message.getFileSize());
+            messageData.put("fileMimeType", message.getFileMimeType());
+        }
 
         // Save message to Firestore
         messageRef.set(messageData)
                 .addOnSuccessListener(aVoid -> {
                     // Update conversation's lastMessage
-                    updateConversationLastMessage(conversationId, message.getContent(), message.getTimestamp());
+                    String lastMessageText = message.getContent();
+                    
+                    // For file messages, show user-friendly text instead of URL
+                    if (Message.TYPE_FILE.equals(message.getType())) {
+                        lastMessageText = "Bạn đã gửi một file";
+                    }
+                    
+                    updateConversationLastMessage(conversationId, lastMessageText, message.getTimestamp());
                     callback.onSuccess();
                 })
                 .addOnFailureListener(e -> {
@@ -267,6 +281,119 @@ public class ChatRepository {
                     .dispatch();
         } catch (Exception e) {
             callback.onError("Failed to start upload: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Upload file to Cloudinary and send as message (LiveData version)
+     * @param conversationId ID of the conversation
+     * @param fileUri Local URI of the file to upload
+     * @param senderId ID of the sender
+     * @param fileName Original file name
+     * @param fileSize File size in bytes
+     * @param fileMimeType File MIME type
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> uploadFileAndSendMessageLiveData(@NonNull String conversationId,
+                                                                          @NonNull Uri fileUri,
+                                                                          @NonNull String senderId,
+                                                                          @NonNull String fileName,
+                                                                          long fileSize,
+                                                                          @NonNull String fileMimeType) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        uploadFileAndSendMessage(conversationId, fileUri, senderId, fileName, fileSize, fileMimeType,
+                new SendMessageCallback() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(true));
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        result.setValue(Resource.error(error));
+                    }
+                });
+        
+        return result;
+    }
+    
+    /**
+     * Upload file to Cloudinary and send as message (callback version)
+     * @param conversationId ID of the conversation
+     * @param fileUri Local URI of the file to upload
+     * @param senderId ID of the sender
+     * @param fileName Original file name
+     * @param fileSize File size in bytes
+     * @param fileMimeType File MIME type
+     * @param callback Callback for success/error
+     */
+    public void uploadFileAndSendMessage(String conversationId, Uri fileUri, String senderId,
+                                         String fileName, long fileSize, String fileMimeType,
+                                         SendMessageCallback callback) {
+        try {
+            // Determine resource type based on MIME type
+            String resourceType = "auto"; // Cloudinary auto-detects type
+            if (fileMimeType.startsWith("image/")) {
+                resourceType = "image";
+            } else if (fileMimeType.startsWith("video/")) {
+                resourceType = "video";
+            } else {
+                resourceType = "raw"; // For documents, audio, etc.
+            }
+            
+            // Upload to Cloudinary
+            MediaManager.get().upload(fileUri)
+                    .option("folder", "zalo_chat/" + conversationId + "/files")
+                    .option("resource_type", resourceType)
+                    .callback(new UploadCallback() {
+                        @Override
+                        public void onStart(String requestId) {
+                            Log.d("Cloudinary", "File upload started: " + fileName);
+                        }
+
+                        @Override
+                        public void onProgress(String requestId, long bytes, long totalBytes) {
+                            // Optional: track upload progress
+                            int progress = (int) ((bytes * 100) / totalBytes);
+                            Log.d("Cloudinary", "Upload progress: " + progress + "%");
+                        }
+
+                        @Override
+                        public void onSuccess(String requestId, Map resultData) {
+                            // Get the secure URL from Cloudinary response
+                            String fileUrl = (String) resultData.get("secure_url");
+                            
+                            // Create FILE type message with Cloudinary URL and metadata
+                            Message fileMessage = new Message(
+                                    null,
+                                    senderId,
+                                    fileUrl,  // URL in content field
+                                    Message.TYPE_FILE,
+                                    System.currentTimeMillis(),
+                                    fileName,
+                                    fileSize,
+                                    fileMimeType
+                            );
+                            
+                            // Send message to Firestore
+                            sendMessage(conversationId, fileMessage, callback);
+                        }
+
+                        @Override
+                        public void onError(String requestId, ErrorInfo error) {
+                            callback.onError("File upload failed: " + error.getDescription());
+                        }
+
+                        @Override
+                        public void onReschedule(String requestId, ErrorInfo error) {
+                            Log.d("Cloudinary", "File upload rescheduled");
+                        }
+                    })
+                    .dispatch();
+        } catch (Exception e) {
+            callback.onError("Failed to start file upload: " + e.getMessage());
         }
     }
     

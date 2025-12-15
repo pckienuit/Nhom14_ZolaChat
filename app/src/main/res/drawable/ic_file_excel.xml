@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp"
+    android:height="40dp"
+    android:viewportWidth="40"
+    android:viewportHeight="40">
+    
+    <!-- Background - Excel green -->
+    <path
+        android:pathData="M8,4 L32,4 A4,4 0 0,1 36,8 L36,32 A4,4 0 0,1 32,36 L8,36 A4,4 0 0,1 4,32 L4,8 A4,4 0 0,1 8,4 Z"
+        android:fillColor="#4CAF50"/>
+    
+    <!-- X letter in white -->
+    <path
+        android:pathData="M13,17 L16,17 L19,21 L22,17 L25,17 L20.5,22 L25,27 L22,27 L19,23 L16,27 L13,27 L17.5,22 Z"
+        android:fillColor="#FFFFFF"/>
+</vector>

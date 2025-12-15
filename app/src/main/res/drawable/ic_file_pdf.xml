@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp"
+    android:height="40dp"
+    android:viewportWidth="40"
+    android:viewportHeight="40">
+    
+    <!-- Background -->
+    <path
+        android:pathData="M8,4 L32,4 A4,4 0 0,1 36,8 L36,32 A4,4 0 0,1 32,36 L8,36 A4,4 0 0,1 4,32 L4,8 A4,4 0 0,1 8,4 Z"
+        android:fillColor="#FF5722"/>
+    
+    <!-- PDF text in white -->
+    <path
+        android:pathData="M11,18 L11,22 L12.5,22 Q13.5,22 13.5,20 Q13.5,18 12.5,18 Z M10,17 L12.5,17 Q14.5,17 14.5,20 Q14.5,23 12.5,23 L11,23 L11,25 L10,25 Z"
+        android:fillColor="#FFFFFF"/>
+    
+    <path
+        android:pathData="M16,17 L18.5,17 Q20.5,17 20.5,21 Q20.5,25 18.5,25 L16,25 Z M17,18 L17,24 L18.5,24 Q19.5,24 19.5,21 Q19.5,18 18.5,18 Z"
+        android:fillColor="#FFFFFF"/>
+    
+    <path
+        android:pathData="M22,17 L27,17 L27,18 L23,18 L23,20.5 L26.5,20.5 L26.5,21.5 L23,21.5 L23,25 L22,25 Z"
+        android:fillColor="#FFFFFF"/>
+</vector>

@@ -73,6 +73,26 @@ public class RoomActivity extends AppCompatActivity {
     private ImagePickerAdapter imagePickerAdapter;
     private List<Uri> selectedPhotos = new ArrayList<>();
     private ActivityResultLauncher<String> permissionLauncher;
+    
+    // Action menu UI
+    private ImageButton moreActionsButton;
+    private FrameLayout actionMenuContainer;
+    private com.example.doan_zaloclone.ui.room.actions.QuickActionAdapter quickActionAdapter;
+    private com.example.doan_zaloclone.ui.room.actions.QuickActionManager quickActionManager;
+    
+    // File picker
+    private ActivityResultLauncher<String> filePickerLauncher;
+    private ActivityResultLauncher<String> multipleFilePickerLauncher;
+    private Uri selectedFileUri;
+    private String selectedFileName;
+    private long selectedFileSize;
+    private String selectedFileMimeType;
+    
+    // File preview (for multiple files)
+    private FrameLayout filePickerBottomSheet;
+    private FilePreviewAdapter filePreviewAdapter;
+    private List<FilePreviewAdapter.FileItem> selectedFilesForPreview = new ArrayList<>();
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -97,6 +117,26 @@ public class RoomActivity extends AppCompatActivity {
                         loadAndShowImagePicker();
                     } else {
                         Toast.makeText(this, "Cần quyền truy cập ảnh để chọn ảnh", Toast.LENGTH_SHORT).show();
+                    }
+                }
+        );
+        
+        // Register file picker launcher
+        filePickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetContent(),
+                uri -> {
+                    if (uri != null) {
+                        handleFileSelected(uri);
+                    }
+                }
+        );
+        
+        // Register multiple file picker launcher
+        multipleFilePickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.GetMultipleContents(),
+                uris -> {
+                    if (uris != null && !uris.isEmpty()) {
+                        handleMultipleFilesSelected(uris);
                     }
                 }
         );
@@ -140,6 +180,13 @@ public class RoomActivity extends AppCompatActivity {
         qualitySpinner = findViewById(R.id.qualitySpinner);
         selectedCountTextView = findViewById(R.id.selectedCountTextView);
         sendImagesButton = findViewById(R.id.sendImagesButton);
+        
+        // Action menu views
+        moreActionsButton = findViewById(R.id.moreActionsButton);
+        actionMenuContainer = findViewById(R.id.actionMenuContainer);
+        
+        // Initialize QuickActionManager
+        quickActionManager = com.example.doan_zaloclone.ui.room.actions.QuickActionManager.getInstance();
     }
 
     private void setupToolbar() {
@@ -359,6 +406,7 @@ public class RoomActivity extends AppCompatActivity {
     private void setupListeners() {
         sendButton.setOnClickListener(v -> handleSendMessage());
         attachImageButton.setOnClickListener(v -> requestPermissionAndShowPicker());
+        moreActionsButton.setOnClickListener(v -> showActionMenu());
         backButton.setOnClickListener(v -> hideImagePicker());
         sendImagesButton.setOnClickListener(v -> handleSendImages());
     }
@@ -641,6 +689,263 @@ public class RoomActivity extends AppCompatActivity {
         // Re-enable button after a short delay
         sendButton.postDelayed(() -> sendButton.setEnabled(true), 500);
     }
+    
+    // ============ ACTION MENU METHODS ============
+    
+    private void showActionMenu() {
+        // Hide keyboard
+        android.view.inputmethod.InputMethodManager imm = 
+            (android.view.inputmethod.InputMethodManager) getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+        if (imm != null && getCurrentFocus() != null) {
+            imm.hideSoftInputFromWindow(getCurrentFocus().getWindowToken(), 0);
+        }
+        
+        // Setup adapter with actions
+        quickActionAdapter = new com.example.doan_zaloclone.ui.room.actions.QuickActionAdapter(
+            quickActionManager.getActions(),
+            this::handleQuickAction
+        );
+        
+        // Inflate bottom sheet
+        View menuView = LayoutInflater.from(this)
+                .inflate(R.layout.bottom_sheet_action_menu, actionMenuContainer, false);
+        RecyclerView actionsRecyclerView = menuView.findViewById(R.id.actionsRecyclerView);
+        actionsRecyclerView.setAdapter(quickActionAdapter);
+        
+        // Show menu
+        actionMenuContainer.removeAllViews();
+        actionMenuContainer.addView(menuView);
+        actionMenuContainer.setVisibility(View.VISIBLE);
+    }
+    
+    private void hideActionMenu() {
+        actionMenuContainer.setVisibility(View.GONE);
+        actionMenuContainer.removeAllViews();
+    }
+    
+    private void handleQuickAction(com.example.doan_zaloclone.ui.room.actions.QuickAction action) {
+        hideActionMenu();
+        
+        action.execute(this, new com.example.doan_zaloclone.ui.room.actions.QuickActionCallback() {
+            @Override
+            public void onShowUI() {
+                // Launch file picker
+                launchFilePicker();
+            }
+            
+            @Override
+            public void onCancel() {
+                Toast.makeText(RoomActivity.this, "Đã hủy", Toast.LENGTH_SHORT).show();
+            }
+            
+            @Override
+            public void onFilesSelected(List<Uri> fileUris) {
+                // Handle multiple files (future enhancement)
+            }
+            
+            @Override
+            public void onError(String error) {
+                Toast.makeText(RoomActivity.this, error, Toast.LENGTH_SHORT).show();
+            }
+            
+            @Override
+            public void onSuccess() {
+                Toast.makeText(RoomActivity.this, "Thành công!", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    
+    // ============ FILE HANDLING METHODS ============
+    
+    private void launchFilePicker() {
+        // Default to multi-file picker (can still select just 1 file)
+        com.example.doan_zaloclone.utils.FilePickerHelper.launchMultipleFilePicker(multipleFilePickerLauncher);
+    }
+    
+    private void handleFileSelected(Uri fileUri) {
+        // Extract file metadata
+        selectedFileUri = fileUri;
+        selectedFileName = com.example.doan_zaloclone.utils.FileUtils.getFileName(this, fileUri);
+        selectedFileSize = com.example.doan_zaloclone.utils.FileUtils.getFileSize(this, fileUri);
+        selectedFileMimeType = com.example.doan_zaloclone.utils.FileUtils.getMimeType(this, fileUri);
+        
+        // Show confirmation and upload
+        String fileSizeFormatted = com.example.doan_zaloclone.utils.FileUtils.formatFileSize(selectedFileSize);
+        String message = "Gửi file: " + selectedFileName + " (" + fileSizeFormatted + ")?";
+        
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Xác nhận gửi file")
+                .setMessage(message)
+                .setPositiveButton("Gửi", (dialog, which) -> uploadAndSendFile())
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+    
+    private void uploadAndSendFile() {
+        if (selectedFileUri == null || firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Lỗi: Không thể gửi file", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        Toast.makeText(this, "Đang gửi file...", Toast.LENGTH_SHORT).show();
+        
+        chatRepository.uploadFileAndSendMessage(
+                conversationId,
+                selectedFileUri,
+                currentUserId,
+                selectedFileName,
+                selectedFileSize,
+                selectedFileMimeType,
+                new ChatRepository.SendMessageCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Đã gửi file!", Toast.LENGTH_SHORT).show();
+                            // Clear selection
+                            selectedFileUri = null;
+                            selectedFileName = null;
+                            selectedFileSize = 0;
+                            selectedFileMimeType = null;
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi gửi file: " + error, Toast.LENGTH_LONG).show();
+                        });
+                    }
+                }
+        );
+    }
+    
+    private void handleMultipleFilesSelected(List<Uri> uris) {
+        selectedFilesForPreview.clear();
+        
+        // Process each URI and create FileItem
+        for (Uri uri : uris) {
+            String name = com.example.doan_zaloclone.utils.FileUtils.getFileName(this, uri);
+            long size = com.example.doan_zaloclone.utils.FileUtils.getFileSize(this, uri);
+            String mimeType = com.example.doan_zaloclone.utils.FileUtils.getMimeType(this, uri);
+            
+            selectedFilesForPreview.add(new FilePreviewAdapter.FileItem(uri, name, size, mimeType));
+        }
+        
+        // Show file preview bottom sheet
+        showFilePreviewBottomSheet();
+    }
+    
+    private void showFilePreviewBottomSheet() {
+        // Inflate bottom sheet
+        View bottomSheetView = LayoutInflater.from(this)
+                .inflate(R.layout.bottom_sheet_file_picker, actionMenuContainer, false);
+        
+        // Setup RecyclerView with FilePreviewAdapter
+        RecyclerView filesRecyclerView = bottomSheetView.findViewById(R.id.filesRecyclerView);
+        filesRecyclerView.setLayoutManager(new androidx.recyclerview.widget.LinearLayoutManager(this));
+        
+        TextView selectedCountTextView = bottomSheetView.findViewById(R.id.selectedCountTextView);
+        if (selectedCountTextView == null) {
+            // If TextView doesn't exist in layout, we'll handle it differently
+            android.widget.Button sendButton = bottomSheetView.findViewById(R.id.sendFileButton);
+            sendButton.setText("Gửi (" + selectedFilesForPreview.size() + " files)");
+        }
+        
+        filePreviewAdapter = new FilePreviewAdapter(selectedFilesForPreview, selectedCount -> {
+            // Update button text when selection changes
+            android.widget.Button sendButton = bottomSheetView.findViewById(R.id.sendFileButton);
+            sendButton.setText("Gửi (" + selectedCount + " files)");
+            sendButton.setEnabled(selectedCount > 0);
+        });
+        filesRecyclerView.setAdapter(filePreviewAdapter);
+        
+        // Setup buttons
+        android.widget.Button cancelButton = bottomSheetView.findViewById(R.id.cancelButton);
+        android.widget.Button sendButton = bottomSheetView.findViewById(R.id.sendFileButton);
+        
+        cancelButton.setOnClickListener(v -> hideFilePreviewBottomSheet());
+        sendButton.setOnClickListener(v -> {
+            hideFilePreviewBottomSheet();
+            uploadAndSendMultipleFiles();
+        });
+        
+        // Show bottom sheet
+        actionMenuContainer.removeAllViews();
+        actionMenuContainer.addView(bottomSheetView);
+        actionMenuContainer.setVisibility(View.VISIBLE);
+    }
+    
+    private void hideFilePreviewBottomSheet() {
+        actionMenuContainer.setVisibility(View.GONE);
+        actionMenuContainer.removeAllViews();
+    }
+    
+    private void uploadAndSendMultipleFiles() {
+        if (firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Lỗi: Người dùng chưa đăng nhập", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        List<FilePreviewAdapter.FileItem> filesToSend = filePreviewAdapter.getSelectedFiles();
+        if (filesToSend.isEmpty()) {
+            Toast.makeText(this, "Chưa chọn file nào", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        Toast.makeText(this, "Đang gửi " + filesToSend.size() + " files...", Toast.LENGTH_SHORT).show();
+        
+        // Upload each file sequentially
+        uploadFilesSequentially(filesToSend, currentUserId, 0, filesToSend.size());
+    }
+    
+    private void uploadFilesSequentially(List<FilePreviewAdapter.FileItem> files, String userId, 
+                                         int currentIndex, int total) {
+        if (currentIndex >= files.size()) {
+            // All files uploaded
+            runOnUiThread(() -> {
+                Toast.makeText(this, "Đã gửi tất cả " + total + " files!", Toast.LENGTH_SHORT).show();
+            });
+            return;
+        }
+        
+        FilePreviewAdapter.FileItem file = files.get(currentIndex);
+        int fileNumber = currentIndex + 1;
+        
+        chatRepository.uploadFileAndSendMessage(
+                conversationId,
+                file.uri,
+                userId,
+                file.name,
+                file.size,
+                file.mimeType,
+                new ChatRepository.SendMessageCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, 
+                                "Đã gửi file " + fileNumber + "/" + total, 
+                                Toast.LENGTH_SHORT).show();
+                        });
+                        // Upload next file
+                        uploadFilesSequentially(files, userId, currentIndex + 1, total);
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, 
+                                "Lỗi gửi file " + fileNumber + ": " + error, 
+                                Toast.LENGTH_LONG).show();
+                        });
+                        // Continue with next file despite error
+                        uploadFilesSequentially(files, userId, currentIndex + 1, total);
+                    }
+                }
+        );
+    }
+    
     
     private void openGroupInfo() {
         android.content.Intent intent = new android.content.Intent(this, 
