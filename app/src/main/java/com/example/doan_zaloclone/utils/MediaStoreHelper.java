@@ -29,14 +29,16 @@ public class MediaStoreHelper {
     public static List<Uri> loadPhotos(Context context, int limit) {
         List<Uri> photoUris = new ArrayList<>();
         
+        android.util.Log.d("MediaStoreHelper", "Starting to load photos with limit: " + limit);
+        
         // Define columns to query
         String[] projection = {
                 MediaStore.Images.Media._ID,
                 MediaStore.Images.Media.DATE_MODIFIED
         };
         
-        // Sort by date modified (newest first) with LIMIT
-        String sortOrder = MediaStore.Images.Media.DATE_MODIFIED + " DESC LIMIT " + limit;
+        // Sort by date modified (newest first)
+        String sortOrder = MediaStore.Images.Media.DATE_MODIFIED + " DESC";
         
         ContentResolver contentResolver = context.getContentResolver();
         
@@ -48,6 +50,7 @@ public class MediaStoreHelper {
                 sortOrder
         )) {
             if (cursor != null) {
+                android.util.Log.d("MediaStoreHelper", "Cursor count: " + cursor.getCount());
                 int idColumn = cursor.getColumnIndexOrThrow(MediaStore.Images.Media._ID);
                 int count = 0;
                 
@@ -60,8 +63,13 @@ public class MediaStoreHelper {
                     photoUris.add(contentUri);
                     count++;
                 }
+                
+                android.util.Log.d("MediaStoreHelper", "Loaded " + photoUris.size() + " photos");
+            } else {
+                android.util.Log.e("MediaStoreHelper", "Cursor is null");
             }
         } catch (Exception e) {
+            android.util.Log.e("MediaStoreHelper", "Error loading photos", e);
             e.printStackTrace();
         }
         

@@ -425,19 +425,41 @@ public class RoomActivity extends AppCompatActivity {
         }
     }
     
+    /**
+     * Public method to trigger image picker from QuickActions
+     */
+    public void triggerImagePicker() {
+        requestPermissionAndShowPicker();
+    }
+    
     private void loadAndShowImagePicker() {
         // Show loading indicator
         Toast.makeText(this, "Đang tải ảnh...", Toast.LENGTH_SHORT).show();
         
+        android.util.Log.d("RoomActivity", "Starting to load image picker");
+        
         // Load photos in background thread to prevent ANR
         new Thread(() -> {
-            // Load photos from device (limited to 100 most recent)
-            List<Uri> photos = MediaStoreHelper.loadPhotos(this, 100);
-            
-            // Update UI on main thread
-            runOnUiThread(() -> {
-                setupImagePickerUI(photos);
-            });
+            try {
+                // Load photos from device (limited to 100 most recent)
+                List<Uri> photos = MediaStoreHelper.loadPhotos(this, 100);
+                
+                android.util.Log.d("RoomActivity", "Loaded " + photos.size() + " photos");
+                
+                // Update UI on main thread
+                runOnUiThread(() -> {
+                    if (photos.isEmpty()) {
+                        Toast.makeText(this, "Không tìm thấy ảnh nào trên thiết bị", Toast.LENGTH_SHORT).show();
+                    } else {
+                        setupImagePickerUI(photos);
+                    }
+                });
+            } catch (Exception e) {
+                android.util.Log.e("RoomActivity", "Error loading photos", e);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Lỗi khi tải ảnh: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                });
+            }
         }).start();
     }
     
