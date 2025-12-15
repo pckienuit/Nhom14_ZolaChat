@@ -299,21 +299,67 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
         
         private void openFile(Message message) {
-            try {
-                android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
-                android.net.Uri fileUri = android.net.Uri.parse(message.getContent());
-                intent.setDataAndType(fileUri, message.getFileMimeType());
-                intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                itemView.getContext().startActivity(intent);
-            } catch (android.content.ActivityNotFoundException e) {
-                android.widget.Toast.makeText(itemView.getContext(), 
-                    "Không tìm thấy ứng dụng để mở file này", 
-                    android.widget.Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                android.widget.Toast.makeText(itemView.getContext(), 
-                    "Lỗi mở file: " + e.getMessage(), 
-                    android.widget.Toast.LENGTH_SHORT).show();
-            }
+            // Show loading dialog
+            android.app.ProgressDialog progressDialog = new android.app.ProgressDialog(itemView.getContext());
+            progressDialog.setMessage("Đang tải file...");
+            progressDialog.setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL);
+            progressDialog.setCancelable(false);
+            progressDialog.show();
+            
+            // Download file first
+            String fileUrl = message.getContent();
+            String fileName = message.getFileName();
+            
+            com.example.doan_zaloclone.utils.FileDownloadHelper.downloadFile(
+                itemView.getContext(),
+                fileUrl,
+                fileName,
+                new com.example.doan_zaloclone.utils.FileDownloadHelper.DownloadCallback() {
+                    @Override
+                    public void onProgress(int progress) {
+                        ((android.app.Activity) itemView.getContext()).runOnUiThread(() -> {
+                            progressDialog.setProgress(progress);
+                        });
+                    }
+                    
+                    @Override
+                    public void onSuccess(java.io.File file) {
+                        ((android.app.Activity) itemView.getContext()).runOnUiThread(() -> {
+                            progressDialog.dismiss();
+                            
+                            try {
+                                // Get URI using FileProvider
+                                android.net.Uri fileUri = com.example.doan_zaloclone.utils.FileDownloadHelper.getFileUri(
+                                        itemView.getContext(), file);
+                                
+                                // Open file with appropriate app
+                                android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                                intent.setDataAndType(fileUri, message.getFileMimeType());
+                                intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | 
+                                              android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                                itemView.getContext().startActivity(intent);
+                            } catch (android.content.ActivityNotFoundException e) {
+                                android.widget.Toast.makeText(itemView.getContext(), 
+                                    "Không tìm thấy ứng dụng để mở file này", 
+                                    android.widget.Toast.LENGTH_SHORT).show();
+                            } catch (Exception e) {
+                                android.widget.Toast.makeText(itemView.getContext(), 
+                                    "Lỗi mở file: " + e.getMessage(), 
+                                    android.widget.Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        ((android.app.Activity) itemView.getContext()).runOnUiThread(() -> {
+                            progressDialog.dismiss();
+                            android.widget.Toast.makeText(itemView.getContext(), 
+                                "Lỗi tải file: " + error, 
+                                android.widget.Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
         }
     }
     
@@ -350,21 +396,67 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
         
         private void openFile(Message message) {
-            try {
-                android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
-                android.net.Uri fileUri = android.net.Uri.parse(message.getContent());
-                intent.setDataAndType(fileUri, message.getFileMimeType());
-                intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-                itemView.getContext().startActivity(intent);
-            } catch (android.content.ActivityNotFoundException e) {
-                android.widget.Toast.makeText(itemView.getContext(), 
-                    "Không tìm thấy ứng dụng để mở file này", 
-                    android.widget.Toast.LENGTH_SHORT).show();
-            } catch (Exception e) {
-                android.widget.Toast.makeText(itemView.getContext(), 
-                    "Lỗi mở file: " + e.getMessage(), 
-                    android.widget.Toast.LENGTH_SHORT).show();
-            }
+            // Show loading dialog
+            android.app.ProgressDialog progressDialog = new android.app.ProgressDialog(itemView.getContext());
+            progressDialog.setMessage("Đang tải file...");
+            progressDialog.setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL);
+            progressDialog.setCancelable(false);
+            progressDialog.show();
+            
+            // Download file first
+            String fileUrl = message.getContent();
+            String fileName = message.getFileName();
+            
+            com.example.doan_zaloclone.utils.FileDownloadHelper.downloadFile(
+                itemView.getContext(),
+                fileUrl,
+                fileName,
+                new com.example.doan_zaloclone.utils.FileDownloadHelper.DownloadCallback() {
+                    @Override
+                    public void onProgress(int progress) {
+                        ((android.app.Activity) itemView.getContext()).runOnUiThread(() -> {
+                            progressDialog.setProgress(progress);
+                        });
+                    }
+                    
+                    @Override
+                    public void onSuccess(java.io.File file) {
+                        ((android.app.Activity) itemView.getContext()).runOnUiThread(() -> {
+                            progressDialog.dismiss();
+                            
+                            try {
+                                // Get URI using FileProvider
+                                android.net.Uri fileUri = com.example.doan_zaloclone.utils.FileDownloadHelper.getFileUri(
+                                        itemView.getContext(), file);
+                                
+                                // Open file with appropriate app
+                                android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                                intent.setDataAndType(fileUri, message.getFileMimeType());
+                                intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | 
+                                              android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                                itemView.getContext().startActivity(intent);
+                            } catch (android.content.ActivityNotFoundException e) {
+                                android.widget.Toast.makeText(itemView.getContext(), 
+                                    "Không tìm thấy ứng dụng để mở file này", 
+                                    android.widget.Toast.LENGTH_SHORT).show();
+                            } catch (Exception e) {
+                                android.widget.Toast.makeText(itemView.getContext(), 
+                                    "Lỗi mở file: " + e.getMessage(), 
+                                    android.widget.Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        ((android.app.Activity) itemView.getContext()).runOnUiThread(() -> {
+                            progressDialog.dismiss();
+                            android.widget.Toast.makeText(itemView.getContext(), 
+                                "Lỗi tải file: " + error, 
+                                android.widget.Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
         }
     }
     
