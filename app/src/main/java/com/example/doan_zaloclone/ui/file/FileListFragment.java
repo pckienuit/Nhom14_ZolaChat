@@ -12,7 +12,6 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.SearchView;
-import androidx.appcompat.widget.Toolbar;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.GridLayoutManager;
@@ -62,7 +61,6 @@ public class FileListFragment extends Fragment {
     private String conversationId;
     
     // UI components
-    private Toolbar toolbar;
     private RecyclerView recyclerView;
     private SwipeRefreshLayout swipeRefresh;
     private View emptyStateLayout;
@@ -118,7 +116,6 @@ public class FileListFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         
         initViews(view);
-        setupToolbar();
         setupViewModel();
         setupRecyclerView();
         setupSwipeRefresh();
@@ -133,7 +130,6 @@ public class FileListFragment extends Fragment {
     }
     
     private void initViews(View view) {
-        toolbar = view.findViewById(R.id.toolbar);
         recyclerView = view.findViewById(R.id.recyclerView);
         swipeRefresh = view.findViewById(R.id.swipeRefresh);
         emptyStateLayout = view.findViewById(R.id.emptyStateLayout);
@@ -143,11 +139,6 @@ public class FileListFragment extends Fragment {
         senderFilterChip = view.findViewById(R.id.senderFilterChip);
         dateFilterChip = view.findViewById(R.id.dateFilterChip);
         clearFiltersChip = view.findViewById(R.id.clearFiltersChip);
-    }
-    
-    private void setupToolbar() {
-        toolbar.inflateMenu(R.menu.menu_file_list);
-        toolbar.setOnMenuItemClickListener(this::onOptionsItemSelected);
     }
     
     private void setupViewModel() {
