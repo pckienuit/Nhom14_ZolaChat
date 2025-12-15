@@ -4,13 +4,13 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ImageView;
 import android.widget.ProgressBar;
-import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -18,6 +18,8 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.FileCategory;
+import com.example.doan_zaloclone.models.FileItem;
+import com.example.doan_zaloclone.viewmodel.FileViewModel;
 
 /**
  * Fragment to display a list of files for a specific category
@@ -34,6 +36,12 @@ public class FileListFragment extends Fragment {
     private SwipeRefreshLayout swipeRefresh;
     private View emptyStateLayout;
     private ProgressBar progressBar;
+    
+    private FileViewModel viewModel;
+    private FileAdapter adapter;
+    
+    private boolean isLoading = false;
+    private boolean isInitialLoad = true;
     
     public static FileListFragment newInstance(FileCategory category, String conversationId) {
         FileListFragment fragment = new FileListFragment();
@@ -66,11 +74,16 @@ public class FileListFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         
         initViews(view);
+        setupViewModel();
         setupRecyclerView();
         setupSwipeRefresh();
+        observeData();
         
-        // TODO Phase 2: Load data from ViewModel
-        showEmptyState(true);
+        // Load data only once on initial creation
+        if (isInitialLoad) {
+            loadData();
+            isInitialLoad = false;
+        }
     }
     
     private void initViews(View view) {
@@ -78,6 +91,11 @@ public class FileListFragment extends Fragment {
         swipeRefresh = view.findViewById(R.id.swipeRefresh);
         emptyStateLayout = view.findViewById(R.id.emptyStateLayout);
         progressBar = view.findViewById(R.id.progressBar);
+    }
+    
+    private void setupViewModel() {
+        // Get shared ViewModel scoped to the parent Activity
+        viewModel = new ViewModelProvider(requireActivity()).get(FileViewModel.class);
     }
     
     private void setupRecyclerView() {
@@ -90,14 +108,124 @@ public class FileListFragment extends Fragment {
             recyclerView.setLayoutManager(linearLayoutManager);
         }
         
-        // TODO Phase 2: Set adapter
+        // Setup adapter
+        adapter = new FileAdapter(category);
+        adapter.setOnItemClickListener(this::onFileItemClick);
+        recyclerView.setAdapter(adapter);
+        
+        // Setup pagination scroll listener
+        recyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+                
+                if (!isLoading && viewModel.hasMore(category)) {
+                    RecyclerView.LayoutManager layoutManager = recyclerView.getLayoutManager();
+                    
+                    int visibleItemCount = layoutManager != null ? layoutManager.getChildCount() : 0;
+                    int totalItemCount = layoutManager != null ? layoutManager.getItemCount() : 0;
+                    int firstVisibleItemPosition;
+                    
+                    if (layoutManager instanceof GridLayoutManager) {
+                        firstVisibleItemPosition = ((GridLayoutManager) layoutManager).findFirstVisibleItemPosition();
+                    } else if (layoutManager instanceof LinearLayoutManager) {
+                        firstVisibleItemPosition = ((LinearLayoutManager) layoutManager).findFirstVisibleItemPosition();
+                    } else {
+                        return;
+                    }
+                    
+                    // Load more when near the end (5 items before the end)
+                    if ((visibleItemCount + firstVisibleItemPosition + 5) >= totalItemCount
+                            && firstVisibleItemPosition >= 0) {
+                        loadMoreFiles();
+                    }
+                }
+            }
+        });
     }
     
     private void setupSwipeRefresh() {
         swipeRefresh.setOnRefreshListener(() -> {
-            // TODO Phase 2: Reload data
-            swipeRefresh.setRefreshing(false);
+            viewModel.refreshFiles(conversationId);
         });
+    }
+    
+    private void observeData() {
+        // Observe the appropriate LiveData based on category
+        switch (category) {
+            case MEDIA:
+                viewModel.getMediaFilesLiveData().observe(getViewLifecycleOwner(), resource -> {
+                    handleResourceUpdate(resource);
+                });
+                break;
+            case FILES:
+                viewModel.getFilesLiveData().observe(getViewLifecycleOwner(), resource -> {
+                    handleResourceUpdate(resource);
+                });
+                break;
+            case LINKS:
+                viewModel.getLinksLiveData().observe(getViewLifecycleOwner(), resource -> {
+                    handleResourceUpdate(resource);
+                });
+                break;
+        }
+    }
+    
+    private void handleResourceUpdate(com.example.doan_zaloclone.utils.Resource<java.util.List<FileItem>> resource) {
+        if (resource == null) return;
+        
+        if (resource.isLoading()) {
+            showLoading(true);
+            swipeRefresh.setRefreshing(false);
+        } else if (resource.isSuccess()) {
+            showLoading(false);
+            swipeRefresh.setRefreshing(false);
+            isLoading = false;
+            
+            java.util.List<FileItem> files = resource.getData();
+            if (files != null && !files.isEmpty()) {
+                showEmptyState(false);
+                adapter.updateFiles(files);
+            } else {
+                showEmptyState(true);
+            }
+        } else if (resource.isError()) {
+            showLoading(false);
+            swipeRefresh.setRefreshing(false);
+            isLoading = false;
+            
+            String errorMsg = resource.getMessage();
+            if (errorMsg != null && getContext() != null) {
+                Toast.makeText(getContext(), errorMsg, Toast.LENGTH_SHORT).show();
+            }
+            
+            // Show empty state if no data
+            if (adapter.getItemCount() == 0) {
+                showEmptyState(true);
+            }
+        }
+    }
+    
+    private void loadData() {
+        if (conversationId != null && viewModel != null) {
+            viewModel.loadFiles(conversationId);
+        }
+    }
+    
+    private void loadMoreFiles() {
+        if (isLoading || conversationId == null) return;
+        
+        isLoading = true;
+        viewModel.loadMoreFiles(conversationId, category);
+    }
+    
+    private void onFileItemClick(FileItem item, int position) {
+        // TODO Phase 5: Handle file actions
+        if (getContext() != null) {
+            Toast.makeText(getContext(), 
+                "Clicked: " + item.getDisplayName(), 
+                Toast.LENGTH_SHORT).show();
+        }
     }
     
     private void showEmptyState(boolean show) {

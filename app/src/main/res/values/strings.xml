@@ -1,4 +1,9 @@
 <resources>
     <string name="app_name">DoAn_ZaloClone</string>
     <string name="no_files">Không có file</string>
+    
+    <!-- File Management Strings -->
+    <string name="media_thumbnail">Ảnh thu nhỏ</string>
+    <string name="file_icon">Biểu tượng file</string>
+    <string name="link_icon">Biểu tượng liên kết</string>
 </resources>
