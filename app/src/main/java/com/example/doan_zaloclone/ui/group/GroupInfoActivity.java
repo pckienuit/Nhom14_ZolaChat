@@ -85,7 +85,9 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
     }
 
     private void setupRecyclerView() {
-        memberAdapter = new GroupMemberAdapter(currentUserId, false, this);
+        // Will be updated in updateUI when conversation is loaded
+        boolean isAdmin = conversation != null && conversation.isAdmin(currentUserId);
+        memberAdapter = new GroupMemberAdapter(currentUserId, isAdmin, this);
         binding.membersRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         binding.membersRecyclerView.setAdapter(memberAdapter);
     }
@@ -164,7 +166,7 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
                             String name = documentSnapshot.getString("name");
                             String email = documentSnapshot.getString("email");
                             String avatarUrl = documentSnapshot.getString("avatarUrl");
-                            boolean isMemberAdmin = memberId.equals(conversation.getAdminId());
+                            boolean isMemberAdmin = conversation.isAdmin(memberId);
 
                             GroupMember member = new GroupMember(memberId, name, email, avatarUrl, isMemberAdmin);
                             members.add(member);
@@ -233,6 +235,16 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
     }
 
     private void showLeaveGroupDialog() {
+        // Check if user is the last admin
+        if (conversation != null && conversation.isLastAdmin(currentUserId)) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Không thể rời nhóm")
+                    .setMessage("Bạn là quản trị viên duy nhất. Vui lòng chuyển quyền quản trị cho thành viên khác trước khi rời nhóm.")
+                    .setPositiveButton("OK", null)
+                    .show();
+            return;
+        }
+        
         new AlertDialog.Builder(this)
                 .setTitle("Rời nhóm")
                 .setMessage("Bạn có chắc muốn rời khỏi nhóm này?")
@@ -262,6 +274,28 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
                 .setPositiveButton("Xóa", (dialog, which) -> 
                     groupViewModel.removeGroupMember(conversationId, member.getUserId())
                 )
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+    
+    public void onMemberLongClick(GroupMember member) {
+        // Only admins can transfer admin rights
+        if (conversation == null || !conversation.isAdmin(currentUserId)) {
+            return;
+        }
+        
+        // Cannot transfer to yourself or someone who's already admin
+        if (member.getUserId().equals(currentUserId) || member.isAdmin()) {
+            return;
+        }
+        
+        // Show dialog to transfer admin
+        new AlertDialog.Builder(this)
+                .setTitle("Chuyển quyền quản trị")
+                .setMessage("Bạn có muốn chuyển quyền quản trị cho " + member.getName() + "?")
+                .setPositiveButton("Chuyển quyền", (dialog, which) -> {
+                    groupViewModel.transferAdmin(conversationId, member.getUserId());
+                })
                 .setNegativeButton("Hủy", null)
                 .show();
     }

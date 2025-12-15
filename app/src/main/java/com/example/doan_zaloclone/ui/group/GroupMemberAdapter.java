@@ -26,6 +26,7 @@ public class GroupMemberAdapter extends RecyclerView.Adapter<GroupMemberAdapter.
 
     public interface OnMemberActionListener {
         void onRemoveMember(GroupMember member);
+        void onMemberLongClick(GroupMember member);
     }
 
     public GroupMemberAdapter(String currentUserId, boolean isCurrentUserAdmin, OnMemberActionListener listener) {
@@ -121,6 +122,15 @@ public class GroupMemberAdapter extends RecyclerView.Adapter<GroupMemberAdapter.
             } else {
                 avatarImageView.setImageResource(R.drawable.ic_person);
             }
+            
+            // Long click for admin transfer
+            itemView.setOnLongClickListener(v -> {
+                if (listener != null) {
+                    listener.onMemberLongClick(member);
+                    return true;
+                }
+                return false;
+            });
 
             // Show remove button only if:
             // 1. Current user is admin
