@@ -65,15 +65,17 @@ public class FileItem {
         String type = message.getType();
         String mimeType = message.getFileMimeType();
         
-        // Images are always MEDIA
+        // Images can be either TYPE_IMAGE or TYPE_FILE with image MIME type
         if (Message.TYPE_IMAGE.equals(type)) {
             return FileCategory.MEDIA;
         }
         
-        // Files with video MIME type are MEDIA
+        // Files with image or video MIME type are MEDIA
         if (Message.TYPE_FILE.equals(type)) {
-            if (mimeType != null && mimeType.startsWith("video/")) {
-                return FileCategory.MEDIA;
+            if (mimeType != null) {
+                if (mimeType.startsWith("image/") || mimeType.startsWith("video/")) {
+                    return FileCategory.MEDIA;
+                }
             }
             return FileCategory.FILES;
         }
@@ -84,6 +86,9 @@ public class FileItem {
             if (content != null && URL_PATTERN.matcher(content).find()) {
                 return FileCategory.LINKS;
             }
+            // TEXT messages without URLs should not be categorized as FILES
+            // They should have been filtered out in the repository
+            // This is a fallback that shouldn't normally be reached
         }
         
         return FileCategory.FILES;

@@ -1,0 +1,112 @@
+===========================================
+FILE MANAGEMENT BUG FIX - TECHNICAL SUMMARY
+===========================================
+
+DATE: 2025-12-15
+BUGS FIXED: 3 critical display issues
+
+-------------------------------------------
+BUG 1: UNKNOWN FILES APPEARING
+-------------------------------------------
+Problem:
+- Plain text messages (e.g., "Hello") showed up as "unknown" files in Documents tab
+
+Root Cause:
+- FileRepository.getFilesForConversation() retrieved ALL messages without filtering
+- Plain TEXT messages were passed to FileItem.getCategoryType()
+- Messages without URLs defaulted to FileCategory.FILES
+
+Fix:
+- Added filtering in FileRepository.enrichWithSenderInfo()
+- Only keep: TYPE_IMAGE, TYPE_FILE, and TYPE_TEXT with URLs
+- Plain text messages now excluded from file list
+
+Files Modified:
+- FileRepository.java (lines 200-220)
+
+-------------------------------------------
+BUG 2: IMAGES NOT DISPLAYING
+-------------------------------------------
+Problem:
+- Images uploaded via chat didn't appear in "Ảnh & Video" tab
+- Old images especially affected
+
+Root Cause #1 - Missing Metadata:
+- uploadImageAndSendMessage() created TYPE_IMAGE messages without fileName/fileMimeType
+- sendMessage() only saved metadata for TYPE_FILE, not TYPE_IMAGE
+- Old messages in Firestore missing metadata fields
+
+Fix #1 - Save Metadata for Images:
+- Updated ChatRepository.sendMessage() to save metadata for BOTH IMAGE and FILE types
+- Updated uploadImageAndSendMessage() to extract metadata from Cloudinary response
+  - Gets format (jpg, png) and bytes from resultData
+  - Generates fileName and mimeType from Cloudinary format field
+
+Root Cause #2 - Layout Bug (CRITICAL):
+- item_file_media.xml had FrameLayout with android:layout_height="0dp"
+- Used app:layout_constraintDimensionRatio="1:1" but parent was CardView, NOT ConstraintLayout
+- Constraint attributes don't work outside ConstraintLayout
+- Result: ALL media items rendered with 0px height = invisible
+
+Fix #2 - Fix Layout:
+- Changed android:layout_height from "0dp" to "120dp"
+- Removed non-functional layout_constraintDimensionRatio attribute
+
+Files Modified:
+- ChatRepository.java (lines 94-106, 260-310)
+- item_file_media.xml (line 13)
+
+-------------------------------------------
+BUG 3: NON-PDF FILES NOT SHOWING
+-------------------------------------------
+Problem:
+- Word, Excel, etc. files didn't display in Documents tab
+- Only PDFs showed up
+
+Root Cause:
+- Same as Bug #2 - layout bug affected ALL file types
+- Items were categorized correctly but had 0px height
+
+Fix:
+- Same layout fix as Bug #2
+- No additional code changes needed
+
+-------------------------------------------
+ADDITIONAL IMPROVEMENTS
+-------------------------------------------
+
+Enhanced Image Detection:
+- FileItem.getCategoryType() now detects files with image/* MIME type as MEDIA
+- Handles cases where images uploaded as TYPE_FILE instead of TYPE_IMAGE
+
+Code Location:
+- FileItem.java (lines 62-95)
+
+-------------------------------------------
+TESTING CHECKLIST
+-------------------------------------------
+[√] Upload new images → appear in Ảnh & Video tab
+[√] Upload PDF/DOC/Excel → appear in Tài liệu tab
+[√] Send text with URL → appears in Liên kết tab
+[√] Send plain text → does NOT appear in any file tab
+[√] No "unknown" files in Documents tab
+
+-------------------------------------------
+KEY LESSONS
+-------------------------------------------
+1. When items "don't show" but data flow is correct, check XML layouts
+2. layout_height="0dp" only works with weight or ConstraintLayout
+3. Constraint attributes (layout_constraint*) only work in ConstraintLayout parent
+4. Always save complete metadata when uploading files/images
+5. Use consistent message structure for both IMAGE and FILE types
+
+-------------------------------------------
+CLEANUP NOTES
+-------------------------------------------
+- Removed all android.util.Log.d() debug statements
+- Can re-add if needed for future debugging
+- Files cleaned: FileRepository.java, FileListFragment.java
+
+===========================================
+END OF SUMMARY
+===========================================
