@@ -15,7 +15,7 @@ public class Conversation {
     private java.util.Map<String, String> memberNames;
     
     private String type;
-    private String adminId;
+    private List<String> adminIds;
     private String avatarUrl;
 
     public Conversation() {
@@ -49,7 +49,11 @@ public class Conversation {
         this.timestamp = timestamp;
         this.memberIds = memberIds != null ? memberIds : new ArrayList<>();
         this.type = type != null ? type : TYPE_FRIEND;
-        this.adminId = adminId;
+        // Backward compatibility: convert single adminId to list
+        this.adminIds = new ArrayList<>();
+        if (adminId != null && !adminId.isEmpty()) {
+            this.adminIds.add(adminId);
+        }
         this.avatarUrl = avatarUrl;
     }
 
@@ -78,8 +82,16 @@ public class Conversation {
         return type;
     }
     
+    public List<String> getAdminIds() {
+        return adminIds != null ? adminIds : new ArrayList<>();
+    }
+    
+    // Backward compatibility: get first admin
     public String getAdminId() {
-        return adminId;
+        if (adminIds != null && !adminIds.isEmpty()) {
+            return adminIds.get(0);
+        }
+        return null;
     }
     
     public String getAvatarUrl() {
@@ -110,8 +122,16 @@ public class Conversation {
         this.type = type;
     }
     
+    public void setAdminIds(List<String> adminIds) {
+        this.adminIds = adminIds;
+    }
+    
+    // Backward compatibility: set single admin as list
     public void setAdminId(String adminId) {
-        this.adminId = adminId;
+        this.adminIds = new ArrayList<>();
+        if (adminId != null && !adminId.isEmpty()) {
+            this.adminIds.add(adminId);
+        }
     }
     
     public void setAvatarUrl(String avatarUrl) {
@@ -154,7 +174,30 @@ public class Conversation {
     }
     
     public boolean isAdmin(String userId) {
-        return userId != null && userId.equals(adminId);
+        return userId != null && adminIds != null && adminIds.contains(userId);
+    }
+    
+    public void addAdmin(String userId) {
+        if (this.adminIds == null) {
+            this.adminIds = new ArrayList<>();
+        }
+        if (userId != null && !userId.isEmpty() && !this.adminIds.contains(userId)) {
+            this.adminIds.add(userId);
+        }
+    }
+    
+    public void removeAdmin(String userId) {
+        if (this.adminIds != null && userId != null) {
+            this.adminIds.remove(userId);
+        }
+    }
+    
+    public int getAdminCount() {
+        return adminIds != null ? adminIds.size() : 0;
+    }
+    
+    public boolean isLastAdmin(String userId) {
+        return isAdmin(userId) && getAdminCount() == 1;
     }
     
     public String getOtherUserName(String currentUserId) {
@@ -189,13 +232,13 @@ public class Conversation {
                java.util.Objects.equals(memberIds, that.memberIds) &&
                java.util.Objects.equals(memberNames, that.memberNames) &&
                java.util.Objects.equals(type, that.type) &&
-               java.util.Objects.equals(adminId, that.adminId) &&
+               java.util.Objects.equals(adminIds, that.adminIds) &&
                java.util.Objects.equals(avatarUrl, that.avatarUrl);
     }
     
     @Override
     public int hashCode() {
         return java.util.Objects.hash(id, name, lastMessage, timestamp, memberIds, memberNames, 
-                                      type, adminId, avatarUrl);
+                                      type, adminIds, avatarUrl);
     }
 }

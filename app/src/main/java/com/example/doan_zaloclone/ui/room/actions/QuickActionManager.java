@@ -28,11 +28,11 @@ public class QuickActionManager {
         return instance;
     }
     
-    /**
-     * Register default actions
-     */
     private void registerDefaultActions() {
-        // Register send file action as default
+        // Register send image action
+        registerAction(new SendImageAction());
+        
+        // Register send file action
         registerAction(new SendFileAction());
         
         // Future actions can be added here
