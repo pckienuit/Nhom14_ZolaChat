@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">DoAn_ZaloClone</string>
+    <string name="no_files">Không có file</string>
 </resources>

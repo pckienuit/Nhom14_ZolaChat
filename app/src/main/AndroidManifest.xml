@@ -68,6 +68,12 @@
             android:exported="false"
             android:parentActivityName=".ui.group.GroupInfoActivity" />
             
+        <!-- File Management Activity -->
+        <activity
+            android:name=".ui.file.FileManagementActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.room.RoomActivity" />
+            
         <!-- FileProvider for sharing downloaded files -->
         <provider
             android:name="androidx.core.content.FileProvider"
