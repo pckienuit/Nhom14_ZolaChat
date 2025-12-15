@@ -596,6 +596,33 @@ public class ChatRepository {
     }
 
     /**
+     * Transfer admin rights to member
+     */
+    public LiveData<Resource<Boolean>> transferAdmin(@NonNull String conversationId,
+                                                     @NonNull String newAdminId) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+
+        firestoreManager.transferAdmin(conversationId, newAdminId,
+            new FirestoreManager.OnGroupUpdatedListener() {
+                @Override
+                public void onSuccess() {
+                    result.setValue(Resource.success(true));
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Không thể chuyển quyền quản trị";
+                    result.setValue(Resource.error(errorMessage));
+                }
+            });
+
+        return result;
+    }
+
+    /**
      * Delete group
      */
     public LiveData<Resource<Boolean>> deleteGroup(@NonNull String conversationId) {

@@ -87,6 +87,14 @@ public class GroupViewModel extends ViewModel {
     }
 
     /**
+     * Transfer admin rights to member
+     */
+    public void transferAdmin(@NonNull String conversationId, @NonNull String newAdminId) {
+        chatRepository.transferAdmin(conversationId, newAdminId)
+                .observeForever(resource -> updateResult.setValue(resource));
+    }
+
+    /**
      * Delete group
      */
     public void deleteGroup(@NonNull String conversationId) {

@@ -399,7 +399,7 @@ public class FirestoreManager {
         conversationData.put("id", conversationId);
         conversationData.put("type", Conversation.TYPE_GROUP);
         conversationData.put("name", groupName.trim());
-        conversationData.put("adminId", adminId);
+        conversationData.put("adminIds", Arrays.asList(adminId));  // Store as array for multi-admin support
         conversationData.put("memberIds", memberIds);
         conversationData.put("lastMessage", "Nhóm được tạo");
         conversationData.put("timestamp", System.currentTimeMillis());
@@ -526,11 +526,114 @@ public class FirestoreManager {
 
     /**
      * Leave group (remove self from members)
+     * Prevents last admin from leaving without transferring admin rights
      */
     public void leaveGroup(@NonNull String conversationId,
                           @NonNull String userId,
                           @NonNull OnGroupUpdatedListener listener) {
-        removeGroupMember(conversationId, userId, listener);
+        // First, check if user is the last admin
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (!doc.exists()) {
+                        listener.onFailure(new Exception("Nhóm không tồn tại"));
+                        return;
+                    }
+                    
+                    Conversation conversation = doc.toObject(Conversation.class);
+                    if (conversation == null) {
+                        listener.onFailure(new Exception("Không thể tải thông tin nhóm"));
+                        return;
+                    }
+                    
+                    // Check if user is the last admin
+                    if (conversation.isLastAdmin(userId)) {
+                        listener.onFailure(new Exception(
+                            "Bạn là quản trị viên duy nhất. Vui lòng chuyển quyền quản trị cho thành viên khác trước khi rời nhóm."));
+                        return;
+                    }
+                    
+                    // If user is admin but not the last one, remove from adminIds too
+                    if (conversation.isAdmin(userId)) {
+                        Map<String, Object> updates = new HashMap<>();
+                        updates.put("adminIds", com.google.firebase.firestore.FieldValue.arrayRemove(userId));
+                        updates.put("memberIds", com.google.firebase.firestore.FieldValue.arrayRemove(userId));
+                        
+                        db.collection(COLLECTION_CONVERSATIONS)
+                                .document(conversationId)
+                                .update(updates)
+                                .addOnSuccessListener(aVoid -> {
+                                    Log.d(TAG, "Admin left group: " + conversationId);
+                                    listener.onSuccess();
+                                })
+                                .addOnFailureListener(e -> {
+                                    Log.e(TAG, "Error leaving group", e);
+                                    listener.onFailure(e);
+                                });
+                    } else {
+                        // Regular member, just remove from memberIds
+                        removeGroupMember(conversationId, userId, listener);
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error checking admin status", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Transfer admin rights to another member
+     * Adds userId to adminIds array
+     */
+    public void transferAdmin(@NonNull String conversationId,
+                             @NonNull String newAdminId,
+                             @NonNull OnGroupUpdatedListener listener) {
+        // Check if user is already a member
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (!doc.exists()) {
+                        listener.onFailure(new Exception("Nhóm không tồn tại"));
+                        return;
+                    }
+                    
+                    Conversation conversation = doc.toObject(Conversation.class);
+                    if (conversation == null) {
+                        listener.onFailure(new Exception("Không thể tải thông tin nhóm"));
+                        return;
+                    }
+                    
+                    // Check if new admin is a member
+                    if (!conversation.hasMember(newAdminId)) {
+                        listener.onFailure(new Exception("Người dùng không phải là thành viên của nhóm"));
+                        return;
+                    }
+                    
+                    // Check if already admin
+                    if (conversation.isAdmin(newAdminId)) {
+                        listener.onFailure(new Exception("Người dùng đã là quản trị viên"));
+                        return;
+                    }
+                    
+                    // Add to adminIds
+                    db.collection(COLLECTION_CONVERSATIONS)
+                            .document(conversationId)
+                            .update("adminIds", com.google.firebase.firestore.FieldValue.arrayUnion(newAdminId))
+                            .addOnSuccessListener(aVoid -> {
+                                Log.d(TAG, "Admin rights transferred to: " + newAdminId + " in group: " + conversationId);
+                                listener.onSuccess();
+                            })
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG, "Error transferring admin rights", e);
+                                listener.onFailure(e);
+                            });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error checking conversation", e);
+                    listener.onFailure(e);
+                });
     }
 
     /**
