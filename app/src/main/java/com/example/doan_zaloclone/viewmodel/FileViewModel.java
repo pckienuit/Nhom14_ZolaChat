@@ -7,12 +7,16 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.example.doan_zaloclone.models.FileCategory;
 import com.example.doan_zaloclone.models.FileItem;
+import com.example.doan_zaloclone.models.SenderInfo;
 import com.example.doan_zaloclone.repository.FileRepository;
 import com.example.doan_zaloclone.utils.Resource;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * ViewModel for file management
@@ -32,6 +36,17 @@ public class FileViewModel extends BaseViewModel {
     // Combined LiveData for all files
     private final MutableLiveData<Resource<List<FileItem>>> allFilesLiveData = new MutableLiveData<>();
     
+    // Filter state
+    private final MutableLiveData<String> searchQueryLiveData = new MutableLiveData<>("");
+    private final MutableLiveData<Set<String>> selectedSendersLiveData = new MutableLiveData<>(new HashSet<>());
+    private final MutableLiveData<Long> filterStartDateLiveData = new MutableLiveData<>(null);
+    private final MutableLiveData<Long> filterEndDateLiveData = new MutableLiveData<>(null);
+    
+    // Filtered LiveData (combines original data + filters)
+    private final MediatorLiveData<Resource<List<FileItem>>> filteredMediaFilesLiveData = new MediatorLiveData<>();
+    private final MediatorLiveData<Resource<List<FileItem>>> filteredFilesLiveData = new MediatorLiveData<>();
+    private final MediatorLiveData<Resource<List<FileItem>>> filteredLinksLiveData = new MediatorLiveData<>();
+    
     // Pagination tracking
     private long lastMediaTimestamp = Long.MAX_VALUE;
     private long lastFilesTimestamp = Long.MAX_VALUE;
@@ -48,6 +63,48 @@ public class FileViewModel extends BaseViewModel {
     
     public FileViewModel() {
         this.fileRepository = new FileRepository();
+        setupFilteredLiveData();
+    }
+    
+    /**
+     * Setup MediatorLiveData to combine original data with filters
+     */
+    private void setupFilteredLiveData() {
+        // Media files filtering
+        filteredMediaFilesLiveData.addSource(mediaFilesLiveData, resource -> 
+            filteredMediaFilesLiveData.setValue(applyFilters(resource)));
+        filteredMediaFilesLiveData.addSource(searchQueryLiveData, query -> 
+            filteredMediaFilesLiveData.setValue(applyFilters(mediaFilesLiveData.getValue())));
+        filteredMediaFilesLiveData.addSource(selectedSendersLiveData, senders -> 
+            filteredMediaFilesLiveData.setValue(applyFilters(mediaFilesLiveData.getValue())));
+        filteredMediaFilesLiveData.addSource(filterStartDateLiveData, date -> 
+            filteredMediaFilesLiveData.setValue(applyFilters(mediaFilesLiveData.getValue())));
+        filteredMediaFilesLiveData.addSource(filterEndDateLiveData, date -> 
+            filteredMediaFilesLiveData.setValue(applyFilters(mediaFilesLiveData.getValue())));
+        
+        // Files filtering
+        filteredFilesLiveData.addSource(filesLiveData, resource -> 
+            filteredFilesLiveData.setValue(applyFilters(resource)));
+        filteredFilesLiveData.addSource(searchQueryLiveData, query -> 
+            filteredFilesLiveData.setValue(applyFilters(filesLiveData.getValue())));
+        filteredFilesLiveData.addSource(selectedSendersLiveData, senders -> 
+            filteredFilesLiveData.setValue(applyFilters(filesLiveData.getValue())));
+        filteredFilesLiveData.addSource(filterStartDateLiveData, date -> 
+            filteredFilesLiveData.setValue(applyFilters(filesLiveData.getValue())));
+        filteredFilesLiveData.addSource(filterEndDateLiveData, date -> 
+            filteredFilesLiveData.setValue(applyFilters(filesLiveData.getValue())));
+        
+        // Links filtering
+        filteredLinksLiveData.addSource(linksLiveData, resource -> 
+            filteredLinksLiveData.setValue(applyFilters(resource)));
+        filteredLinksLiveData.addSource(searchQueryLiveData, query -> 
+            filteredLinksLiveData.setValue(applyFilters(linksLiveData.getValue())));
+        filteredLinksLiveData.addSource(selectedSendersLiveData, senders -> 
+            filteredLinksLiveData.setValue(applyFilters(linksLiveData.getValue())));
+        filteredLinksLiveData.addSource(filterStartDateLiveData, date -> 
+            filteredLinksLiveData.setValue(applyFilters(linksLiveData.getValue())));
+        filteredLinksLiveData.addSource(filterEndDateLiveData, date -> 
+            filteredLinksLiveData.setValue(applyFilters(linksLiveData.getValue())));
     }
     
     /**
@@ -269,5 +326,151 @@ public class FileViewModel extends BaseViewModel {
     @FunctionalInterface
     private interface TimestampUpdater {
         void update(long timestamp);
+    }
+    
+    // ========== FILTER METHODS ==========
+    
+    /**
+     * Get filtered LiveData for media files
+     */
+    public LiveData<Resource<List<FileItem>>> getFilteredMediaFilesLiveData() {
+        return filteredMediaFilesLiveData;
+    }
+    
+    /**
+     * Get filtered LiveData for document files
+     */
+    public LiveData<Resource<List<FileItem>>> getFilteredFilesLiveData() {
+        return filteredFilesLiveData;
+    }
+    
+    /**
+     * Get filtered LiveData for links
+     */
+    public LiveData<Resource<List<FileItem>>> getFilteredLinksLiveData() {
+        return filteredLinksLiveData;
+    }
+    
+    /**
+     * Set search query for filtering
+     */
+    public void setSearchQuery(String query) {
+        searchQueryLiveData.setValue(query != null ? query : "");
+    }
+    
+    /**
+     * Set selected senders for filtering
+     */
+    public void setSelectedSenders(Set<String> senderIds) {
+        selectedSendersLiveData.setValue(senderIds != null ? senderIds : new HashSet<>());
+    }
+    
+    /**
+     * Set date range for filtering
+     */
+    public void setDateRange(Long startDate, Long endDate) {
+        filterStartDateLiveData.setValue(startDate);
+        filterEndDateLiveData.setValue(endDate);
+    }
+    
+    /**
+     * Clear all filters
+     */
+    public void clearFilters() {
+        searchQueryLiveData.setValue("");
+        selectedSendersLiveData.setValue(new HashSet<>());
+        filterStartDateLiveData.setValue(null);
+        filterEndDateLiveData.setValue(null);
+    }
+    
+    /**
+     * Apply filters to a Resource<List<FileItem>>
+     */
+    private Resource<List<FileItem>> applyFilters(Resource<List<FileItem>> resource) {
+        if (resource == null || !resource.isSuccess() || resource.getData() == null) {
+            return resource;
+        }
+        
+        List<FileItem> items = resource.getData();
+        List<FileItem> filtered = new ArrayList<>();
+        
+        String query = searchQueryLiveData.getValue();
+        Set<String> senders = selectedSendersLiveData.getValue();
+        Long startDate = filterStartDateLiveData.getValue();
+        Long endDate = filterEndDateLiveData.getValue();
+        
+        for (FileItem item : items) {
+            // Apply search filter (case-insensitive filename match)
+            if (query != null && !query.isEmpty()) {
+                String displayName = item.getDisplayName();
+                if (displayName == null || !displayName.toLowerCase().contains(query.toLowerCase())) {
+                    continue;
+                }
+            }
+            
+            // Apply sender filter
+            if (senders != null && !senders.isEmpty()) {
+                String senderId = item.getMessage() != null ? item.getMessage().getSenderId() : null;
+                if (senderId == null || !senders.contains(senderId)) {
+                    continue;
+                }
+            }
+            
+            // Apply date range filter
+            if (startDate != null || endDate != null) {
+                long timestamp = item.getMessage() != null ? item.getMessage().getTimestamp() : 0;
+                if (startDate != null && timestamp < startDate) {
+                    continue;
+                }
+                if (endDate != null && timestamp > endDate) {
+                    continue;
+                }
+            }
+            
+            // Item passed all filters
+            filtered.add(item);
+        }
+        
+        return Resource.success(filtered);
+    }
+    
+    /**
+     * Get unique senders from all files for filter dialog
+     */
+    public LiveData<List<SenderInfo>> getUniqueSenders() {
+        MutableLiveData<List<SenderInfo>> result = new MutableLiveData<>();
+        
+        // Combine all categories to get unique senders
+        List<FileItem> allItems = new ArrayList<>();
+        if (currentMediaFiles != null) allItems.addAll(currentMediaFiles);
+        if (currentFiles != null) allItems.addAll(currentFiles);
+        if (currentLinks != null) allItems.addAll(currentLinks);
+        
+        // Count files per sender
+        Map<String, SenderInfo> senderMap = new HashMap<>();
+        for (FileItem item : allItems) {
+            if (item.getMessage() == null) continue;
+            
+            String senderId = item.getMessage().getSenderId();
+            String senderName = item.getSenderName();
+            String senderAvatar = item.getSenderAvatarUrl();
+            
+            if (senderId != null) {
+                if (senderMap.containsKey(senderId)) {
+                    SenderInfo info = senderMap.get(senderId);
+                    info.setFileCount(info.getFileCount() + 1);
+                } else {
+                    senderMap.put(senderId, new SenderInfo(
+                        senderId,
+                        senderName != null ? senderName : "User",
+                        senderAvatar,
+                        1
+                    ));
+                }
+            }
+        }
+        
+        result.setValue(new ArrayList<>(senderMap.values()));
+        return result;
     }
 }

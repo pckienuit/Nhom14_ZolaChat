@@ -6,4 +6,16 @@
     <string name="media_thumbnail">Ảnh thu nhỏ</string>
     <string name="file_icon">Biểu tượng file</string>
     <string name="link_icon">Biểu tượng liên kết</string>
+    
+    <!-- Search and Filter Strings -->
+    <string name="search_files">Tìm kiếm file...</string>
+    <string name="filter_by_sender">Lọc theo người gửi</string>
+    <string name="filter_by_date">Lọc theo ngày</string>
+    <string name="clear_filters">Xóa bộ lọc</string>
+    <string name="all_senders">Tất cả</string>
+    <string name="apply">Áp dụng</string>
+    <string name="cancel">Hủy</string>
+    <string name="no_results">Không tìm thấy kết quả</string>
+    <string name="sender_filter_title">Chọn người gửi</string>
+    <string name="files_count">%d file</string>
 </resources>
