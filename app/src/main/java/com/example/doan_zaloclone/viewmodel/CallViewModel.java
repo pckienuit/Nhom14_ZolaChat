@@ -2,6 +2,8 @@ package com.example.doan_zaloclone.viewmodel;
 
 import android.app.Application;
 import android.content.Context;
+import android.content.Intent;
+import android.os.Build;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -280,6 +282,28 @@ public class CallViewModel extends AndroidViewModel {
                     Log.e(TAG, "Failed to reject call: " + errorMsg);
                 }
             });
+    }
+    
+    /**
+     * Handle incoming call - start service for background notification
+     * 
+     * @param context Application context
+     * @param call Incoming call object
+     * @param callerName Name of the caller
+     */
+    public void handleIncomingCall(@NonNull Context context, @NonNull Call call, @NonNull String callerName) {
+        Log.d(TAG, "Handling incoming call from: " + callerName);
+        
+        Intent serviceIntent = new Intent(context, com.example.doan_zaloclone.services.IncomingCallService.class);
+        serviceIntent.putExtra("CALL_ID", call.getId());
+        serviceIntent.putExtra("CALLER_NAME", callerName);
+        serviceIntent.putExtra("IS_VIDEO", call.isVideoCall());
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(serviceIntent);
+        } else {
+            context.startService(serviceIntent);
+        }
     }
     
     /**

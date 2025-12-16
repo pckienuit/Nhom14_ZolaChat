@@ -1,0 +1,355 @@
+=================================================================================
+PHASE 7: INCOMING CALL SERVICE & NOTIFICATIONS - IMPLEMENTATION COMPLETE
+=================================================================================
+
+📅 Implementation Date: 2025-12-16
+⏱️ Status: COMPLETE
+🎯 Objective: Full-screen notification for incoming calls when app is in background
+
+=================================================================================
+✅ COMPLETED TASKS
+=================================================================================
+
+## TASK 7.1: CallNotificationHelper.java ✅
+**File:** app/src/main/java/com/example/doan_zaloclone/utils/CallNotificationHelper.java
+
+**Created:** Full notification helper class with:
+- Notification channel creation for Android O+
+- createIncomingCallNotification() - Full-screen incoming call notification with:
+  * Full-screen intent to open CallActivity
+  * Accept action button
+  * Reject action button
+  * High priority for heads-up display
+  * Ongoing notification flag
+- createOngoingCallNotification() - Notification for calls in progress
+- cancelNotification() - Clean up notifications
+- Notification ID getters for tracking
+
+**Key Features:**
+- Supports both voice and video calls
+- Full-screen intent for background incoming calls
+- PendingIntent actions for accept/reject
+- Compatible with Android 13+ (IMMUTABLE flags)
+
+---
+
+## TASK 7.2: IncomingCallService.java ✅
+**File:** app/src/main/java/com/example/doan_zaloclone/services/IncomingCallService.java
+
+**Created:** Foreground service with:
+- onCreate() - Initialize CallRepository and notification channel
+- onStartCommand() - Handle service actions:
+  * Show incoming call notification
+  * Accept call action
+  * Reject call action
+  * Cancel call action
+- showIncomingCallNotification() - Display notification and start foreground service
+- playRingtone() - Play system default ringtone for incoming calls
+- startVibration() - Vibrate with pattern (1s on, 1s off, repeat)
+- stopRingtoneAndVibration() - Clean stop of audio/vibration
+- listenToCallUpdates() - Real-time Firestore listener for call status changes
+- acceptCall() - Stop ringtone, open CallActivity
+- rejectCall() - Update call status to REJECTED in Firestore
+- stopService() - Clean up all resources
+
+**Key Features:**
+- Foreground service with notification
+- Real-time call status monitoring
+- Auto-dismiss if caller cancels
+- Ringtone and vibration management
+- Proper resource cleanup in onDestroy()
+
+---
+
+## TASK 7.3: AndroidManifest.xml Updates ✅
+**File:** app/src/main/AndroidManifest.xml
+
+**Added Permissions:**
+```xml
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+```
+
+**Added CallActivity Declaration:**
+```xml
+<activity
+    android:name=".ui.call.CallActivity"
+    android:exported="false"
+    android:screenOrientation="portrait"
+    android:launchMode="singleTask"
+    android:showWhenLocked="true"
+    android:turnScreenOn="true" />
+```
+
+**Added IncomingCallService Declaration:**
+```xml
+<service
+    android:name=".services.IncomingCallService"
+    android:exported="false"
+    android:foregroundServiceType="camera|microphone" />
+```
+
+**Key Features:**
+- Proper permissions for notifications and foreground service
+- CallActivity shown when locked and turns screen on
+- Service foreground type specified for camera/microphone access
+
+---
+
+## TASK 7.4: CallViewModel Integration ✅
+**File:** app/src/main/java/com/example/doan_zaloclone/viewmodel/CallViewModel.java
+
+**Added:**
+- Import statements for Intent and Build
+- handleIncomingCall() method:
+  ```java
+  public void handleIncomingCall(@NonNull Context context, 
+                                 @NonNull Call call, 
+                                 @NonNull String callerName)
+  ```
+
+**Functionality:**
+- Receives incoming call notification request
+- Creates Intent for IncomingCallService
+- Passes call ID, caller name, and call type (video/voice)
+- Starts foreground service (API 26+) or regular service
+
+**Usage Example:**
+```java
+// In MainActivity or wherever incoming calls are detected:
+callRepository.listenToIncomingCalls(currentUserId, new CallRepository.OnIncomingCallListener() {
+    @Override
+    public void onIncomingCall(Call call) {
+        if (Call.STATUS_CALLING.equals(call.getStatus())) {
+            // Fetch caller info
+            getUserName(call.getCallerId(), callerName -> {
+                callViewModel.handleIncomingCall(MainActivity.this, call, callerName);
+            });
+        }
+    }
+    
+    @Override
+    public void onError(String errorMsg) {
+        Log.e(TAG, "Error: " + errorMsg);
+    }
+});
+```
+
+=================================================================================
+🏗️ ARCHITECTURE OVERVIEW
+=================================================================================
+
+**Flow Diagram:**
+```
+Firestore (Incoming Call)
+    ↓
+CallRepository.listenToIncomingCalls()
+    ↓
+MainActivity/Fragment detects new call
+    ↓
+CallViewModel.handleIncomingCall()
+    ↓
+IncomingCallService started
+    ↓
+┌─────────────────────────────────┐
+│  Foreground Notification        │
+│  - Full screen on locked device │
+│  - Ringtone playing             │
+│  - Vibration pattern            │
+│  - Accept/Reject buttons        │
+└─────────────────────────────────┘
+         ↓           ↓
+     Accept      Reject
+         ↓           ↓
+   CallActivity   Update Firestore
+                  (STATUS_REJECTED)
+```
+
+**Components:**
+1. **CallNotificationHelper** - Notification builder utility
+2. **IncomingCallService** - Foreground service handling incoming calls
+3. **CallViewModel** - Orchestrator connecting UI to services
+4. **CallRepository** - Firestore data layer
+5. **CallActivity** - UI for active call
+
+=================================================================================
+📋 INTEGRATION CHECKLIST
+=================================================================================
+
+✅ CallNotificationHelper.java created
+✅ IncomingCallService.java created
+✅ AndroidManifest.xml updated with permissions
+✅ AndroidManifest.xml updated with service declaration
+✅ AndroidManifest.xml updated with CallActivity declaration
+✅ CallViewModel.handleIncomingCall() added
+✅ Required drawable resources exist (ic_call, ic_close)
+
+=================================================================================
+🧪 TESTING GUIDE
+=================================================================================
+
+## Prerequisites:
+- 2 physical Android devices (A and B)
+- Both devices logged into different accounts
+- Firebase project configured
+- App installed on both devices
+
+## Test 1: Background Incoming Call
+**Steps:**
+1. Device B: Press home button (app goes to background)
+2. Device A: Initiate call to Device B
+3. Device B: Verify full-screen notification appears
+4. Device B: Verify ringtone is playing
+5. Device B: Verify phone is vibrating
+
+**Expected Result:**
+✓ Full-screen notification appears even when app is background
+✓ Ringtone plays with system default sound
+✓ Phone vibrates with 1s on/off pattern
+✓ Notification shows caller name
+✓ Accept and Reject buttons visible
+
+## Test 2: Accept from Notification
+**Steps:**
+1. Device B: App in background, incoming call notification showing
+2. Device B: Tap "Chấp nhận" button
+3. Verify CallActivity opens
+4. Verify call connects
+5. Verify notification disappears
+
+**Expected Result:**
+✓ CallActivity launches and comes to foreground
+✓ WebRTC connection establishes
+✓ Audio/video streams work
+✓ Incoming call notification dismissed
+✓ Ringtone stops
+
+## Test 3: Reject from Notification
+**Steps:**
+1. Device B: App in background, incoming call notification showing
+2. Device B: Tap "Từ chối" button
+3. Device A: Check call status
+
+**Expected Result:**
+✓ Notification disappears
+✓ Ringtone and vibration stop
+✓ Device A sees "Đã từ chối" status
+✓ Service cleans up properly
+
+## Test 4: Caller Cancels Before Answer
+**Steps:**
+1. Device B: App in background, incoming call notification showing
+2. Device A: End call before B answers
+3. Device B: Verify notification behavior
+
+**Expected Result:**
+✓ Notification auto-dismisses
+✓ Ringtone stops
+✓ Vibration stops
+✓ Service stops itself
+
+## Test 5: Lock Screen Behavior
+**Steps:**
+1. Device B: Lock screen
+2. Device A: Call Device B
+3. Device B: Verify notification appears on lock screen
+
+**Expected Result:**
+✓ Full-screen intent wakes screen
+✓ Notification shows over lock screen
+✓ Can accept/reject without unlocking
+✓ Screen turns on (android:turnScreenOn="true")
+
+## Test 6: Multiple Sequential Calls
+**Steps:**
+1. Device A: Call Device B
+2. Device B: Reject call
+3. Device A: Call Device B again immediately
+4. Device B: Verify notification appears
+
+**Expected Result:**
+✓ Second call notification appears correctly
+✓ No leftover state from first call
+✓ Service starts fresh for each call
+
+=================================================================================
+⚠️ KNOWN LIMITATIONS & FUTURE IMPROVEMENTS
+=================================================================================
+
+**Current Limitations:**
+1. ❌ No concurrent call prevention yet (Phase 8)
+2. ❌ No network disconnection handling (Phase 8)
+3. ❌ No call duration tracking
+4. ❌ No call history persistence
+5. ❌ Permission denied handling incomplete (Phase 8)
+
+**Phase 8 Will Add:**
+- Concurrent call prevention
+- Network disconnection auto-retry
+- Permission denied user guidance
+- Background/foreground transitions
+- Call history tracking
+
+=================================================================================
+🔧 TROUBLESHOOTING
+=================================================================================
+
+**Issue: Notification doesn't appear**
+- Check: POST_NOTIFICATIONS permission granted (Android 13+)
+- Check: Notification channel created
+- Check: Service started as foreground service
+
+**Issue: Ringtone doesn't play**
+- Check: MODIFY_AUDIO_SETTINGS permission
+- Check: Phone not in silent mode
+- Check: RingtoneManager has access to system ringtones
+
+**Issue: Full-screen intent doesn't work**
+- Check: USE_FULL_SCREEN_INTENT permission
+- Check: Battery optimization disabled for app
+- Check: Draw over other apps permission (some devices)
+
+**Issue: Service crashes**
+- Check: Foreground service started with notification
+- Check: Notification ID matches between start and stop
+- Check: CallRepository properly initialized
+
+**Issue: CallActivity doesn't open on accept**
+- Check: CallActivity declared in manifest
+- Check: Intent has FLAG_ACTIVITY_NEW_TASK
+- Check: CALL_ID extra is passed correctly
+
+=================================================================================
+📝 NEXT STEPS
+=================================================================================
+
+1. **Build and Test**: Deploy to 2 physical devices and test all scenarios
+2. **Request Permissions**: Ensure all required permissions are requested at runtime
+3. **Phase 8 Implementation**: Add edge case handling and polish
+4. **Production Testing**: Test on various Android versions (8.0 - 14)
+5. **Battery Optimization**: Handle manufacturer-specific battery optimization
+
+=================================================================================
+🎉 PHASE 7 COMPLETION SUMMARY
+=================================================================================
+
+**Files Created:**
+- CallNotificationHelper.java (127 lines)
+- IncomingCallService.java (191 lines)
+
+**Files Modified:**
+- AndroidManifest.xml (Added 3 permissions, 1 activity, 1 service)
+- CallViewModel.java (Added handleIncomingCall method)
+
+**Total Lines of Code:** ~350 lines
+
+**Estimated Implementation Time:** 2-3 hours
+**Actual Implementation Time:** ~30 minutes (AI-assisted)
+
+**Status:** ✅ READY FOR TESTING
+
+Phase 7 is now complete and ready for integration testing!
+Proceed to Phase 8 for edge case handling after successful Phase 7 testing.
+
+=================================================================================

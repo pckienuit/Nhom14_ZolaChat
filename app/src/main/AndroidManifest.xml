@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
     <!-- Feature declarations for calls -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -85,6 +88,21 @@
             android:name=".ui.file.FileManagementActivity"
             android:exported="false"
             android:parentActivityName=".ui.room.RoomActivity" />
+            
+        <!-- Call Activity -->
+        <activity
+            android:name=".ui.call.CallActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true" />
+            
+        <!-- Incoming Call Service -->
+        <service
+            android:name=".services.IncomingCallService"
+            android:exported="false"
+            android:foregroundServiceType="camera|microphone" />
             
         <!-- FileProvider for sharing downloaded files -->
         <provider

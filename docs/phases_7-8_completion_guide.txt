@@ -1,0 +1,735 @@
+=================================================================================
+PHASES 7-8: REMAINING IMPLEMENTATION GUIDE
+=================================================================================
+
+User đã hoàn thành Phases 1-6! Còn lại 2 phases:
+- **Phase 7:** Incoming Call Service & Notifications (~2-3 hours)
+- **Phase 8:** Polish & Edge Cases (~3-4 hours)
+
+=================================================================================
+📞 PHASE 7: INCOMING CALL SERVICE & NOTIFICATIONS
+=================================================================================
+
+**Goal:** Full-screen notification cho incoming calls khi app ở background
+
+**Duration:** ~2-3 hours
+
+**Current Status:** Incoming calls chỉ work khi app foreground. Cần service + notification để handle background calls.
+
+---
+
+## TASK 7.1: Create CallNotificationHelper.java
+**File:** `utils/CallNotificationHelper.java`
+
+```java
+package com.example.doan_zaloclone.utils;
+
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Build;
+
+import androidx.core.app.NotificationCompat;
+
+import com.example.doan_zaloclone.R;
+import com.example.doan_zaloclone.models.Call;
+import com.example.doan_zaloclone.ui.call.CallActivity;
+
+public class CallNotificationHelper {
+    private static final String CHANNEL_ID = "call_channel";
+    private static final String CHANNEL_NAME = "Cuộc gọi";
+    private static final int INCOMING_CALL_NOTIFICATION_ID = 1001;
+    private static final int ONGOING_CALL_NOTIFICATION_ID = 1002;
+    
+    public static void createNotificationChannel(Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Thông báo cuộc gọi đến");
+            channel.enableVibration(true);
+            
+            NotificationManager manager = context.getSystemService(NotificationManager.class);
+            manager.createNotificationChannel(channel);
+        }
+    }
+    
+    /**
+     * Create full-screen incoming call notification
+     */
+    public static Notification createIncomingCallNotification(
+            Context context, 
+            Call call, 
+            String callerName, 
+            String callerAvatar) {
+        
+        // Full screen intent
+        Intent fullScreenIntent = new Intent(context, CallActivity.class);
+        fullScreenIntent.putExtra("CALL_ID", call.getId());
+        fullScreenIntent.putExtra("IS_INCOMING", true);
+        fullScreenIntent.putExtra("IS_VIDEO", call.isVideoCall());
+        fullScreenIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        
+        PendingIntent fullScreenPendingIntent = PendingIntent.getActivity(
+            context, 0, fullScreenIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        
+        // Accept action
+        Intent acceptIntent = new Intent(context, IncomingCallService.class);
+        acceptIntent.setAction("ACTION_ACCEPT_CALL");
+        acceptIntent.putExtra("CALL_ID", call.getId());
+        PendingIntent acceptPendingIntent = PendingIntent.getService(
+            context, 1, acceptIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        
+        // Reject action
+        Intent rejectIntent = new Intent(context, IncomingCallService.class);
+        rejectIntent.setAction("ACTION_REJECT_CALL");
+        rejectIntent.putExtra("CALL_ID", call.getId());
+        PendingIntent rejectPendingIntent = PendingIntent.getService(
+            context, 2, rejectIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_call)
+            .setContentTitle(callerName)
+            .setContentText(call.isVideoCall() ? "Cuộc gọi video đến..." : "Cuộc gọi thoại đến...")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setFullScreenIntent(fullScreenPendingIntent, true)
+            .setAutoCancel(true)
+            .setOngoing(true)
+            .addAction(R.drawable.ic_close, "Từ chối", rejectPendingIntent)
+            .addAction(R.drawable.ic_call, "Chấp nhận", acceptPendingIntent);
+        
+        return builder.build();
+    }
+    
+    /**
+     * Create ongoing call notification
+     */
+    public static Notification createOngoingCallNotification(Context context, Call call, String userName) {
+        Intent intent = new Intent(context, CallActivity.class);
+        intent.putExtra("CALL_ID", call.getId());
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_call)
+            .setContentTitle("Cuộc gọi đang diễn ra")
+            .setContentText(userName)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setContentIntent(pendingIntent)
+            .setOngoing(true);
+        
+        return builder.build();
+    }
+    
+    public static void cancelNotification(Context context, int notificationId) {
+        NotificationManager manager = context.getSystemService(NotificationManager.class);
+        manager.cancel(notificationId);
+    }
+}
+```
+
+---
+
+## TASK 7.2: Create IncomingCallService.java
+**File:** `services/IncomingCallService.java`
+
+```java
+package com.example.doan_zaloclone.services;
+
+import android.app.Service;
+import android.content.Intent;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
+import android.net.Uri;
+import android.os.IBinder;
+import android.os.Vibrator;
+import android.util.Log;
+
+import androidx.annotation.Nullable;
+
+import com.example.doan_zaloclone.models.Call;
+import com.example.doan_zaloclone.repository.CallRepository;
+import com.example.doan_zaloclone.utils.CallNotificationHelper;
+import com.google.firebase.firestore.ListenerRegistration;
+
+public class IncomingCallService extends Service {
+    private static final String TAG = "IncomingCallService";
+    private static final int NOTIFICATION_ID = 1001;
+    
+    private CallRepository callRepository;
+    private ListenerRegistration callListener;
+    private Ringtone ringtone;
+    private Vibrator vibrator;
+    private String currentCallId;
+    
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        callRepository = new CallRepository();
+        
+        // Create notification channel
+        CallNotificationHelper.createNotificationChannel(this);
+    }
+    
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent == null) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+        
+        String action = intent.getAction();
+        currentCallId = intent.getStringExtra("CALL_ID");
+        
+        if (action == null) {
+            // Show incoming call notification
+            showIncomingCallNotification(intent);
+        } else if ("ACTION_ACCEPT_CALL".equals(action)) {
+            acceptCall();
+        } else if ("ACTION_REJECT_CALL".equals(action)) {
+            rejectCall();
+        } else if ("ACTION_CANCEL_CALL".equals(action)) {
+            stopService();
+        }
+        
+        return START_NOT_STICKY;
+    }
+    
+    private void showIncomingCallNotification(Intent intent) {
+        String callerName = intent.getStringExtra("CALLER_NAME");
+        boolean isVideo = intent.getBooleanExtra("IS_VIDEO", false);
+        
+        // Create call object for notification
+        Call call = new Call();
+        call.setId(currentCallId);
+        call.setType(isVideo ? Call.TYPE_VIDEO : Call.TYPE_VOICE);
+        
+        // Start foreground with notification
+        startForeground(NOTIFICATION_ID, 
+            CallNotificationHelper.createIncomingCallNotification(this, call, callerName, null));
+        
+        // Start ringtone
+        playRingtone();
+        
+        // Start vibration
+        startVibration();
+        
+        // Listen to call updates (auto-dismiss if caller cancels)
+        listenToCallUpdates();
+    }
+    
+    private void playRingtone() {
+        try {
+            Uri ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
+            ringtone = RingtoneManager.getRingtone(this, ringtoneUri);
+            ringtone.play();
+        } catch (Exception e) {
+            Log.e(TAG, "Error playing ringtone", e);
+        }
+    }
+    
+    private void startVibration() {
+        vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+        long[] pattern = {0, 1000, 1000}; // Wait 0ms, vibrate 1s, wait 1s
+        vibrator.vibrate(pattern, 0); // Repeat
+    }
+    
+    private void stopRingtoneAndVibration() {
+        if (ringtone != null && ringtone.isPlaying()) {
+            ringtone.stop();
+        }
+        if (vibrator != null) {
+            vibrator.cancel();
+        }
+    }
+    
+    private void listenToCallUpdates() {
+        if (currentCallId == null) return;
+        
+        callListener = callRepository.listenToCall(currentCallId, new CallRepository.OnCallChangedListener() {
+            @Override
+            public void onCallChanged(Call call) {
+                // If call ended/rejected/missed, stop service
+                if (call.isEnded() || Call.STATUS_MISSED.equals(call.getStatus())) {
+                    stopService();
+                }
+            }
+            
+            @Override
+            public void onError(String errorMsg) {
+                Log.e(TAG, "Error listening to call: " + errorMsg);
+            }
+        });
+    }
+    
+    private void acceptCall() {
+        stopRingtoneAndVibration();
+        
+        // Open CallActivity
+        Intent callIntent = new Intent(this, com.example.doan_zaloclone.ui.call.CallActivity.class);
+        callIntent.putExtra("CALL_ID", currentCallId);
+        callIntent.putExtra("IS_INCOMING", true);
+        callIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(callIntent);
+        
+        stopService();
+    }
+    
+    private void rejectCall() {
+        if (currentCallId != null) {
+            callRepository.updateCallStatus(currentCallId, Call.STATUS_REJECTED, 
+                new CallRepository.OnCallUpdatedListener() {
+                    @Override
+                    public void onSuccess() {
+                        stopService();
+                    }
+                    
+                    @Override
+                    public void onError(String errorMsg) {
+                        stopService();
+                    }
+                });
+        } else {
+            stopService();
+        }
+    }
+    
+    private void stopService() {
+        stopRingtoneAndVibration();
+        
+        if (callListener != null) {
+            callListener.remove();
+        }
+        
+        CallNotificationHelper.cancelNotification(this, NOTIFICATION_ID);
+        stopForeground(true);
+        stopSelf();
+    }
+    
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+    
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        stopRingtoneAndVibration();
+        if (callListener != null) {
+            callListener.remove();
+        }
+    }
+}
+```
+
+---
+
+## TASK 7.3: Update AndroidManifest.xml
+
+Add service declaration:
+
+```xml
+<!-- Inside <application> tag -->
+<service
+    android:name=".services.IncomingCallService"
+    android:exported="false"
+    android:foregroundServiceType="camera|microphone" />
+```
+
+Add permissions (if not already):
+```xml
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+```
+
+---
+
+## TASK 7.4: Integrate Service với CallViewModel
+
+Thêm method vào CallViewModel để start service khi có incoming call:
+
+```java
+/**
+ * Handle incoming call - start service for background notification
+ */
+public void handleIncomingCall(Context context, Call call, String callerName) {
+    Intent serviceIntent = new Intent(context, IncomingCallService.class);
+    serviceIntent.putExtra("CALL_ID", call.getId());
+    serviceIntent.putExtra("CALLER_NAME", callerName);
+    serviceIntent.putExtra("IS_VIDEO", call.isVideoCall());
+    
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        context.startForegroundService(serviceIntent);
+    } else {
+        context.startService(serviceIntent);
+    }
+}
+```
+
+Trong MainActivity hoặc nơi listen incoming calls:
+```java
+callRepository.listenToIncomingCalls(currentUserId, new CallRepository.OnCallChangedListener() {
+    @Override
+    public void onCallChanged(Call call) {
+        if (Call.STATUS_CALLING.equals(call.getStatus())) {
+            // Fetch caller info
+            getUserName(call.getCallerId(), callerName -> {
+                callViewModel.handleIncomingCall(MainActivity.this, call, callerName);
+            });
+        }
+    }
+    
+    @Override
+    public void onError(String errorMsg) {
+        Log.e(TAG, "Error: " + errorMsg);
+    }
+});
+```
+
+---
+
+## TESTING PHASE 7:
+
+**Test 1: App in Background**
+- [ ] Device B: Press home (app background)
+- [ ] Device A: Call Device B
+- [ ] Device B: Full-screen notification appears
+- [ ] Device B: Ringtone plays
+- [ ] Device B: Phone vibrates
+
+**Test 2: Accept from Notification**
+- [ ] Tap "Chấp nhận"
+- [ ] CallActivity opens
+- [ ] Call connects normally
+- [ ] Notification disappears
+
+**Test 3: Reject from Notification**
+- [ ] Tap "Từ chối"
+- [ ] Notification disappears
+- [ ] Device A sees "Đã từ chối"
+
+**Test 4: Caller Cancels**
+- [ ] Device A: End call before B answers
+- [ ] Device B: Notification auto-dismisses
+- [ ] Ringtone stops
+
+=================================================================================
+✨ PHASE 8: POLISH & EDGE CASES
+=================================================================================
+
+**Goal:** Handle edge cases và improve UX
+
+**Duration:** ~3-4 hours
+
+---
+
+## TASK 8.1: Concurrent Calls Prevention
+
+**File:** `CallViewModel.java`
+
+Add field:
+```java
+private static boolean isInCall = false;
+```
+
+Update `initiateCall()`:
+```java
+public void initiateCall(...) {
+    if (isInCall) {
+        error.postValue("Bạn đang trong cuộc gọi khác");
+        return;
+    }
+    isInCall = true;
+    // ... existing code
+}
+```
+
+Update `acceptCall()`:
+```java
+public void acceptCall(...) {
+    if (isInCall) {
+        // Auto-reject
+        rejectCall(callId);
+        return;
+    }
+    isInCall = true;
+    // ... existing code
+}
+```
+
+Update `cleanup()`:
+```java
+private void cleanup() {
+    // ... existing cleanup
+    isInCall = false;
+}
+```
+
+**Test:**
+- [ ] User A in call with B
+- [ ] User C calls A
+- [ ] A auto-rejects with busy message
+
+---
+
+## TASK 8.2: Network Disconnection Handling
+
+Add timeout timer vào CallViewModel:
+
+```java
+private Handler disconnectHandler = new Handler(Looper.getMainLooper());
+private Runnable disconnectRunnable;
+
+private void startDisconnectTimer() {
+    if (disconnectRunnable != null) {
+        disconnectHandler.removeCallbacks(disconnectRunnable);
+    }
+    
+    disconnectRunnable = () -> {
+        Log.w(TAG, "Connection timeout - ending call");
+        error.postValue("Mất kết nối");
+        endCall();
+    };
+    
+    // 10 second timeout
+    disconnectHandler.postDelayed(disconnectRunnable, 10000);
+}
+
+private void cancelDisconnectTimer() {
+    if (disconnectRunnable != null) {
+        disconnectHandler.removeCallbacks(disconnectRunnable);
+    }
+}
+```
+
+Update connection state callback:
+```java
+@Override
+public void onDisconnected() {
+    connectionState.postValue("DISCONNECTED");
+    startDisconnectTimer(); // Auto-end if not reconnected
+}
+
+@Override
+public void onConnected() {
+    connectionState.postValue("CONNECTED");
+    cancelDisconnectTimer(); // Cancel timeout
+}
+```
+
+**Test:**
+- [ ] During call, turn off WiFi
+- [ ] After 10s, call auto-ends
+- [ ] Turn WiFi back on within 10s → call resumes
+
+---
+
+## TASK 8.3: Permission Denied Handling
+
+Update CallActivity permission result:
+
+```java
+@Override
+public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    
+    boolean allGranted = true;
+    for (int result : grantResults) {
+        if (result != PackageManager.PERMISSION_GRANTED) {
+            allGranted = false;
+            break;
+        }
+    }
+    
+    if (!allGranted) {
+        // Show explanation dialog
+        new AlertDialog.Builder(this)
+            .setTitle("Cần quyền truy cập")
+            .setMessage(isVideo ? 
+                "Cần quyền Camera và Microphone để thực hiện cuộc gọi video" :
+                "Cần quyền Microphone để thực hiện cuộc gọi thoại")
+            .setPositiveButton("Cài đặt", (dialog, which) -> {
+                // Open app settings
+                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                Uri uri = Uri.fromParts("package", getPackageName(), null);
+                intent.setData(uri);
+                startActivity(intent);
+                finish();
+            })
+            .setNegativeButton("Hủy", (dialog, which) -> finish())
+            .show();
+    }
+}
+```
+
+**Test:**
+- [ ] Deny permissions
+- [ ] Dialog appears with explanation
+- [ ] Tap "Cài đặt" → opens Settings
+- [ ] Grant permissions → retry call
+
+---
+
+## TASK 8.4: Background/Foreground Transitions
+
+Update CallActivity lifecycle:
+
+```java
+@Override
+protected void onPause() {
+    super.onPause();
+    if (isVideo && isCallOngoing) {
+        // Pause local video to save battery
+        callViewModel.toggleCamera(); // Turn off
+    }
+}
+
+@Override
+protected void onResume() {
+    super.onResume();
+    if (isVideo && isCallOngoing && wasCameraOn) {
+        // Resume video
+        callViewModel.toggleCamera(); // Turn back on
+    }
+}
+```
+
+Add during call notification:
+```java
+private void showOngoingNotification() {
+    // In CallActivity when call connects
+    Notification notification = CallNotificationHelper.createOngoingCallNotification(
+        this, currentCall, otherUserName
+    );
+    
+    NotificationManager manager = getSystemService(NotificationManager.class);
+    manager.notify(1002, notification);
+}
+```
+
+**Test:**
+- [ ] During voice call, press home
+- [ ] Call continues in background
+- [ ] Tap ongoing notification → returns to call
+- [ ] During video call, press home
+- [ ] Video pauses
+- [ ] Return → video resumes
+
+---
+
+## TASK 8.5: Call History (Optional)
+
+Add method to CallRepository:
+
+```java
+public LiveData<Resource<List<Call>>> getCallHistory(String userId) {
+    MutableLiveData<Resource<List<Call>>> result = new MutableLiveData<>();
+    result.setValue(Resource.loading(null));
+    
+    db.collection("calls")
+        .whereIn("callerId", Arrays.asList(userId))
+        .whereIn("receiverId", Arrays.asList(userId))
+        .orderBy("startTime", Query.Direction.DESCENDING)
+        .limit(50)
+        .get()
+        .addOnSuccessListener(snapshot -> {
+            List<Call> calls = new ArrayList<>();
+            for (QueryDocumentSnapshot doc : snapshot) {
+                calls.add(doc.toObject(Call.class));
+            }
+            result.setValue(Resource.success(calls));
+        })
+        .addOnFailureListener(e -> {
+            result.setValue(Resource.error(e.getMessage(), null));
+        });
+    
+    return result;
+}
+```
+
+Create CallHistoryFragment to display list.
+
+---
+
+=================================================================================
+📋 FINAL TESTING CHECKLIST (All Phases)
+=================================================================================
+
+**Basic Call Flow:**
+- [ ] Voice call outgoing
+- [ ] Voice call incoming
+- [ ] Video call outgoing
+- [ ] Video call incoming
+- [ ] Call duration timer accurate
+
+**Audio/Video Controls:**
+- [ ] Mute/unmute mic
+- [ ] Speaker toggle
+- [ ] Camera on/off (video)
+- [ ] Switch front/back (video)
+
+**Connection:**
+- [ ] Both users hear each other
+- [ ] Both users see each other (video)
+- [ ] ICE connection stable
+- [ ] Network switch (WiFi → 4G) handled
+
+**Notifications:**
+- [ ] Incoming call notification (background)
+- [ ] Accept from notification
+- [ ] Reject from notification
+- [ ] Ongoing call notification
+
+**Edge Cases:**
+- [ ] Concurrent call prevention
+- [ ] Permission denied handling
+- [ ] Network disconnection
+- [ ] Caller cancels before answer
+- [ ] Background/foreground transitions
+- [ ] Lock screen during call
+
+**Cleanup:**
+- [ ] End call properly
+- [ ] No memory leaks
+- [ ] WebRTC resources disposed
+- [ ] Notifications cleared
+
+=================================================================================
+🎉 COMPLETION SUMMARY
+=================================================================================
+
+**Phase 1-6:** ✅ COMPLETE
+**Phase 7:** Notifications (2-3 hours)
+**Phase 8:** Edge Cases (3-4 hours)
+
+**Total Implementation Time:** ~20-25 hours
+**Files Created/Modified:** ~15 files
+
+**Next Steps:**
+1. Implement Phase 7 (notifications)
+2. Test on 2 physical devices
+3. Implement Phase 8 (edge cases)
+4. Final testing & polish
+5. Deploy to production!
+
+**Architecture Highlights:**
+- ✅ MVVM pattern throughout
+- ✅ Repository pattern for data
+- ✅ LiveData for reactive UI
+- ✅ Proper resource cleanup
+- ✅ Scalable WebRTC integration
+
+Congratulations on implementing a full-featured calling system! 🚀
+=================================================================================
