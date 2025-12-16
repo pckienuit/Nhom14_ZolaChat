@@ -4,6 +4,8 @@ import android.app.Application;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -47,6 +49,13 @@ public class CallViewModel extends AndroidViewModel {
     private String currentUserId;
     private boolean isInitiator = false;
     
+    // Concurrent call prevention
+    private static boolean isInCall = false;
+    
+    // Network disconnection handling
+    private Handler disconnectHandler = new Handler(Looper.getMainLooper());
+    private Runnable disconnectRunnable;
+    
     public CallViewModel(@NonNull Application application) {
         super(application);
         this.callRepository = new CallRepository();
@@ -73,6 +82,9 @@ public class CallViewModel extends AndroidViewModel {
                 Log.d(TAG, "WebRTC connected");
                 connectionState.postValue("CONNECTED");
                 
+                // Cancel disconnect timer if reconnected
+                cancelDisconnectTimer();
+                
                 // Update call status in Firestore
                 if (currentCallId != null) {
                     callRepository.updateCallStatus(currentCallId, Call.STATUS_ONGOING, 
@@ -94,6 +106,9 @@ public class CallViewModel extends AndroidViewModel {
             public void onDisconnected() {
                 Log.d(TAG, "WebRTC disconnected");
                 connectionState.postValue("DISCONNECTED");
+                
+                // Start timer to auto-end call if not reconnected
+                startDisconnectTimer();
             }
             
             @Override
@@ -147,6 +162,14 @@ public class CallViewModel extends AndroidViewModel {
                             boolean isVideo) {
         Log.d(TAG, "Initiating call: " + (isVideo ? "VIDEO" : "VOICE"));
         
+        // Check if already in a call
+        if (isInCall) {
+            error.postValue("Bạn đang trong cuộc gọi khác");
+            Log.w(TAG, "Cannot initiate call - already in a call");
+            return;
+        }
+        
+        isInCall = true;
         this.currentUserId = callerId;
         this.isInitiator = true;
         
@@ -233,6 +256,14 @@ public class CallViewModel extends AndroidViewModel {
     public void acceptCall(@NonNull String callId, @NonNull String receiverId) {
         Log.d(TAG, "Accepting call: " + callId);
         
+        // Check if already in a call
+        if (isInCall) {
+            Log.w(TAG, "Cannot accept call - already in another call, auto-rejecting");
+            rejectCall(callId);
+            return;
+        }
+        
+        isInCall = true;
         this.currentCallId = callId;
         this.currentUserId = receiverId;
         this.isInitiator = false;
@@ -522,6 +553,34 @@ public class CallViewModel extends AndroidViewModel {
     }
     
     /**
+     * Start disconnect timer - auto-end call after 10 seconds if not reconnected
+     */
+    private void startDisconnectTimer() {
+        if (disconnectRunnable != null) {
+            disconnectHandler.removeCallbacks(disconnectRunnable);
+        }
+        
+        disconnectRunnable = () -> {
+            Log.w(TAG, "Connection timeout - ending call");
+            error.postValue("Mất kết nối");
+            endCall();
+        };
+        
+        // 10 second timeout
+        disconnectHandler.postDelayed(disconnectRunnable, 10000);
+    }
+    
+    /**
+     * Cancel disconnect timer - call reconnected
+     */
+    private void cancelDisconnectTimer() {
+        if (disconnectRunnable != null) {
+            disconnectHandler.removeCallbacks(disconnectRunnable);
+            disconnectRunnable = null;
+        }
+    }
+    
+    /**
      * Cleanup resources
      */
     private void cleanup() {
@@ -544,6 +603,7 @@ public class CallViewModel extends AndroidViewModel {
         // Reset state
         currentCallId = null;
         isInitiator = false;
+        isInCall = false;  // Reset concurrent call flag
         connectionState.postValue("IDLE");
     }
     

@@ -4,7 +4,9 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -14,6 +16,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -459,10 +462,34 @@ public class CallActivity extends AppCompatActivity {
                 // Permissions granted, retry call initiation
                 recreate();
             } else {
-                showError(getString(R.string.permission_call_denied));
-                finish();
+                // Show explanation dialog
+                showPermissionDeniedDialog();
             }
         }
+    }
+    
+    /**
+     * Show dialog explaining why permissions are needed
+     */
+    private void showPermissionDeniedDialog() {
+        String message = isVideo ? 
+            "Cần quyền Camera và Microphone để thực hiện cuộc gọi video" :
+            "Cần quyền Microphone để thực hiện cuộc gọi thoại";
+            
+        new AlertDialog.Builder(this)
+            .setTitle("Cần quyền truy cập")
+            .setMessage(message)
+            .setPositiveButton("Cài đặt", (dialog, which) -> {
+                // Open app settings
+                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                Uri uri = Uri.fromParts("package", getPackageName(), null);
+                intent.setData(uri);
+                startActivity(intent);
+                finish();
+            })
+            .setNegativeButton("Hủy", (dialog, which) -> finish())
+            .setCancelable(false)
+            .show();
     }
     
     @Override
