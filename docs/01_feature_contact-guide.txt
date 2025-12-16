@@ -1,0 +1,88 @@
+================================================================================
+CONTACT FEATURE - TIM KIEM VA TAO PHONG CHAT
+================================================================================
+
+CHUC NANG
+
+Tim kiem user theo email -> Click -> Tu dong kiem tra va tao/mo phong chat
+Hien tai: DEMO MODE (khong can Firebase)
+
+
+FILES CHINH
+
+Models:
+- User.java - Thong tin user (id, name, email, avatarUrl, devices)
+- Conversation.java - Phong chat (id, name, lastMessage, memberIds)
+- Message.java - Tin nhan (id, senderId, content, type, timestamp)
+
+Services:
+- FirestoreManager.java - Xu ly Firestore (search, create conversation)
+
+UI:
+- ContactFragment.java - Logic tim kiem + tao conversation
+- UserAdapter.java - Hien thi search results
+- item_user_search.xml - Layout item user
+- fragment_contact.xml - Layout search bar + results
+
+DEMO DATA
+
+5 users co san:
+- alice@example.com (Alice Johnson)
+- bob@example.com (Bob Smith)
+- charlie@example.com (Charlie Brown)
+- diana@example.com (Diana Prince)
+- evan@example.com (Evan Davis)
+
+
+CACH TEST
+
+1. Mo tab Contacts
+2. Nhap email (vd: alice, bob@example.com, @example.com)
+3. Bam Search
+4. Click vao user -> Tao/mo chat
+
+
+FLOW HOAT DONG
+
+Search email -> searchUserByEmailDemo()
+-> Hien thi results
+-> Click user -> checkAndOpenConversationDemo()
+-> Neu chua co: createNewConversationDemo()
+-> openChatRoom() -> RoomActivity
+
+
+CODE QUAN TRONG
+----------------
+
+Toggle demo mode (ContactFragment.java):
+private static final boolean DEMO_MODE = true;  // false = dung Firestore
+
+Demo data (ContactFragment.java):
+private void initDemoData() {
+    demoUsers.add(new User("user1", "Alice Johnson", "alice@example.com", ""));
+    demoConversations = new ArrayList<>();
+}
+
+Check conversation da ton tai:
+for (Conversation conv : demoConversations) {
+    if (conv.getMemberIds().contains(currentUserId) &&
+        conv.getMemberIds().contains(otherUserId)) {
+        // Da co
+    }
+}
+
+
+CHUYEN SANG FIRESTORE
+
+1. Doi DEMO_MODE = false
+2. Cap nhat google-services.json (tu Firebase Console)
+3. Sync Gradle
+4. Enable Firestore trong Firebase Console
+
+
+LUU Y
+
+- Conversations luu trong memory, mat khi restart
+- Search partial match, khong phan biet hoa/thuong
+- Khong duplicate conversations
+- Conversation ID: conv_[timestamp]

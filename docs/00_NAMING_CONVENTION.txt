@@ -1,0 +1,89 @@
+================================================================================
+QUYƯỚC ĐẶT TÊN FILE TÀI LIỆU (Documentation Naming Convention)
+================================================================================
+
+MỤC ĐÍCH
+Thống nhất cách đặt tên các file documentation (.txt) trong thư mục docs/,
+giúp dễ quản lý, tìm kiếm và sắp xếp theo logic.
+
+
+NGUYÊN TẮC ĐẶT TÊN
+------------------
+
+Format: [số thứ tự]_[loại]_[tên-mô-tả].txt
+
+1. SỐ THỨ TỰ (2 chữ số: 01, 02, 03...)
+   - Giúp sắp xếp file theo thứ tự ưu tiên/thời gian
+   - File này (naming convention) là 00
+
+2. LOẠI TÀI LIỆU (category)
+   - feature: Tài liệu về tính năng mới
+   - architecture: Kiến trúc, design pattern
+   - bugfix: Báo cáo sửa lỗi
+   - config: Cấu hình, setup
+   - optimization: Tối ưu hóa hiệu năng
+   - guide: Hướng dẫn sử dụng
+
+3. TÊN MÔ TẢ
+   - Viết thường, không dấu
+   - Dùng dấu gạch ngang (-) thay khoảng trắng
+   - Ngắn gọn, mô tả rõ nội dung
+
+
+VÍ DỤ
+-----
+
+01_feature_contact-guide.txt
+   → Feature về contact/search users
+
+02_architecture_mvvm-migration.txt
+   → Chuyển đổi sang kiến trúc MVVM
+
+03_bugfix_file-management.txt
+   → Sửa lỗi liên quan đến quản lý file
+
+04_config_firestore-security-rules.txt
+   → Cấu hình Firestore security rules
+
+05_bugfix_friend-request.txt
+   → Sửa lỗi friend request
+
+06_optimization_image-loading.txt
+   → Tối ưu hóa việc load ảnh
+
+07_optimization_performance.txt
+   → Tối ưu hóa hiệu năng tổng quát
+
+08_optimization_recyclerview.txt
+   → Tối ưu hóa RecyclerView
+
+
+LƯU Ý
+------
+
+- Khi thêm file mới, chọn số thứ tự tiếp theo
+- Nếu có nhiều file cùng loại, sắp xếp theo thứ tự logic hoặc thời gian
+- Có thể thêm loại mới nếu cần thiết
+- Tất cả file documentation thuộc dự án nên đặt trong folder docs/
+- File build artifacts (trong app/build/) KHÔNG cần tổ chức lại
+
+
+DANH SÁCH FILE HIỆN TẠI
+-----------------------
+
+00_NAMING_CONVENTION.txt       - File này (quy tắc đặt tên)
+01_feature_contact-guide.txt   - Hướng dẫn tính năng Contact
+02_architecture_mvvm-migration.txt - Tổng kết chuyển đổi MVVM
+03_bugfix_file-management.txt  - Sửa lỗi quản lý file
+04_config_firestore-security-rules.txt - Cấu hình Firestore
+05_bugfix_friend-request.txt   - Sửa lỗi friend request
+06_optimization_image-loading.txt - Tối ưu image loading
+07_optimization_performance.txt - Tối ưu hiệu năng tổng quát
+08_optimization_recyclerview.txt - Tối ưu RecyclerView
+
+
+CẬP NHẬT
+--------
+
+Tạo ngày: 16/12/2025
+Tổng số file tài liệu: 9 files (bao gồm file này)
