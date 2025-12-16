@@ -75,6 +75,12 @@ public class FileListFragment extends Fragment {
     private Chip dateFilterChip;
     private Chip clearFiltersChip;
     
+    // Media filter chips (only for MEDIA category)
+    private View mediaFilterScrollView;
+    private Chip allMediaChip;
+    private Chip imagesOnlyChip;
+    private Chip videosOnlyChip;
+    
     // Filter state
     private Set<String> selectedSenderIds = new HashSet<>();
     private Long filterStartDate = null;
@@ -120,6 +126,7 @@ public class FileListFragment extends Fragment {
         setupRecyclerView();
         setupSwipeRefresh();
         setupFilterChips();
+        setupMediaFilterChips();
         observeData();
         
         // Load data only once on initial creation
@@ -139,6 +146,12 @@ public class FileListFragment extends Fragment {
         senderFilterChip = view.findViewById(R.id.senderFilterChip);
         dateFilterChip = view.findViewById(R.id.dateFilterChip);
         clearFiltersChip = view.findViewById(R.id.clearFiltersChip);
+        
+        // Media filter chips
+        mediaFilterScrollView = view.findViewById(R.id.mediaFilterScrollView);
+        allMediaChip = view.findViewById(R.id.allMediaChip);
+        imagesOnlyChip = view.findViewById(R.id.imagesOnlyChip);
+        videosOnlyChip = view.findViewById(R.id.videosOnlyChip);
     }
     
     private void setupViewModel() {
@@ -242,6 +255,28 @@ public class FileListFragment extends Fragment {
         senderFilterChip.setOnClickListener(v -> showSenderFilterDialog());
         dateFilterChip.setOnClickListener(v -> showDateRangePickerDialog());
         clearFiltersChip.setOnClickListener(v -> clearAllFilters());
+    }
+    
+    private void setupMediaFilterChips() {
+        // Show media filter chips only for MEDIA category
+        if (category == FileCategory.MEDIA) {
+            mediaFilterScrollView.setVisibility(View.VISIBLE);
+            
+            // Set up chip listeners
+            allMediaChip.setOnClickListener(v -> {
+                viewModel.setMediaTypeFilter(FileViewModel.MediaTypeFilter.ALL);
+            });
+            
+            imagesOnlyChip.setOnClickListener(v -> {
+                viewModel.setMediaTypeFilter(FileViewModel.MediaTypeFilter.IMAGES_ONLY);
+            });
+            
+            videosOnlyChip.setOnClickListener(v -> {
+                viewModel.setMediaTypeFilter(FileViewModel.MediaTypeFilter.VIDEOS_ONLY);
+            });
+        } else {
+            mediaFilterScrollView.setVisibility(View.GONE);
+        }
     }
     
     private void observeData() {

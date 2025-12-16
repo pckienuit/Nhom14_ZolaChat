@@ -24,6 +24,13 @@ import java.util.Set;
  */
 public class FileViewModel extends BaseViewModel {
     
+    // Media type filter enum
+    public enum MediaTypeFilter {
+        ALL,
+        IMAGES_ONLY,
+        VIDEOS_ONLY
+    }
+    
     private static final int PAGE_SIZE = 50;
     
     private final FileRepository fileRepository;
@@ -41,6 +48,7 @@ public class FileViewModel extends BaseViewModel {
     private final MutableLiveData<Set<String>> selectedSendersLiveData = new MutableLiveData<>(new HashSet<>());
     private final MutableLiveData<Long> filterStartDateLiveData = new MutableLiveData<>(null);
     private final MutableLiveData<Long> filterEndDateLiveData = new MutableLiveData<>(null);
+    private final MutableLiveData<MediaTypeFilter> mediaTypeFilterLiveData = new MutableLiveData<>(MediaTypeFilter.ALL);
     
     // Filtered LiveData (combines original data + filters)
     private final MediatorLiveData<Resource<List<FileItem>>> filteredMediaFilesLiveData = new MediatorLiveData<>();
@@ -80,6 +88,8 @@ public class FileViewModel extends BaseViewModel {
         filteredMediaFilesLiveData.addSource(filterStartDateLiveData, date -> 
             filteredMediaFilesLiveData.setValue(applyFilters(mediaFilesLiveData.getValue())));
         filteredMediaFilesLiveData.addSource(filterEndDateLiveData, date -> 
+            filteredMediaFilesLiveData.setValue(applyFilters(mediaFilesLiveData.getValue())));
+        filteredMediaFilesLiveData.addSource(mediaTypeFilterLiveData, mediaType -> 
             filteredMediaFilesLiveData.setValue(applyFilters(mediaFilesLiveData.getValue())));
         
         // Files filtering
@@ -381,6 +391,14 @@ public class FileViewModel extends BaseViewModel {
         selectedSendersLiveData.setValue(new HashSet<>());
         filterStartDateLiveData.setValue(null);
         filterEndDateLiveData.setValue(null);
+        mediaTypeFilterLiveData.setValue(MediaTypeFilter.ALL);
+    }
+    
+    /**
+     * Set media type filter (for MEDIA category only)
+     */
+    public void setMediaTypeFilter(MediaTypeFilter filter) {
+        mediaTypeFilterLiveData.setValue(filter != null ? filter : MediaTypeFilter.ALL);
     }
     
     /**
@@ -419,10 +437,21 @@ public class FileViewModel extends BaseViewModel {
             // Apply date range filter
             if (startDate != null || endDate != null) {
                 long timestamp = item.getMessage() != null ? item.getMessage().getTimestamp() : 0;
-                if (startDate != null && timestamp < startDate) {
+                if (startDate != null &&  timestamp < startDate) {
                     continue;
                 }
                 if (endDate != null && timestamp > endDate) {
+                    continue;
+                }
+            }
+            
+            // Apply media type filter (for MEDIA category only)
+            MediaTypeFilter mediaFilter = mediaTypeFilterLiveData.getValue();
+            if (mediaFilter != null && mediaFilter != MediaTypeFilter.ALL) {
+                if (mediaFilter == MediaTypeFilter.IMAGES_ONLY && !item.isImage()) {
+                    continue;
+                }
+                if (mediaFilter == MediaTypeFilter.VIDEOS_ONLY && !item.isVideo()) {
                     continue;
                 }
             }

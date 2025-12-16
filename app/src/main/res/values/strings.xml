@@ -31,7 +31,7 @@
     <string name="to_date">Đến ngày</string>
     
     <!-- Media Filter Strings -->
-    <string name="all">Tất cả</string>
-    <string name="images">Ảnh</string>
-    <string name="videos">Video</string>
+    <string name="all_media">Tất cả</string>
+    <string name="images_only">Ảnh</string>
+    <string name="videos_only">Video</string>
 </resources>
