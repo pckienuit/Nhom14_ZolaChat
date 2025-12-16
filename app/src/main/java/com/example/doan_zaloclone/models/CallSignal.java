@@ -1,5 +1,6 @@
 package com.example.doan_zaloclone.models;
 
+import com.google.firebase.firestore.Exclude;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -124,21 +125,22 @@ public class CallSignal {
     /**
      * Check if this is an OFFER signal
      */
-    public boolean isOffer() {
+    @Exclude
+    public boolean isOfferSignal() {
         return TYPE_OFFER.equals(this.type);
     }
-    
     /**
      * Check if this is an ANSWER signal
      */
-    public boolean isAnswer() {
+    @Exclude
+    public boolean isAnswerSignal() {
         return TYPE_ANSWER.equals(this.type);
     }
-    
     /**
      * Check if this is an ICE candidate signal
      */
-    public boolean isIceCandidate() {
+    @Exclude
+    public boolean isIceCandidateSignal() {
         return TYPE_ICE_CANDIDATE.equals(this.type);
     }
     
@@ -162,24 +164,25 @@ public class CallSignal {
     /**
      * Extract candidate string from ICE candidate map
      */
+    @Exclude
     public String getCandidateString() {
         if (iceCandidate == null) return null;
         Object candidate = iceCandidate.get("candidate");
         return candidate != null ? candidate.toString() : null;
     }
-    
     /**
      * Extract sdpMid from ICE candidate map
      */
+    @Exclude
     public String getSdpMid() {
         if (iceCandidate == null) return null;
         Object sdpMid = iceCandidate.get("sdpMid");
         return sdpMid != null ? sdpMid.toString() : null;
     }
-    
     /**
      * Extract sdpMLineIndex from ICE candidate map
      */
+    @Exclude
     public Integer getSdpMLineIndex() {
         if (iceCandidate == null) return null;
         Object index = iceCandidate.get("sdpMLineIndex");

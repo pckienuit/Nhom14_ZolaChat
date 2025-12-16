@@ -468,13 +468,13 @@ public class CallViewModel extends AndroidViewModel {
     private void handleSignal(@NonNull CallSignal signal) {
         Log.d(TAG, "Handling signal: " + signal.getType());
         
-        if (signal.isOffer()) {
+        if (signal.isOfferSignal()) {
             // Receiver gets OFFER, create answer
             handleOffer(signal.getSdp());
-        } else if (signal.isAnswer()) {
+        } else if (signal.isAnswerSignal()) {
             // Caller gets ANSWER, set remote description
             handleAnswer(signal.getSdp());
-        } else if (signal.isIceCandidate()) {
+        } else if (signal.isIceCandidateSignal()) {
             // Add ICE candidate
             handleIceCandidate(signal);
         }

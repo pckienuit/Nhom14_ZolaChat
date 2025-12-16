@@ -53,6 +53,10 @@ dependencies {
     implementation(libs.recyclerview)
     implementation(libs.cardview)
     implementation(libs.glide)
+
+    // WebRTC
+    implementation("io.getstream:stream-webrtc-android:1.1.1")
+
     annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")  // For AppGlideModule
     
     // ExifInterface for image rotation
@@ -76,4 +80,6 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+
+    
 }

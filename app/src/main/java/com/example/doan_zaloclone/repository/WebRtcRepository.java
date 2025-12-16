@@ -20,6 +20,7 @@ import org.webrtc.MediaStream;
 import org.webrtc.PeerConnection;
 import org.webrtc.PeerConnectionFactory;
 import org.webrtc.RtpReceiver;
+import org.webrtc.RtpSender;
 import org.webrtc.SdpObserver;
 import org.webrtc.SessionDescription;
 import org.webrtc.SurfaceTextureHelper;
@@ -37,14 +38,15 @@ public class WebRtcRepository {
     private static final String TAG = "WebRtcRepository";
     private static final String AUDIO_TRACK_ID = "audio_track";
     private static final String VIDEO_TRACK_ID = "video_track";
-    private static final String LOCAL_STREAM_ID = "local_stream";
+    private static final String STREAM_ID = "stream";
     
     private final Context context;
     private PeerConnectionFactory peerConnectionFactory;
     private PeerConnection peerConnection;
     private AudioSource audioSource;
     private AudioTrack localAudioTrack;
-    private MediaStream localMediaStream;
+    private RtpSender audioSender;
+    private RtpSender videoSender;
     
     // Video components
     private EglBase eglBase;
@@ -89,6 +91,10 @@ public class WebRtcRepository {
         // Set ICE transport policy (relay for TURN-only, all for STUN+TURN)
         rtcConfig.iceTransportsType = PeerConnection.IceTransportsType.ALL;
         
+        // CRITICAL: Explicitly set Unified Plan SDP semantics
+        // This is required for addTrack() API to work properly
+        rtcConfig.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN;
+        
         // Create PeerConnection with observer
         peerConnection = peerConnectionFactory.createPeerConnection(
                 rtcConfig,
@@ -123,14 +129,12 @@ public class WebRtcRepository {
         localAudioTrack = peerConnectionFactory.createAudioTrack(AUDIO_TRACK_ID, audioSource);
         localAudioTrack.setEnabled(true);
         
-        // Create local media stream and add track
-        localMediaStream = peerConnectionFactory.createLocalMediaStream(LOCAL_STREAM_ID);
-        localMediaStream.addTrack(localAudioTrack);
-        
-        // Add stream to peer connection
+        // Add audio track to peer connection using Unified Plan API
+        // Note: Unified Plan uses addTrack with stream labels
         if (peerConnection != null) {
-            peerConnection.addStream(localMediaStream);
-            Log.d(TAG, "Local audio track added to PeerConnection");
+            java.util.List<String> streamLabels = java.util.Arrays.asList(STREAM_ID);
+            audioSender = peerConnection.addTrack(localAudioTrack, streamLabels);
+            Log.d(TAG, "Local audio track added to PeerConnection with stream: " + STREAM_ID);
         }
     }
     
@@ -411,10 +415,11 @@ public class WebRtcRepository {
         localVideoTrack = peerConnectionFactory.createVideoTrack(VIDEO_TRACK_ID, videoSource);
         localVideoTrack.setEnabled(true);
         
-        // Add video track to media stream
-        if (localMediaStream != null) {
-            localMediaStream.addTrack(localVideoTrack);
-            Log.d(TAG, "Local video track added to MediaStream");
+        // Add video track to peer connection using Unified Plan API
+        if (peerConnection != null) {
+            java.util.List<String> streamLabels = java.util.Arrays.asList(STREAM_ID);
+            videoSender = peerConnection.addTrack(localVideoTrack, streamLabels);
+            Log.d(TAG, "Local video track added to PeerConnection with stream: " + STREAM_ID);
         }
         
         Log.d(TAG, "Local video track created and capturing started");
@@ -577,10 +582,9 @@ public class WebRtcRepository {
             audioSource = null;
         }
         
-        if (localMediaStream != null) {
-            localMediaStream.dispose();
-            localMediaStream = null;
-        }
+        // Clear RtpSender references
+        audioSender = null;
+        videoSender = null;
         
         if (peerConnection != null) {
             peerConnection.dispose();
