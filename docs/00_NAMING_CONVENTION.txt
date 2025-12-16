@@ -80,10 +80,12 @@ DANH SÁCH FILE HIỆN TẠI
 06_optimization_image-loading.txt - Tối ưu image loading
 07_optimization_performance.txt - Tối ưu hiệu năng tổng quát
 08_optimization_recyclerview.txt - Tối ưu RecyclerView
+09_bugfix_filter-chip.txt      - Sửa lỗi filter chip container & circular button
 
 
 CẬP NHẬT
 --------
 
 Tạo ngày: 16/12/2025
-Tổng số file tài liệu: 9 files (bao gồm file này)
+Cập nhật lần cuối: 16/12/2025
+Tổng số file tài liệu: 10 files (bao gồm file này)
