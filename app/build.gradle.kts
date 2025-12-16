@@ -64,6 +64,9 @@ dependencies {
     // Cloudinary for image uploads
     implementation("com.cloudinary:cloudinary-android:3.0.2")
     
+    // WebRTC for voice and video calls
+    implementation("io.getstream:stream-webrtc-android:1.1.1")
+    
     // Firebase BoM - quản lý versions tự động
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)

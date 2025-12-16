@@ -1,0 +1,356 @@
+================================================================================
+KẾ HOẠCH PHÁT TRIỂN: TÍNH NĂNG GỌI ĐIỆN THOẠI VÀ VIDEO CALL
+================================================================================
+
+NGÀY TẠO: 16/12/2025
+LOẠI: Feature Planning
+TÍNH NĂNG: Voice Call và Video Call (1-1)
+CÔNG NGHỆ: WebRTC + Firebase Firestore
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Tính năng cho phép người dùng thực hiện cuộc gọi thoại và video trong ứng dụng
+Zalo Clone, hỗ trợ cuộc gọi 1-1 real-time với chất lượng cao.
+
+CÔNG NGHỆ SỬ DỤNG:
+- WebRTC: Truyền tải audio/video peer-to-peer
+- Firebase Firestore: Signaling server (trao đổi SDP và ICE candidates)
+- Stream WebRTC Android SDK: Thư viện WebRTC được maintain tốt
+- MVVM Architecture: Theo pattern hiện tại của dự án
+
+LÝ DO CHỌN WEBRTC + FIREBASE:
+- WebRTC là tiêu chuẩn công nghiệp cho real-time communication
+- Firebase Firestore đã được tích hợp sẵn trong dự án
+- Firestore real-time listeners phù hợp cho signaling
+- Stream SDK giải quyết vấn đề Google's official libraries outdated
+- Chi phí thấp (chỉ cần STUN servers miễn phí cho development)
+
+================================================================================
+2. KIẾN TRÚC TỔNG QUAN
+================================================================================
+
+2.1. LUỒNG CUỘC GỌI (Call Flow)
+
+Outgoing Call (User A gọi User B):
+1. User A tap "Call" button trong conversation
+2. App request CAMERA/RECORD_AUDIO permissions (nếu chưa có)
+3. CallViewModel.initiateCall() được gọi
+4. CallRepository tạo Call document trong Firestore
+5. WebRtcRepository khởi tạo PeerConnection
+6. WebRtcRepository tạo SDP Offer
+7. CallRepository gửi Offer qua Firestore signals subcollection
+8. User B nhận real-time update từ Firestore
+9. IncomingCallService hiển thị notification cho User B
+10. User B tap "Accept"
+11. WebRtcRepository (User B) tạo SDP Answer
+12. Answer được gửi qua Firestore
+13. Cả hai bên trao đổi ICE candidates qua Firestore
+14. WebRTC connection established → cuộc gọi bắt đầu
+15. Khi kết thúc: CallRepository update call status và duration
+
+2.2. PHÂN TẦNG KIẾN TRÚC (MVVM)
+
+┌─────────────────────────────────────────┐
+│           UI Layer                      │
+│  - CallActivity (voice/video UI)       │
+│  - IncomingCallService (notification)  │
+│  - RoomActivity (call buttons)         │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│        ViewModel Layer                  │
+│  - CallViewModel                        │
+│    * LiveData: currentCall, callHistory │
+│    * Methods: initiateCall, acceptCall  │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│       Repository Layer                  │
+│  - CallRepository (Firestore ops)       │
+│  - WebRtcRepository (WebRTC ops)        │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│         Data Layer                      │
+│  - Firestore: calls collection          │
+│  - WebRTC: PeerConnection               │
+│  - Models: Call.java, CallSignal.java   │
+└─────────────────────────────────────────┘
+
+2.3. FIRESTORE DATA STRUCTURE
+
+calls/{callId}
+  - id: string
+  - conversationId: string
+  - callerId: string
+  - receiverId: string
+  - type: "VOICE" | "VIDEO"
+  - status: "CALLING" | "RINGING" | "ONGOING" | "ENDED" | "MISSED" | "REJECTED"
+  - startTime: timestamp
+  - endTime: timestamp (nullable)
+  - duration: number (seconds)
+  
+  signals/{signalId}  (subcollection)
+    - type: "OFFER" | "ANSWER" | "ICE_CANDIDATE"
+    - senderId: string
+    - sdp: string (for OFFER/ANSWER)
+    - iceCandidate: map (for ICE_CANDIDATE)
+    - timestamp: timestamp
+
+================================================================================
+3. CÁC COMPONENT CẦN TRIỂN KHAI
+================================================================================
+
+3.1. DATA MODELS
+- Call.java: Model cho cuộc gọi
+- CallSignal.java: Model cho signaling data
+
+3.2. REPOSITORY LAYER
+- CallRepository.java: Quản lý Firestore operations
+- WebRtcRepository.java: Quản lý WebRTC PeerConnection
+
+3.3. VIEWMODEL LAYER
+- CallViewModel.java: Quản lý UI state và business logic
+
+3.4. UI LAYER
+- CallActivity.java: Màn hình cuộc gọi
+- activity_call.xml: Layout cho CallActivity
+- IncomingCallService.java: Foreground service cho notification
+- RoomActivity.java (MODIFY): Thêm call buttons
+
+3.5. RESOURCES
+- Drawables: ic_call.xml, ic_videocam.xml, ic_call_end.xml, etc.
+- Strings: call_ringing, incoming_call, accept_call, etc.
+- Dimensions: call_button_size, call_avatar_size, etc.
+
+3.6. UTILS
+- PermissionHelper.java: Xử lý runtime permissions
+- CallNotificationHelper.java: Tạo notifications
+- WebRtcHelper.java: WebRTC utilities
+
+3.7. CONFIGURATION
+- AndroidManifest.xml (MODIFY): Thêm permissions và CallActivity
+- build.gradle.kts (MODIFY): Thêm Stream WebRTC SDK
+
+================================================================================
+4. BÀI HỌC TỪ DOCUMENTATION
+================================================================================
+
+Từ việc đọc các file documentation, đã áp dụng các bài học sau:
+
+4.1. TỪ 00_NAMING_CONVENTION.txt:
+✓ File tài liệu này sẽ được đặt tên: 10_feature_voice-video-call.txt
+✓ Số thứ tự: 10 (tiếp theo sau 09_bugfix_filter-chip.txt)
+✓ Loại: feature (tính năng mới)
+✓ Tên mô tả: voice-video-call (viết thường, dấu gạch ngang)
+
+4.2. TỪ 02_architecture_mvvm-migration.txt:
+✓ Tuân thủ MVVM: Repository → ViewModel → View
+✓ Sử dụng LiveData để quan sát dữ liệu
+✓ Không giữ reference tới View trong ViewModel
+✓ Repository là Single Source of Truth
+✓ Xử lý tất cả thao tác bất đồng bộ trong Repository
+
+4.3. TỪ 05_bugfix_friend-request.txt:
+✓ KHÔNG dùng setHasFixedSize(true) với RecyclerView wrap_content
+  (Không áp dụng trực tiếp nhưng nhớ nguyên tắc)
+✓ Luôn set document ID khi convert Firestore document → Object
+✓ Gọi requestLayout() sau khi update adapter nếu cần
+
+4.4. TỪ 09_bugfix_filter-chip.txt:
+✓ Material Components có nhiều thuộc tính ẩn ảnh hưởng layout
+✓ Đọc documentation kỹ trước khi dùng
+✓ Test từng thuộc tính để tìm nguyên nhân lỗi
+✓ Không dùng thuộc tính không được hỗ trợ
+
+4.5. TỪ 04_config_firestore-security-rules.txt:
+✓ Luôn cấu hình Security Rules trước khi deploy
+✓ Test rules trong Firebase Console
+✓ Chỉ cho phép read/write nếu user có quyền
+✓ Sử dụng request.auth.uid để verify ownership
+
+4.6. TỪ 06_optimization_image-loading.txt:
+✓ Quản lý lifecycle resources đúng cách (try-finally)
+✓ Recycle bitmaps để tránh memory leak
+✓ Sử dụng inSampleSize cho memory-efficient decoding
+  (Tương tự: đóng PeerConnection khi call kết thúc)
+
+================================================================================
+5. DEPENDENCIES MỚI
+================================================================================
+
+Thêm vào app/build.gradle.kts:
+
+dependencies {
+    // WebRTC
+    implementation("io.getstream:stream-webrtc-android:1.1.1")
+    
+    // Permissions (optional)
+    implementation("com.github.permissions-dispatcher:permissionsdispatcher:4.9.2")
+    annotationProcessor("com.github.permissions-dispatcher:permissionsdispatcher-processor:4.9.2")
+}
+
+IMPACT:
+- Tăng kích thước APK khoảng 15-20 MB
+- Stream WebRTC SDK bao gồm native libraries cho armeabi-v7a, arm64-v8a, x86, x86_64
+- Tương thích với minSdk 28 (hiện tại của dự án)
+
+================================================================================
+6. PERMISSIONS MỚI
+================================================================================
+
+Thêm vào AndroidManifest.xml:
+
+<uses-permission android:name="android.permission.CAMERA" />
+<uses-permission android:name="android.permission.RECORD_AUDIO" />
+<uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+<uses-permission android:name="android.permission.VIBRATE" />
+
+<uses-feature android:name="android.hardware.camera" android:required="false" />
+<uses-feature android:name="android.hardware.microphone" android:required="true" />
+
+LƯU Ý:
+- Camera không bắt buộc (required="false") vì voice call không cần
+- Microphone bắt buộc (required="true")
+- Runtime permissions sẽ được request khi user tap call button
+
+================================================================================
+7. FIRESTORE SECURITY RULES
+================================================================================
+
+Thêm vào Firebase Console → Firestore → Rules:
+
+match /calls/{callId} {
+  // Read nếu user là caller hoặc receiver
+  allow read: if request.auth != null && 
+                 (request.auth.uid == resource.data.callerId || 
+                  request.auth.uid == resource.data.receiverId);
+  
+  // Create nếu user là caller
+  allow create: if request.auth != null && 
+                   request.auth.uid == request.resource.data.callerId;
+  
+  // Update nếu user là caller hoặc receiver
+  allow update: if request.auth != null && 
+                   (request.auth.uid == resource.data.callerId || 
+                    request.auth.uid == resource.data.receiverId);
+  
+  allow delete: if false;
+  
+  match /signals/{signalId} {
+    allow read: if request.auth != null;
+    allow create: if request.auth != null && 
+                     request.auth.uid == request.resource.data.senderId;
+    allow update, delete: if false;
+  }
+}
+
+================================================================================
+8. KẾ HOẠCH VERIFICATION
+================================================================================
+
+8.1. MANUAL TESTING (YÊU CẦU 2 THIẾT BỊ ANDROID THỰC)
+
+Test Case 1: Voice Call - Happy Path
+- User A gọi User B
+- User B chấp nhận
+- Kiểm tra audio 2 chiều
+- Test mute/unmute
+- Kết thúc call → verify duration
+
+Test Case 2: Video Call - Happy Path
+- User A gọi video User B
+- User B chấp nhận
+- Kiểm tra video 2 chiều
+- Test camera on/off, switch camera
+- Kết thúc call
+
+Test Case 3: Reject Call
+- User A gọi User B
+- User B từ chối
+- Verify status = "REJECTED"
+
+Test Case 4: Missed Call
+- User A gọi User B
+- User B không trả lời (timeout 30s)
+- Verify status = "MISSED"
+
+Test Case 5: Network Issues
+- Trong cuộc gọi, ngắt WiFi/Data
+- Verify call auto-ends
+
+Test Case 6: Permissions
+- Video call khi chưa cấp CAMERA permission
+- Verify app request permission
+- Deny → verify call không bắt đầu
+
+Test Case 7: Background/Foreground
+- Trong cuộc gọi, press Home
+- Verify ongoing notification
+- Tap notification → back to call
+
+Test Case 8: Concurrent Calls
+- User A trong call với B
+- User C gọi A
+- Verify A nhận "busy" signal
+
+Test Case 9: Firestore Security
+- Kiểm tra Firestore Console
+- Verify call documents có đúng structure
+- Verify signals subcollection
+
+8.2. FIREBASE CONSOLE VERIFICATION
+- Check calls collection có documents
+- Verify signals subcollection có OFFER, ANSWER, ICE_CANDIDATE
+- Test security rules bằng cách đọc/ghi từ unauthorized user
+
+================================================================================
+9. KNOWN LIMITATIONS
+================================================================================
+
+- Chỉ hỗ trợ 1-1 calls (không có group call)
+- Cần STUN/TURN servers (dùng Google's free STUN cho development)
+- Không hỗ trợ call waiting
+- Không có call recording
+- Không có call history UI (chỉ lưu trong Firestore)
+
+================================================================================
+10. FUTURE IMPROVEMENTS
+================================================================================
+
+- Group voice/video calls
+- Call history UI với filter (missed, incoming, outgoing)
+- Call quality indicators
+- Screen sharing
+- Noise cancellation
+- Self-hosted TURN server cho production
+- Picture-in-Picture mode cho video call
+- Call statistics (bitrate, packet loss, etc.)
+
+================================================================================
+11. THAM KHẢO
+================================================================================
+
+- WebRTC Official: https://webrtc.org/
+- Stream WebRTC Android: https://github.com/GetStream/webrtc-android
+- Firebase WebRTC Codelab: https://webrtc.org/getting-started/firebase-rtc-codelab
+- Android Permissions: https://developer.android.com/training/permissions/requesting
+
+Project Documentation:
+- 00_NAMING_CONVENTION.txt
+- 02_architecture_mvvm-migration.txt
+- 04_config_firestore-security-rules.txt
+- 05_bugfix_friend-request.txt
+- 06_optimization_image-loading.txt
+- 09_bugfix_filter-chip.txt
+
+================================================================================
+PHIÊN BẢN
+================================================================================
+
+Tạo ngày: 16/12/2025
+Cập nhật lần cuối: 16/12/2025
+Phiên bản: 1.0
+Trạng thái: Planning Complete - Chờ User Review
