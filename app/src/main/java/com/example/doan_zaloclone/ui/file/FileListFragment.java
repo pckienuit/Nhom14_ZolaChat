@@ -5,10 +5,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.ArrayAdapter;
 import android.widget.ProgressBar;
-import android.widget.Spinner;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -79,9 +76,9 @@ public class FileListFragment extends Fragment {
     private Chip domainFilterChip;
     private Chip clearFiltersChip;
     
-    // Filter dropdowns (category-specific)
-    private Spinner mediaFilterSpinner;
-    private Spinner fileTypeFilterSpinner;
+    // Filter chips for dropdowns (category-specific)
+    private Chip mediaFilterChip;
+    private Chip fileTypeFilterChip;
     
     // Filter state
     private Set<String> selectedSenderIds = new HashSet<>();
@@ -151,9 +148,9 @@ public class FileListFragment extends Fragment {
         domainFilterChip = view.findViewById(R.id.domainFilterChip);
         clearFiltersChip = view.findViewById(R.id.clearFiltersChip);
         
-        // Filter dropdowns
-        mediaFilterSpinner = view.findViewById(R.id.mediaFilterSpinner);
-        fileTypeFilterSpinner = view.findViewById(R.id.fileTypeFilterSpinner);
+        // Filter chips for dropdowns
+        mediaFilterChip = view.findViewById(R.id.mediaFilterChip);
+        fileTypeFilterChip = view.findViewById(R.id.fileTypeFilterChip);
     }
     
     private void setupViewModel() {
@@ -268,78 +265,55 @@ public class FileListFragment extends Fragment {
     }
     
     private void setupCategoryFilterDropdowns() {
-        // Setup media filter dropdown
+        // Setup media filter chip
         if (category == FileCategory.MEDIA) {
-            mediaFilterSpinner.setVisibility(View.VISIBLE);
-            ArrayAdapter<CharSequence> mediaAdapter = ArrayAdapter.createFromResource(
-                requireContext(),
-                R.array.media_type_options,
-                android.R.layout.simple_spinner_item
-            );
-            mediaAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            mediaFilterSpinner.setAdapter(mediaAdapter);
-            mediaFilterSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    switch (position) {
-                        case 0: // Tất cả
-                            viewModel.setMediaTypeFilter(FileViewModel.MediaTypeFilter.ALL);
-                            break;
-                        case 1: // Ảnh
-                            viewModel.setMediaTypeFilter(FileViewModel.MediaTypeFilter.IMAGES_ONLY);
-                            break;
-                        case 2: // Video
-                            viewModel.setMediaTypeFilter(FileViewModel.MediaTypeFilter.VIDEOS_ONLY);
-                            break;
-                    }
-                }
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
-            });
+            mediaFilterChip.setVisibility(View.VISIBLE);
+            mediaFilterChip.setOnClickListener(v -> showMediaFilterDialog());
         } else {
-            mediaFilterSpinner.setVisibility(View.GONE);
+            mediaFilterChip.setVisibility(View.GONE);
         }
         
-        // Setup file type filter dropdown
+        // Setup file type filter chip
         if (category == FileCategory.FILES) {
-            fileTypeFilterSpinner.setVisibility(View.VISIBLE);
-            ArrayAdapter<CharSequence> fileTypeAdapter = ArrayAdapter.createFromResource(
-                requireContext(),
-                R.array.file_type_options,
-                android.R.layout.simple_spinner_item
-            );
-            fileTypeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            fileTypeFilterSpinner.setAdapter(fileTypeAdapter);
-            fileTypeFilterSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-                @Override
-                public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                    switch (position) {
-                        case 0: // Tất cả
-                            viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.ALL);
-                            break;
-                        case 1: // PDF
-                            viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.PDF);
-                            break;
-                        case 2: // Word
-                            viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.WORD);
-                            break;
-                        case 3: // Excel
-                            viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.EXCEL);
-                            break;
-                        case 4: // PowerPoint
-                            viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.POWERPOINT);
-                            break;
-                        case 5: // Archive
-                            viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.ARCHIVE);
-                            break;
-                    }
-                }
-                @Override
-                public void onNothingSelected(AdapterView<?> parent) {}
-            });
+            fileTypeFilterChip.setVisibility(View.VISIBLE);
+            fileTypeFilterChip.setOnClickListener(v -> showFileTypeFilterDialog());
         } else {
-            fileTypeFilterSpinner.setVisibility(View.GONE);
+            fileTypeFilterChip.setVisibility(View.GONE);
         }
+    }
+    
+    private void showMediaFilterDialog() {
+        String[] options = getResources().getStringArray(R.array.media_type_options);
+        int currentSelection = viewModel.getMediaTypeFilterLiveData().getValue() == null ? 0 :
+                viewModel.getMediaTypeFilterLiveData().getValue().ordinal();
+        
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Loại media")
+                .setSingleChoiceItems(options, currentSelection, (dialog, which) -> {
+                    FileViewModel.MediaTypeFilter filter = FileViewModel.MediaTypeFilter.values()[which];
+                    viewModel.setMediaTypeFilter(filter);
+                    mediaFilterChip.setText(options[which]);
+                    dialog.dismiss();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+    
+    private void showFileTypeFilterDialog() {
+        String[] options = getResources().getStringArray(R.array.file_type_options);
+        int currentSelection = viewModel.getFileTypeFilterLiveData().getValue() == null ? 0 :
+                viewModel.getFileTypeFilterLiveData().getValue().ordinal();
+        
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Loại file")
+                .setSingleChoiceItems(options, currentSelection, (dialog, which) -> {
+                    FileViewModel.FileTypeFilter filter = FileViewModel.FileTypeFilter.values()[which];
+                    viewModel.setFileTypeFilter(filter);
+                    fileTypeFilterChip.setText(options[which]);
+                    dialog.dismiss();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
     }
     
     private void observeData() {
