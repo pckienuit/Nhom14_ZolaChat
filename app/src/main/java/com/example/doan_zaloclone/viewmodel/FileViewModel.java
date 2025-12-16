@@ -60,6 +60,7 @@ public class FileViewModel extends BaseViewModel {
     private final MutableLiveData<Long> filterEndDateLiveData = new MutableLiveData<>(null);
     private final MutableLiveData<MediaTypeFilter> mediaTypeFilterLiveData = new MutableLiveData<>(MediaTypeFilter.ALL);
     private final MutableLiveData<FileTypeFilter> fileTypeFilterLiveData = new MutableLiveData<>(FileTypeFilter.ALL);
+    private final MutableLiveData<Set<String>> selectedDomainsLiveData = new MutableLiveData<>(new HashSet<>());
     
     // Filtered LiveData (combines original data + filters)
     private final MediatorLiveData<Resource<List<FileItem>>> filteredMediaFilesLiveData = new MediatorLiveData<>();
@@ -127,6 +128,8 @@ public class FileViewModel extends BaseViewModel {
         filteredLinksLiveData.addSource(filterStartDateLiveData, date -> 
             filteredLinksLiveData.setValue(applyFilters(linksLiveData.getValue())));
         filteredLinksLiveData.addSource(filterEndDateLiveData, date -> 
+            filteredLinksLiveData.setValue(applyFilters(linksLiveData.getValue())));
+        filteredLinksLiveData.addSource(selectedDomainsLiveData, domains -> 
             filteredLinksLiveData.setValue(applyFilters(linksLiveData.getValue())));
     }
     
@@ -406,6 +409,7 @@ public class FileViewModel extends BaseViewModel {
         filterEndDateLiveData.setValue(null);
         mediaTypeFilterLiveData.setValue(MediaTypeFilter.ALL);
         fileTypeFilterLiveData.setValue(FileTypeFilter.ALL);
+        selectedDomainsLiveData.setValue(new HashSet<>());
     }
     
     /**
@@ -420,6 +424,13 @@ public class FileViewModel extends BaseViewModel {
      */
     public void setFileTypeFilter(FileTypeFilter filter) {
         fileTypeFilterLiveData.setValue(filter != null ? filter : FileTypeFilter.ALL);
+    }
+    
+    /**
+     * Set selected domains for filtering (for LINKS category only)
+     */
+    public void setSelectedDomains(Set<String> domains) {
+        selectedDomainsLiveData.setValue(domains != null ? domains : new HashSet<>());
     }
     
     /**
@@ -503,6 +514,15 @@ public class FileViewModel extends BaseViewModel {
                 }
             }
             
+            // Apply domain filter (for LINKS category only)
+            Set<String> domains = selectedDomainsLiveData.getValue();
+            if (domains != null && !domains.isEmpty()) {
+                String itemDomain = item.getDomain();
+                if (itemDomain == null || !domains.contains(itemDomain)) {
+                    continue;
+                }
+            }
+            
             // Item passed all filters
             filtered.add(item);
         }
@@ -547,6 +567,31 @@ public class FileViewModel extends BaseViewModel {
         }
         
         result.setValue(new ArrayList<>(senderMap.values()));
+        return result;
+    }
+    
+    /**
+     * Get unique domains from links for filter dialog
+     */
+    public LiveData<List<String>> getUniqueDomains() {
+        MutableLiveData<List<String>> result = new MutableLiveData<>();
+        
+        // Get domains from link items only
+        List<String> domains = new ArrayList<>();
+        if (currentLinks != null) {
+            Set<String> uniqueDomains = new HashSet<>();
+            for (FileItem item : currentLinks) {
+                String domain = item.getDomain();
+                if (domain != null && !domain.isEmpty()) {
+                    uniqueDomains.add(domain);
+                }
+            }
+            domains = new ArrayList<>(uniqueDomains);
+            // Sort alphabetically
+            java.util.Collections.sort(domains);
+        }
+        
+        result.setValue(domains);
         return result;
     }
 }

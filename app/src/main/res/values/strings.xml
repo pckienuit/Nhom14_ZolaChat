@@ -42,4 +42,9 @@
     <string name="excel_files">Excel</string>
     <string name="powerpoint_files">PowerPoint</string>
     <string name="archive_files">Archive</string>
+    
+    <!-- Domain Filter Strings -->
+    <string name="filter_by_domain">Lọc theo tên miền</string>
+    <string name="domain_filter_title">Chọn tên miền</string>
+    <string name="all_domains">Tất cả tên miền</string>
 </resources>

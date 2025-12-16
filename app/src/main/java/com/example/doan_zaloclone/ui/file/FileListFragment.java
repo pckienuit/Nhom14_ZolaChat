@@ -73,6 +73,7 @@ public class FileListFragment extends Fragment {
     private SearchView searchView; // Will be from menu
     private Chip senderFilterChip;
     private Chip dateFilterChip;
+    private Chip domainFilterChip;
     private Chip clearFiltersChip;
     
     // Media filter chips (only for MEDIA category)
@@ -95,6 +96,7 @@ public class FileListFragment extends Fragment {
     private Long filterStartDate = null;
     private Long filterEndDate = null;
     private TimeFilterDialog.TimeFilterPreset currentTimePreset = TimeFilterDialog.TimeFilterPreset.NONE;
+    private Set<String> selectedDomains = new HashSet<>();
     
     private boolean isLoading = false;
     private boolean isInitialLoad = true;
@@ -155,6 +157,7 @@ public class FileListFragment extends Fragment {
         // Filter UI (searchView will be initialized from menu)
         senderFilterChip = view.findViewById(R.id.senderFilterChip);
         dateFilterChip = view.findViewById(R.id.dateFilterChip);
+        domainFilterChip = view.findViewById(R.id.domainFilterChip);
         clearFiltersChip = view.findViewById(R.id.clearFiltersChip);
         
         // Media filter chips
@@ -273,7 +276,15 @@ public class FileListFragment extends Fragment {
     private void setupFilterChips() {
         senderFilterChip.setOnClickListener(v -> showSenderFilterDialog());
         dateFilterChip.setOnClickListener(v -> showDateRangePickerDialog());
+        domainFilterChip.setOnClickListener(v -> showDomainFilterDialog());
         clearFiltersChip.setOnClickListener(v -> clearAllFilters());
+        
+        // Show domain filter chip only for LINKS category
+        if (category == FileCategory.LINKS) {
+            domainFilterChip.setVisibility(View.VISIBLE);
+        } else {
+            domainFilterChip.setVisibility(View.GONE);
+        }
     }
     
     private void setupMediaFilterChips() {
@@ -491,10 +502,12 @@ public class FileListFragment extends Fragment {
         filterStartDate = null;
         filterEndDate = null;
         currentTimePreset = TimeFilterDialog.TimeFilterPreset.NONE;
+        selectedDomains.clear();
         
         viewModel.clearFilters();
         updateSenderChipText();
         updateDateChipText();
+        updateDomainChipText();
         updateClearFiltersVisibility();
     }
     
@@ -538,7 +551,61 @@ public class FileListFragment extends Fragment {
     private void updateClearFiltersVisibility() {
         String query = (searchView != null) ? searchView.getQuery().toString() : "";
         boolean hasFilters = !query.isEmpty() || !selectedSenderIds.isEmpty() 
-                || filterStartDate != null || filterEndDate != null;
+                || filterStartDate != null || filterEndDate != null
+                || !selectedDomains.isEmpty();
         clearFiltersChip.setVisibility(hasFilters ? View.VISIBLE : View.GONE);
+    }
+    
+    private void showDomainFilterDialog() {
+        viewModel.getUniqueDomains().observe(getViewLifecycleOwner(), domains -> {
+            if (domains == null || domains.isEmpty()) {
+                Toast.makeText(requireContext(), "Không có tên miền nào", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // Create selection array
+            String[] domainArray = domains.toArray(new String[0]);
+            boolean[] checkedItems = new boolean[domainArray.length];
+            
+            // Mark currently selected domains
+            for (int i = 0; i < domainArray.length; i++) {
+                checkedItems[i] = selectedDomains.contains(domainArray[i]);
+            }
+            
+            AlertDialog dialog = new AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.domain_filter_title)
+                    .setMultiChoiceItems(domainArray, checkedItems, (dialogInterface, which, isChecked) -> {
+                        if (isChecked) {
+                            selectedDomains.add(domainArray[which]);
+                        } else {
+                            selectedDomains.remove(domainArray[which]);
+                        }
+                    })
+                    .setPositiveButton(R.string.apply, (dialogInterface, i) -> {
+                        viewModel.setSelectedDomains(selectedDomains);
+                        updateDomainChipText();
+                        updateClearFiltersVisibility();
+                    })
+                    .setNegativeButton(R.string.cancel, null)
+                    .setNeutralButton(R.string.all_domains, (dialogInterface, i) -> {
+                        selectedDomains.clear();
+                        viewModel.setSelectedDomains(selectedDomains);
+                        updateDomainChipText();
+                        updateClearFiltersVisibility();
+                    })
+                    .create();
+            dialog.show();
+        });
+    }
+    
+    private void updateDomainChipText() {
+        if (!selectedDomains.isEmpty()) {
+            int count = selectedDomains.size();
+            domainFilterChip.setText(getString(R.string.filter_by_domain) + " (" + count + ")");
+            domainFilterChip.setChecked(true);
+        } else {
+            domainFilterChip.setText(R.string.filter_by_domain);
+            domainFilterChip.setChecked(false);
+        }
     }
 }

@@ -202,6 +202,34 @@ public class FileItem {
     }
     
     /**
+     * Get domain from URL (for link items)
+     */
+    public String getDomain() {
+        String url = getExtractedUrl();
+        if (url == null) return null;
+        
+        try {
+            // Remove protocol
+            String domain = url.replaceFirst("^https?://", "");
+            // Remove www. prefix if present
+            domain = domain.replaceFirst("^www\\.", "");
+            // Remove path (everything after first /)
+            int slashIndex = domain.indexOf('/');
+            if (slashIndex > 0) {
+                domain = domain.substring(0, slashIndex);
+            }
+            // Remove port if present
+            int colonIndex = domain.indexOf(':');
+            if (colonIndex > 0) {
+                domain = domain.substring(0, colonIndex);
+            }
+            return domain.toLowerCase();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+    
+    /**
      * Check if this is a video file
      */
     public boolean isVideo() {
