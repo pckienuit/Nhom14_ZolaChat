@@ -1,0 +1,497 @@
+================================================================================
+CALL SYSTEM DEBUG & FIX - COMPREHENSIVE DOCUMENTATION
+================================================================================
+
+Date: 16/12/2025
+Category: bugfix
+Files: 11_bugfix_call-system-debug.txt
+
+================================================================================
+OVERVIEW
+================================================================================
+
+Debugging and fixing critical bugs in the voice/video call system that prevented
+successful call connections between two devices. This document details all 9 bugs
+discovered and their solutions.
+
+Main Issue: Calls initiated but never connected - receiver didn't detect incoming
+calls, and even when detected, WebRTC connections failed with multiple errors.
+
+
+================================================================================
+BUGS DISCOVERED & FIXES
+================================================================================
+
+--------------------------------------------------------------------------------
+BUG #1: Missing Call ID and Receiver ID in Intent
+--------------------------------------------------------------------------------
+
+LOCATION: MainActivity.java (lines 86-93)
+
+SYMPTOM:
+- Receiver's CallActivity crashed when accepting call
+- Log: "Invalid call ID" → finish()
+
+ROOT CAUSE:
+MainActivity.listenToIncomingCalls() launched CallActivity but didn't pass 
+critical extras: EXTRA_CALL_ID and EXTRA_RECEIVER_ID
+
+BEFORE:
+```java
+Intent intent = new Intent(MainActivity.this, CallActivity.class);
+intent.putExtra("call_id", call.getId());           // Có code này nhưng...
+intent.putExtra("is_incoming", true);
+intent.putExtra("caller_id", call.getCallerId());
+intent.putExtra("call_type", call.getType());
+// THIẾU: receiver_id
+startActivity(intent);
+```
+
+FIX:
+```java
+intent.putExtra(CallActivity.EXTRA_CALL_ID, call.getId());
+intent.putExtra(CallActivity.EXTRA_RECEIVER_ID, currentUserId);  // ADDED
+```
+
+IMPACT: Receiver can now properly identify and accept calls
+
+
+--------------------------------------------------------------------------------
+BUG #2: Incorrect Video Flag Handling
+--------------------------------------------------------------------------------
+
+LOCATION: MainActivity.java, CallActivity.java
+
+SYMPTOM:
+- Video calls displayed as voice calls (no camera UI)
+- isVideo always = false
+
+ROOT CAUSE:
+MainActivity passed call.getType() (string "VOICE"/"VIDEO") but CallActivity 
+expected boolean isVideo flag
+
+BEFORE:
+```java
+// MainActivity
+intent.putExtra("call_type", call.getType());  // String
+
+// CallActivity  
+isVideo = intent.getBooleanExtra(EXTRA_IS_VIDEO, false);  // Always false!
+```
+
+FIX:
+```java
+// MainActivity - convert to boolean
+boolean isVideo = Call.TYPE_VIDEO.equals(call.getType());
+intent.putExtra(CallActivity.EXTRA_IS_VIDEO, isVideo);
+```
+
+IMPACT: Video calls now initialize with correct media configuration
+
+
+--------------------------------------------------------------------------------
+BUG #3: Missing Caller Name
+--------------------------------------------------------------------------------
+
+LOCATION: MainActivity.java
+
+SYMPTOM:
+- Incoming call screen showed "Unknown" or null for caller name
+
+ROOT CAUSE:
+MainActivity didn't fetch caller name from Firestore before launching CallActivity
+
+FIX:
+```java
+// Added new method
+private void fetchCallerNameAndLaunchCallActivity(Call call, String currentUserId) {
+    FirebaseFirestore.getInstance()
+        .collection("users")
+        .document(call.getCallerId())
+        .get()
+        .addOnSuccessListener(doc -> {
+            String callerName = doc.exists() ? doc.getString("name") : "Unknown";
+            launchIncomingCallActivity(call, currentUserId, callerName);
+        });
+}
+```
+
+IMPACT: Better UX - receiver sees caller's actual name
+
+
+--------------------------------------------------------------------------------
+BUG #4: Duplicate Call Activities
+--------------------------------------------------------------------------------
+
+LOCATION: MainActivity.java
+
+SYMPTOM:
+- Multiple CallActivity instances opened for same call
+- Firestore listener triggered multiple times
+
+ROOT CAUSE:
+- No FLAG_ACTIVITY_SINGLE_TOP
+- lastHandledCallId check not sufficient
+
+FIX:
+```java
+intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+```
+
+IMPACT: Only one CallActivity per call
+
+
+--------------------------------------------------------------------------------
+BUG #5: Caller Not Receiving Status Updates
+--------------------------------------------------------------------------------
+
+LOCATION: CallViewModel.java (initiateCall method)
+
+SYMPTOM:
+- Caller stuck at "Đang gọi..." screen
+- Never knew when receiver accepted
+
+ROOT CAUSE:
+initiateCall() sent offer but didn't call listenToCall() to receive status updates
+(CALLING → RINGING → ONGOING)
+
+BEFORE:
+```java
+callRepository.sendSignal(currentCallId, offerSignal, listener -> {
+    Log.d(TAG, "Offer sent successfully");
+    listenToSignals(currentCallId);  // Only listened to signals, not call status!
+});
+```
+
+FIX:
+```java
+@Override
+public void onSuccess() {
+    Log.d(TAG, "Offer sent successfully");
+    listenToCall(currentCallId);     // ADDED - now receives status updates
+    listenToSignals(currentCallId);
+}
+```
+
+IMPACT: Caller now receives real-time call status updates
+
+
+--------------------------------------------------------------------------------
+BUG #6: Wrong isVideo Flag in handleOffer()
+--------------------------------------------------------------------------------
+
+LOCATION: CallViewModel.java (handleOffer method)
+
+SYMPTOM:
+- Receiver initialized wrong WebRTC connection type
+- Video calls processed as audio-only
+
+ROOT CAUSE:
+handleOffer() tried to get isVideo from currentCall LiveData, but LiveData wasn't
+populated yet when handleOffer was called (race condition)
+
+BEFORE:
+```java
+private void handleOffer(String sdp) {
+    Call call = currentCall.getValue().getData();  // NULL or not ready!
+    boolean isVideo = call != null && call.isVideoCall();
+    webRtcRepository.initializePeerConnection(currentCallId, isVideo);
+}
+```
+
+FIX:
+```java
+// Store isVideo when accepting call
+public void acceptCall(String callId, String receiverId, boolean isVideo) {
+    this.currentCallIsVideo = isVideo;  // Store it
+    // ...
+}
+
+private void handleOffer(String sdp) {
+    // Use stored value instead of LiveData
+    boolean isVideo = currentCallIsVideo;
+    // ...
+}
+```
+
+IMPACT: Receiver initializes correct media configuration
+
+
+--------------------------------------------------------------------------------
+BUG #7: Stale Call Detection (Old Calls)
+--------------------------------------------------------------------------------
+
+LOCATION: CallRepository.java (listenToIncomingCalls)
+
+SYMPTOM:
+- Opening app automatically showed old call from previous test
+- Every app launch triggered incoming call screen
+
+ROOT CAUSE:
+Query detected ALL calls with status CALLING/RINGING, including old ones
+
+INITIAL FIX ATTEMPT - Firestore Filter:
+```java
+.whereGreaterThan("startTime", twoMinutesAgo)
+```
+RESULT: ERROR - "The query requires an index"
+
+FINAL FIX - Client-Side Filter:
+```java
+for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+    Call call = doc.toObject(Call.class);
+    
+    // CLIENT-SIDE TIMESTAMP CHECK
+    if (call.getStartTime() < twoMinutesAgo) {
+        Log.d(TAG, "Skipping old call: " + call.getId());
+        continue;
+    }
+    
+    listener.onIncomingCall(call);
+}
+```
+
+IMPACT: Only recent calls (< 2 minutes) are detected
+
+NOTE: For production, create Firestore composite index for better performance
+
+
+--------------------------------------------------------------------------------
+BUG #8: Infinite Signal Processing Loop
+--------------------------------------------------------------------------------
+
+LOCATION: CallViewModel.java (listenToSignals method)
+
+SYMPTOM:
+- Log showed "Received 2129 signals"
+- "WebRTC connection failed" spammed dozens of times
+- App hung/slow
+
+ROOT CAUSE:
+Firestore listener returned ALL signals every time a new one was added.
+listenToSignals() processed all 2000+ signals EVERY TIME, including own signals
+
+BEFORE:
+```java
+public void onSignalsChanged(List<CallSignal> signals) {
+    Log.d(TAG, "Received " + signals.size() + " signals");
+    for (CallSignal signal : signals) {
+        if (!signal.getSenderId().equals(currentUserId)) {
+            handleSignal(signal);  // Process EVERY signal EVERY time
+        }
+    }
+}
+```
+
+FIX - Track Processed Signals:
+```java
+private Set<String> processedSignalIds = new HashSet<>();
+
+public void onSignalsChanged(List<CallSignal> signals) {
+    int newSignalsCount = 0;
+    for (CallSignal signal : signals) {
+        // Skip if already processed
+        if (processedSignalIds.contains(signal.getId())) {
+            continue;
+        }
+        
+        // Skip own signals
+        if (currentUserId.equals(signal.getSenderId())) {
+            processedSignalIds.add(signal.getId());
+            continue;
+        }
+        
+        processedSignalIds.add(signal.getId());
+        newSignalsCount++;
+        handleSignal(signal);
+    }
+    Log.d(TAG, "Processed " + newSignalsCount + " new signals");
+}
+```
+
+IMPACT: Reduced from 2000+ to 1-2 signals processed per update
+
+
+--------------------------------------------------------------------------------
+BUG #9: WebRTC State Race Condition
+--------------------------------------------------------------------------------
+
+LOCATION: CallViewModel.java (acceptCall method)
+
+SYMPTOM:
+- Error: "Failed to set remote description: Called in wrong state: stable"
+- Calls failed to connect despite all other fixes
+
+ROOT CAUSE:
+CRITICAL TIMING ISSUE:
+1. acceptCall() updated call status to RINGING
+2. Started listenToSignals() immediately
+3. Firestore returned OFFER signal
+4. handleOffer() tried to initialize WebRTC
+5. But WebRTC wasn't ready yet!
+
+Flow của lỗi:
+```
+acceptCall() → updateCallStatus(RINGING) → listenToSignals()
+                                            ↓
+handle OFFER → init WebRTC → TOO LATE!
+PeerConnection đã ở wrong state
+```
+
+BEFORE:
+```java
+public void acceptCall(String callId, String receiverId, boolean isVideo) {
+    this.currentCallIsVideo = isVideo;
+    connectionState.setValue("ACCEPTING");
+    
+    // Update status first
+    callRepository.updateCallStatus(callId, STATUS_RINGING, listener -> {
+        listenToCall(callId);
+        listenToSignals(callId);  // Signals arrive immediately!
+    });
+}
+
+private void handleOffer(String sdp) {
+    // Initialize WebRTC HERE - too late if OFFER already processed
+    webRtcRepository.initializePeerConnection(currentCallId, isVideo);
+    webRtcRepository.createAnswer(sdp, ...);
+}
+```
+
+FIX - Initialize WebRTC BEFORE Listening:
+```java
+public void acceptCall(String callId, String receiverId, boolean isVideo) {
+    this.currentCallIsVideo = isVideo;
+    connectionState.setValue("ACCEPTING");
+    
+    // CRITICAL FIX: Initialize WebRTC BEFORE listening to signals
+    Log.d(TAG, "Initializing WebRTC for " + (isVideo ? "video" : "voice"));
+    webRtcRepository.initializePeerConnection(callId, isVideo);
+    
+    // NOW update status and listen
+    callRepository.updateCallStatus(callId, STATUS_RINGING, listener -> {
+        listenToCall(callId);
+        listenToSignals(callId);  // WebRTC is ready now
+    });
+}
+
+private void handleOffer(String sdp) {
+    // WebRTC already initialized, just create answer
+    webRtcRepository.createAnswer(sdp, ...);
+}
+```
+
+IMPACT: PeerConnection in correct state when processing OFFER → connection succeeds
+
+
+================================================================================
+FILES MODIFIED
+================================================================================
+
+1. MainActivity.java
+   - Added fetchCallerNameAndLaunchCallActivity()
+   - Added launchIncomingCallActivity()
+   - Fixed Intent extras (call_id, receiver_id, is_video, caller_name)
+   - Added FLAG_ACTIVITY_SINGLE_TOP
+   - Added comprehensive debug logging
+
+2. CallActivity.java
+   - Added receiverId instance variable
+   - Updated onCreate() to read EXTRA_RECEIVER_ID
+   - Updated acceptCall() to use receiverId and pass isVideo
+
+3. CallViewModel.java
+   - Added currentCallIsVideo field
+   - Added listenToCall() in initiateCall() (Bug #5)
+   - Updated acceptCall() signature with isVideo parameter (Bug #6)
+   - Moved WebRTC initialization before listenToSignals() (Bug #9)
+   - Added signal deduplication with HashSet (Bug #8)
+   - Added null ID handling for signals
+
+4. CallRepository.java
+   - Changed from Firestore timestamp filter to client-side filter (Bug #7)
+   - Added comprehensive logging for debugging
+   - Added old call detection and skipping
+
+================================================================================
+TESTING RESULTS
+================================================================================
+
+[PASS] Caller can initiate voice calls
+[PASS] Caller can initiate video calls
+[PASS] Receiver detects incoming calls (within 2 minutes)
+[PASS] Receiver sees correct caller name
+[PASS] Video flag correctly set for both parties
+[PASS] WebRTC initialization timing correct
+[PASS] No duplicate CallActivity instances
+[PASS] No infinite signal processing loops
+[PASS] Calls connect successfully
+[PASS] Audio stream established
+[PASS] Video stream established (for video calls)
+[PASS] Accept/Reject/End call functions work
+[PASS] Call status updates sync between devices
+
+================================================================================
+KNOWN LIMITATIONS & FUTURE IMPROVEMENTS
+================================================================================
+
+1. FIRESTORE INDEX
+   Current: Client-side timestamp filtering (works but less efficient)
+   Recommended: Create composite index for server-side filtering
+   
+   Index fields:
+   - receiverId (Ascending)
+   - status (Ascending)
+   - startTime (Ascending)
+   
+   Benefits:
+   - Reduced bandwidth (Firestore filters before sending)
+   - Better performance with large call history
+   - Lower battery usage
+
+2. SIGNAL DEDUPLICATION
+   Current: Using HashSet in memory
+   Issue: Cleared on app restart
+   Improvement: Could persist processed signal IDs if needed
+
+3. CONCURRENT CALL HANDLING
+   Current: isInCall flag prevents multiple calls
+   Improvement: Could implement call waiting/queue system
+
+================================================================================
+PERFORMANCE IMPACT
+================================================================================
+
+Before Fixes:
+- 2000+ signals processed per update
+- Multiple Firestore queries per call
+- Redundant WebRTC initializations
+
+After Fixes:
+- 1-2 signals processed per update (99% reduction)
+- Minimal Firestore overhead
+- Single WebRTC initialization per call
+
+Estimated improvement: 95% reduction in processing overhead
+
+================================================================================
+CONCLUSION
+================================================================================
+
+All 9 critical bugs in the call system have been identified and fixed. The
+system now successfully establishes voice and video calls between two devices
+with proper signaling, media streaming, and UI updates.
+
+Key learnings:
+- Timing is CRITICAL in WebRTC - initialize before processing signals
+- Firestore listeners return ALL matching docs, must track processed items
+- Client-side filtering can workaround index requirements
+- Comprehensive logging essential for debugging distributed systems
+
+Total development time: ~4 hours
+Lines of code modified: ~150 lines across 4 files
+Bugs fixed: 9 critical bugs
+
+================================================================================
+END OF DOCUMENT
+================================================================================
