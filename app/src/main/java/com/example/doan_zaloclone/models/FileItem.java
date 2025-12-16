@@ -222,6 +222,72 @@ public class FileItem {
     }
     
     /**
+     * Check if this is a PDF file
+     */
+    public boolean isPdf() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String fileName = message.getFileName();
+        return (mimeType != null && mimeType.contains("pdf")) ||
+               (fileName != null && fileName.toLowerCase().endsWith(".pdf"));
+    }
+    
+    /**
+     * Check if this is a Word document
+     */
+    public boolean isWord() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String fileName = message.getFileName();
+        return (mimeType != null && (mimeType.contains("word") || mimeType.contains("msword") || 
+                mimeType.contains("officedocument.wordprocessing"))) ||
+               (fileName != null && (fileName.toLowerCase().endsWith(".doc") || 
+                fileName.toLowerCase().endsWith(".docx")));
+    }
+    
+    /**
+     * Check if this is an Excel spreadsheet
+     */
+    public boolean isExcel() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String fileName = message.getFileName();
+        return (mimeType != null && (mimeType.contains("excel") || mimeType.contains("spreadsheet") || 
+                mimeType.contains("ms-excel"))) ||
+               (fileName != null && (fileName.toLowerCase().endsWith(".xls") || 
+                fileName.toLowerCase().endsWith(".xlsx")));
+    }
+    
+    /**
+     * Check if this is a PowerPoint presentation
+     */
+    public boolean isPowerPoint() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String fileName = message.getFileName();
+        return (mimeType != null && (mimeType.contains("powerpoint") || mimeType.contains("presentation") || 
+                mimeType.contains("ms-powerpoint"))) ||
+               (fileName != null && (fileName.toLowerCase().endsWith(".ppt") || 
+                fileName.toLowerCase().endsWith(".pptx")));
+    }
+    
+    /**
+     * Check if this is an archive file (zip, rar, 7z, etc.)
+     */
+    public boolean isArchive() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String fileName = message.getFileName();
+        boolean isMimeArchive = mimeType != null && (mimeType.contains("zip") || 
+                mimeType.contains("rar") || mimeType.contains("compress") || 
+                mimeType.contains("archive"));
+        boolean isFileArchive = fileName != null && (fileName.toLowerCase().endsWith(".zip") || 
+                fileName.toLowerCase().endsWith(".rar") || fileName.toLowerCase().endsWith(".7z") || 
+                fileName.toLowerCase().endsWith(".tar") || fileName.toLowerCase().endsWith(".gz"));
+        return isMimeArchive || isFileArchive;
+    }
+    
+    /**
      * Get file type label (e.g., "PDF", "DOC", "MP4")
      */
     public String getFileTypeLabel() {

@@ -31,6 +31,16 @@ public class FileViewModel extends BaseViewModel {
         VIDEOS_ONLY
     }
     
+    // File type filter enum
+    public enum FileTypeFilter {
+        ALL,
+        PDF,
+        WORD,
+        EXCEL,
+        POWERPOINT,
+        ARCHIVE
+    }
+    
     private static final int PAGE_SIZE = 50;
     
     private final FileRepository fileRepository;
@@ -49,6 +59,7 @@ public class FileViewModel extends BaseViewModel {
     private final MutableLiveData<Long> filterStartDateLiveData = new MutableLiveData<>(null);
     private final MutableLiveData<Long> filterEndDateLiveData = new MutableLiveData<>(null);
     private final MutableLiveData<MediaTypeFilter> mediaTypeFilterLiveData = new MutableLiveData<>(MediaTypeFilter.ALL);
+    private final MutableLiveData<FileTypeFilter> fileTypeFilterLiveData = new MutableLiveData<>(FileTypeFilter.ALL);
     
     // Filtered LiveData (combines original data + filters)
     private final MediatorLiveData<Resource<List<FileItem>>> filteredMediaFilesLiveData = new MediatorLiveData<>();
@@ -102,6 +113,8 @@ public class FileViewModel extends BaseViewModel {
         filteredFilesLiveData.addSource(filterStartDateLiveData, date -> 
             filteredFilesLiveData.setValue(applyFilters(filesLiveData.getValue())));
         filteredFilesLiveData.addSource(filterEndDateLiveData, date -> 
+            filteredFilesLiveData.setValue(applyFilters(filesLiveData.getValue())));
+        filteredFilesLiveData.addSource(fileTypeFilterLiveData, fileType -> 
             filteredFilesLiveData.setValue(applyFilters(filesLiveData.getValue())));
         
         // Links filtering
@@ -392,6 +405,7 @@ public class FileViewModel extends BaseViewModel {
         filterStartDateLiveData.setValue(null);
         filterEndDateLiveData.setValue(null);
         mediaTypeFilterLiveData.setValue(MediaTypeFilter.ALL);
+        fileTypeFilterLiveData.setValue(FileTypeFilter.ALL);
     }
     
     /**
@@ -399,6 +413,13 @@ public class FileViewModel extends BaseViewModel {
      */
     public void setMediaTypeFilter(MediaTypeFilter filter) {
         mediaTypeFilterLiveData.setValue(filter != null ? filter : MediaTypeFilter.ALL);
+    }
+    
+    /**
+     * Set file type filter (for FILES category only)
+     */
+    public void setFileTypeFilter(FileTypeFilter filter) {
+        fileTypeFilterLiveData.setValue(filter != null ? filter : FileTypeFilter.ALL);
     }
     
     /**
@@ -452,6 +473,32 @@ public class FileViewModel extends BaseViewModel {
                     continue;
                 }
                 if (mediaFilter == MediaTypeFilter.VIDEOS_ONLY && !item.isVideo()) {
+                    continue;
+                }
+            }
+            
+            // Apply file type filter (for FILES category only)
+            FileTypeFilter fileFilter = fileTypeFilterLiveData.getValue();
+            if (fileFilter != null && fileFilter != FileTypeFilter.ALL) {
+                boolean matches = false;
+                switch (fileFilter) {
+                    case PDF:
+                        matches = item.isPdf();
+                        break;
+                    case WORD:
+                        matches = item.isWord();
+                        break;
+                    case EXCEL:
+                        matches = item.isExcel();
+                        break;
+                    case POWERPOINT:
+                        matches = item.isPowerPoint();
+                        break;
+                    case ARCHIVE:
+                        matches = item.isArchive();
+                        break;
+                }
+                if (!matches) {
                     continue;
                 }
             }

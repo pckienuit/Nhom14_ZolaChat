@@ -81,6 +81,15 @@ public class FileListFragment extends Fragment {
     private Chip imagesOnlyChip;
     private Chip videosOnlyChip;
     
+    // File type filter chips (only for FILES category)
+    private View fileTypeFilterScrollView;
+    private Chip allFilesChip;
+    private Chip pdfFilesChip;
+    private Chip wordFilesChip;
+    private Chip excelFilesChip;
+    private Chip powerpointFilesChip;
+    private Chip archiveFilesChip;
+    
     // Filter state
     private Set<String> selectedSenderIds = new HashSet<>();
     private Long filterStartDate = null;
@@ -127,6 +136,7 @@ public class FileListFragment extends Fragment {
         setupSwipeRefresh();
         setupFilterChips();
         setupMediaFilterChips();
+        setupFileTypeFilterChips();
         observeData();
         
         // Load data only once on initial creation
@@ -152,6 +162,15 @@ public class FileListFragment extends Fragment {
         allMediaChip = view.findViewById(R.id.allMediaChip);
         imagesOnlyChip = view.findViewById(R.id.imagesOnlyChip);
         videosOnlyChip = view.findViewById(R.id.videosOnlyChip);
+        
+        // File type filter chips
+        fileTypeFilterScrollView = view.findViewById(R.id.fileTypeFilterScrollView);
+        allFilesChip = view.findViewById(R.id.allFilesChip);
+        pdfFilesChip = view.findViewById(R.id.pdfFilesChip);
+        wordFilesChip = view.findViewById(R.id.wordFilesChip);
+        excelFilesChip = view.findViewById(R.id.excelFilesChip);
+        powerpointFilesChip = view.findViewById(R.id.powerpointFilesChip);
+        archiveFilesChip = view.findViewById(R.id.archiveFilesChip);
     }
     
     private void setupViewModel() {
@@ -276,6 +295,40 @@ public class FileListFragment extends Fragment {
             });
         } else {
             mediaFilterScrollView.setVisibility(View.GONE);
+        }
+    }
+    
+    private void setupFileTypeFilterChips() {
+        // Show file type filter chips only for FILES category
+        if (category == FileCategory.FILES) {
+            fileTypeFilterScrollView.setVisibility(View.VISIBLE);
+            
+            // Set up chip listeners
+            allFilesChip.setOnClickListener(v -> {
+                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.ALL);
+            });
+            
+            pdfFilesChip.setOnClickListener(v -> {
+                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.PDF);
+            });
+            
+            wordFilesChip.setOnClickListener(v -> {
+                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.WORD);
+            });
+            
+            excelFilesChip.setOnClickListener(v -> {
+                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.EXCEL);
+            });
+            
+            powerpointFilesChip.setOnClickListener(v -> {
+                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.POWERPOINT);
+            });
+            
+            archiveFilesChip.setOnClickListener(v -> {
+                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.ARCHIVE);
+            });
+        } else {
+            fileTypeFilterScrollView.setVisibility(View.GONE);
         }
     }
     

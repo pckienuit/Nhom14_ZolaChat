@@ -34,4 +34,12 @@
     <string name="all_media">Tất cả</string>
     <string name="images_only">Ảnh</string>
     <string name="videos_only">Video</string>
+    
+    <!-- File Type Filter Strings -->
+    <string name="all_files">Tất cả</string>
+    <string name="pdf_files">PDF</string>
+    <string name="word_files">Word</string>
+    <string name="excel_files">Excel</string>
+    <string name="powerpoint_files">PowerPoint</string>
+    <string name="archive_files">Archive</string>
 </resources>
