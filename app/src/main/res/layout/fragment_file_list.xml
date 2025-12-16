@@ -6,37 +6,59 @@
     android:orientation="vertical"
     android:background="@color/white">
 
-    <!-- Search and Filter Section -->
+    <!-- Filter Chips Section -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="8dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="12dp"
+        android:paddingBottom="12dp"
         android:background="@color/white"
         android:elevation="2dp">
 
-        <!-- SearchView -->
-        <androidx.appcompat.widget.SearchView
-            android:id="@+id/searchView"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/rounded_background"
-            android:queryHint="@string/search_files"
-            app:iconifiedByDefault="false"
-            app:queryBackground="@android:color/transparent" />
-
-        <!-- Filter Chips -->
+        <!-- Filter Chips in Horizontal Scroll -->
         <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:fillViewport="false"
             android:scrollbars="none">
 
             <com.google.android.material.chip.ChipGroup
                 android:id="@+id/filterChipGroup"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                app:singleSelection="false">
+                app:singleSelection="false"
+                app:singleLine="true"
+                app:chipSpacing="8dp"
+                app:chipSpacingHorizontal="8dp">
+
+                <!-- Media Type Filter Chip (visible only for MEDIA category) -->
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/mediaFilterChip"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tất cả"
+                    android:checkable="false"
+                    android:visibility="gone"
+                    app:ensureMinTouchTargetSize="false"
+                    app:chipIcon="@drawable/ic_filter"
+                    app:closeIconVisible="false" />
+
+                <!-- File Type Filter Chip (visible only for FILES category) -->
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/fileTypeFilterChip"
+                    style="@style/Widget.MaterialComponents.Chip.Choice"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tất cả"
+                    android:checkable="false"
+                    android:visibility="gone"
+                    app:ensureMinTouchTargetSize="false"
+                    app:chipIcon="@drawable/ic_filter"
+                    app:closeIconVisible="false" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/senderFilterChip"
@@ -44,6 +66,8 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/filter_by_sender"
+                    android:checkable="false"
+                    app:ensureMinTouchTargetSize="false"
                     app:chipIcon="@drawable/ic_person" />
 
                 <com.google.android.material.chip.Chip
@@ -52,16 +76,44 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/filter_by_date"
+                    android:checkable="false"
+                    app:ensureMinTouchTargetSize="false"
                     app:chipIcon="@drawable/ic_calendar" />
 
                 <com.google.android.material.chip.Chip
-                    android:id="@+id/clearFiltersChip"
-                    style="@style/Widget.MaterialComponents.Chip.Action"
+                    android:id="@+id/domainFilterChip"
+                    style="@style/Widget.MaterialComponents.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/clear_filters"
+                    android:text="@string/filter_by_domain"
                     android:visibility="gone"
-                    app:chipIcon="@drawable/ic_close" />
+                    android:checkable="false"
+                    app:ensureMinTouchTargetSize="false"
+                    app:chipIcon="@drawable/ic_link" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/clearFiltersChip"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    android:text=""
+                    android:contentDescription="Xóa bộ lọc"
+                    app:chipIcon="@drawable/ic_close"
+                    app:chipIconTint="#F44336"
+                    app:chipBackgroundColor="#FFEBEE"
+                    app:chipStrokeColor="#F44336"
+                    app:chipStrokeWidth="1dp"
+                    app:chipIconSize="16dp"
+                    app:chipMinTouchTargetSize="0dp"
+                    app:chipStartPadding="0dp"
+                    app:chipEndPadding="0dp"
+                    app:iconStartPadding="6dp"
+                    app:iconEndPadding="6dp"
+                    app:textStartPadding="0dp"
+                    app:textEndPadding="0dp"
+                    app:chipCornerRadius="50dp"
+                    android:clickable="true"
+                    android:focusable="true" />
 
             </com.google.android.material.chip.ChipGroup>
 

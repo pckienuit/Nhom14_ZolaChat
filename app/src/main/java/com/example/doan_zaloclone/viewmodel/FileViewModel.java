@@ -24,6 +24,23 @@ import java.util.Set;
  */
 public class FileViewModel extends BaseViewModel {
     
+    // Media type filter enum
+    public enum MediaTypeFilter {
+        ALL,
+        IMAGES_ONLY,
+        VIDEOS_ONLY
+    }
+    
+    // File type filter enum
+    public enum FileTypeFilter {
+        ALL,
+        PDF,
+        WORD,
+        EXCEL,
+        POWERPOINT,
+        ARCHIVE
+    }
+    
     private static final int PAGE_SIZE = 50;
     
     private final FileRepository fileRepository;
@@ -41,6 +58,9 @@ public class FileViewModel extends BaseViewModel {
     private final MutableLiveData<Set<String>> selectedSendersLiveData = new MutableLiveData<>(new HashSet<>());
     private final MutableLiveData<Long> filterStartDateLiveData = new MutableLiveData<>(null);
     private final MutableLiveData<Long> filterEndDateLiveData = new MutableLiveData<>(null);
+    private final MutableLiveData<MediaTypeFilter> mediaTypeFilterLiveData = new MutableLiveData<>(MediaTypeFilter.ALL);
+    private final MutableLiveData<FileTypeFilter> fileTypeFilterLiveData = new MutableLiveData<>(FileTypeFilter.ALL);
+    private final MutableLiveData<Set<String>> selectedDomainsLiveData = new MutableLiveData<>(new HashSet<>());
     
     // Filtered LiveData (combines original data + filters)
     private final MediatorLiveData<Resource<List<FileItem>>> filteredMediaFilesLiveData = new MediatorLiveData<>();
@@ -81,6 +101,8 @@ public class FileViewModel extends BaseViewModel {
             filteredMediaFilesLiveData.setValue(applyFilters(mediaFilesLiveData.getValue())));
         filteredMediaFilesLiveData.addSource(filterEndDateLiveData, date -> 
             filteredMediaFilesLiveData.setValue(applyFilters(mediaFilesLiveData.getValue())));
+        filteredMediaFilesLiveData.addSource(mediaTypeFilterLiveData, mediaType -> 
+            filteredMediaFilesLiveData.setValue(applyFilters(mediaFilesLiveData.getValue())));
         
         // Files filtering
         filteredFilesLiveData.addSource(filesLiveData, resource -> 
@@ -93,6 +115,8 @@ public class FileViewModel extends BaseViewModel {
             filteredFilesLiveData.setValue(applyFilters(filesLiveData.getValue())));
         filteredFilesLiveData.addSource(filterEndDateLiveData, date -> 
             filteredFilesLiveData.setValue(applyFilters(filesLiveData.getValue())));
+        filteredFilesLiveData.addSource(fileTypeFilterLiveData, fileType -> 
+            filteredFilesLiveData.setValue(applyFilters(filesLiveData.getValue())));
         
         // Links filtering
         filteredLinksLiveData.addSource(linksLiveData, resource -> 
@@ -104,6 +128,8 @@ public class FileViewModel extends BaseViewModel {
         filteredLinksLiveData.addSource(filterStartDateLiveData, date -> 
             filteredLinksLiveData.setValue(applyFilters(linksLiveData.getValue())));
         filteredLinksLiveData.addSource(filterEndDateLiveData, date -> 
+            filteredLinksLiveData.setValue(applyFilters(linksLiveData.getValue())));
+        filteredLinksLiveData.addSource(selectedDomainsLiveData, domains -> 
             filteredLinksLiveData.setValue(applyFilters(linksLiveData.getValue())));
     }
     
@@ -381,6 +407,38 @@ public class FileViewModel extends BaseViewModel {
         selectedSendersLiveData.setValue(new HashSet<>());
         filterStartDateLiveData.setValue(null);
         filterEndDateLiveData.setValue(null);
+        mediaTypeFilterLiveData.setValue(MediaTypeFilter.ALL);
+        fileTypeFilterLiveData.setValue(FileTypeFilter.ALL);
+        selectedDomainsLiveData.setValue(new HashSet<>());
+    }
+    
+    /**
+     * Set media type filter (for MEDIA category only)
+     */
+    public void setMediaTypeFilter(MediaTypeFilter filter) {
+        mediaTypeFilterLiveData.setValue(filter != null ? filter : MediaTypeFilter.ALL);
+    }
+    
+    /**
+     * Set file type filter (for FILES category only)
+     */
+    public void setFileTypeFilter(FileTypeFilter filter) {
+        fileTypeFilterLiveData.setValue(filter != null ? filter : FileTypeFilter.ALL);
+    }
+    
+    public LiveData<MediaTypeFilter> getMediaTypeFilterLiveData() {
+        return mediaTypeFilterLiveData;
+    }
+    
+    public LiveData<FileTypeFilter> getFileTypeFilterLiveData() {
+        return fileTypeFilterLiveData;
+    }
+    
+    /**
+     * Set selected domains for filtering (for LINKS category only)
+     */
+    public void setSelectedDomains(Set<String> domains) {
+        selectedDomainsLiveData.setValue(domains != null ? domains : new HashSet<>());
     }
     
     /**
@@ -419,10 +477,56 @@ public class FileViewModel extends BaseViewModel {
             // Apply date range filter
             if (startDate != null || endDate != null) {
                 long timestamp = item.getMessage() != null ? item.getMessage().getTimestamp() : 0;
-                if (startDate != null && timestamp < startDate) {
+                if (startDate != null &&  timestamp < startDate) {
                     continue;
                 }
                 if (endDate != null && timestamp > endDate) {
+                    continue;
+                }
+            }
+            
+            // Apply media type filter (for MEDIA category only)
+            MediaTypeFilter mediaFilter = mediaTypeFilterLiveData.getValue();
+            if (mediaFilter != null && mediaFilter != MediaTypeFilter.ALL) {
+                if (mediaFilter == MediaTypeFilter.IMAGES_ONLY && !item.isImage()) {
+                    continue;
+                }
+                if (mediaFilter == MediaTypeFilter.VIDEOS_ONLY && !item.isVideo()) {
+                    continue;
+                }
+            }
+            
+            // Apply file type filter (for FILES category only)
+            FileTypeFilter fileFilter = fileTypeFilterLiveData.getValue();
+            if (fileFilter != null && fileFilter != FileTypeFilter.ALL) {
+                boolean matches = false;
+                switch (fileFilter) {
+                    case PDF:
+                        matches = item.isPdf();
+                        break;
+                    case WORD:
+                        matches = item.isWord();
+                        break;
+                    case EXCEL:
+                        matches = item.isExcel();
+                        break;
+                    case POWERPOINT:
+                        matches = item.isPowerPoint();
+                        break;
+                    case ARCHIVE:
+                        matches = item.isArchive();
+                        break;
+                }
+                if (!matches) {
+                    continue;
+                }
+            }
+            
+            // Apply domain filter (for LINKS category only)
+            Set<String> domains = selectedDomainsLiveData.getValue();
+            if (domains != null && !domains.isEmpty()) {
+                String itemDomain = item.getDomain();
+                if (itemDomain == null || !domains.contains(itemDomain)) {
                     continue;
                 }
             }
@@ -471,6 +575,31 @@ public class FileViewModel extends BaseViewModel {
         }
         
         result.setValue(new ArrayList<>(senderMap.values()));
+        return result;
+    }
+    
+    /**
+     * Get unique domains from links for filter dialog
+     */
+    public LiveData<List<String>> getUniqueDomains() {
+        MutableLiveData<List<String>> result = new MutableLiveData<>();
+        
+        // Get domains from link items only
+        List<String> domains = new ArrayList<>();
+        if (currentLinks != null) {
+            Set<String> uniqueDomains = new HashSet<>();
+            for (FileItem item : currentLinks) {
+                String domain = item.getDomain();
+                if (domain != null && !domain.isEmpty()) {
+                    uniqueDomains.add(domain);
+                }
+            }
+            domains = new ArrayList<>(uniqueDomains);
+            // Sort alphabetically
+            java.util.Collections.sort(domains);
+        }
+        
+        result.setValue(domains);
         return result;
     }
 }

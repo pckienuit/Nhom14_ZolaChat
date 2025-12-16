@@ -19,6 +19,10 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
+
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.FileCategory;
 import com.example.doan_zaloclone.models.FileItem;
@@ -56,6 +60,7 @@ public class FileListFragment extends Fragment {
     private FileCategory category;
     private String conversationId;
     
+    // UI components
     private RecyclerView recyclerView;
     private SwipeRefreshLayout swipeRefresh;
     private View emptyStateLayout;
@@ -65,15 +70,22 @@ public class FileListFragment extends Fragment {
     private FileAdapter adapter;
     
     // Filter UI components
-    private SearchView searchView;
+    private SearchView searchView; // Will be from menu
     private Chip senderFilterChip;
     private Chip dateFilterChip;
+    private Chip domainFilterChip;
     private Chip clearFiltersChip;
+    
+    // Filter chips for dropdowns (category-specific)
+    private Chip mediaFilterChip;
+    private Chip fileTypeFilterChip;
     
     // Filter state
     private Set<String> selectedSenderIds = new HashSet<>();
     private Long filterStartDate = null;
     private Long filterEndDate = null;
+    private TimeFilterDialog.TimeFilterPreset currentTimePreset = TimeFilterDialog.TimeFilterPreset.NONE;
+    private Set<String> selectedDomains = new HashSet<>();
     
     private boolean isLoading = false;
     private boolean isInitialLoad = true;
@@ -90,6 +102,7 @@ public class FileListFragment extends Fragment {
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setHasOptionsMenu(true); // Enable options menu
         if (getArguments() != null) {
             int categoryPosition = getArguments().getInt(ARG_CATEGORY);
             category = FileCategory.fromPosition(categoryPosition);
@@ -112,8 +125,8 @@ public class FileListFragment extends Fragment {
         setupViewModel();
         setupRecyclerView();
         setupSwipeRefresh();
-        setupSearchView();
         setupFilterChips();
+        setupCategoryFilterDropdowns();
         observeData();
         
         // Load data only once on initial creation
@@ -129,11 +142,15 @@ public class FileListFragment extends Fragment {
         emptyStateLayout = view.findViewById(R.id.emptyStateLayout);
         progressBar = view.findViewById(R.id.progressBar);
         
-        // Filter UI
-        searchView = view.findViewById(R.id.searchView);
+        // Filter UI (searchView will be initialized from menu)
         senderFilterChip = view.findViewById(R.id.senderFilterChip);
         dateFilterChip = view.findViewById(R.id.dateFilterChip);
+        domainFilterChip = view.findViewById(R.id.domainFilterChip);
         clearFiltersChip = view.findViewById(R.id.clearFiltersChip);
+        
+        // Filter chips for dropdowns
+        mediaFilterChip = view.findViewById(R.id.mediaFilterChip);
+        fileTypeFilterChip = view.findViewById(R.id.fileTypeFilterChip);
     }
     
     private void setupViewModel() {
@@ -193,7 +210,31 @@ public class FileListFragment extends Fragment {
         });
     }
     
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == R.id.action_search) {
+            return true; // Handled by SearchView
+        }
+        return false;
+    }
+    
+    @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        inflater.inflate(R.menu.menu_file_list, menu);
+        
+        MenuItem searchItem = menu.findItem(R.id.action_search);
+        if (searchItem != null) {
+            searchView = (SearchView) searchItem.getActionView();
+            setupSearchView();
+        }
+        
+        super.onCreateOptionsMenu(menu, inflater);
+    }
+    
     private void setupSearchView() {
+        if (searchView == null) return;
+        
+        searchView.setQueryHint(getString(R.string.search_files));
         searchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
             @Override
             public boolean onQueryTextSubmit(String query) {
@@ -212,7 +253,67 @@ public class FileListFragment extends Fragment {
     private void setupFilterChips() {
         senderFilterChip.setOnClickListener(v -> showSenderFilterDialog());
         dateFilterChip.setOnClickListener(v -> showDateRangePickerDialog());
+        domainFilterChip.setOnClickListener(v -> showDomainFilterDialog());
         clearFiltersChip.setOnClickListener(v -> clearAllFilters());
+        
+        // Show domain filter chip only for LINKS category
+        if (category == FileCategory.LINKS) {
+            domainFilterChip.setVisibility(View.VISIBLE);
+        } else {
+            domainFilterChip.setVisibility(View.GONE);
+        }
+    }
+    
+    private void setupCategoryFilterDropdowns() {
+        // Setup media filter chip
+        if (category == FileCategory.MEDIA) {
+            mediaFilterChip.setVisibility(View.VISIBLE);
+            mediaFilterChip.setOnClickListener(v -> showMediaFilterDialog());
+        } else {
+            mediaFilterChip.setVisibility(View.GONE);
+        }
+        
+        // Setup file type filter chip
+        if (category == FileCategory.FILES) {
+            fileTypeFilterChip.setVisibility(View.VISIBLE);
+            fileTypeFilterChip.setOnClickListener(v -> showFileTypeFilterDialog());
+        } else {
+            fileTypeFilterChip.setVisibility(View.GONE);
+        }
+    }
+    
+    private void showMediaFilterDialog() {
+        String[] options = getResources().getStringArray(R.array.media_type_options);
+        int currentSelection = viewModel.getMediaTypeFilterLiveData().getValue() == null ? 0 :
+                viewModel.getMediaTypeFilterLiveData().getValue().ordinal();
+        
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Loại media")
+                .setSingleChoiceItems(options, currentSelection, (dialog, which) -> {
+                    FileViewModel.MediaTypeFilter filter = FileViewModel.MediaTypeFilter.values()[which];
+                    viewModel.setMediaTypeFilter(filter);
+                    mediaFilterChip.setText(options[which]);
+                    dialog.dismiss();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+    
+    private void showFileTypeFilterDialog() {
+        String[] options = getResources().getStringArray(R.array.file_type_options);
+        int currentSelection = viewModel.getFileTypeFilterLiveData().getValue() == null ? 0 :
+                viewModel.getFileTypeFilterLiveData().getValue().ordinal();
+        
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Loại file")
+                .setSingleChoiceItems(options, currentSelection, (dialog, which) -> {
+                    FileViewModel.FileTypeFilter filter = FileViewModel.FileTypeFilter.values()[which];
+                    viewModel.setFileTypeFilter(filter);
+                    fileTypeFilterChip.setText(options[which]);
+                    dialog.dismiss();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
     }
     
     private void observeData() {
@@ -326,15 +427,20 @@ public class FileListFragment extends Fragment {
             
             SenderFilterAdapter senderAdapter = new SenderFilterAdapter();
             senderAdapter.setSenders(senders);
-            senderAdapter.setSelectedSenders(selectedSenderIds);
+            // Clone current selection to temp state
+            senderAdapter.setSelectedSenders(new HashSet<>(selectedSenderIds));
             senderRecyclerView.setAdapter(senderAdapter);
             
             AlertDialog dialog = new AlertDialog.Builder(requireContext())
                     .setView(dialogView)
+                    .setCancelable(true) // Allow dismiss but don't apply
                     .create();
+            
+            dialog.setCanceledOnTouchOutside(true);
             
             dialogView.findViewById(R.id.cancelButton).setOnClickListener(v -> dialog.dismiss());
             dialogView.findViewById(R.id.applyButton).setOnClickListener(v -> {
+                // Only apply changes when user explicitly clicks Apply
                 selectedSenderIds = senderAdapter.getSelectedSenders();
                 viewModel.setSelectedSenders(selectedSenderIds);
                 updateSenderChipText();
@@ -347,36 +453,39 @@ public class FileListFragment extends Fragment {
     }
     
     private void showDateRangePickerDialog() {
-        Calendar calendar = Calendar.getInstance();
-        
-        // Show start date picker
-        new DatePickerDialog(requireContext(), (view, year, month, dayOfMonth) -> {
-            Calendar startCal = Calendar.getInstance();
-            startCal.set(year, month, dayOfMonth, 0, 0, 0);
-            filterStartDate = startCal.getTimeInMillis();
+        TimeFilterDialog dialog = TimeFilterDialog.newInstance();
+        dialog.setTimeFilterListener((preset, startDate, endDate) -> {
+            currentTimePreset = preset;
+            filterStartDate = startDate;
+            filterEndDate = endDate;
             
-            // Show end date picker
-            new DatePickerDialog(requireContext(), (view2, year2, month2, dayOfMonth2) -> {
-                Calendar endCal = Calendar.getInstance();
-                endCal.set(year2, month2, dayOfMonth2, 23, 59, 59);
-                filterEndDate = endCal.getTimeInMillis();
-                
-                viewModel.setDateRange(filterStartDate, filterEndDate);
-                updateDateChipText();
-                updateClearFiltersVisibility();
-            }, year, month, dayOfMonth).show();
-        }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show();
+            if (startDate != null && endDate != null) {
+                viewModel.setDateRange(startDate, endDate);
+            } else {
+                viewModel.setDateRange(null, null);
+            }
+            
+            updateDateChipText();
+            updateClearFiltersVisibility();
+        });
+        dialog.show(getParentFragmentManager(), "TimeFilterDialog");
     }
     
     private void clearAllFilters() {
-        searchView.setQuery("", false);
+        if (searchView != null) {
+            searchView.setQuery("", false);
+            searchView.setIconified(true); // Collapse search
+        }
         selectedSenderIds.clear();
         filterStartDate = null;
         filterEndDate = null;
+        currentTimePreset = TimeFilterDialog.TimeFilterPreset.NONE;
+        selectedDomains.clear();
         
         viewModel.clearFilters();
         updateSenderChipText();
         updateDateChipText();
+        updateDomainChipText();
         updateClearFiltersVisibility();
     }
     
@@ -391,7 +500,25 @@ public class FileListFragment extends Fragment {
     
     private void updateDateChipText() {
         if (filterStartDate != null || filterEndDate != null) {
-            dateFilterChip.setText(getString(R.string.filter_by_date) + " ✓");
+            String presetText = "";
+            switch (currentTimePreset) {
+                case YESTERDAY:
+                    presetText = getString(R.string.yesterday);
+                    break;
+                case LAST_WEEK:
+                    presetText = getString(R.string.last_week);
+                    break;
+                case LAST_MONTH:
+                    presetText = getString(R.string.last_month);
+                    break;
+                case CUSTOM:
+                    presetText = getString(R.string.custom);
+                    break;
+                default:
+                    presetText = "✓";
+                    break;
+            }
+            dateFilterChip.setText(getString(R.string.filter_by_date) + " (" + presetText + ")");
             dateFilterChip.setChecked(true);
         } else {
             dateFilterChip.setText(R.string.filter_by_date);
@@ -400,9 +527,73 @@ public class FileListFragment extends Fragment {
     }
     
     private void updateClearFiltersVisibility() {
-        String query = searchView.getQuery().toString();
+        String query = (searchView != null) ? searchView.getQuery().toString() : "";
         boolean hasFilters = !query.isEmpty() || !selectedSenderIds.isEmpty() 
-                || filterStartDate != null || filterEndDate != null;
+                || filterStartDate != null || filterEndDate != null
+                || !selectedDomains.isEmpty();
         clearFiltersChip.setVisibility(hasFilters ? View.VISIBLE : View.GONE);
+    }
+    
+    private void showDomainFilterDialog() {
+        viewModel.getUniqueDomains().observe(getViewLifecycleOwner(), domains -> {
+            if (domains == null || domains.isEmpty()) {
+                Toast.makeText(requireContext(), "Không có tên miền nào", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // Create temp selection to track changes
+            Set<String> tempSelectedDomains = new HashSet<>(selectedDomains);
+            
+            // Create selection array
+            String[] domainArray = domains.toArray(new String[0]);
+            boolean[] checkedItems = new boolean[domainArray.length];
+            
+            // Mark currently selected domains
+            for (int i = 0; i < domainArray.length; i++) {
+                checkedItems[i] = tempSelectedDomains.contains(domainArray[i]);
+            }
+            
+            AlertDialog dialog = new AlertDialog.Builder(requireContext())
+                    .setTitle(R.string.domain_filter_title)
+                    .setCancelable(true)
+                    .setMultiChoiceItems(domainArray, checkedItems, (dialogInterface, which, isChecked) -> {
+                        // Update temp selection only
+                        if (isChecked) {
+                            tempSelectedDomains.add(domainArray[which]);
+                        } else {
+                            tempSelectedDomains.remove(domainArray[which]);
+                        }
+                    })
+                    .setPositiveButton(R.string.apply, (dialogInterface, i) -> {
+                        // Only apply when user clicks Apply
+                        selectedDomains.clear();
+                        selectedDomains.addAll(tempSelectedDomains);
+                        viewModel.setSelectedDomains(selectedDomains);
+                        updateDomainChipText();
+                        updateClearFiltersVisibility();
+                    })
+                    .setNegativeButton(R.string.cancel, null)
+                    .setNeutralButton(R.string.all_domains, (dialogInterface, i) -> {
+                        selectedDomains.clear();
+                        viewModel.setSelectedDomains(selectedDomains);
+                        updateDomainChipText();
+                        updateClearFiltersVisibility();
+                    })
+                    .create();
+            
+            dialog.setCanceledOnTouchOutside(true);
+            dialog.show();
+        });
+    }
+    
+    private void updateDomainChipText() {
+        if (!selectedDomains.isEmpty()) {
+            int count = selectedDomains.size();
+            domainFilterChip.setText(getString(R.string.filter_by_domain) + " (" + count + ")");
+            domainFilterChip.setChecked(true);
+        } else {
+            domainFilterChip.setText(R.string.filter_by_domain);
+            domainFilterChip.setChecked(false);
+        }
     }
 }

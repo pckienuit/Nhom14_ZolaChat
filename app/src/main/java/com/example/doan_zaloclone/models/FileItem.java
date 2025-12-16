@@ -202,12 +202,117 @@ public class FileItem {
     }
     
     /**
+     * Get domain from URL (for link items)
+     */
+    public String getDomain() {
+        String url = getExtractedUrl();
+        if (url == null) return null;
+        
+        try {
+            // Remove protocol
+            String domain = url.replaceFirst("^https?://", "");
+            // Remove www. prefix if present
+            domain = domain.replaceFirst("^www\\.", "");
+            // Remove path (everything after first /)
+            int slashIndex = domain.indexOf('/');
+            if (slashIndex > 0) {
+                domain = domain.substring(0, slashIndex);
+            }
+            // Remove port if present
+            int colonIndex = domain.indexOf(':');
+            if (colonIndex > 0) {
+                domain = domain.substring(0, colonIndex);
+            }
+            return domain.toLowerCase();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+    
+    /**
      * Check if this is a video file
      */
     public boolean isVideo() {
         if (message == null) return false;
         String mimeType = message.getFileMimeType();
         return mimeType != null && mimeType.startsWith("video/");
+    }
+    
+    /**
+     * Check if this is an image file
+     */
+    public boolean isImage() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String type = message.getType();
+        return Message.TYPE_IMAGE.equals(type) || 
+               (mimeType != null && mimeType.startsWith("image/"));
+    }
+    
+    /**
+     * Check if this is a PDF file
+     */
+    public boolean isPdf() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String fileName = message.getFileName();
+        return (mimeType != null && mimeType.contains("pdf")) ||
+               (fileName != null && fileName.toLowerCase().endsWith(".pdf"));
+    }
+    
+    /**
+     * Check if this is a Word document
+     */
+    public boolean isWord() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String fileName = message.getFileName();
+        return (mimeType != null && (mimeType.contains("word") || mimeType.contains("msword") || 
+                mimeType.contains("officedocument.wordprocessing"))) ||
+               (fileName != null && (fileName.toLowerCase().endsWith(".doc") || 
+                fileName.toLowerCase().endsWith(".docx")));
+    }
+    
+    /**
+     * Check if this is an Excel spreadsheet
+     */
+    public boolean isExcel() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String fileName = message.getFileName();
+        return (mimeType != null && (mimeType.contains("excel") || mimeType.contains("spreadsheet") || 
+                mimeType.contains("ms-excel"))) ||
+               (fileName != null && (fileName.toLowerCase().endsWith(".xls") || 
+                fileName.toLowerCase().endsWith(".xlsx")));
+    }
+    
+    /**
+     * Check if this is a PowerPoint presentation
+     */
+    public boolean isPowerPoint() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String fileName = message.getFileName();
+        return (mimeType != null && (mimeType.contains("powerpoint") || mimeType.contains("presentation") || 
+                mimeType.contains("ms-powerpoint"))) ||
+               (fileName != null && (fileName.toLowerCase().endsWith(".ppt") || 
+                fileName.toLowerCase().endsWith(".pptx")));
+    }
+    
+    /**
+     * Check if this is an archive file (zip, rar, 7z, etc.)
+     */
+    public boolean isArchive() {
+        if (message == null) return false;
+        String mimeType = message.getFileMimeType();
+        String fileName = message.getFileName();
+        boolean isMimeArchive = mimeType != null && (mimeType.contains("zip") || 
+                mimeType.contains("rar") || mimeType.contains("compress") || 
+                mimeType.contains("archive"));
+        boolean isFileArchive = fileName != null && (fileName.toLowerCase().endsWith(".zip") || 
+                fileName.toLowerCase().endsWith(".rar") || fileName.toLowerCase().endsWith(".7z") || 
+                fileName.toLowerCase().endsWith(".tar") || fileName.toLowerCase().endsWith(".gz"));
+        return isMimeArchive || isFileArchive;
     }
     
     /**
