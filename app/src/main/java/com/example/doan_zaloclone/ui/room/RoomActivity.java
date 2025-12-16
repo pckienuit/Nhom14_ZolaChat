@@ -969,6 +969,32 @@ public class RoomActivity extends AppCompatActivity {
     }
     
     
+    
+    @Override
+    public boolean onCreateOptionsMenu(android.view.Menu menu) {
+        getMenuInflater().inflate(R.menu.room_menu, menu);
+        return true;
+    }
+    
+    @Override
+    public boolean onOptionsItemSelected(@androidx.annotation.NonNull android.view.MenuItem item) {
+        if (item.getItemId() == R.id.action_file_management) {
+            openFileManagement();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+    
+    private void openFileManagement() {
+        android.content.Intent intent = new android.content.Intent(this, 
+                com.example.doan_zaloclone.ui.file.FileManagementActivity.class);
+        intent.putExtra(com.example.doan_zaloclone.ui.file.FileManagementActivity.EXTRA_CONVERSATION_ID, 
+                conversationId);
+        intent.putExtra(com.example.doan_zaloclone.ui.file.FileManagementActivity.EXTRA_CONVERSATION_NAME, 
+                conversationName);
+        startActivity(intent);
+    }
+
     private void openGroupInfo() {
         android.content.Intent intent = new android.content.Intent(this, 
                 com.example.doan_zaloclone.ui.group.GroupInfoActivity.class);

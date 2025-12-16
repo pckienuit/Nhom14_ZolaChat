@@ -1,0 +1,220 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <!-- Title -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/time_filter_title"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/black"
+        android:paddingBottom="16dp" />
+
+    <!-- Preset Options -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/preset_options"
+        android:textSize="14sp"
+        android:textColor="@android:color/darker_gray"
+        android:paddingBottom="8dp" />
+
+    <com.google.android.material.chip.ChipGroup
+        android:id="@+id/presetChipGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:singleSelection="true"
+        app:selectionRequired="false">
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/chipYesterday"
+            style="@style/Widget.MaterialComponents.Chip.Choice"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/yesterday" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/chipLastWeek"
+            style="@style/Widget.MaterialComponents.Chip.Choice"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/last_week" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/chipLastMonth"
+            style="@style/Widget.MaterialComponents.Chip.Choice"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/last_month" />
+
+        <com.google.android.material.chip.Chip
+            android:id="@+id/chipCustom"
+            style="@style/Widget.MaterialComponents.Chip.Choice"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/custom" />
+
+    </com.google.android.material.chip.ChipGroup>
+
+    <!-- Custom Date Range Section -->
+    <LinearLayout
+        android:id="@+id/customDateLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="16dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/select_date_range"
+            android:textSize="14sp"
+            android:textColor="@android:color/darker_gray"
+            android:paddingBottom="8dp" />
+
+        <!-- Start Date Section -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/from_date"
+            android:textSize="12sp"
+            android:textColor="@android:color/darker_gray"
+            android:paddingTop="8dp" />
+
+        <LinearLayout
+            android:id="@+id/startDatePickerLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:padding="8dp"
+            android:background="@drawable/rounded_background">
+
+            <!-- Day Picker -->
+            <NumberPicker
+                android:id="@+id/startDayPicker"
+                android:layout_width="0dp"
+                android:layout_height="120dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="/"
+                android:textSize="16sp"
+                android:paddingHorizontal="4dp" />
+
+            <!-- Month Picker -->
+            <NumberPicker
+                android:id="@+id/startMonthPicker"
+                android:layout_width="0dp"
+                android:layout_height="120dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="/"
+                android:textSize="16sp"
+                android:paddingHorizontal="4dp" />
+
+            <!-- Year Picker -->
+            <NumberPicker
+                android:id="@+id/startYearPicker"
+                android:layout_width="0dp"
+                android:layout_height="120dp"
+                android:layout_weight="1" />
+
+        </LinearLayout>
+
+        <!-- End Date Section -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/to_date"
+            android:textSize="12sp"
+            android:textColor="@android:color/darker_gray"
+            android:paddingTop="16dp" />
+
+        <LinearLayout
+            android:id="@+id/endDatePickerLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:padding="8dp"
+            android:background="@drawable/rounded_background">
+
+            <!-- Day Picker -->
+            <NumberPicker
+                android:id="@+id/endDayPicker"
+                android:layout_width="0dp"
+                android:layout_height="120dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="/"
+                android:textSize="16sp"
+                android:paddingHorizontal="4dp" />
+
+            <!-- Month Picker -->
+            <NumberPicker
+                android:id="@+id/endMonthPicker"
+                android:layout_width="0dp"
+                android:layout_height="120dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="/"
+                android:textSize="16sp"
+                android:paddingHorizontal="4dp" />
+
+            <!-- Year Picker -->
+            <NumberPicker
+                android:id="@+id/endYearPicker"
+                android:layout_width="0dp"
+                android:layout_height="120dp"
+                android:layout_weight="1" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="16dp"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/cancelButton"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/cancel"
+            android:textColor="@android:color/darker_gray" />
+
+        <Button
+            android:id="@+id/applyButton"
+            style="@style/Widget.MaterialComponents.Button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="@string/apply" />
+
+    </LinearLayout>
+
+</LinearLayout>

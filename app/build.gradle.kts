@@ -58,6 +58,9 @@ dependencies {
     // ExifInterface for image rotation
     implementation("androidx.exifinterface:exifinterface:1.3.7")
     
+    // SwipeRefreshLayout for pull-to-refresh
+    implementation("androidx.swiperefreshlayout:swiperefreshlayout:1.1.0")
+    
     // Cloudinary for image uploads
     implementation("com.cloudinary:cloudinary-android:3.0.2")
     

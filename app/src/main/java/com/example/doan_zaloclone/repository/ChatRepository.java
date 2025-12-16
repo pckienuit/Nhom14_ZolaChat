@@ -91,11 +91,18 @@ public class ChatRepository {
         messageData.put("type", message.getType());
         messageData.put("timestamp", message.getTimestamp());
         
-        // Add file metadata if this is a file message
-        if (Message.TYPE_FILE.equals(message.getType())) {
-            messageData.put("fileName", message.getFileName());
-            messageData.put("fileSize", message.getFileSize());
-            messageData.put("fileMimeType", message.getFileMimeType());
+        // Add file metadata if this is a file OR image message
+        if (Message.TYPE_FILE.equals(message.getType()) || 
+            Message.TYPE_IMAGE.equals(message.getType())) {
+            if (message.getFileName() != null) {
+                messageData.put("fileName", message.getFileName());
+            }
+            if (message.getFileSize() > 0) {
+                messageData.put("fileSize", message.getFileSize());
+            }
+            if (message.getFileMimeType() != null) {
+                messageData.put("fileMimeType", message.getFileMimeType());
+            }
         }
 
         // Save message to Firestore
@@ -255,13 +262,57 @@ public class ChatRepository {
                             // Get the secure URL from Cloudinary response
                             String imageUrl = (String) resultData.get("secure_url");
                             
-                            // Create IMAGE type message with Cloudinary URL
+                            // Extract metadata from Cloudinary response
+                            String format = (String) resultData.get("format");  // e.g., "jpg", "png"
+                            Object bytesObj = resultData.get("bytes");
+                            long fileSize = 0;
+                            if (bytesObj instanceof Number) {
+                                fileSize = ((Number) bytesObj).longValue();
+                            }
+                            
+                            // Generate filename and MIME type
+                            String fileName = "image_" + System.currentTimeMillis();
+                            if (format != null && !format.isEmpty()) {
+                                fileName += "." + format;
+                            } else {
+                                fileName += ".jpg";  // Default
+                            }
+                            
+                            // Determine MIME type from format
+                            String mimeType = "image/jpeg";  // Default
+                            if (format != null) {
+                                switch (format.toLowerCase()) {
+                                    case "png":
+                                        mimeType = "image/png";
+                                        break;
+                                    case "gif":
+                                        mimeType = "image/gif";
+                                        break;
+                                    case "webp":
+                                        mimeType = "image/webp";
+                                        break;
+                                    case "jpg":
+                                    case "jpeg":
+                                        mimeType = "image/jpeg";
+                                        break;
+                                    default:
+                                        mimeType = "image/" + format;
+                                }
+                            }
+                            
+                            Log.d("Cloudinary", "Image uploaded: " + fileName + 
+                                ", size: " + fileSize + ", mimeType: " + mimeType);
+                            
+                            // Create IMAGE type message with metadata
                             Message imageMessage = new Message(
                                     null,
                                     senderId,
                                     imageUrl,
                                     Message.TYPE_IMAGE,
-                                    System.currentTimeMillis()
+                                    System.currentTimeMillis(),
+                                    fileName,
+                                    fileSize,
+                                    mimeType
                             );
                             
                             // Send message to Firestore
