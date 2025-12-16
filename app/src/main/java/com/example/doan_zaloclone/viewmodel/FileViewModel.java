@@ -426,6 +426,14 @@ public class FileViewModel extends BaseViewModel {
         fileTypeFilterLiveData.setValue(filter != null ? filter : FileTypeFilter.ALL);
     }
     
+    public LiveData<MediaTypeFilter> getMediaTypeFilterLiveData() {
+        return mediaTypeFilterLiveData;
+    }
+    
+    public LiveData<FileTypeFilter> getFileTypeFilterLiveData() {
+        return fileTypeFilterLiveData;
+    }
+    
     /**
      * Set selected domains for filtering (for LINKS category only)
      */

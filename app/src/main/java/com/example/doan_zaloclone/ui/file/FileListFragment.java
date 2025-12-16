@@ -76,20 +76,9 @@ public class FileListFragment extends Fragment {
     private Chip domainFilterChip;
     private Chip clearFiltersChip;
     
-    // Media filter chips (only for MEDIA category)
-    private View mediaFilterScrollView;
-    private Chip allMediaChip;
-    private Chip imagesOnlyChip;
-    private Chip videosOnlyChip;
-    
-    // File type filter chips (only for FILES category)
-    private View fileTypeFilterScrollView;
-    private Chip allFilesChip;
-    private Chip pdfFilesChip;
-    private Chip wordFilesChip;
-    private Chip excelFilesChip;
-    private Chip powerpointFilesChip;
-    private Chip archiveFilesChip;
+    // Filter chips for dropdowns (category-specific)
+    private Chip mediaFilterChip;
+    private Chip fileTypeFilterChip;
     
     // Filter state
     private Set<String> selectedSenderIds = new HashSet<>();
@@ -137,8 +126,7 @@ public class FileListFragment extends Fragment {
         setupRecyclerView();
         setupSwipeRefresh();
         setupFilterChips();
-        setupMediaFilterChips();
-        setupFileTypeFilterChips();
+        setupCategoryFilterDropdowns();
         observeData();
         
         // Load data only once on initial creation
@@ -160,20 +148,9 @@ public class FileListFragment extends Fragment {
         domainFilterChip = view.findViewById(R.id.domainFilterChip);
         clearFiltersChip = view.findViewById(R.id.clearFiltersChip);
         
-        // Media filter chips
-        mediaFilterScrollView = view.findViewById(R.id.mediaFilterScrollView);
-        allMediaChip = view.findViewById(R.id.allMediaChip);
-        imagesOnlyChip = view.findViewById(R.id.imagesOnlyChip);
-        videosOnlyChip = view.findViewById(R.id.videosOnlyChip);
-        
-        // File type filter chips
-        fileTypeFilterScrollView = view.findViewById(R.id.fileTypeFilterScrollView);
-        allFilesChip = view.findViewById(R.id.allFilesChip);
-        pdfFilesChip = view.findViewById(R.id.pdfFilesChip);
-        wordFilesChip = view.findViewById(R.id.wordFilesChip);
-        excelFilesChip = view.findViewById(R.id.excelFilesChip);
-        powerpointFilesChip = view.findViewById(R.id.powerpointFilesChip);
-        archiveFilesChip = view.findViewById(R.id.archiveFilesChip);
+        // Filter chips for dropdowns
+        mediaFilterChip = view.findViewById(R.id.mediaFilterChip);
+        fileTypeFilterChip = view.findViewById(R.id.fileTypeFilterChip);
     }
     
     private void setupViewModel() {
@@ -287,60 +264,56 @@ public class FileListFragment extends Fragment {
         }
     }
     
-    private void setupMediaFilterChips() {
-        // Show media filter chips only for MEDIA category
+    private void setupCategoryFilterDropdowns() {
+        // Setup media filter chip
         if (category == FileCategory.MEDIA) {
-            mediaFilterScrollView.setVisibility(View.VISIBLE);
-            
-            // Set up chip listeners
-            allMediaChip.setOnClickListener(v -> {
-                viewModel.setMediaTypeFilter(FileViewModel.MediaTypeFilter.ALL);
-            });
-            
-            imagesOnlyChip.setOnClickListener(v -> {
-                viewModel.setMediaTypeFilter(FileViewModel.MediaTypeFilter.IMAGES_ONLY);
-            });
-            
-            videosOnlyChip.setOnClickListener(v -> {
-                viewModel.setMediaTypeFilter(FileViewModel.MediaTypeFilter.VIDEOS_ONLY);
-            });
+            mediaFilterChip.setVisibility(View.VISIBLE);
+            mediaFilterChip.setOnClickListener(v -> showMediaFilterDialog());
         } else {
-            mediaFilterScrollView.setVisibility(View.GONE);
+            mediaFilterChip.setVisibility(View.GONE);
+        }
+        
+        // Setup file type filter chip
+        if (category == FileCategory.FILES) {
+            fileTypeFilterChip.setVisibility(View.VISIBLE);
+            fileTypeFilterChip.setOnClickListener(v -> showFileTypeFilterDialog());
+        } else {
+            fileTypeFilterChip.setVisibility(View.GONE);
         }
     }
     
-    private void setupFileTypeFilterChips() {
-        // Show file type filter chips only for FILES category
-        if (category == FileCategory.FILES) {
-            fileTypeFilterScrollView.setVisibility(View.VISIBLE);
-            
-            // Set up chip listeners
-            allFilesChip.setOnClickListener(v -> {
-                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.ALL);
-            });
-            
-            pdfFilesChip.setOnClickListener(v -> {
-                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.PDF);
-            });
-            
-            wordFilesChip.setOnClickListener(v -> {
-                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.WORD);
-            });
-            
-            excelFilesChip.setOnClickListener(v -> {
-                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.EXCEL);
-            });
-            
-            powerpointFilesChip.setOnClickListener(v -> {
-                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.POWERPOINT);
-            });
-            
-            archiveFilesChip.setOnClickListener(v -> {
-                viewModel.setFileTypeFilter(FileViewModel.FileTypeFilter.ARCHIVE);
-            });
-        } else {
-            fileTypeFilterScrollView.setVisibility(View.GONE);
-        }
+    private void showMediaFilterDialog() {
+        String[] options = getResources().getStringArray(R.array.media_type_options);
+        int currentSelection = viewModel.getMediaTypeFilterLiveData().getValue() == null ? 0 :
+                viewModel.getMediaTypeFilterLiveData().getValue().ordinal();
+        
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Loại media")
+                .setSingleChoiceItems(options, currentSelection, (dialog, which) -> {
+                    FileViewModel.MediaTypeFilter filter = FileViewModel.MediaTypeFilter.values()[which];
+                    viewModel.setMediaTypeFilter(filter);
+                    mediaFilterChip.setText(options[which]);
+                    dialog.dismiss();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+    
+    private void showFileTypeFilterDialog() {
+        String[] options = getResources().getStringArray(R.array.file_type_options);
+        int currentSelection = viewModel.getFileTypeFilterLiveData().getValue() == null ? 0 :
+                viewModel.getFileTypeFilterLiveData().getValue().ordinal();
+        
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Loại file")
+                .setSingleChoiceItems(options, currentSelection, (dialog, which) -> {
+                    FileViewModel.FileTypeFilter filter = FileViewModel.FileTypeFilter.values()[which];
+                    viewModel.setFileTypeFilter(filter);
+                    fileTypeFilterChip.setText(options[which]);
+                    dialog.dismiss();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
     }
     
     private void observeData() {
@@ -454,15 +427,20 @@ public class FileListFragment extends Fragment {
             
             SenderFilterAdapter senderAdapter = new SenderFilterAdapter();
             senderAdapter.setSenders(senders);
-            senderAdapter.setSelectedSenders(selectedSenderIds);
+            // Clone current selection to temp state
+            senderAdapter.setSelectedSenders(new HashSet<>(selectedSenderIds));
             senderRecyclerView.setAdapter(senderAdapter);
             
             AlertDialog dialog = new AlertDialog.Builder(requireContext())
                     .setView(dialogView)
+                    .setCancelable(true) // Allow dismiss but don't apply
                     .create();
+            
+            dialog.setCanceledOnTouchOutside(true);
             
             dialogView.findViewById(R.id.cancelButton).setOnClickListener(v -> dialog.dismiss());
             dialogView.findViewById(R.id.applyButton).setOnClickListener(v -> {
+                // Only apply changes when user explicitly clicks Apply
                 selectedSenderIds = senderAdapter.getSelectedSenders();
                 viewModel.setSelectedSenders(selectedSenderIds);
                 updateSenderChipText();
@@ -563,25 +541,33 @@ public class FileListFragment extends Fragment {
                 return;
             }
             
+            // Create temp selection to track changes
+            Set<String> tempSelectedDomains = new HashSet<>(selectedDomains);
+            
             // Create selection array
             String[] domainArray = domains.toArray(new String[0]);
             boolean[] checkedItems = new boolean[domainArray.length];
             
             // Mark currently selected domains
             for (int i = 0; i < domainArray.length; i++) {
-                checkedItems[i] = selectedDomains.contains(domainArray[i]);
+                checkedItems[i] = tempSelectedDomains.contains(domainArray[i]);
             }
             
             AlertDialog dialog = new AlertDialog.Builder(requireContext())
                     .setTitle(R.string.domain_filter_title)
+                    .setCancelable(true)
                     .setMultiChoiceItems(domainArray, checkedItems, (dialogInterface, which, isChecked) -> {
+                        // Update temp selection only
                         if (isChecked) {
-                            selectedDomains.add(domainArray[which]);
+                            tempSelectedDomains.add(domainArray[which]);
                         } else {
-                            selectedDomains.remove(domainArray[which]);
+                            tempSelectedDomains.remove(domainArray[which]);
                         }
                     })
                     .setPositiveButton(R.string.apply, (dialogInterface, i) -> {
+                        // Only apply when user clicks Apply
+                        selectedDomains.clear();
+                        selectedDomains.addAll(tempSelectedDomains);
                         viewModel.setSelectedDomains(selectedDomains);
                         updateDomainChipText();
                         updateClearFiltersVisibility();
@@ -594,6 +580,8 @@ public class FileListFragment extends Fragment {
                         updateClearFiltersVisibility();
                     })
                     .create();
+            
+            dialog.setCanceledOnTouchOutside(true);
             dialog.show();
         });
     }
