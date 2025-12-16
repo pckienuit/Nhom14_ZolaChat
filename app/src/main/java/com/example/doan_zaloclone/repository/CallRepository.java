@@ -379,14 +379,22 @@ public class CallRepository {
     
     /**
      * Listen to incoming calls for a user
+     * Uses client-side timestamp filtering to avoid Firestore index requirement
      * @param userId User ID
      * @param listener Listener for incoming calls
      * @return ListenerRegistration for cleanup
      */
     public ListenerRegistration listenToIncomingCalls(@NonNull String userId, @NonNull OnIncomingCallListener listener) {
+        Log.d(TAG, "Listening for incoming calls for user: " + userId);
+        
+        // Calculate timestamp on client side
+        final long twoMinutesAgo = System.currentTimeMillis() - 120000;
+        Log.d(TAG, "Will filter calls older than: " + twoMinutesAgo);
+        
         return db.collection(COLLECTION_CALLS)
                 .whereEqualTo("receiverId", userId)
                 .whereIn("status", java.util.Arrays.asList(Call.STATUS_CALLING, Call.STATUS_RINGING))
+                // No Firestore timestamp filter to avoid index requirement
                 .addSnapshotListener((querySnapshot, e) -> {
                     if (e != null) {
                         Log.e(TAG, "Error listening to incoming calls", e);
@@ -394,15 +402,31 @@ public class CallRepository {
                         return;
                     }
                     
-                    if (querySnapshot != null && !querySnapshot.isEmpty()) {
-                        for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
-                            Call call = doc.toObject(Call.class);
-                            if (call != null) {
-                                call.setId(doc.getId());
-                                Log.d(TAG, "Incoming call: " + call.getId());
-                                listener.onIncomingCall(call);
-                                break;  // Handle one call at a time
+                    if (querySnapshot != null) {
+                        Log.d(TAG, "Query snapshot received, size: " + querySnapshot.size());
+                        
+                        if (!querySnapshot.isEmpty()) {
+                            for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                                Call call = doc.toObject(Call.class);
+                                if (call != null) {
+                                    call.setId(doc.getId());
+                                    
+                                    // CLIENT-SIDE TIMESTAMP CHECK (avoids Firestore index)
+                                    if (call.getStartTime() < twoMinutesAgo) {
+                                        Log.d(TAG, "Skipping old call: " + call.getId() + 
+                                              " (started at " + call.getStartTime() + ")");
+                                        continue;  // Skip old calls
+                                    }
+                                    
+                                    Log.d(TAG, "Incoming call detected: " + call.getId() + 
+                                          ", startTime: " + call.getStartTime() + 
+                                          ", status: " + call.getStatus());
+                                    listener.onIncomingCall(call);
+                                    break;  // Handle one call at a time
+                                }
                             }
+                        } else {
+                            Log.d(TAG, "No incoming calls found");
                         }
                     }
                 });

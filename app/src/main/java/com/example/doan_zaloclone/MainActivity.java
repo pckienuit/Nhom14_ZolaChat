@@ -12,11 +12,17 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 import androidx.lifecycle.ViewModelProvider;
 
+import com.example.doan_zaloclone.models.Call;
+import com.example.doan_zaloclone.repository.CallRepository;
+import com.example.doan_zaloclone.ui.call.CallActivity;
 import com.example.doan_zaloclone.ui.contact.ContactFragment;
 import com.example.doan_zaloclone.ui.home.HomeFragment;
 import com.example.doan_zaloclone.ui.login.LoginActivity;
 import com.example.doan_zaloclone.viewmodel.MainViewModel;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.ListenerRegistration;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -27,6 +33,11 @@ public class MainActivity extends AppCompatActivity {
     // Cache fragments to preserve state
     private HomeFragment homeFragment;
     private ContactFragment contactFragment;
+    
+    // Incoming call listener
+    private CallRepository callRepository;
+    private ListenerRegistration incomingCallListener;
+    private String lastHandledCallId = null;  // Track last handled call to avoid duplicates
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -50,6 +61,108 @@ public class MainActivity extends AppCompatActivity {
 
         setupBottomNavigation();
         observeViewModel();
+        
+        // Start listening for incoming calls
+        setupIncomingCallListener();
+    }
+    
+    private void setupIncomingCallListener() {
+        android.util.Log.d("MainActivity", "setupIncomingCallListener() called");
+        
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null) {
+            android.util.Log.e("MainActivity", "Cannot setup listener - user not logged in");
+            return;
+        }
+        
+        android.util.Log.d("MainActivity", "Setting up listener for user: " + currentUser.getUid());
+        
+        callRepository = new CallRepository();
+        incomingCallListener = callRepository.listenToIncomingCalls(
+            currentUser.getUid(),
+            new CallRepository.OnIncomingCallListener() {
+                @Override
+                public void onIncomingCall(Call call) {
+                    android.util.Log.d("MainActivity", "onIncomingCall triggered for call: " + call.getId());
+                    
+                    // Prevent duplicate launches for the same call
+                    if (call.getId().equals(lastHandledCallId)) {
+                        android.util.Log.d("MainActivity", "Skipping duplicate call: " + call.getId());
+                        return;
+                    }
+                    
+                    lastHandledCallId = call.getId();
+                    android.util.Log.d("MainActivity", "Processing new incoming call: " + call.getId());
+                    
+                    // Fetch caller name before launching CallActivity
+                    fetchCallerNameAndLaunchCallActivity(call, currentUser.getUid());
+                }
+                
+                @Override
+                public void onError(String error) {
+                    // Log error but don't show to user
+                    android.util.Log.e("MainActivity", "Error listening for calls: " + error);
+                }
+            }
+        );
+        
+        android.util.Log.d("MainActivity", "Incoming call listener setup complete");
+    }
+    
+    /**
+     * Fetch caller name from Firestore and launch CallActivity
+     * Fixes: Bug #3 (missing caller name), Bug #1 (missing receiver_id), Bug #2 (wrong isVideo)
+     */
+    private void fetchCallerNameAndLaunchCallActivity(Call call, String currentUserId) {
+        // Fetch caller name from Firestore
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(call.getCallerId())
+            .get()
+            .addOnSuccessListener(doc -> {
+                String callerName = "Unknown";
+                if (doc.exists() && doc.contains("name")) {
+                    callerName = doc.getString("name");
+                }
+                
+                launchIncomingCallActivity(call, currentUserId, callerName);
+            })
+            .addOnFailureListener(e -> {
+                // Launch anyway with default name
+                android.util.Log.e("MainActivity", "Failed to fetch caller name", e);
+                launchIncomingCallActivity(call, currentUserId, "Unknown");
+            });
+    }
+    
+    /**
+     * Launch CallActivity for incoming call with all required extras
+     */
+    private void launchIncomingCallActivity(Call call, String currentUserId, String callerName) {
+        Intent intent = new Intent(MainActivity.this, CallActivity.class);
+        
+        // Fix #1: Add call_id and receiver_id
+        intent.putExtra(CallActivity.EXTRA_CALL_ID, call.getId());
+        intent.putExtra(CallActivity.EXTRA_RECEIVER_ID, currentUserId);
+        
+        // Fix #2: Convert call type to boolean isVideo
+        boolean isVideo = Call.TYPE_VIDEO.equals(call.getType());
+        intent.putExtra(CallActivity.EXTRA_IS_VIDEO, isVideo);
+        
+        // Other required extras
+        intent.putExtra(CallActivity.EXTRA_IS_INCOMING, true);
+        intent.putExtra(CallActivity.EXTRA_CALLER_ID, call.getCallerId());
+        
+        // Fix #3: Add caller name
+        intent.putExtra(CallActivity.EXTRA_CALLER_NAME, callerName);
+        
+        // Fix #4: Use SINGLE_TOP to prevent duplicate activities
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        
+        startActivity(intent);
+        
+        android.util.Log.d("MainActivity", 
+            "Launched CallActivity for incoming " + (isVideo ? "video" : "voice") + 
+            " call from " + callerName);
     }
     
     private void observeViewModel() {
@@ -143,5 +256,22 @@ public class MainActivity extends AppCompatActivity {
         }
         
         transaction.commit();
+    }
+    
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Reset the flag when returning to MainActivity
+        // This allows detecting new incoming calls
+        lastHandledCallId = null;
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Clean up incoming call listener
+        if (incomingCallListener != null) {
+            incomingCallListener.remove();
+        }
     }
 }

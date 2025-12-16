@@ -44,10 +44,14 @@ public class CallViewModel extends AndroidViewModel {
     private ListenerRegistration callListener;
     private ListenerRegistration signalsListener;
     
+    // Track processed signals to avoid duplicates
+    private java.util.Set<String> processedSignalIds = new java.util.HashSet<>();
+    
     // Current call tracking
     private String currentCallId;
     private String currentUserId;
     private boolean isInitiator = false;
+    private boolean currentCallIsVideo = false;  // Fix #6: Store video flag
     
     // Concurrent call prevention
     private static boolean isInCall = false;
@@ -172,6 +176,7 @@ public class CallViewModel extends AndroidViewModel {
         isInCall = true;
         this.currentUserId = callerId;
         this.isInitiator = true;
+        this.currentCallIsVideo = isVideo;  // Store video flag for later use
         
         currentCall.setValue(Resource.loading(null));
         connectionState.setValue("INITIALIZING");
@@ -216,6 +221,8 @@ public class CallViewModel extends AndroidViewModel {
                                 @Override
                                 public void onSuccess() {
                                     Log.d(TAG, "Offer sent successfully");
+                                    // Fix #5: Listen to call updates so caller receives status changes
+                                    listenToCall(currentCallId);
                                     // Listen for answer and ICE candidates
                                     listenToSignals(currentCallId);
                                 }
@@ -252,8 +259,9 @@ public class CallViewModel extends AndroidViewModel {
      * 
      * @param callId Call ID
      * @param receiverId Receiver user ID
+     * @param isVideo Whether this is a video call (Fix #6)
      */
-    public void acceptCall(@NonNull String callId, @NonNull String receiverId) {
+    public void acceptCall(@NonNull String callId, @NonNull String receiverId, boolean isVideo) {
         Log.d(TAG, "Accepting call: " + callId);
         
         // Check if already in a call
@@ -267,8 +275,14 @@ public class CallViewModel extends AndroidViewModel {
         this.currentCallId = callId;
         this.currentUserId = receiverId;
         this.isInitiator = false;
+        this.currentCallIsVideo = isVideo;  // Fix #6: Store video flag
         
         connectionState.setValue("ACCEPTING");
+        
+        // CRITICAL FIX: Initialize WebRTC BEFORE listening to signals
+        // This prevents race condition where OFFER is processed before PeerConnection is ready
+        Log.d(TAG, "Initializing WebRTC for " + (isVideo ? "video" : "voice") + " call");
+        webRtcRepository.initializePeerConnection(callId, isVideo);
         
         // Update call status to RINGING
         callRepository.updateCallStatus(callId, Call.STATUS_RINGING, 
@@ -281,6 +295,7 @@ public class CallViewModel extends AndroidViewModel {
                     listenToCall(callId);
                     
                     // Listen to signals to get OFFER
+                    // WebRTC is now ready to handle OFFER
                     listenToSignals(callId);
                 }
                 
@@ -440,18 +455,52 @@ public class CallViewModel extends AndroidViewModel {
             signalsListener.remove();
         }
         
+        // Clear processed signals when starting new listener
+        processedSignalIds.clear();
+        
         signalsListener = callRepository.listenToSignals(callId, new CallRepository.OnSignalsChangedListener() {
             @Override
             public void onSignalsChanged(List<CallSignal> signals) {
-                Log.d(TAG, "Received " + signals.size() + " signals");
+                int newSignalsCount = 0;
+                int nullIdCount = 0;
                 
                 for (CallSignal signal : signals) {
-                    // Skip own signals
-                    if (currentUserId != null && currentUserId.equals(signal.getSenderId())) {
+                    // Handle signals without IDs (process them anyway)
+                    if (signal.getId() == null) {
+                        nullIdCount++;
+                        // Process signals without IDs (can't deduplicate them)
+                        if (currentUserId != null && currentUserId.equals(signal.getSenderId())) {
+                            continue;  // Still skip own signals
+                        }
+                        handleSignal(signal);
+                        newSignalsCount++;
                         continue;
                     }
                     
+                    // Skip if already processed
+                    if (processedSignalIds.contains(signal.getId())) {
+                        continue;
+                    }
+                    
+                    // Skip own signals
+                    if (currentUserId != null && currentUserId.equals(signal.getSenderId())) {
+                        processedSignalIds.add(signal.getId());
+                        continue;
+                    }
+                    
+                    // Mark as processed
+                    processedSignalIds.add(signal.getId());
+                    newSignalsCount++;
+                    
                     handleSignal(signal);
+                }
+                
+                if (nullIdCount > 0) {
+                    Log.d(TAG, "Processed " + newSignalsCount + " new signals (" + nullIdCount + 
+                          " without IDs) out of " + signals.size() + " total");
+                } else {
+                    Log.d(TAG, "Processed " + newSignalsCount + " new signals out of " + 
+                          signals.size() + " total");
                 }
             }
             
@@ -486,14 +535,8 @@ public class CallViewModel extends AndroidViewModel {
     private void handleOffer(@NonNull String sdp) {
         Log.d(TAG, "Handling OFFER");
         
-        // Get current call to check if it's video
-        Call call = currentCall.getValue() != null ? currentCall.getValue().getData() : null;
-        boolean isVideo = call != null && call.isVideoCall();
-        
-        // Initialize WebRTC if not already
-        webRtcRepository.initializePeerConnection(currentCallId, isVideo);
-        
-        // Create answer
+        // WebRTC is already initialized in acceptCall(), no need to re-initialize
+        // Just create the answer
         webRtcRepository.createAnswer(sdp, new WebRtcRepository.AnswerCallback() {
             @Override
             public void onAnswerCreated(String answerSdp) {
@@ -596,6 +639,9 @@ public class CallViewModel extends AndroidViewModel {
             signalsListener.remove();
             signalsListener = null;
         }
+        
+        // Clear processed signals
+        processedSignalIds.clear();
         
         // Close WebRTC connection
         webRtcRepository.closePeerConnection();

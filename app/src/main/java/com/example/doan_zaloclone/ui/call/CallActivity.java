@@ -77,6 +77,7 @@ public class CallActivity extends AppCompatActivity {
     
     // State
     private String callId;
+    private String receiverId;  // Added to store receiver ID from Intent
     private boolean isIncoming;
     private boolean isVideo;
     private boolean isMicEnabled = true;
@@ -102,7 +103,7 @@ public class CallActivity extends AppCompatActivity {
         isVideo = intent.getBooleanExtra(EXTRA_IS_VIDEO, false);
         String conversationId = intent.getStringExtra(EXTRA_CONVERSATION_ID);
         String callerId = intent.getStringExtra(EXTRA_CALLER_ID);
-        String receiverId = intent.getStringExtra(EXTRA_RECEIVER_ID);
+        this.receiverId = intent.getStringExtra(EXTRA_RECEIVER_ID);  // Store as instance variable
         String callerNameStr = intent.getStringExtra(EXTRA_CALLER_NAME);
         
         // Initialize UI
@@ -287,7 +288,7 @@ public class CallActivity extends AppCompatActivity {
     }
     
     private void acceptCall() {
-        Log.d(TAG, "Accepting call");
+        Log.d(TAG, "Accepting call: " + callId);
         
         if (callId == null) {
             showError("Invalid call ID");
@@ -295,9 +296,16 @@ public class CallActivity extends AppCompatActivity {
             return;
         }
         
-        // Get current user ID (you might need to get from SharedPreferences or similar)
-        String currentUserId = getCurrentUserId();
-        callViewModel.acceptCall(callId, currentUserId);
+        // Use receiver ID from Intent, fallback to current user if not available
+        String currentUserId = receiverId != null ? receiverId : getCurrentUserId();
+        if (currentUserId == null || currentUserId.isEmpty()) {
+            showError("Cannot determine receiver ID");
+            finish();
+            return;
+        }
+        
+        // Pass isVideo flag to acceptCall so it can initialize WebRTC correctly
+        callViewModel.acceptCall(callId, currentUserId, isVideo);
         
         callStatus.setText(R.string.call_connecting);
         showConnectingUI();
