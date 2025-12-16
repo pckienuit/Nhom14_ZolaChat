@@ -26,6 +26,11 @@ import com.example.doan_zaloclone.utils.Resource;
 import com.example.doan_zaloclone.viewmodel.CallViewModel;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
+import org.webrtc.EglBase;
+import org.webrtc.MediaStream;
+import org.webrtc.SurfaceViewRenderer;
+import org.webrtc.VideoTrack;
+
 /**
  * Activity for handling voice and video calls
  * Supports incoming, outgoing, and ongoing call states
@@ -56,6 +61,13 @@ public class CallActivity extends AppCompatActivity {
     private FloatingActionButton micButton;
     private FloatingActionButton speakerButton;
     private FloatingActionButton endCallButton;
+    
+    // Video components
+    private SurfaceViewRenderer localVideoView;
+    private SurfaceViewRenderer remoteVideoView;
+    private FloatingActionButton cameraButton;
+    private FloatingActionButton switchCameraButton;
+    private EglBase eglBase;
     
     // ViewModel
     private CallViewModel callViewModel;
@@ -137,12 +149,73 @@ public class CallActivity extends AppCompatActivity {
         speakerButton = findViewById(R.id.speakerButton);
         endCallButton = findViewById(R.id.endCallButton);
         
+        // Video components
+        localVideoView = findViewById(R.id.localVideoView);
+        remoteVideoView = findViewById(R.id.remoteVideoView);
+        cameraButton = findViewById(R.id.cameraButton);
+        switchCameraButton = findViewById(R.id.switchCameraButton);
+        
         // Setup button listeners
         acceptButton.setOnClickListener(v -> acceptCall());
         rejectButton.setOnClickListener(v -> rejectCall());
         endCallButton.setOnClickListener(v -> endCall());
         micButton.setOnClickListener(v -> toggleMicrophone());
         speakerButton.setOnClickListener(v -> toggleSpeaker());
+        
+        // Video button listeners
+        cameraButton.setOnClickListener(v -> callViewModel.toggleCamera());
+        switchCameraButton.setOnClickListener(v -> callViewModel.switchCamera());
+        
+        // Setup video if this is a video call
+        if (isVideo) {
+            setupVideoViews();
+            cameraButton.setVisibility(View.VISIBLE);
+            switchCameraButton.setVisibility(View.VISIBLE);
+            callerAvatar.setVisibility(View.GONE);  // Hide avatar for video call
+        } else {
+            cameraButton.setVisibility(View.GONE);
+            switchCameraButton.setVisibility(View.GONE);
+        }
+    }
+    
+    /**
+     * Setup video views for video call
+     */
+    private void setupVideoViews() {
+        // Create EglBase for video rendering
+        eglBase = EglBase.create();
+        
+        // Initialize local video view
+        localVideoView.init(eglBase.getEglBaseContext(), null);
+        localVideoView.setMirror(true);  // Mirror for front camera
+        localVideoView.setVisibility(View.VISIBLE);
+        
+        // Initialize remote video view
+        remoteVideoView.init(eglBase.getEglBaseContext(), null);
+        remoteVideoView.setVisibility(View.VISIBLE);
+        
+        // Attach local renderer
+        callViewModel.getWebRtcRepository().attachLocalRenderer(localVideoView);
+        
+        // Setup remote stream callback
+        callViewModel.getWebRtcRepository().setRemoteStreamCallback(mediaStream -> {
+            Log.d(TAG, "Remote stream received");
+            
+            // Get video track from stream
+            if (mediaStream.videoTracks.size() > 0) {
+                VideoTrack remoteVideoTrack = mediaStream.videoTracks.get(0);
+                
+                // Must run on UI thread
+                runOnUiThread(() -> {
+                    if (remoteVideoView != null) {
+                        remoteVideoTrack.addSink(remoteVideoView);
+                        Log.d(TAG, "Remote video track attached to view");
+                    }
+                });
+            }
+        });
+        
+        Log.d(TAG, "Video views setup complete");
     }
     
     private void setupObservers() {
@@ -177,6 +250,14 @@ public class CallActivity extends AppCompatActivity {
         callViewModel.getIsMicEnabled().observe(this, enabled -> {
             isMicEnabled = enabled;
             updateMicUI();
+        });
+        
+        // Observe camera state
+        callViewModel.getIsCameraEnabled().observe(this, enabled -> {
+            if (isVideo) {
+                cameraButton.setImageResource(enabled ? 
+                    R.drawable.ic_videocam : R.drawable.ic_videocam_off);
+            }
         });
         
         // Observe errors
@@ -388,6 +469,18 @@ public class CallActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         stopDurationTimer();
+        
+        // Cleanup video resources
+        if (isVideo && eglBase != null) {
+            if (localVideoView != null) {
+                callViewModel.getWebRtcRepository().detachLocalRenderer(localVideoView);
+                localVideoView.release();
+            }
+            if (remoteVideoView != null) {
+                remoteVideoView.release();
+            }
+            eglBase.release();
+        }
         
         // Reset audio mode
         if (audioManager != null) {

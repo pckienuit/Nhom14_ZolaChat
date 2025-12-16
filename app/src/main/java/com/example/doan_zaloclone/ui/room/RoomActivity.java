@@ -1,6 +1,7 @@
 package com.example.doan_zaloclone.ui.room;
 
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
@@ -29,8 +30,10 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Message;
 import com.example.doan_zaloclone.repository.ChatRepository;
+import com.example.doan_zaloclone.ui.call.CallActivity;
 import com.example.doan_zaloclone.utils.ImageUtils;
 import com.example.doan_zaloclone.utils.MediaStoreHelper;
+import com.example.doan_zaloclone.utils.PermissionHelper;
 import com.example.doan_zaloclone.viewmodel.RoomViewModel;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.ListenerRegistration;
@@ -184,6 +187,14 @@ public class RoomActivity extends AppCompatActivity {
         // Action menu views
         moreActionsButton = findViewById(R.id.moreActionsButton);
         actionMenuContainer = findViewById(R.id.actionMenuContainer);
+        
+        // Call buttons
+        ImageButton videoCallButton = findViewById(R.id.videoCallButton);
+        ImageButton voiceCallButton = findViewById(R.id.voiceCallButton);
+        
+        // Setup call button listeners
+        videoCallButton.setOnClickListener(v -> startCall(true));
+        voiceCallButton.setOnClickListener(v -> startCall(false));
         
         // Initialize QuickActionManager
         quickActionManager = com.example.doan_zaloclone.ui.room.actions.QuickActionManager.getInstance();
@@ -999,6 +1010,50 @@ public class RoomActivity extends AppCompatActivity {
         android.content.Intent intent = new android.content.Intent(this, 
                 com.example.doan_zaloclone.ui.group.GroupInfoActivity.class);
         intent.putExtra("conversationId", conversationId);
+        startActivity(intent);
+    }
+    
+    /**
+     * Start a call (video or voice)
+     * @param isVideo true for video call, false for voice call
+     */
+    private void startCall(boolean isVideo) {
+        // Check and request permissions
+        if (!PermissionHelper.checkCallPermissions(this, isVideo)) {
+            PermissionHelper.requestCallPermissions(this, isVideo, 
+                isVideo ? PermissionHelper.REQUEST_CODE_VIDEO_CALL : PermissionHelper.REQUEST_CODE_VOICE_CALL);
+            return;
+        }
+        
+        // Get current user ID
+        String currentUserId = firebaseAuth.getCurrentUser() != null ? 
+            firebaseAuth.getCurrentUser().getUid() : null;
+        
+        if (currentUserId == null) {
+            Toast.makeText(this, "Bạn cần đăng nhập để thực hiện cuộc gọi", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // For group calls, show a message (not yet implemented)
+        if ("GROUP".equals(conversationType)) {
+            Toast.makeText(this, "Cuộc gọi nhóm sẽ sớm được hỗ trợ", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // For 1-1 calls, ensure we have otherUserId
+        if (otherUserId == null || otherUserId.isEmpty()) {
+            Toast.makeText(this, "Không thể xác định người nhận cuộc gọi", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Start call activity
+        Intent intent = new Intent(this, CallActivity.class);
+        intent.putExtra(CallActivity.EXTRA_CONVERSATION_ID, conversationId);
+        intent.putExtra(CallActivity.EXTRA_CALLER_ID, currentUserId);
+        intent.putExtra(CallActivity.EXTRA_RECEIVER_ID, otherUserId);
+        intent.putExtra(CallActivity.EXTRA_IS_VIDEO, isVideo);
+        intent.putExtra(CallActivity.EXTRA_IS_INCOMING, false);
+        intent.putExtra(CallActivity.EXTRA_CALLER_NAME, conversationName);
         startActivity(intent);
     }
     

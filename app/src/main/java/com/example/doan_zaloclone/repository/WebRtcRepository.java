@@ -9,6 +9,11 @@ import com.example.doan_zaloclone.utils.WebRtcHelper;
 
 import org.webrtc.AudioSource;
 import org.webrtc.AudioTrack;
+import org.webrtc.Camera1Enumerator;
+import org.webrtc.Camera2Enumerator;
+import org.webrtc.CameraEnumerator;
+import org.webrtc.CameraVideoCapturer;
+import org.webrtc.EglBase;
 import org.webrtc.IceCandidate;
 import org.webrtc.MediaConstraints;
 import org.webrtc.MediaStream;
@@ -17,6 +22,10 @@ import org.webrtc.PeerConnectionFactory;
 import org.webrtc.RtpReceiver;
 import org.webrtc.SdpObserver;
 import org.webrtc.SessionDescription;
+import org.webrtc.SurfaceTextureHelper;
+import org.webrtc.SurfaceViewRenderer;
+import org.webrtc.VideoSource;
+import org.webrtc.VideoTrack;
 
 import java.util.List;
 
@@ -27,6 +36,7 @@ import java.util.List;
 public class WebRtcRepository {
     private static final String TAG = "WebRtcRepository";
     private static final String AUDIO_TRACK_ID = "audio_track";
+    private static final String VIDEO_TRACK_ID = "video_track";
     private static final String LOCAL_STREAM_ID = "local_stream";
     
     private final Context context;
@@ -36,11 +46,21 @@ public class WebRtcRepository {
     private AudioTrack localAudioTrack;
     private MediaStream localMediaStream;
     
+    // Video components
+    private EglBase eglBase;
+    private VideoSource videoSource;
+    private VideoTrack localVideoTrack;
+    private CameraVideoCapturer videoCapturer;
+    private SurfaceTextureHelper surfaceTextureHelper;
+    private boolean isFrontCamera = true;
+    
     private boolean isAudioEnabled = true;
+    private boolean isVideoEnabled = true;
     
     // Callbacks
     private ConnectionStateCallback connectionStateCallback;
     private IceCandidateCallback iceCandidateCallback;
+    private RemoteStreamCallback remoteStreamCallback;
     
     public WebRtcRepository(Context context) {
         this.context = context.getApplicationContext();
@@ -82,6 +102,11 @@ public class WebRtcRepository {
         
         // Create local audio track
         createLocalAudioTrack();
+        
+        // Create local video track if video call
+        if (isVideo) {
+            createLocalVideoTrack();
+        }
         
         Log.d(TAG, "PeerConnection initialized successfully");
     }
@@ -350,10 +375,197 @@ public class WebRtcRepository {
     }
     
     /**
+     * Create local video track and add to peer connection
+     */
+    private void createLocalVideoTrack() {
+        // Create EglBase for video rendering
+        if (eglBase == null) {
+            eglBase = EglBase.create();
+        }
+        
+        // Create camera capturer
+        videoCapturer = createCameraCapturer(true);  // Start with front camera
+        if (videoCapturer == null) {
+            Log.e(TAG, "Failed to create camera capturer");
+            return;
+        }
+        
+        // Create surface texture helper
+        surfaceTextureHelper = SurfaceTextureHelper.create(
+                "CameraThread",
+                eglBase.getEglBaseContext()
+        );
+        
+        // Create video source
+        videoSource = peerConnectionFactory.createVideoSource(videoCapturer.isScreencast());
+        videoCapturer.initialize(
+                surfaceTextureHelper,
+                context,
+                videoSource.getCapturerObserver()
+        );
+        
+        // Start capturing
+        videoCapturer.startCapture(720, 1280, 30);  // Portrait mode
+        
+        // Create video track
+        localVideoTrack = peerConnectionFactory.createVideoTrack(VIDEO_TRACK_ID, videoSource);
+        localVideoTrack.setEnabled(true);
+        
+        // Add video track to media stream
+        if (localMediaStream != null) {
+            localMediaStream.addTrack(localVideoTrack);
+            Log.d(TAG, "Local video track added to MediaStream");
+        }
+        
+        Log.d(TAG, "Local video track created and capturing started");
+    }
+    
+    /**
+     * Create camera capturer for video
+     * 
+     * @param useFrontCamera true to use front camera, false for back camera
+     * @return CameraVideoCapturer or null if failed
+     */
+    private CameraVideoCapturer createCameraCapturer(boolean useFrontCamera) {
+        CameraEnumerator enumerator;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+            enumerator = new Camera2Enumerator(context);
+        } else {
+            enumerator = new Camera1Enumerator(false);
+        }
+        
+        String[] deviceNames = enumerator.getDeviceNames();
+        
+        // First try to find the requested camera
+        for (String deviceName : deviceNames) {
+            if (useFrontCamera == enumerator.isFrontFacing(deviceName)) {
+                CameraVideoCapturer capturer = enumerator.createCapturer(deviceName, null);
+                if (capturer != null) {
+                    Log.d(TAG, "Camera created: " + deviceName);
+                    return capturer;
+                }
+            }
+        }
+        
+        // Fallback: try any camera
+        for (String deviceName : deviceNames) {
+            CameraVideoCapturer capturer = enumerator.createCapturer(deviceName, null);
+            if (capturer != null) {
+                Log.d(TAG, "Fallback camera created: " + deviceName);
+                return capturer;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Toggle camera on/off
+     * 
+     * @param enabled true to enable, false to disable
+     */
+    public void toggleCamera(boolean enabled) {
+        if (localVideoTrack != null) {
+            localVideoTrack.setEnabled(enabled);
+            isVideoEnabled = enabled;
+            Log.d(TAG, "Camera " + (enabled ? "enabled" : "disabled"));
+        }
+    }
+    
+    /**
+     * Switch between front and back camera
+     */
+    public void switchCamera() {
+        if (videoCapturer != null) {
+            videoCapturer.switchCamera(new CameraVideoCapturer.CameraSwitchHandler() {
+                @Override
+                public void onCameraSwitchDone(boolean isFrontCamera) {
+                    WebRtcRepository.this.isFrontCamera = isFrontCamera;
+                    Log.d(TAG, "Camera switched to " + (isFrontCamera ? "front" : "back"));
+                }
+                
+                @Override
+                public void onCameraSwitchError(String errorDescription) {
+                    Log.e(TAG, "Camera switch error: " + errorDescription);
+                }
+            });
+        }
+    }
+    
+    /**
+     * Check if camera is enabled
+     * 
+     * @return true if camera is enabled
+     */
+    public boolean isCameraEnabled() {
+        return isVideoEnabled;
+    }
+    
+    /**
+     * Attach local video to renderer
+     * Call this to show local camera preview
+     * 
+     * @param renderer SurfaceViewRenderer for local video
+     */
+    public void attachLocalRenderer(SurfaceViewRenderer renderer) {
+        if (eglBase == null) {
+            Log.e(TAG, "EglBase not initialized");
+            return;
+        }
+        
+        renderer.init(eglBase.getEglBaseContext(), null);
+        renderer.setMirror(isFrontCamera);  // Mirror for front camera
+        
+        if (localVideoTrack != null) {
+            localVideoTrack.addSink(renderer);
+            Log.d(TAG, "Local video renderer attached");
+        }
+    }
+    
+    /**
+     * Detach local video from renderer
+     * 
+     * @param renderer SurfaceViewRenderer to detach
+     */
+    public void detachLocalRenderer(SurfaceViewRenderer renderer) {
+        if (localVideoTrack != null) {
+            localVideoTrack.removeSink(renderer);
+        }
+        renderer.release();
+        Log.d(TAG, "Local video renderer detached");
+    }
+    
+    /**
      * Close PeerConnection and cleanup resources
      */
     public void closePeerConnection() {
         Log.d(TAG, "Closing PeerConnection");
+        
+        // Stop video capturing
+        if (videoCapturer != null) {
+           try {
+                videoCapturer.stopCapture();
+            } catch (InterruptedException e) {
+                Log.e(TAG, "Error stopping video capture", e);
+            }
+            videoCapturer.dispose();
+            videoCapturer = null;
+        }
+        
+        if (localVideoTrack != null) {
+            localVideoTrack.dispose();
+            localVideoTrack = null;
+        }
+        
+        if (videoSource != null) {
+            videoSource.dispose();
+            videoSource = null;
+        }
+        
+        if (surfaceTextureHelper != null) {
+            surfaceTextureHelper.dispose();
+            surfaceTextureHelper = null;
+        }
         
         if (localAudioTrack != null) {
             localAudioTrack.dispose();
@@ -375,7 +587,7 @@ public class WebRtcRepository {
             peerConnection = null;
         }
         
-        // Note: PeerConnectionFactory should be kept alive for potential future calls
+        // Note: PeerConnectionFactory and EglBase should be kept alive for potential future calls
         // Only dispose when app is closing
         
         Log.d(TAG, "PeerConnection closed and resources cleaned up");
@@ -387,6 +599,11 @@ public class WebRtcRepository {
      */
     public void dispose() {
         closePeerConnection();
+        
+        if (eglBase != null) {
+            eglBase.release();
+            eglBase = null;
+        }
         
         if (peerConnectionFactory != null) {
             peerConnectionFactory.dispose();
@@ -410,6 +627,15 @@ public class WebRtcRepository {
      */
     public void setIceCandidateCallback(IceCandidateCallback callback) {
         this.iceCandidateCallback = callback;
+    }
+    
+    /**
+     * Set remote stream callback
+     * 
+     * @param callback Callback for remote stream
+     */
+    public void setRemoteStreamCallback(RemoteStreamCallback callback) {
+        this.remoteStreamCallback = callback;
     }
     
     // ==================== PeerConnection Observer ====================
@@ -474,6 +700,10 @@ public class WebRtcRepository {
         public void onAddStream(MediaStream mediaStream) {
             Log.d(TAG, "Remote stream added: " + mediaStream.getId());
             // Remote audio will automatically play through earpiece/speaker
+            // Notify callback for remote video handling
+            if (remoteStreamCallback != null) {
+                remoteStreamCallback.onRemoteStream(mediaStream);
+            }
         }
         
         @Override
@@ -511,6 +741,10 @@ public class WebRtcRepository {
     
     public interface IceCandidateCallback {
         void onIceCandidateGenerated(String candidate, String sdpMid, int sdpMLineIndex);
+    }
+    
+    public interface RemoteStreamCallback {
+        void onRemoteStream(MediaStream mediaStream);
     }
     
     public interface ConnectionStateCallback {

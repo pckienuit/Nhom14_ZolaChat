@@ -33,6 +33,7 @@ public class CallViewModel extends AndroidViewModel {
     private MutableLiveData<Resource<Call>> currentCall;
     private MutableLiveData<String> connectionState;
     private MutableLiveData<Boolean> isMicEnabled;
+    private MutableLiveData<Boolean> isCameraEnabled;
     private MutableLiveData<String> error;
     
     // Listeners
@@ -52,6 +53,7 @@ public class CallViewModel extends AndroidViewModel {
         this.currentCall = new MutableLiveData<>();
         this.connectionState = new MutableLiveData<>();
         this.isMicEnabled = new MutableLiveData<>(true);
+        this.isCameraEnabled = new MutableLiveData<>(true);
         this.error = new MutableLiveData<>();
         
         // Setup WebRTC callbacks
@@ -321,6 +323,33 @@ public class CallViewModel extends AndroidViewModel {
     }
     
     /**
+     * Toggle camera on/off (video calls only)
+     */
+    public void toggleCamera() {
+        boolean newState = !webRtcRepository.isCameraEnabled();
+        webRtcRepository.toggleCamera(newState);
+        isCameraEnabled.postValue(newState);
+        Log.d(TAG, "Camera " + (newState ? "enabled" : "disabled"));
+    }
+    
+    /**
+     * Switch between front and back camera (video calls only)
+     */
+    public void switchCamera() {
+        webRtcRepository.switchCamera();
+        Log.d(TAG, "Switching camera");
+    }
+    
+    /**
+     * Get WebRtcRepository for video renderer attachment
+     * 
+     * @return WebRtcRepository instance
+     */
+    public WebRtcRepository getWebRtcRepository() {
+        return webRtcRepository;
+    }
+    
+    /**
      * Listen to call updates
      */
     private void listenToCall(@NonNull String callId) {
@@ -506,6 +535,10 @@ public class CallViewModel extends AndroidViewModel {
     
     public LiveData<Boolean> getIsMicEnabled() {
         return isMicEnabled;
+    }
+    
+    public LiveData<Boolean> getIsCameraEnabled() {
+        return isCameraEnabled;
     }
     
     public LiveData<String> getError() {
