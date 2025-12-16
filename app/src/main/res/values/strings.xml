@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">DoAn_ZaloClone</string>
-    <string name="no_files">Không có file</string>
+    <string name="no_files">Không có file nào</string>
     
     <!-- File Management Strings -->
     <string name="media_thumbnail">Ảnh thu nhỏ</string>
@@ -8,14 +8,14 @@
     <string name="link_icon">Biểu tượng liên kết</string>
     
     <!-- Search and Filter Strings -->
-    <string name="search_files">Tìm kiếm file...</string>
-    <string name="filter_by_sender">Lọc theo người gửi</string>
-    <string name="filter_by_date">Lọc theo ngày</string>
+    <string name="search_files">Tìm kiếm file</string>
+    <string name="filter_by_sender">Người gửi</string>
+    <string name="filter_by_date">Theo ngày</string>
     <string name="clear_filters">Xóa bộ lọc</string>
     <string name="all_senders">Tất cả</string>
     <string name="apply">Áp dụng</string>
     <string name="cancel">Hủy</string>
-    <string name="no_results">Không tìm thấy kết quả</string>
+    <string name="no_results">Không có file nào</string>
     <string name="sender_filter_title">Chọn người gửi</string>
     <string name="files_count">%d file</string>
     
@@ -44,7 +44,7 @@
     <string name="archive_files">Archive</string>
     
     <!-- Domain Filter Strings -->
-    <string name="filter_by_domain">Lọc theo tên miền</string>
+    <string name="filter_by_domain">Tên miền</string>
     <string name="domain_filter_title">Chọn tên miền</string>
     <string name="all_domains">Tất cả tên miền</string>
 </resources>
