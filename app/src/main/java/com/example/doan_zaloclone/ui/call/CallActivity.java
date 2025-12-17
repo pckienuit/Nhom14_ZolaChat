@@ -8,6 +8,10 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
 import android.media.AudioManager;
 import android.net.Uri;
 import android.os.Build;
@@ -107,6 +111,31 @@ public class CallActivity extends AppCompatActivity {
     // Audio
     private AudioManager audioManager;
     
+    // Proximity Sensor
+    private SensorManager sensorManager;
+    private Sensor proximitySensor;
+    private boolean isProximityNear = false;
+    private SensorEventListener proximitySensorListener = new SensorEventListener() {
+        @Override
+        public void onSensorChanged(SensorEvent event) {
+            if (event.sensor.getType() == Sensor.TYPE_PROXIMITY) {
+                float distance = event.values[0];
+                boolean wasNear = isProximityNear;
+                isProximityNear = distance < proximitySensor.getMaximumRange();
+                
+                if (wasNear != isProximityNear) {
+                    Log.d(TAG, "Proximity changed: " + (isProximityNear ? "NEAR" : "FAR"));
+                    handleProximityChange();
+                }
+            }
+        }
+        
+        @Override
+        public void onAccuracyChanged(Sensor sensor, int accuracy) {
+            // Not needed
+        }
+    };
+    
     // OngoingCallService
     private OngoingCallService ongoingCallService;
     private boolean serviceBound = false;
@@ -179,6 +208,11 @@ public class CallActivity extends AppCompatActivity {
         
         // Register audio device change listener
         registerAudioDeviceListener();
+        
+        // Setup proximity sensor for voice calls
+        if (!isVideo) {
+            setupProximitySensor();
+        }
         
         // Setup observers
         setupObservers();
@@ -481,6 +515,7 @@ public class CallActivity extends AppCompatActivity {
         
         stopDurationTimer();
         stopOngoingCallService();
+        disableProximitySensor();
         finish();
     }
     
@@ -559,6 +594,81 @@ public class CallActivity extends AppCompatActivity {
         }
     }
     
+    /**
+     * Setup proximity sensor for voice calls
+     */
+    private void setupProximitySensor() {
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        proximitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
+        
+        if (proximitySensor != null) {
+            Log.d(TAG, "Proximity sensor available, max range: " + proximitySensor.getMaximumRange());
+        } else {
+            Log.w(TAG, "Proximity sensor not available on this device");
+        }
+    }
+    
+    /**
+     * Enable proximity sensor when call connects (voice calls only)
+     */
+    private void enableProximitySensor() {
+        if (isVideo || proximitySensor == null) return;
+        
+        sensorManager.registerListener(
+            proximitySensorListener,
+            proximitySensor,
+            SensorManager.SENSOR_DELAY_NORMAL
+        );
+        
+        Log.d(TAG, "Proximity sensor enabled");
+    }
+    
+    /**
+     * Disable proximity sensor
+     */
+    private void disableProximitySensor() {
+        if (proximitySensor == null) return;
+        
+        try {
+            sensorManager.unregisterListener(proximitySensorListener);
+            Log.d(TAG, "Proximity sensor disabled");
+        } catch (IllegalArgumentException e) {
+            // Listener was not registered, ignore
+        }
+    }
+    
+    /**
+     * Handle proximity sensor state change
+     */
+    private void handleProximityChange() {
+        if (isVideo) return; // Only for voice calls
+        
+        if (isProximityNear) {
+            // Phone near ear: turn off screen
+            getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
+            
+            // Request screen off
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(false);
+                setTurnScreenOn(false);
+            }
+            
+            Log.d(TAG, "Screen should turn off (phone near ear)");
+        } else {
+            // Phone away from ear: turn on screen
+            getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON);
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(true);
+                setTurnScreenOn(true);
+            }
+            
+            Log.d(TAG, "Screen should turn on (phone away from ear)");
+        }
+    }
+    
     private void updateUIForCallStatus(String status) {
         Log.d(TAG, "Updating UI for status: " + status);
         
@@ -597,6 +707,9 @@ public class CallActivity extends AppCompatActivity {
         
         // Start OngoingCallService to maintain call in background
         startOngoingCallService();
+        
+        // Enable proximity sensor for voice calls
+        enableProximitySensor();
     }
     
     private void showIncomingCallUI() {
@@ -729,6 +842,9 @@ public class CallActivity extends AppCompatActivity {
         
         // Unregister audio device listener
         unregisterAudioDeviceListener();
+        
+        // Disable proximity sensor
+        disableProximitySensor();
         
         // Cleanup video resources
         if (isVideo && eglBase != null) {
