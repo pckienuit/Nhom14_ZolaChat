@@ -10,5 +10,10 @@
         android:id="@+id/nav_contact"
         android:icon="@drawable/ic_contacts"
         android:title="Contacts" />
+
+    <item
+        android:id="@+id/nav_newsfeed"
+        android:icon="@drawable/ic_calendar"
+        android:title="Newsfeed" />
     
 </menu>
