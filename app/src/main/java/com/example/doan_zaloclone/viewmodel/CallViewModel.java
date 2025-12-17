@@ -52,9 +52,14 @@ public class CallViewModel extends AndroidViewModel {
     private String currentUserId;
     private boolean isInitiator = false;
     private boolean currentCallIsVideo = false;  // Fix #6: Store video flag
+    private long callInitiatedTimestamp = 0;  // Track when call started
     
     // Concurrent call prevention
     private static boolean isInCall = false;
+    
+    // Call expiry timeout (milliseconds) - reject calls older than 60 seconds
+    private static final long CALL_EXPIRY_TIMEOUT = 60000;  // 60 seconds
+    private static final long MAX_DISCONNECT_TIMEOUT = 15000;  // 15 seconds
     
     // Network disconnection handling
     private Handler disconnectHandler = new Handler(Looper.getMainLooper());
@@ -268,18 +273,29 @@ public class CallViewModel extends AndroidViewModel {
         Log.d(TAG, "isVideo: " + isVideo);
         Log.d(TAG, "Current userId will be set to: " + receiverId);
         
-        // Check if already in a call
+        // CRITICAL: Cleanup any previous call state first
+        if (isInCall || currentCallId != null) {
+            Log.w(TAG, "Previous call still active, forcing cleanup before accept");
+            forceCleanup();
+        }
+        
+        // Check if already in a call (after cleanup)
         if (isInCall) {
             Log.w(TAG, "Cannot accept call - already in another call, auto-rejecting");
             rejectCall(callId);
             return;
         }
         
+        // Validate call is not too old (prevent accepting stale calls)
+        // Note: This requires getting call timestamp from Firestore
+        // For now, we track from accept time
+        
         isInCall = true;
         this.currentCallId = callId;
         this.currentUserId = receiverId;
         this.isInitiator = false;
         this.currentCallIsVideo = isVideo;  // Fix #6: Store video flag
+        this.callInitiatedTimestamp = System.currentTimeMillis();  // Track accept time
         
         connectionState.setValue("ACCEPTING");
         
@@ -461,12 +477,22 @@ public class CallViewModel extends AndroidViewModel {
         
         // Clear processed signals when starting new listener
         processedSignalIds.clear();
+        Log.d(TAG, "Starting fresh signals listener for call: " + callId);
         
         signalsListener = callRepository.listenToSignals(callId, new CallRepository.OnSignalsChangedListener() {
             @Override
             public void onSignalsChanged(List<CallSignal> signals) {
                 Log.d(TAG, "===== SIGNALS LISTENER FIRED =====");
                 Log.d(TAG, "Received " + signals.size() + " total signals");
+                
+                // Check if call is too old (prevent processing stale signals)
+                if (callInitiatedTimestamp > 0) {
+                    long callAge = System.currentTimeMillis() - callInitiatedTimestamp;
+                    if (callAge > CALL_EXPIRY_TIMEOUT) {
+                        Log.w(TAG, "Call too old (" + callAge + "ms), ignoring signals");
+                        return;
+                    }
+                }
                 
                 int newSignalsCount = 0;
                 int nullIdCount = 0;
@@ -615,7 +641,7 @@ public class CallViewModel extends AndroidViewModel {
     }
     
     /**
-     * Start disconnect timer - auto-end call after 10 seconds if not reconnected
+     * Start disconnect timer - auto-end call after MAX_DISCONNECT_TIMEOUT if not reconnected
      */
     private void startDisconnectTimer() {
         if (disconnectRunnable != null) {
@@ -623,13 +649,13 @@ public class CallViewModel extends AndroidViewModel {
         }
         
         disconnectRunnable = () -> {
-            Log.w(TAG, "Connection timeout - ending call");
+            Log.w(TAG, "Connection timeout (" + MAX_DISCONNECT_TIMEOUT + "ms) - ending call");
             error.postValue("Mất kết nối");
             endCall();
         };
         
-        // 10 second timeout
-        disconnectHandler.postDelayed(disconnectRunnable, 10000);
+        disconnectHandler.postDelayed(disconnectRunnable, MAX_DISCONNECT_TIMEOUT);
+        Log.d(TAG, "Disconnect timer started: " + MAX_DISCONNECT_TIMEOUT + "ms");
     }
     
     /**
@@ -646,30 +672,106 @@ public class CallViewModel extends AndroidViewModel {
      * Cleanup resources
      */
     private void cleanup() {
-        Log.d(TAG, "Cleaning up call resources");
+        Log.d(TAG, "===== CLEANING UP CALL RESOURCES =====");
+        
+        // Cancel any pending timers
+        cancelDisconnectTimer();
         
         // Remove listeners
         if (callListener != null) {
             callListener.remove();
             callListener = null;
+            Log.d(TAG, "Call listener removed");
         }
         
         if (signalsListener != null) {
             signalsListener.remove();
             signalsListener = null;
+            Log.d(TAG, "Signals listener removed");
         }
         
         // Clear processed signals
+        int signalsCleared = processedSignalIds.size();
         processedSignalIds.clear();
+        Log.d(TAG, "Cleared " + signalsCleared + " processed signal IDs");
         
         // Close WebRTC connection
         webRtcRepository.closePeerConnection();
         
         // Reset state
+        String oldCallId = currentCallId;
         currentCallId = null;
+        currentUserId = null;
         isInitiator = false;
+        callInitiatedTimestamp = 0;
         isInCall = false;  // Reset concurrent call flag
         connectionState.postValue("IDLE");
+        
+        Log.d(TAG, "Cleanup complete for call: " + oldCallId);
+        Log.d(TAG, "===== CLEANUP FINISHED =====");
+    }
+    
+    /**
+     * Force cleanup - more aggressive, used when state is inconsistent
+     */
+    private void forceCleanup() {
+        Log.w(TAG, "===== FORCE CLEANUP INITIATED =====");
+        
+        try {
+            // Cancel all timers
+            cancelDisconnectTimer();
+            
+            // Force remove all listeners
+            if (callListener != null) {
+                try {
+                    callListener.remove();
+                } catch (Exception e) {
+                    Log.e(TAG, "Error removing call listener: " + e.getMessage());
+                }
+                callListener = null;
+            }
+            
+            if (signalsListener != null) {
+                try {
+                    signalsListener.remove();
+                } catch (Exception e) {
+                    Log.e(TAG, "Error removing signals listener: " + e.getMessage());
+                }
+                signalsListener = null;
+            }
+            
+            // Clear all tracking
+            processedSignalIds.clear();
+            
+            // Force close WebRTC
+            try {
+                webRtcRepository.closePeerConnection();
+            } catch (Exception e) {
+                Log.e(TAG, "Error closing WebRTC: " + e.getMessage());
+            }
+            
+            // Reset ALL state
+            currentCallId = null;
+            currentUserId = null;
+            isInitiator = false;
+            callInitiatedTimestamp = 0;
+            isInCall = false;
+            connectionState.postValue("IDLE");
+            
+            Log.w(TAG, "Force cleanup complete");
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Critical error during force cleanup: " + e.getMessage());
+            // Last resort - reset everything
+            currentCallId = null;
+            currentUserId = null;
+            callListener = null;
+            signalsListener = null;
+            isInCall = false;
+            callInitiatedTimestamp = 0;
+        }
+        
+        Log.w(TAG, "===== FORCE CLEANUP FINISHED =====");
     }
     
     // ==================== LiveData Getters ====================
@@ -697,8 +799,18 @@ public class CallViewModel extends AndroidViewModel {
     @Override
     protected void onCleared() {
         super.onCleared();
-        Log.d(TAG, "ViewModel cleared");
-        cleanup();
-        webRtcRepository.dispose();
+        Log.d(TAG, "===== ViewModel onCleared =====");
+        
+        // Force cleanup to ensure everything is released
+        forceCleanup();
+        
+        // Dispose WebRTC factory
+        try {
+            webRtcRepository.dispose();
+        } catch (Exception e) {
+            Log.e(TAG, "Error disposing WebRTC: " + e.getMessage());
+        }
+        
+        Log.d(TAG, "ViewModel cleared and disposed");
     }
 }

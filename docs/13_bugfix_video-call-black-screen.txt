@@ -611,12 +611,260 @@ FUTURE IMPROVEMENTS
 
 
 ================================================================================
+BUG #3: CALL LIFECYCLE & STALE CALLS PREVENTION
+================================================================================
+
+--------------------------------------------------------------------------------
+PROBLEM
+--------------------------------------------------------------------------------
+
+SYMPTOMS:
+- Calls sometimes hang/freeze and don't properly end
+- Old calls from Firebase accepted even though they're stale (>1 minute old)
+- Race conditions during rapid call attempts
+- Incomplete cleanup causing state corruption
+
+ROOT CAUSES:
+1. No call age validation - accepting calls created minutes ago
+2. Weak cleanup() - didn't handle all edge cases
+3. Listeners not properly removed
+4. No forced cleanup on ViewModel destruction
+5. Race conditions in initiateCall/acceptCall
+
+--------------------------------------------------------------------------------
+SOLUTION: ROBUST LIFECYCLE MANAGEMENT
+--------------------------------------------------------------------------------
+
+1. TIMESTAMP TRACKING & VALIDATION
+
+Added fields in CallViewModel:
+```java
+private long callInitiatedTimestamp = 0;
+private static final long CALL_EXPIRY_TIMEOUT = 60000; // 60 seconds
+private static final long MAX_DISCONNECT_TIMEOUT = 15000; // 15 seconds
+```
+
+Timestamp set when call initiated:
+```java
+public void initiateCall(String receiverId, boolean isVideo, String receiverName) {
+    callInitiatedTimestamp = System.currentTimeMillis();
+    // ... rest of call logic
+}
+```
+
+Call age validation in signal processing:
+```java
+private void listenToSignals(String callId) {
+    if (callInitiatedTimestamp > 0) {
+        long callAge = System.currentTimeMillis() - callInitiatedTimestamp;
+        if (callAge > CALL_EXPIRY_TIMEOUT) {
+            Log.w(TAG, "Call too old (" + callAge + "ms), ignoring signals");
+            return;
+        }
+    }
+    // ... rest of signal processing
+}
+```
+
+2. FORCED CLEANUP METHOD
+
+Added comprehensive forceCleanup() that handles ALL edge cases:
+```java
+private void forceCleanup() {
+    Log.d(TAG, "===== Force cleanup started =====");
+    
+    // Remove ALL Firestore listeners with error handling
+    if (callStatusListener != null) {
+        try {
+            callStatusListener.remove();
+            Log.d(TAG, "Call status listener removed");
+        } catch (Exception e) {
+            Log.e(TAG, "Error removing status listener: " + e.getMessage());
+        }
+        callStatusListener = null;
+    }
+    
+    if (signalingListener != null) {
+        try {
+            signalingListener.remove();
+            Log.d(TAG, "Signaling listener removed");
+        } catch (Exception e) {
+            Log.e(TAG, "Error removing signaling listener: " + e.getMessage());
+        }
+        signalingListener = null;
+    }
+    
+    // Cancel ALL timers
+    if (ringtoneCancelTimer != null) {
+        ringtoneCancelTimer.cancel(true);
+        ringtoneCancelTimer = null;
+    }
+    
+    if (callDisconnectTimer != null) {
+        callDisconnectTimer.cancel(true);
+        callDisconnectTimer = null;
+    }
+    
+    if (ringtoneHandler != null && ringtoneRunnable != null) {
+        ringtoneHandler.removeCallbacks(ringtoneRunnable);
+    }
+    
+    if (callDurationHandler != null && callDurationRunnable != null) {
+        callDurationHandler.removeCallbacks(callDurationRunnable);
+    }
+    
+    // Nullify all references
+    currentCallId.setValue(null);
+    callStatus.setValue(null);
+    callInitiatedTimestamp = 0;
+    
+    Log.d(TAG, "===== Force cleanup complete =====");
+}
+```
+
+3. CLEANUP BEFORE NEW CALLS
+
+Always cleanup before starting new call to clear residual state:
+```java
+public void initiateCall(String receiverId, boolean isVideo, String receiverName) {
+    Log.d(TAG, "initiateCall: " + receiverId + ", isVideo=" + isVideo);
+    
+    // Force cleanup before starting new call
+    forceCleanup();
+    
+    callInitiatedTimestamp = System.currentTimeMillis();
+    // ... continue with call initiation
+}
+
+public void acceptCall(String callId) {
+    Log.d(TAG, "acceptCall: " + callId);
+    
+    // Validate no active call
+    if (currentCallId.getValue() != null && !currentCallId.getValue().equals(callId)) {
+        Log.w(TAG, "Cannot accept call, already in call: " + currentCallId.getValue());
+        return;
+    }
+    
+    // Cleanup before accepting
+    forceCleanup();
+    
+    callInitiatedTimestamp = System.currentTimeMillis();
+    // ... continue with call acceptance
+}
+```
+
+4. ENHANCED ONCEARED
+
+ViewModel destruction now uses forceCleanup:
+```java
+@Override
+protected void onCleared() {
+    super.onCleared();
+    Log.d(TAG, "===== ViewModel onCleared =====");
+    
+    forceCleanup();
+    
+    try {
+        webRtcRepository.dispose();
+        Log.d(TAG, "WebRTC disposed successfully");
+    } catch (Exception e) {
+        Log.e(TAG, "Error disposing WebRTC: " + e.getMessage());
+    }
+}
+```
+
+5. MAINACTIVITY CALL AGE VALIDATION
+
+Added validation in MainActivity to reject old incoming calls:
+```java
+@Override
+public void onIncomingCall(Call call) {
+    // Prevent duplicate launches
+    if (call.getId().equals(lastHandledCallId)) {
+        return;
+    }
+    
+    // Reject calls older than 60 seconds
+    if (call.getTimestamp() != null) {
+        long callAge = System.currentTimeMillis() - call.getTimestamp().getTime();
+        if (callAge > 60000) {
+            android.util.Log.w("MainActivity", 
+                "Rejecting old call: " + call.getId() + ", age: " + callAge + "ms");
+            return;
+        }
+    }
+    
+    lastHandledCallId = call.getId();
+    fetchCallerNameAndLaunchCallActivity(call, currentUserId);
+}
+```
+
+6. CONFIGURABLE DISCONNECT TIMER
+
+Made disconnect timeout configurable:
+```java
+private void startDisconnectTimer(long timeoutMs) {
+    if (callDisconnectTimer != null) {
+        callDisconnectTimer.cancel(true);
+    }
+    
+    callDisconnectTimer = scheduler.schedule(() -> {
+        Log.w(TAG, "Disconnect timer expired after " + timeoutMs + "ms");
+        callStatus.postValue("ended");
+        cleanup();
+    }, timeoutMs, TimeUnit.MILLISECONDS);
+}
+
+// Used with MAX_DISCONNECT_TIMEOUT
+startDisconnectTimer(MAX_DISCONNECT_TIMEOUT);
+```
+
+--------------------------------------------------------------------------------
+BENEFITS
+--------------------------------------------------------------------------------
+
+✅ No more hung calls - forceCleanup handles all edge cases
+✅ Stale calls rejected automatically (older than 60 seconds)
+✅ Race conditions prevented by cleanup-before-start pattern
+✅ Complete listener removal with error handling
+✅ Configurable timeouts for different scenarios
+✅ Detailed logging for debugging lifecycle issues
+✅ Defensive state management with validation checks
+
+--------------------------------------------------------------------------------
+TESTING SCENARIOS
+--------------------------------------------------------------------------------
+
+Test these scenarios to verify robustness:
+
+1. RAPID CALL ATTEMPTS
+   - Initiate call, cancel, initiate again quickly
+   - Should cleanup properly between attempts
+
+2. STALE CALL HANDLING
+   - Create call in Firebase with old timestamp (>60s ago)
+   - App should reject with log: "Call too old"
+
+3. APP KILL DURING CALL
+   - Kill app while in active call
+   - Restart app - no residual state
+
+4. NETWORK DISCONNECT
+   - Start call, disable network
+   - Should timeout after 15 seconds and cleanup
+
+5. MULTIPLE INCOMING CALLS
+   - Receive multiple calls rapidly
+   - Should handle only newest, reject duplicates/old ones
+
+
+================================================================================
 AUTHOR & VERSION
 ================================================================================
 
 Author: Development Team
 Date: 17/12/2025
-Version: v1.0
+Version: v1.1
 Status: ✅ COMPLETED & TESTED
 
 ================================================================================

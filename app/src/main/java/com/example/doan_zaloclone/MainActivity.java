@@ -91,6 +91,15 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
                     
+                    // Reject calls older than 60 seconds
+                    if (call.getStartTime() > 0) {
+                        long callAge = System.currentTimeMillis() - call.getStartTime();
+                        if (callAge > 60000) { // 60 seconds
+                            android.util.Log.w("MainActivity", "Rejecting old call: " + call.getId() + ", age: " + callAge + "ms");
+                            return;
+                        }
+                    }
+                    
                     lastHandledCallId = call.getId();
                     android.util.Log.d("MainActivity", "Processing new incoming call: " + call.getId());
                     
