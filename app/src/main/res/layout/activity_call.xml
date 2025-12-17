@@ -2,15 +2,14 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/black">
+    android:layout_height="match_parent">
 
     <!-- Remote video (full screen) - BACKGROUND -->
     <org.webrtc.SurfaceViewRenderer
         android:id="@+id/remoteVideoView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:visibility="gone" />
+        android:visibility="invisible" />
 
     <!-- Local video preview (small, top-right corner) -->
     <org.webrtc.SurfaceViewRenderer
@@ -20,18 +19,47 @@
         android:layout_gravity="top|end"
         android:layout_marginTop="60dp"
         android:layout_marginEnd="16dp"
-        android:visibility="gone" />
+        android:visibility="invisible" />
 
     <!-- Content overlay -->
     <LinearLayout
+        android:id="@+id/contentOverlay"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:gravity="center"
-        android:padding="24dp">
+        android:padding="24dp"
+        android:background="@android:color/transparent"
+        android:clickable="false"
+        android:focusable="false">
+
+        <!-- Call duration (top center, always visible during call) -->
+        <TextView
+            android:id="@+id/callDuration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:text="00:00"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:background="#CC000000"
+            android:elevation="16dp"
+            android:layout_marginTop="8dp"
+            android:visibility="gone" />
+
+        <!-- Spacer to push content to center -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
 
         <!-- Caller information -->
         <LinearLayout
+            android:id="@+id/callerInfoContainer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
@@ -68,63 +96,58 @@
                 android:textSize="16sp"
                 android:textColor="@android:color/white"
                 android:alpha="0.8" />
-
-            <!-- Call duration -->
-            <TextView
-                android:id="@+id/callDuration"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="00:00"
-                android:textSize="18sp"
-                android:textColor="@android:color/white"
-                android:layout_marginTop="8dp"
-                android:visibility="gone" />
         </LinearLayout>
+    </LinearLayout>
 
-        <View
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
+    <!-- Incoming call buttons - OUTSIDE overlay so always at bottom -->
+    <LinearLayout
+        android:id="@+id/incomingCallButtons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingTop="16dp"
+        android:paddingBottom="32dp"
+        android:background="#CC000000"
+        android:elevation="16dp"
+        android:visibility="gone">
 
-        <!-- Incoming call buttons -->
-        <LinearLayout
-            android:id="@+id/incomingCallButtons"
+        <!-- Reject button -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/rejectButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_gravity="center"
-            android:visibility="gone">
+            android:src="@drawable/ic_call_end"
+            app:backgroundTint="@android:color/holo_red_dark"
+            app:tint="@android:color/white"
+            android:layout_marginEnd="32dp" />
 
-            <!-- Reject button -->
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/rejectButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:src="@drawable/ic_call_end"
-                app:backgroundTint="@android:color/holo_red_dark"
-                app:tint="@android:color/white"
-                android:layout_marginEnd="32dp" />
-
-            <!-- Accept button -->
-            <com.google.android.material.floatingactionbutton.FloatingActionButton
-                android:id="@+id/acceptButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:src="@drawable/ic_call"
-                app:backgroundTint="@android:color/holo_green_dark"
-                app:tint="@android:color/white" />
-        </LinearLayout>
-
-        <!-- Call controls (during call) -->
-        <LinearLayout
-            android:id="@+id/callControls"
+        <!-- Accept button -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/acceptButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_gravity="center"
-            android:visibility="gone">
+            android:src="@drawable/ic_call"
+            app:backgroundTint="@android:color/holo_green_dark"
+            app:tint="@android:color/white" />
+    </LinearLayout>
+
+    <!-- Call controls - OUTSIDE overlay so always at bottom -->
+    <LinearLayout
+        android:id="@+id/callControls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingTop="16dp"
+        android:paddingBottom="32dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:background="#CC000000"
+        android:elevation="16dp"
+        android:visibility="gone">
 
             <!-- Microphone button -->
             <com.google.android.material.floatingactionbutton.FloatingActionButton
@@ -183,5 +206,5 @@
                 app:tint="@android:color/white"
                 app:fabSize="normal" />
         </LinearLayout>
-    </LinearLayout>
+
 </FrameLayout>

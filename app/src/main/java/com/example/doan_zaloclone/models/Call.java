@@ -14,6 +14,7 @@ public class Call {
     // Call statuses
     public static final String STATUS_CALLING = "CALLING";     // Caller waiting for receiver to pick up
     public static final String STATUS_RINGING = "RINGING";     // Receiver's phone is ringing
+    public static final String STATUS_CONNECTED = "CONNECTED"; // Call connected (WebRTC established)
     public static final String STATUS_ONGOING = "ONGOING";     // Call in progress
     public static final String STATUS_ENDED = "ENDED";         // Call ended normally
     public static final String STATUS_MISSED = "MISSED";       // Receiver didn't answer

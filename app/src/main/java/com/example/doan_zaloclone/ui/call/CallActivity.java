@@ -51,6 +51,7 @@ public class CallActivity extends AppCompatActivity {
     public static final String EXTRA_CALLER_NAME = "caller_name";
     
     // UI Components
+    private View callerInfoContainer;  // Container holding avatar, name, status
     private ImageView callerAvatar;
     private TextView callerName;
     private TextView callStatus;
@@ -64,6 +65,10 @@ public class CallActivity extends AppCompatActivity {
     private FloatingActionButton micButton;
     private FloatingActionButton speakerButton;
     private FloatingActionButton endCallButton;
+    
+    // Content overlay
+    private View contentOverlay;
+    private View rootLayout;  // Root FrameLayout
     
     // Video components
     private SurfaceViewRenderer localVideoView;
@@ -166,6 +171,10 @@ public class CallActivity extends AppCompatActivity {
     }
     
     private void initViews() {
+        // Find root layout and overlays
+        rootLayout = findViewById(android.R.id.content).getRootView();
+        callerInfoContainer = findViewById(R.id.callerInfoContainer);
+        contentOverlay = findViewById(R.id.contentOverlay);
         callerAvatar = findViewById(R.id.callerAvatar);
         callerName = findViewById(R.id.callerName);
         callStatus = findViewById(R.id.callStatus);
@@ -199,7 +208,7 @@ public class CallActivity extends AppCompatActivity {
         
         // Setup video if this is a video call
         if (isVideo) {
-            setupVideoViews();
+            setupVideoViews();  // Activity uses its own EglBase
             cameraButton.setVisibility(View.VISIBLE);
             switchCameraButton.setVisibility(View.VISIBLE);
             callerAvatar.setVisibility(View.GONE);  // Hide avatar for video call
@@ -213,40 +222,94 @@ public class CallActivity extends AppCompatActivity {
      * Setup video views for video call
      */
     private void setupVideoViews() {
-        // Create EglBase for video rendering
+        Log.d(TAG, "===== SETTING UP VIDEO VIEWS =====");
+        
+        // Create EglBase for video rendering (Activity owns this, not Repository)
         eglBase = EglBase.create();
+        Log.d(TAG, "EglBase created");
         
-        // Initialize local video view
-        localVideoView.init(eglBase.getEglBaseContext(), null);
-        localVideoView.setMirror(true);  // Mirror for front camera
-        localVideoView.setVisibility(View.VISIBLE);
+        // CRITICAL: Share EglBase context with WebRtcRepository IMMEDIATELY
+        callViewModel.getWebRtcRepository().setEglBaseContext(eglBase.getEglBaseContext());
+        Log.d(TAG, "EglBase context shared with WebRtcRepository");
         
-        // Initialize remote video view
+        // Initialize and setup remote video view FIRST (background, full screen)
         remoteVideoView.init(eglBase.getEglBaseContext(), null);
-        remoteVideoView.setVisibility(View.VISIBLE);
+        remoteVideoView.setEnableHardwareScaler(true);  // Enable hardware acceleration
+        remoteVideoView.setMirror(false);  // Don't mirror remote video
+        remoteVideoView.setZOrderMediaOverlay(false);  // Render in background
+        remoteVideoView.setZOrderOnTop(false);  // Ensure it's in background
         
-        // Attach local renderer
+        // CRITICAL: Set visible NOW before attaching tracks
+        remoteVideoView.setVisibility(View.VISIBLE);
+        remoteVideoView.requestLayout();
+        Log.d(TAG, "Remote video view initialized and set to VISIBLE (width=" + remoteVideoView.getWidth() + ", height=" + remoteVideoView.getHeight() + ")");
+        
+        // Initialize and setup local video view (foreground, small preview)
+        localVideoView.init(eglBase.getEglBaseContext(), null);
+        localVideoView.setEnableHardwareScaler(true);  // Enable hardware acceleration
+        localVideoView.setMirror(true);  // Mirror for selfie view
+        localVideoView.setZOrderMediaOverlay(true);  // Render on top of remote view
+        localVideoView.setZOrderOnTop(true);  // Ensure it's on top
+        
+        // CRITICAL: Set visible NOW before attaching tracks
+        localVideoView.setVisibility(View.VISIBLE);
+        localVideoView.requestLayout();
+        Log.d(TAG, "Local video view initialized and set to VISIBLE (width=" + localVideoView.getWidth() + ", height=" + localVideoView.getHeight() + ")");
+        
+        // Force layout pass to ensure views have proper dimensions
+        remoteVideoView.post(() -> {
+            Log.d(TAG, "Post-layout remote view: width=" + remoteVideoView.getWidth() + ", height=" + remoteVideoView.getHeight());
+        });
+        localVideoView.post(() -> {
+            Log.d(TAG, "Post-layout local view: width=" + localVideoView.getWidth() + ", height=" + localVideoView.getHeight());
+        });
+        
+        // Register renderer - will attach video track when it's created in initializePeerConnection()
         callViewModel.getWebRtcRepository().attachLocalRenderer(localVideoView);
         
         // Setup remote stream callback
         callViewModel.getWebRtcRepository().setRemoteStreamCallback(mediaStream -> {
-            Log.d(TAG, "Remote stream received");
+            Log.d(TAG, "===== REMOTE STREAM CALLBACK TRIGGERED =====");
+            Log.d(TAG, "Remote stream ID: " + mediaStream.getId());
+            Log.d(TAG, "Audio tracks: " + mediaStream.audioTracks.size());
+            Log.d(TAG, "Video tracks: " + mediaStream.videoTracks.size());
             
             // Get video track from stream
             if (mediaStream.videoTracks.size() > 0) {
                 VideoTrack remoteVideoTrack = mediaStream.videoTracks.get(0);
+                Log.d(TAG, "Remote video track ID: " + remoteVideoTrack.id());
+                Log.d(TAG, "Remote video track enabled: " + remoteVideoTrack.enabled());
+                Log.d(TAG, "Remote video track state: " + remoteVideoTrack.state());
                 
                 // Must run on UI thread
                 runOnUiThread(() -> {
                     if (remoteVideoView != null) {
-                        remoteVideoTrack.addSink(remoteVideoView);
-                        Log.d(TAG, "Remote video track attached to view");
+                        // Double-check visibility and dimensions
+                        Log.d(TAG, "Before attach: remoteVideoView visibility=" + remoteVideoView.getVisibility() + 
+                                  ", width=" + remoteVideoView.getWidth() + ", height=" + remoteVideoView.getHeight());
+                        
+                        // Ensure view is visible before attaching
+                        remoteVideoView.setVisibility(View.VISIBLE);
+                        remoteVideoView.bringToFront();
+                        remoteVideoView.requestLayout();
+                        
+                        // Wait for layout to complete, then attach
+                        remoteVideoView.post(() -> {
+                            // Attach video track to renderer
+                            remoteVideoTrack.addSink(remoteVideoView);
+                            Log.d(TAG, "Remote video track attached to remoteVideoView");
+                            Log.d(TAG, "After attach: width=" + remoteVideoView.getWidth() + ", height=" + remoteVideoView.getHeight());
+                        });
+                    } else {
+                        Log.e(TAG, "ERROR: remoteVideoView is null!");
                     }
                 });
+            } else {
+                Log.w(TAG, "WARNING: No video tracks in remote stream!");
             }
         });
         
-        Log.d(TAG, "Video views setup complete");
+        Log.d(TAG, "===== VIDEO VIEWS SETUP COMPLETE =====");
     }
     
     private void setupObservers() {
@@ -305,13 +368,15 @@ public class CallActivity extends AppCompatActivity {
         showIncomingCallUI();
     }
     
-    private void handleOutgoingCall(String conversationId, String callerId, String receiverId) {
-        Log.d(TAG, "Initiating outgoing call");
+    private void handleOutgoingCall(String conversationId, String from, String to) {
+        Log.d(TAG, "Handling outgoing call to: " + to);
         callStatus.setText(R.string.call_calling);
+        
+        // Show outgoing UI
         showOutgoingCallUI();
         
-        // Initiate call via ViewModel
-        callViewModel.initiateCall(conversationId, callerId, receiverId, isVideo);
+        // Initiate call via ViewModel (this calls initializePeerConnection)
+        callViewModel.initiateCall(conversationId, from, to, isVideo);
     }
     
     private void acceptCall() {
@@ -384,6 +449,7 @@ public class CallActivity extends AppCompatActivity {
             case Call.STATUS_RINGING:
                 callStatus.setText(R.string.call_ringing);
                 break;
+            case Call.STATUS_CONNECTED:  // THIS IS THE MISSING CASE!
             case Call.STATUS_ONGOING:
                 callStatus.setText(R.string.call_ongoing);
                 onCallConnected();
@@ -429,9 +495,48 @@ public class CallActivity extends AppCompatActivity {
     }
     
     private void showOngoingCallUI() {
+        Log.d(TAG, "===== showOngoingCallUI called =====");
+        
         incomingCallButtons.setVisibility(View.GONE);
         callControls.setVisibility(View.VISIBLE);
         callDuration.setVisibility(View.VISIBLE);
+        
+        Log.d(TAG, "Call controls visibility set to VISIBLE");
+        Log.d(TAG, "Call duration visibility set to VISIBLE");
+        
+        // For video calls: hide overlay elements to show video
+        if (isVideo) {
+            Log.d(TAG, "Configuring UI for VIDEO call");
+            
+            // Hide caller info container to show video
+            if (callerInfoContainer != null) {
+                callerInfoContainer.setVisibility(View.GONE);
+                Log.d(TAG, "Hidden caller info container");
+            }
+            
+            // Verify controls are visible
+            callControls.post(() -> {
+                Log.d(TAG, "Controls check: visibility=" + callControls.getVisibility() + 
+                      ", width=" + callControls.getWidth() + 
+                      ", height=" + callControls.getHeight());
+            });
+            
+            // Video views are already visible from setupVideoViews()
+            // Just verify they're ready
+            if (remoteVideoView != null) {
+                Log.d(TAG, "Remote video: visibility=" + remoteVideoView.getVisibility() + 
+                      ", width=" + remoteVideoView.getWidth() + 
+                      ", height=" + remoteVideoView.getHeight());
+            }
+            
+            if (localVideoView != null) {
+                Log.d(TAG, "Local video: visibility=" + localVideoView.getVisibility() +
+                      ", width=" + localVideoView.getWidth() +
+                      ", height=" + localVideoView.getHeight());
+            }
+            
+            Log.d(TAG, "===== Video call UI configured =====");
+        }
     }
     
     private void startDurationTimer() {

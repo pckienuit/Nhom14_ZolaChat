@@ -49,15 +49,18 @@ public class WebRtcRepository {
     private RtpSender videoSender;
     
     // Video components
-    private EglBase eglBase;
+    private EglBase eglBase;  // No longer created here, must be set from Activity
+    private EglBase.Context eglBaseContext;  // Received from Activity
     private VideoSource videoSource;
     private VideoTrack localVideoTrack;
     private CameraVideoCapturer videoCapturer;
     private SurfaceTextureHelper surfaceTextureHelper;
     private boolean isFrontCamera = true;
+    private SurfaceViewRenderer localRenderer; // Store for later attachment
     
     private boolean isAudioEnabled = true;
     private boolean isVideoEnabled = true;
+    private boolean isVideoCall = false;  // Track if this is a video call
     
     // Callbacks
     private ConnectionStateCallback connectionStateCallback;
@@ -77,6 +80,15 @@ public class WebRtcRepository {
      */
     public void initializePeerConnection(@NonNull String callId, boolean isVideo) {
         Log.d(TAG, "Initializing PeerConnection for call: " + callId + ", isVideo: " + isVideo);
+        
+        // CRITICAL: Validate EglBase context is set for video calls
+        if (isVideo && eglBaseContext == null) {
+            Log.e(TAG, "FATAL: Video call requested but EglBase context not set! Call setEglBaseContext() first!");
+            throw new IllegalStateException("EglBase context must be set before initializing video call");
+        }
+        
+        // Store isVideo flag for later use in SDP creation
+        this.isVideoCall = isVideo;
         
         // Create PeerConnectionFactory
         if (peerConnectionFactory == null) {
@@ -165,7 +177,8 @@ public class WebRtcRepository {
             return;
         }
         
-        MediaConstraints sdpConstraints = WebRtcHelper.createSdpConstraints(false);  // Audio only for now
+        MediaConstraints sdpConstraints = WebRtcHelper.createSdpConstraints(isVideoCall);
+        Log.d(TAG, "Creating offer with video=" + isVideoCall);
         
         peerConnection.createOffer(new SdpObserver() {
             @Override
@@ -248,7 +261,8 @@ public class WebRtcRepository {
                 Log.d(TAG, "Remote description set successfully");
                 
                 // Create answer
-                MediaConstraints sdpConstraints = WebRtcHelper.createSdpConstraints(false);
+                MediaConstraints sdpConstraints = WebRtcHelper.createSdpConstraints(isVideoCall);
+                Log.d(TAG, "Creating answer with video=" + isVideoCall);
                 
                 peerConnection.createAnswer(new SdpObserver() {
                     @Override
@@ -396,9 +410,10 @@ public class WebRtcRepository {
      * Create local video track and add to peer connection
      */
     private void createLocalVideoTrack() {
-        // Create EglBase for video rendering
-        if (eglBase == null) {
-            eglBase = EglBase.create();
+        // CRITICAL: eglBaseContext MUST be set from Activity before calling this
+        if (eglBaseContext == null) {
+            Log.e(TAG, "CRITICAL ERROR: eglBaseContext is null! Must call setEglBaseContext() first!");
+            return;
         }
         
         // Create camera capturer
@@ -408,11 +423,13 @@ public class WebRtcRepository {
             return;
         }
         
-        // Create surface texture helper
+        // Create surface texture helper using the SHARED EglBase context from Activity
         surfaceTextureHelper = SurfaceTextureHelper.create(
                 "CameraThread",
-                eglBase.getEglBaseContext()
+                eglBaseContext  // Use context from Activity!
         );
+        
+        Log.d(TAG, "SurfaceTextureHelper created with shared EglBase context");
         
         // Create video source
         videoSource = peerConnectionFactory.createVideoSource(videoCapturer.isScreencast());
@@ -437,6 +454,14 @@ public class WebRtcRepository {
         }
         
         Log.d(TAG, "Local video track created and capturing started");
+        
+        // Auto-attach to local renderer if it was set up before track creation
+        if (localRenderer != null) {
+            Log.d(TAG, "Auto-attaching local video track to pre-initialized renderer");
+            localVideoTrack.addSink(localRenderer);
+            localRenderer.setMirror(isFrontCamera);
+            Log.d(TAG, "Local video track attached to renderer (mirror=" + isFrontCamera + ")");
+        }
     }
     
     /**
@@ -521,24 +546,40 @@ public class WebRtcRepository {
     }
     
     /**
+     * Set EglBase context from Activity
+     * MUST be called before initializing video call
+     * 
+     * @param eglBaseContext EglBase context from Activity's EglBase.create()
+     */
+    public void setEglBaseContext(EglBase.Context eglBaseContext) {
+        this.eglBaseContext = eglBaseContext;
+        Log.d(TAG, "EglBase context set from Activity");
+    }
+    
+    /**
      * Attach local video to renderer
      * Call this to show local camera preview
      * 
-     * @param renderer SurfaceViewRenderer for local video
+     * @param renderer SurfaceViewRenderer for local video (must already be initialized)
      */
     public void attachLocalRenderer(SurfaceViewRenderer renderer) {
-        if (eglBase == null) {
-            Log.e(TAG, "EglBase not initialized");
-            return;
-        }
+        Log.d(TAG, "===== ATTACHING LOCAL RENDERER =====");
         
-        renderer.init(eglBase.getEglBaseContext(), null);
-        renderer.setMirror(isFrontCamera);  // Mirror for front camera
+        // Store renderer reference
+        this.localRenderer = renderer;
         
+        // If localVideoTrack already exists, attach immediately
         if (localVideoTrack != null) {
+            renderer.setMirror(isFrontCamera);
             localVideoTrack.addSink(renderer);
-            Log.d(TAG, "Local video renderer attached");
+            Log.d(TAG, "Local video track attached immediately (mirror=" + isFrontCamera + ")");
+        } else {
+            // localVideoTrack will be created later in initializePeerConnection
+            // and will auto-attach to this stored renderer
+            Log.d(TAG, "Renderer stored, will attach when localVideoTrack is created");
         }
+        
+        Log.d(TAG, "===== LOCAL RENDERER ATTACHED =====");
     }
     
     /**
@@ -605,7 +646,8 @@ public class WebRtcRepository {
             peerConnection = null;
         }
         
-        // Note: PeerConnectionFactory and EglBase should be kept alive for potential future calls
+        // Note: EglBase is owned by Activity, don't dispose it here
+        // PeerConnectionFactory should be kept alive for potential future calls
         // Only dispose when app is closing
         
         Log.d(TAG, "PeerConnection closed and resources cleaned up");
@@ -618,10 +660,7 @@ public class WebRtcRepository {
     public void dispose() {
         closePeerConnection();
         
-        if (eglBase != null) {
-            eglBase.release();
-            eglBase = null;
-        }
+        // Note: EglBase is owned by Activity, don't dispose it here
         
         if (peerConnectionFactory != null) {
             peerConnectionFactory.dispose();
