@@ -84,12 +84,26 @@ public class WebRtcRepository {
         }
         
         // Create PeerConnection
-        PeerConnection.RTCConfiguration rtcConfig = new PeerConnection.RTCConfiguration(
-                WebRtcHelper.getDefaultIceServers()
-        );
+        List<PeerConnection.IceServer> iceServers = WebRtcHelper.getDefaultIceServers();
+        
+        // DEBUG: Log all ICE servers
+        Log.d(TAG, "===== ICE SERVERS CONFIGURATION =====");
+        Log.d(TAG, "Total ICE servers: " + iceServers.size());
+        for (int i = 0; i < iceServers.size(); i++) {
+            PeerConnection.IceServer server = iceServers.get(i);
+            Log.d(TAG, "ICE Server #" + (i+1) + ": " + server.urls);
+            if (server.username != null && !server.username.isEmpty()) {
+                Log.d(TAG, "  Username: " + server.username);
+                Log.d(TAG, "  Has Password: " + (server.password != null && !server.password.isEmpty()));
+            }
+        }
+        Log.d(TAG, "====================================");
+        
+        PeerConnection.RTCConfiguration rtcConfig = new PeerConnection.RTCConfiguration(iceServers);
         
         // Set ICE transport policy (relay for TURN-only, all for STUN+TURN)
         rtcConfig.iceTransportsType = PeerConnection.IceTransportsType.ALL;
+        Log.d(TAG, "ICE Transport Type: ALL (STUN + TURN)");
         
         // CRITICAL: Explicitly set Unified Plan SDP semantics
         // This is required for addTrack() API to work properly
@@ -679,12 +693,41 @@ public class WebRtcRepository {
         
         @Override
         public void onIceGatheringChange(PeerConnection.IceGatheringState iceGatheringState) {
-            Log.d(TAG, "ICE gathering state changed: " + iceGatheringState);
+            Log.d(TAG, "===== ICE GATHERING STATE CHANGE =====");
+            Log.d(TAG, "State: " + iceGatheringState);
+            
+            switch (iceGatheringState) {
+                case NEW:
+                    Log.d(TAG, "ICE gathering: NEW - Not started yet");
+                    break;
+                case GATHERING:
+                    Log.d(TAG, "ICE gathering: GATHERING - In progress, waiting for candidates");
+                    break;
+                case COMPLETE:
+                    Log.d(TAG, "ICE gathering: COMPLETE - All candidates collected");
+                    Log.d(TAG, "If you don't see RELAY or SRFLX candidates above, TURN/STUN servers failed!");
+                    break;
+            }
+            Log.d(TAG, "======================================");
         }
         
         @Override
         public void onIceCandidate(IceCandidate iceCandidate) {
-            Log.d(TAG, "ICE candidate generated: " + iceCandidate.sdp.substring(0, Math.min(50, iceCandidate.sdp.length())));
+            // Log FULL candidate to see type (relay/srflx/host)
+            Log.d(TAG, "===== ICE CANDIDATE GENERATED =====");
+            Log.d(TAG, "Full SDP: " + iceCandidate.sdp);
+            
+            // Parse candidate type for debugging
+            String type = "unknown";
+            if (iceCandidate.sdp.contains(" typ relay ")) {
+                type = "RELAY (TURN server)";
+            } else if (iceCandidate.sdp.contains(" typ srflx ")) {
+                type = "SERVER-REFLEXIVE (STUN)";
+            } else if (iceCandidate.sdp.contains(" typ host ")) {
+                type = "HOST (local)";
+            }
+            Log.d(TAG, "Candidate TYPE: " + type);
+            Log.d(TAG, "===================================");
             
             if (iceCandidateCallback != null) {
                 iceCandidateCallback.onIceCandidateGenerated(

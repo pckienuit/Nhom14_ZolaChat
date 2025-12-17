@@ -87,6 +87,9 @@ public class CallActivity extends AppCompatActivity {
     private Handler durationHandler;
     private Runnable durationRunnable;
     private long callStartTime = 0;
+     // Call data (needed for permission callback)
+    private String conversationId;
+    private String callerId;
     
     // Audio
     private AudioManager audioManager;
@@ -101,10 +104,14 @@ public class CallActivity extends AppCompatActivity {
         callId = intent.getStringExtra(EXTRA_CALL_ID);
         isIncoming = intent.getBooleanExtra(EXTRA_IS_INCOMING, false);
         isVideo = intent.getBooleanExtra(EXTRA_IS_VIDEO, false);
-        String conversationId = intent.getStringExtra(EXTRA_CONVERSATION_ID);
-        String callerId = intent.getStringExtra(EXTRA_CALLER_ID);
+        this.conversationId = intent.getStringExtra(EXTRA_CONVERSATION_ID);
+        this.callerId = intent.getStringExtra(EXTRA_CALLER_ID);
         this.receiverId = intent.getStringExtra(EXTRA_RECEIVER_ID);  // Store as instance variable
         String callerNameStr = intent.getStringExtra(EXTRA_CALLER_NAME);
+        
+        // Initialize ViewModel BEFORE initViews()
+        // initViews() calls setupVideoViews() which needs callViewModel
+        callViewModel = new ViewModelProvider(this).get(CallViewModel.class);
         
         // Initialize UI
         initViews();
@@ -112,9 +119,6 @@ public class CallActivity extends AppCompatActivity {
         // Setup audio manager
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
-        
-        // Initialize ViewModel
-        callViewModel = new ViewModelProvider(this).get(CallViewModel.class);
         
         // Setup observers
         setupObservers();
@@ -131,10 +135,33 @@ public class CallActivity extends AppCompatActivity {
         }
         
         // Handle incoming vs outgoing call
+        startCall();
+    }
+    
+    /**
+     * Start call after permissions are granted
+     */
+    private void startCall() {
         if (isIncoming) {
             handleIncomingCall();
         } else {
             handleOutgoingCall(conversationId, callerId, receiverId);
+        }
+    }
+    
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        
+        if (requestCode == PermissionHelper.REQUEST_CODE_VOICE_CALL) {
+            if (PermissionHelper.checkCallPermissions(this, isVideo)) {
+                Log.d(TAG, "Permissions granted, starting call");
+                startCall();
+            } else {
+                Log.e(TAG, "Permissions denied");
+                Toast.makeText(this, "Không thể thực hiện cuộc gọi do thiếu quyền", Toast.LENGTH_SHORT).show();
+                finish();
+            }
         }
     }
     
@@ -288,9 +315,13 @@ public class CallActivity extends AppCompatActivity {
     }
     
     private void acceptCall() {
+        Log.d(TAG, "===== ACCEPT BUTTON CLICKED =====");
         Log.d(TAG, "Accepting call: " + callId);
+        Log.d(TAG, "receiverId: " + receiverId);
+        Log.d(TAG, "isVideo: " + isVideo);
         
         if (callId == null) {
+            Log.e(TAG, "ERROR: callId is null!");
             showError("Invalid call ID");
             finish();
             return;
@@ -299,16 +330,20 @@ public class CallActivity extends AppCompatActivity {
         // Use receiver ID from Intent, fallback to current user if not available
         String currentUserId = receiverId != null ? receiverId : getCurrentUserId();
         if (currentUserId == null || currentUserId.isEmpty()) {
+            Log.e(TAG, "ERROR: currentUserId is null or empty!");
             showError("Cannot determine receiver ID");
             finish();
             return;
         }
         
+        Log.d(TAG, "Calling callViewModel.acceptCall()...");
         // Pass isVideo flag to acceptCall so it can initialize WebRTC correctly
         callViewModel.acceptCall(callId, currentUserId, isVideo);
         
+        Log.d(TAG, "Setting UI to connecting...");
         callStatus.setText(R.string.call_connecting);
         showConnectingUI();
+        Log.d(TAG, "===== ACCEPT CALL COMPLETE =====");
     }
     
     private void rejectCall() {
@@ -450,55 +485,6 @@ public class CallActivity extends AppCompatActivity {
         return currentUser != null ? currentUser.getUid() : "";
     }
     
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, 
-                                          @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        
-        if (requestCode == PermissionHelper.REQUEST_CODE_VOICE_CALL || 
-            requestCode == PermissionHelper.REQUEST_CODE_VIDEO_CALL) {
-            
-            boolean allGranted = true;
-            for (int result : grantResults) {
-                if (result != PackageManager.PERMISSION_GRANTED) {
-                    allGranted = false;
-                    break;
-                }
-            }
-            
-            if (allGranted) {
-                // Permissions granted, retry call initiation
-                recreate();
-            } else {
-                // Show explanation dialog
-                showPermissionDeniedDialog();
-            }
-        }
-    }
-    
-    /**
-     * Show dialog explaining why permissions are needed
-     */
-    private void showPermissionDeniedDialog() {
-        String message = isVideo ? 
-            "Cần quyền Camera và Microphone để thực hiện cuộc gọi video" :
-            "Cần quyền Microphone để thực hiện cuộc gọi thoại";
-            
-        new AlertDialog.Builder(this)
-            .setTitle("Cần quyền truy cập")
-            .setMessage(message)
-            .setPositiveButton("Cài đặt", (dialog, which) -> {
-                // Open app settings
-                Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                Uri uri = Uri.fromParts("package", getPackageName(), null);
-                intent.setData(uri);
-                startActivity(intent);
-                finish();
-            })
-            .setNegativeButton("Hủy", (dialog, which) -> finish())
-            .setCancelable(false)
-            .show();
-    }
     
     @Override
     protected void onDestroy() {

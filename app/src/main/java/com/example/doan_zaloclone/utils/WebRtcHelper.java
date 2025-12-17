@@ -34,18 +34,33 @@ public class WebRtcHelper {
     public static List<PeerConnection.IceServer> getDefaultIceServers() {
         List<PeerConnection.IceServer> iceServers = new ArrayList<>();
         
-        // Add STUN servers
+        // Add STUN servers for NAT traversal
         iceServers.add(PeerConnection.IceServer.builder(STUN_SERVER_1).createIceServer());
         iceServers.add(PeerConnection.IceServer.builder(STUN_SERVER_2).createIceServer());
         iceServers.add(PeerConnection.IceServer.builder(STUN_SERVER_3).createIceServer());
         
-        // TODO: Add TURN servers for production
-        // TURN servers are needed when STUN fails (strict firewalls, symmetric NAT)
-        // Example:
-        // iceServers.add(PeerConnection.IceServer.builder("turn:your-turn-server.com:3478")
-        //     .setUsername("username")
-        //     .setPassword("password")
-        //     .createIceServer());
+        // Add FREE TURN servers from Metered.ca
+        // More reliable than Open Relay Project for testing
+        iceServers.add(
+            PeerConnection.IceServer.builder("turn:a.relay.metered.ca:80")
+                .setUsername("87662b8ca63f0c36f8afb86f")
+                .setPassword("W91wCu2RKr6GmGd/")
+                .createIceServer()
+        );
+        
+        iceServers.add(
+            PeerConnection.IceServer.builder("turn:a.relay.metered.ca:443")
+                .setUsername("87662b8ca63f0c36f8afb86f")
+                .setPassword("W91wCu2RKr6GmGd/")
+                .createIceServer()
+        );
+        
+        iceServers.add(
+            PeerConnection.IceServer.builder("turn:a.relay.metered.ca:443?transport=tcp")
+                .setUsername("87662b8ca63f0c36f8afb86f")
+                .setPassword("W91wCu2RKr6GmGd/")
+                .createIceServer()
+        );
         
         return iceServers;
     }

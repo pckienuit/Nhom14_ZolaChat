@@ -262,7 +262,11 @@ public class CallViewModel extends AndroidViewModel {
      * @param isVideo Whether this is a video call (Fix #6)
      */
     public void acceptCall(@NonNull String callId, @NonNull String receiverId, boolean isVideo) {
-        Log.d(TAG, "Accepting call: " + callId);
+        Log.d(TAG, "===== ACCEPT CALL START =====");
+        Log.d(TAG, "callId: " + callId);
+        Log.d(TAG, "receiverId: " + receiverId);
+        Log.d(TAG, "isVideo: " + isVideo);
+        Log.d(TAG, "Current userId will be set to: " + receiverId);
         
         // Check if already in a call
         if (isInCall) {
@@ -461,10 +465,17 @@ public class CallViewModel extends AndroidViewModel {
         signalsListener = callRepository.listenToSignals(callId, new CallRepository.OnSignalsChangedListener() {
             @Override
             public void onSignalsChanged(List<CallSignal> signals) {
+                Log.d(TAG, "===== SIGNALS LISTENER FIRED =====");
+                Log.d(TAG, "Received " + signals.size() + " total signals");
+                
                 int newSignalsCount = 0;
                 int nullIdCount = 0;
                 
                 for (CallSignal signal : signals) {
+                    Log.d(TAG, "Processing signal: type=" + signal.getType() + 
+                          ", senderId=" + signal.getSenderId() + 
+                          ", id=" + signal.getId());
+                    
                     // Handle signals without IDs (process them anyway)
                     if (signal.getId() == null) {
                         nullIdCount++;
@@ -484,6 +495,7 @@ public class CallViewModel extends AndroidViewModel {
                     
                     // Skip own signals
                     if (currentUserId != null && currentUserId.equals(signal.getSenderId())) {
+                        Log.d(TAG, "Skipping own signal");
                         processedSignalIds.add(signal.getId());
                         continue;
                     }
@@ -515,17 +527,24 @@ public class CallViewModel extends AndroidViewModel {
      * Handle incoming signal from peer
      */
     private void handleSignal(@NonNull CallSignal signal) {
-        Log.d(TAG, "Handling signal: " + signal.getType());
+        Log.d(TAG, "===== HANDLING SIGNAL =====");
+        Log.d(TAG, "Signal type: " + signal.getType());
+        Log.d(TAG, "Signal senderId: " + signal.getSenderId());
         
         if (signal.isOfferSignal()) {
+            Log.d(TAG, "Processing OFFER signal");
             // Receiver gets OFFER, create answer
             handleOffer(signal.getSdp());
         } else if (signal.isAnswerSignal()) {
+            Log.d(TAG, "Processing ANSWER signal");
             // Caller gets ANSWER, set remote description
             handleAnswer(signal.getSdp());
         } else if (signal.isIceCandidateSignal()) {
+            Log.d(TAG, "Processing ICE_CANDIDATE signal");
             // Add ICE candidate
             handleIceCandidate(signal);
+        } else {
+            Log.w(TAG, "Unknown signal type: " + signal.getType());
         }
     }
     
