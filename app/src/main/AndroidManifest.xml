@@ -16,7 +16,10 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
@@ -101,6 +104,12 @@
         <!-- Incoming Call Service -->
         <service
             android:name=".services.IncomingCallService"
+            android:exported="false"
+            android:foregroundServiceType="camera|microphone" />
+            
+        <!-- Ongoing Call Service -->
+        <service
+            android:name=".services.OngoingCallService"
             android:exported="false"
             android:foregroundServiceType="camera|microphone" />
             

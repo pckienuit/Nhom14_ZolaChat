@@ -1,11 +1,18 @@
 package com.example.doan_zaloclone.ui.call;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.media.AudioManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.provider.Settings;
 import android.os.Handler;
 import android.os.Looper;
@@ -24,6 +31,7 @@ import androidx.lifecycle.ViewModelProvider;
 
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Call;
+import com.example.doan_zaloclone.services.OngoingCallService;
 import com.example.doan_zaloclone.utils.PermissionHelper;
 import com.example.doan_zaloclone.utils.Resource;
 import com.example.doan_zaloclone.viewmodel.CallViewModel;
@@ -99,6 +107,47 @@ public class CallActivity extends AppCompatActivity {
     // Audio
     private AudioManager audioManager;
     
+    // OngoingCallService
+    private OngoingCallService ongoingCallService;
+    private boolean serviceBound = false;
+    private ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            OngoingCallService.LocalBinder binder = (OngoingCallService.LocalBinder) service;
+            ongoingCallService = binder.getService();
+            serviceBound = true;
+            Log.d(TAG, "OngoingCallService bound");
+        }
+        
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            ongoingCallService = null;
+            serviceBound = false;
+            Log.d(TAG, "OngoingCallService unbound");
+        }
+    };
+    
+    // Audio routing
+    private BroadcastReceiver audioDeviceChangeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
+                // Headphones unplugged
+                Log.d(TAG, "Headphones unplugged");
+                configureAudioRouting();
+            } else if (AudioManager.ACTION_HEADSET_PLUG.equals(intent.getAction())) {
+                // Wired headset plugged/unplugged
+                int state = intent.getIntExtra("state", -1);
+                if (state == 1) {
+                    Log.d(TAG, "Wired headset connected");
+                } else if (state == 0) {
+                    Log.d(TAG, "Wired headset disconnected");
+                }
+                configureAudioRouting();
+            }
+        }
+    };
+    
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -124,6 +173,12 @@ public class CallActivity extends AppCompatActivity {
         // Setup audio manager
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+        
+        // Configure default audio routing based on call type
+        configureAudioRouting();
+        
+        // Register audio device change listener
+        registerAudioDeviceListener();
         
         // Setup observers
         setupObservers();
@@ -425,6 +480,7 @@ public class CallActivity extends AppCompatActivity {
         callViewModel.endCall();
         
         stopDurationTimer();
+        stopOngoingCallService();
         finish();
     }
     
@@ -437,6 +493,70 @@ public class CallActivity extends AppCompatActivity {
         audioManager.setSpeakerphoneOn(isSpeakerOn);
         updateSpeakerUI();
         Log.d(TAG, "Speaker " + (isSpeakerOn ? "ON" : "OFF"));
+    }
+    
+    /**
+     * Configure audio routing based on call type and device state
+     */
+    private void configureAudioRouting() {
+        if (audioManager == null) return;
+        
+        // Check if headphones/bluetooth are connected
+        boolean isWiredHeadsetOn = audioManager.isWiredHeadsetOn();
+        boolean isBluetoothOn = audioManager.isBluetoothScoOn() || audioManager.isBluetoothA2dpOn();
+        
+        Log.d(TAG, "Audio routing - Wired: " + isWiredHeadsetOn + ", Bluetooth: " + isBluetoothOn + ", Video: " + isVideo);
+        
+        if (isWiredHeadsetOn || isBluetoothOn) {
+            // Headphones/Bluetooth connected: route to them (speaker off)
+            isSpeakerOn = false;
+            audioManager.setSpeakerphoneOn(false);
+            Log.d(TAG, "Audio routed to headphones/bluetooth");
+        } else {
+            // No external audio device
+            if (isVideo) {
+                // Video call: default to speaker
+                isSpeakerOn = true;
+                audioManager.setSpeakerphoneOn(true);
+                Log.d(TAG, "Video call: Audio routed to speaker");
+            } else {
+                // Voice call: default to earpiece
+                isSpeakerOn = false;
+                audioManager.setSpeakerphoneOn(false);
+                Log.d(TAG, "Voice call: Audio routed to earpiece");
+            }
+        }
+        
+        updateSpeakerUI();
+    }
+    
+    /**
+     * Register listener for audio device changes
+     */
+    private void registerAudioDeviceListener() {
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+        filter.addAction(AudioManager.ACTION_HEADSET_PLUG);
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(audioDeviceChangeReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(audioDeviceChangeReceiver, filter);
+        }
+        
+        Log.d(TAG, "Audio device listener registered");
+    }
+    
+    /**
+     * Unregister audio device listener
+     */
+    private void unregisterAudioDeviceListener() {
+        try {
+            unregisterReceiver(audioDeviceChangeReceiver);
+            Log.d(TAG, "Audio device listener unregistered");
+        } catch (IllegalArgumentException e) {
+            // Receiver was not registered, ignore
+        }
     }
     
     private void updateUIForCallStatus(String status) {
@@ -474,6 +594,9 @@ public class CallActivity extends AppCompatActivity {
         Log.d(TAG, "Call connected");
         showOngoingCallUI();
         startDurationTimer();
+        
+        // Start OngoingCallService to maintain call in background
+        startOngoingCallService();
     }
     
     private void showIncomingCallUI() {
@@ -546,7 +669,12 @@ public class CallActivity extends AppCompatActivity {
             @Override
             public void run() {
                 long elapsed = (System.currentTimeMillis() - callStartTime) / 1000;
-                callDuration.setText(formatDuration(elapsed));
+                String duration = formatDuration(elapsed);
+                callDuration.setText(duration);
+                
+                // Update OngoingCallService notification
+                updateOngoingCallNotification(duration);
+                
                 durationHandler.postDelayed(this, 1000);
             }
         };
@@ -596,6 +724,12 @@ public class CallActivity extends AppCompatActivity {
         super.onDestroy();
         stopDurationTimer();
         
+        // Stop OngoingCallService
+        stopOngoingCallService();
+        
+        // Unregister audio device listener
+        unregisterAudioDeviceListener();
+        
         // Cleanup video resources
         if (isVideo && eglBase != null) {
             if (localVideoView != null) {
@@ -615,9 +749,55 @@ public class CallActivity extends AppCompatActivity {
         }
     }
     
+    /**
+     * Start OngoingCallService to keep call alive in background
+     */
+    private void startOngoingCallService() {
+        Intent serviceIntent = new Intent(this, OngoingCallService.class);
+        serviceIntent.setAction(OngoingCallService.ACTION_START_SERVICE);
+        serviceIntent.putExtra(OngoingCallService.EXTRA_CALL_ID, callId);
+        serviceIntent.putExtra(OngoingCallService.EXTRA_CALLER_NAME, callerName.getText().toString());
+        serviceIntent.putExtra(OngoingCallService.EXTRA_IS_VIDEO, isVideo);
+        
+        // Start foreground service
+        startService(serviceIntent);
+        
+        // Bind to service for updates
+        bindService(serviceIntent, serviceConnection, Context.BIND_AUTO_CREATE);
+        
+        Log.d(TAG, "OngoingCallService started");
+    }
+    
+    /**
+     * Stop OngoingCallService when call ends
+     */
+    private void stopOngoingCallService() {
+        // Unbind from service
+        if (serviceBound) {
+            unbindService(serviceConnection);
+            serviceBound = false;
+        }
+        
+        // Stop service
+        Intent serviceIntent = new Intent(this, OngoingCallService.class);
+        serviceIntent.setAction(OngoingCallService.ACTION_STOP_SERVICE);
+        startService(serviceIntent);
+        
+        Log.d(TAG, "OngoingCallService stopped");
+    }
+    
+    /**
+     * Update OngoingCallService notification with new duration
+     */
+    private void updateOngoingCallNotification(String duration) {
+        if (serviceBound && ongoingCallService != null) {
+            ongoingCallService.updateDuration(duration);
+        }
+    }
+    
     @Override
     public void onBackPressed() {
-        // Prevent back button during call
-        // User must use end call button
+        // Allow back button to minimize to background (OngoingCallService keeps call alive)
+        moveTaskToBack(true);
     }
 }
