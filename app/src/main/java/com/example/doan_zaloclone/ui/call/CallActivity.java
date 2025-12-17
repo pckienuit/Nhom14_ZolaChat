@@ -17,6 +17,9 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.app.PictureInPictureParams;
+import android.content.res.Configuration;
+import android.util.Rational;
 import android.provider.Settings;
 import android.os.Handler;
 import android.os.Looper;
@@ -99,6 +102,7 @@ public class CallActivity extends AppCompatActivity {
     private boolean isVideo;
     private boolean isMicEnabled = true;
     private boolean isSpeakerOn = false;
+    private boolean isInPipMode = false;
     
     // Duration tracking
     private Handler durationHandler;
@@ -908,6 +912,107 @@ public class CallActivity extends AppCompatActivity {
     private void updateOngoingCallNotification(String duration) {
         if (serviceBound && ongoingCallService != null) {
             ongoingCallService.updateDuration(duration);
+        }
+    }
+    
+    /**
+     * Enter Picture-in-Picture mode (video calls only)
+     */
+    private void enterPiPMode() {
+        if (!isVideo) {
+            Log.d(TAG, "PiP mode only available for video calls");
+            return;
+        }
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PictureInPictureParams params = buildPiPParams();
+            enterPictureInPictureMode(params);
+            Log.d(TAG, "Entering PiP mode");
+        } else {
+            Log.w(TAG, "PiP mode requires Android 8.0+");
+        }
+    }
+    
+    /**
+     * Build PiP parameters with aspect ratio
+     */
+    private PictureInPictureParams buildPiPParams() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Calculate aspect ratio from video view dimensions
+            Rational aspectRatio = new Rational(9, 16); // Default portrait
+            
+            if (remoteVideoView != null && remoteVideoView.getWidth() > 0 && remoteVideoView.getHeight() > 0) {
+                aspectRatio = new Rational(remoteVideoView.getWidth(), remoteVideoView.getHeight());
+                Log.d(TAG, "PiP aspect ratio: " + aspectRatio);
+            }
+            
+            return new PictureInPictureParams.Builder()
+                    .setAspectRatio(aspectRatio)
+                    .build();
+        }
+        return null;
+    }
+    
+    /**
+     * Auto-enter PiP when user presses Home (video calls only)
+     */
+    @Override
+    public void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        
+        // Only enter PiP for video calls
+        if (isVideo && !isInPipMode) {
+            enterPiPMode();
+        }
+    }
+    
+    /**
+     * Handle PiP mode changes
+     */
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        
+        isInPipMode = isInPictureInPictureMode;
+        Log.d(TAG, "PiP mode changed: " + isInPictureInPictureMode);
+        
+        if (isInPictureInPictureMode) {
+            // Hide UI controls in PiP mode
+            if (callControls != null) {
+                callControls.setVisibility(View.GONE);
+            }
+            if (callDuration != null) {
+                callDuration.setVisibility(View.GONE);
+            }
+            if (localVideoView != null) {
+                localVideoView.setVisibility(View.GONE); // Hide small preview
+            }
+            Log.d(TAG, "PiP mode: UI controls hidden");
+        } else {
+            // Restore UI controls when exiting PiP
+            if (callControls != null) {
+                callControls.setVisibility(View.VISIBLE);
+            }
+            if (callDuration != null) {
+                callDuration.setVisibility(View.VISIBLE);
+            }
+            if (localVideoView != null) {
+                localVideoView.setVisibility(View.VISIBLE);
+            }
+            Log.d(TAG, "Exited PiP mode: UI controls restored");
+        }
+    }
+    
+    /**
+     * Handle configuration changes (required for PiP)
+     */
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        // Update PiP params if aspect ratio changed
+        if (isInPipMode && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            PictureInPictureParams params = buildPiPParams();
+            setPictureInPictureParams(params);
         }
     }
     
