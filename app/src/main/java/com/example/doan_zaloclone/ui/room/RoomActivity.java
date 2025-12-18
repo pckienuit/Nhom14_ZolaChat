@@ -191,10 +191,12 @@ public class RoomActivity extends AppCompatActivity {
         // Call buttons
         ImageButton videoCallButton = findViewById(R.id.videoCallButton);
         ImageButton voiceCallButton = findViewById(R.id.voiceCallButton);
+        ImageButton fileManagementButton = findViewById(R.id.fileManagementButton);
         
         // Setup call button listeners
         videoCallButton.setOnClickListener(v -> startCall(true));
         voiceCallButton.setOnClickListener(v -> startCall(false));
+        fileManagementButton.setOnClickListener(v -> openFileManagement());
         
         // Initialize QuickActionManager
         quickActionManager = com.example.doan_zaloclone.ui.room.actions.QuickActionManager.getInstance();

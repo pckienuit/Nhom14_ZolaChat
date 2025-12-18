@@ -477,6 +477,15 @@ public class CallActivity extends AppCompatActivity {
     private void handleIncomingCall() {
         Log.d(TAG, "Handling incoming call: " + callId);
         callStatus.setText(R.string.incoming_call);
+        
+        // Ensure caller info is visible
+        if (callerInfoContainer != null) {
+            callerInfoContainer.setVisibility(View.VISIBLE);
+        }
+        if (callerName != null) {
+            callerName.setVisibility(View.VISIBLE);
+        }
+        
         setupIncomingUI();
         
         // Listen to call status changes in realtime
@@ -488,6 +497,14 @@ public class CallActivity extends AppCompatActivity {
     private void handleOutgoingCall(String conversationId, String from, String to) {
         Log.d(TAG, "Handling outgoing call to: " + to);
         callStatus.setText(R.string.call_calling);
+        
+        // Ensure caller info is visible
+        if (callerInfoContainer != null) {
+            callerInfoContainer.setVisibility(View.VISIBLE);
+        }
+        if (callerName != null) {
+            callerName.setVisibility(View.VISIBLE);
+        }
         
         // Show outgoing UI
         setupOutgoingUI();
@@ -837,14 +854,23 @@ public class CallActivity extends AppCompatActivity {
         Log.d(TAG, "Call controls visibility set to VISIBLE");
         Log.d(TAG, "Call duration visibility set to VISIBLE");
         
-        // For video calls: hide overlay elements to show video
+        // For video calls: only hide avatar, keep caller name visible
         if (isVideo) {
             Log.d(TAG, "Configuring UI for VIDEO call");
             
-            // Hide caller info container to show video
-            if (callerInfoContainer != null) {
-                callerInfoContainer.setVisibility(View.GONE);
-                Log.d(TAG, "Hidden caller info container");
+            // Hide only the avatar, keep the name
+            if (callerAvatar != null) {
+                callerAvatar.setVisibility(View.GONE);
+                Log.d(TAG, "Hidden caller avatar for video call");
+            }
+            
+            // Ensure caller name stays visible
+            if (callerName != null) {
+                callerName.setVisibility(View.VISIBLE);
+                Log.d(TAG, "Caller name kept visible");
+            }
+            if (callStatus != null) {
+                callStatus.setVisibility(View.VISIBLE);
             }
             
             // Verify controls are visible

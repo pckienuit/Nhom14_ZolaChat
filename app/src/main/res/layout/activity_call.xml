@@ -83,7 +83,7 @@
                 android:layout_height="wrap_content"
                 android:text="Người gọi"
                 android:textSize="24sp"
-                android:textColor="@android:color/white"
+                android:textColor="@android:color/black"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
 
@@ -94,7 +94,7 @@
                 android:layout_height="wrap_content"
                 android:text="Đang gọi..."
                 android:textSize="16sp"
-                android:textColor="@android:color/white"
+                android:textColor="@android:color/black"
                 android:alpha="0.8" />
         </LinearLayout>
 
