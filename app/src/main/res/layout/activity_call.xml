@@ -97,6 +97,12 @@
                 android:textColor="@android:color/white"
                 android:alpha="0.8" />
         </LinearLayout>
+
+        <!-- Spacer to push content to center (bottom) -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
     </LinearLayout>
 
     <!-- Incoming call buttons - OUTSIDE overlay so always at bottom -->
@@ -130,6 +136,30 @@
             android:layout_height="wrap_content"
             android:src="@drawable/ic_call"
             app:backgroundTint="@android:color/holo_green_dark"
+            app:tint="@android:color/white" />
+    </LinearLayout>
+
+    <!-- Outgoing call buttons (Cancel) - For caller -->
+    <LinearLayout
+        android:id="@+id/outgoingCallButtons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingTop="16dp"
+        android:paddingBottom="32dp"
+        android:background="#CC000000"
+        android:elevation="16dp"
+        android:visibility="gone">
+
+        <!-- Cancel button -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/cancelButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_call_end"
+            app:backgroundTint="@android:color/holo_red_dark"
             app:tint="@android:color/white" />
     </LinearLayout>
 

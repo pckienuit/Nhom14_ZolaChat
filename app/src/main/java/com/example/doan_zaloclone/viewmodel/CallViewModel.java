@@ -16,7 +16,9 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.example.doan_zaloclone.models.Call;
 import com.example.doan_zaloclone.models.CallSignal;
+import com.example.doan_zaloclone.models.Message;
 import com.example.doan_zaloclone.repository.CallRepository;
+import com.example.doan_zaloclone.repository.ChatRepository;
 import com.example.doan_zaloclone.repository.WebRtcRepository;
 import com.example.doan_zaloclone.utils.Resource;
 import com.google.firebase.firestore.ListenerRegistration;
@@ -31,6 +33,7 @@ public class CallViewModel extends AndroidViewModel {
     private static final String TAG = "CallViewModel";
     
     private final CallRepository callRepository;
+    private final ChatRepository chatRepository;
     private final WebRtcRepository webRtcRepository;
     
     // LiveData
@@ -68,6 +71,7 @@ public class CallViewModel extends AndroidViewModel {
     public CallViewModel(@NonNull Application application) {
         super(application);
         this.callRepository = new CallRepository();
+        this.chatRepository = new ChatRepository();
         this.webRtcRepository = new WebRtcRepository(application.getApplicationContext());
         
         this.currentCall = new MutableLiveData<>();
@@ -772,6 +776,75 @@ public class CallViewModel extends AndroidViewModel {
         }
         
         Log.w(TAG, "===== FORCE CLEANUP FINISHED =====");
+    }
+    
+    /**
+     * Log call history to chat conversation
+     * @param conversationId Conversation ID
+     * @param callType "MISSED", "INCOMING", "OUTGOING", "REJECTED"
+     * @param isVideo Whether it was a video call
+     * @param duration Call duration in seconds (0 if not applicable)
+     */
+    public void logCallHistory(String conversationId, String callType, boolean isVideo, long duration) {
+        if (conversationId == null) {
+            Log.w(TAG, "Cannot log call history - conversationId is null");
+            return;
+        }
+        
+        String callTypeText;
+        switch (callType) {
+            case "MISSED":
+                callTypeText = isVideo ? "📹 Cuộc gọi video nhỡ" : "📞 Cuộc gọi thoại nhỡ";
+                break;
+            case "INCOMING":
+                callTypeText = isVideo ? "📹 Cuộc gọi video đến" : "📞 Cuộc gọi thoại đến";
+                if (duration > 0) {
+                    callTypeText += " (" + formatDuration(duration) + ")";
+                }
+                break;
+            case "OUTGOING":
+                callTypeText = isVideo ? "📹 Cuộc gọi video đi" : "📞 Cuộc gọi thoại đi";
+                if (duration > 0) {
+                    callTypeText += " (" + formatDuration(duration) + ")";
+                }
+                break;
+            case "REJECTED":
+                callTypeText = isVideo ? "📹 Cuộc gọi video bị từ chối" : "📞 Cuộc gọi thoại bị từ chối";
+                break;
+            default:
+                callTypeText = "📞 Cuộc gọi";
+        }
+        
+        // Create call history message
+        Message callMessage = new Message(
+            null,  // Auto-generated ID
+            "SYSTEM",  // System message
+            callTypeText,
+            Message.TYPE_CALL,
+            System.currentTimeMillis()
+        );
+        
+        // Save to Firestore
+        chatRepository.sendMessage(conversationId, callMessage, new ChatRepository.SendMessageCallback() {
+            @Override
+            public void onSuccess() {
+                Log.d(TAG, "Call history logged: " + callType);
+            }
+            
+            @Override
+            public void onError(String errorMsg) {
+                Log.e(TAG, "Failed to log call history: " + errorMsg);
+            }
+        });
+    }
+    
+    /**
+     * Format duration in seconds to MM:SS
+     */
+    private String formatDuration(long seconds) {
+        long minutes = seconds / 60;
+        long secs = seconds % 60;
+        return String.format("%02d:%02d", minutes, secs);
     }
     
     // ==================== LiveData Getters ====================

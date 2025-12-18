@@ -27,6 +27,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private static final int VIEW_TYPE_IMAGE_RECEIVED = 4;
     private static final int VIEW_TYPE_FILE_SENT = 5;
     private static final int VIEW_TYPE_FILE_RECEIVED = 6;
+    private static final int VIEW_TYPE_CALL_HISTORY = 7;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -59,6 +60,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         boolean isSent = message.getSenderId().equals(currentUserId);
         boolean isImage = Message.TYPE_IMAGE.equals(message.getType());
         boolean isFile = Message.TYPE_FILE.equals(message.getType());
+        boolean isCall = Message.TYPE_CALL.equals(message.getType());
+        
+        // Call history messages are always centered (system messages)
+        if (isCall) {
+            return VIEW_TYPE_CALL_HISTORY;
+        }
         
         if (isSent) {
             if (isFile) return VIEW_TYPE_FILE_SENT;
@@ -98,6 +105,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_file_received, parent, false);
                 return new FileMessageReceivedViewHolder(view);
+            case VIEW_TYPE_CALL_HISTORY:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_call_history, parent, false);
+                return new CallHistoryViewHolder(view);
             default:
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_sent, parent, false);
@@ -120,6 +131,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((FileMessageSentViewHolder) holder).bind(message);
         } else if (holder instanceof FileMessageReceivedViewHolder) {
             ((FileMessageReceivedViewHolder) holder).bind(message);
+        } else if (holder instanceof CallHistoryViewHolder) {
+            ((CallHistoryViewHolder) holder).bind(message);
         }
     }
 
@@ -457,6 +470,19 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                         });
                     }
                 });
+        }
+    }
+    
+    static class CallHistoryViewHolder extends RecyclerView.ViewHolder {
+        private TextView callHistoryTextView;
+
+        public CallHistoryViewHolder(@NonNull View itemView) {
+            super(itemView);
+            callHistoryTextView = itemView.findViewById(R.id.callHistoryTextView);
+        }
+
+        public void bind(Message message) {
+            callHistoryTextView.setText(message.getContent());
         }
     }
     

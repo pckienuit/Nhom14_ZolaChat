@@ -76,6 +76,9 @@ public class CallActivity extends AppCompatActivity {
     private FloatingActionButton acceptButton;
     private FloatingActionButton rejectButton;
     
+    private View outgoingCallButtons;
+    private FloatingActionButton cancelButton;
+    
     private View callControls;
     private FloatingActionButton micButton;
     private FloatingActionButton speakerButton;
@@ -277,6 +280,9 @@ public class CallActivity extends AppCompatActivity {
         acceptButton = findViewById(R.id.acceptButton);
         rejectButton = findViewById(R.id.rejectButton);
         
+        outgoingCallButtons = findViewById(R.id.outgoingCallButtons);
+        cancelButton = findViewById(R.id.cancelButton);
+        
         callControls = findViewById(R.id.callControls);
         micButton = findViewById(R.id.micButton);
         speakerButton = findViewById(R.id.speakerButton);
@@ -291,6 +297,7 @@ public class CallActivity extends AppCompatActivity {
         // Setup button listeners
         acceptButton.setOnClickListener(v -> acceptCall());
         rejectButton.setOnClickListener(v -> rejectCall());
+        cancelButton.setOnClickListener(v -> endCall());
         endCallButton.setOnClickListener(v -> endCall());
         micButton.setOnClickListener(v -> toggleMicrophone());
         speakerButton.setOnClickListener(v -> toggleSpeaker());
@@ -506,15 +513,54 @@ public class CallActivity extends AppCompatActivity {
     
     private void rejectCall() {
         Log.d(TAG, "Rejecting call");
+        Log.d(TAG, "conversationId: " + conversationId);
         
         if (callId != null) {
             callViewModel.rejectCall(callId);
+            
+            // Log call history as REJECTED
+            if (conversationId != null) {
+                Log.d(TAG, "Logging REJECTED call history");
+                callViewModel.logCallHistory(conversationId, "REJECTED", isVideo, 0);
+            } else {
+                Log.e(TAG, "Cannot log REJECTED call - conversationId is NULL!");
+            }
         }
         finish();
     }
     
     private void endCall() {
         Log.d(TAG, "Ending call");
+        
+        // Calculate call duration
+        long durationSeconds = 0;
+        if (callStartTime > 0) {
+            durationSeconds = (System.currentTimeMillis() - callStartTime) / 1000;
+        }
+        
+        Log.d(TAG, "Call duration: " + durationSeconds + " seconds");
+        Log.d(TAG, "conversationId: " + conversationId);
+        Log.d(TAG, "isIncoming: " + isIncoming);
+        Log.d(TAG, "isVideo: " + isVideo);
+        
+        // Log call history
+        if (conversationId != null) {
+            // Determine call type based on isIncoming and duration
+            String callType;
+            if (durationSeconds > 0) {
+                // Call was connected
+                callType = isIncoming ? "INCOMING" : "OUTGOING";
+            } else {
+                // Call ended without connecting (missed or cancelled)
+                callType = isIncoming ? "MISSED" : "OUTGOING";  // Cancelled outgoing shows as OUTGOING with 0 duration
+            }
+            
+            Log.d(TAG, "Logging call history: type=" + callType + ", duration=" + durationSeconds);
+            callViewModel.logCallHistory(conversationId, callType, isVideo, durationSeconds);
+        } else {
+            Log.e(TAG, "Cannot log call history - conversationId is NULL!");
+        }
+        
         callViewModel.endCall();
         
         stopDurationTimer();
@@ -690,7 +736,31 @@ public class CallActivity extends AppCompatActivity {
                 break;
             case Call.STATUS_ENDED:
                 callStatus.setText(R.string.call_ended);
+                
+                // Log call history before finishing
+                long durationSeconds = 0;
+                if (callStartTime > 0) {
+                    durationSeconds = (System.currentTimeMillis() - callStartTime) / 1000;
+                }
+                
+                Log.d(TAG, "Call ENDED - Duration: " + durationSeconds + "s, conversationId: " + conversationId);
+                
+                if (conversationId != null) {
+                    String callType;
+                    if (durationSeconds > 0) {
+                        callType = isIncoming ? "INCOMING" : "OUTGOING";
+                    } else {
+                        callType = isIncoming ? "MISSED" : "OUTGOING";
+                    }
+                    Log.d(TAG, "Logging call history on ENDED: type=" + callType);
+                    callViewModel.logCallHistory(conversationId, callType, isVideo, durationSeconds);
+                } else {
+                    Log.e(TAG, "Cannot log call history - conversationId is NULL!");
+                }
+                
                 stopDurationTimer();
+                stopOngoingCallService();
+                disableProximitySensor();
                 new Handler(Looper.getMainLooper()).postDelayed(this::finish, 1500);
                 break;
             case Call.STATUS_REJECTED:
