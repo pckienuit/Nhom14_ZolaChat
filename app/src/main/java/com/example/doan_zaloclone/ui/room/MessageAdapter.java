@@ -62,7 +62,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         boolean isFile = Message.TYPE_FILE.equals(message.getType());
         boolean isCall = Message.TYPE_CALL.equals(message.getType());
         
-        // Call history messages are always centered (system messages)
+        // Call history messages are always centered
         if (isCall) {
             return VIEW_TYPE_CALL_HISTORY;
         }
@@ -142,8 +142,23 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
 
     public void updateMessages(List<Message> newMessages) {
-        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new MessageDiffCallback(this.messages, newMessages));
-        this.messages = newMessages;
+        // Filter out call messages from other users
+        // Each user should only see their own call history perspective
+        List<Message> filteredMessages = new java.util.ArrayList<>();
+        for (Message msg : newMessages) {
+            if (Message.TYPE_CALL.equals(msg.getType())) {
+                // Only include call messages from current user
+                if (msg.getSenderId().equals(currentUserId)) {
+                    filteredMessages.add(msg);
+                }
+            } else {
+                // Include all non-call messages
+                filteredMessages.add(msg);
+            }
+        }
+        
+        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new MessageDiffCallback(this.messages, filteredMessages));
+        this.messages = filteredMessages;
         diffResult.dispatchUpdatesTo(this);
     }
 
@@ -485,11 +500,19 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             String content = message.getContent();
             callHistoryTextView.setText(content);
             
-            // Set red color for missed calls
+            // Apply color based on call type
             if (content != null && content.contains("nhỡ")) {
-                callHistoryTextView.setTextColor(0xFFE53935); // Red color for missed calls
+                // Missed call - RED
+                callHistoryTextView.setTextColor(0xFFE53935);
+            } else if (content != null && content.contains("đi")) {
+                // Outgoing call - LIGHT GRAY
+                callHistoryTextView.setTextColor(0xFFB0B0B0);
+            } else if (content != null && content.contains("đến")) {
+                // Incoming call - STANDARD GRAY
+                callHistoryTextView.setTextColor(0xFF757575);
             } else {
-                callHistoryTextView.setTextColor(0xFF757575); // Default gray color
+                // Default gray (fallback)
+                callHistoryTextView.setTextColor(0xFF757575);
             }
         }
     }

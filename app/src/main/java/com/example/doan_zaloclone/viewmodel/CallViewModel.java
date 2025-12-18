@@ -781,44 +781,56 @@ public class CallViewModel extends AndroidViewModel {
     /**
      * Log call history to chat conversation
      * @param conversationId Conversation ID
-     * @param callType "MISSED", "INCOMING", "OUTGOING", "REJECTED"
+     * @param callType "MISSED", "INCOMING", "OUTGOING"
      * @param isVideo Whether it was a video call
      * @param duration Call duration in seconds (0 if not applicable)
+     * @param isIncoming True if this is from receiver's perspective, false if from caller's perspective
      */
-    public void logCallHistory(String conversationId, String callType, boolean isVideo, long duration) {
+    public void logCallHistory(String conversationId, String callType, boolean isVideo, long duration, boolean isIncoming) {
         if (conversationId == null) {
             Log.w(TAG, "Cannot log call history - conversationId is null");
             return;
         }
         
+        // Get current user ID to use as senderId
+        String currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser() != null
+                ? com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser().getUid()
+                : "SYSTEM";
+        
         String callTypeText;
         switch (callType) {
             case "MISSED":
+                // Missed calls always show "nhỡ" (red color)
                 callTypeText = isVideo ? "📹 Cuộc gọi video nhỡ" : "📞 Cuộc gọi thoại nhỡ";
                 break;
             case "INCOMING":
+                // Incoming accepted calls show "đến" (standard gray)
                 callTypeText = isVideo ? "📹 Cuộc gọi video đến" : "📞 Cuộc gọi thoại đến";
                 if (duration > 0) {
                     callTypeText += " (" + formatDuration(duration) + ")";
                 }
                 break;
             case "OUTGOING":
+                // Outgoing calls show "đi" (light gray)
                 callTypeText = isVideo ? "📹 Cuộc gọi video đi" : "📞 Cuộc gọi thoại đi";
                 if (duration > 0) {
                     callTypeText += " (" + formatDuration(duration) + ")";
                 }
                 break;
-            case "REJECTED":
-                callTypeText = isVideo ? "📹 Cuộc gọi video bị từ chối" : "📞 Cuộc gọi thoại bị từ chối";
-                break;
             default:
                 callTypeText = "📞 Cuộc gọi";
         }
         
-        // Create call history message
+        // Append timestamp to call message
+        java.text.SimpleDateFormat timeFormat = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
+        String timestamp = timeFormat.format(new java.util.Date());
+        callTypeText += " - " + timestamp;
+        
+        // Create call history message with current user as sender
+        // This allows filtering: each user only sees their own call history perspective
         Message callMessage = new Message(
             null,  // Auto-generated ID
-            "SYSTEM",  // System message
+            currentUserId,  // Use actual userId instead of "SYSTEM"
             callTypeText,
             Message.TYPE_CALL,
             System.currentTimeMillis()
@@ -828,7 +840,7 @@ public class CallViewModel extends AndroidViewModel {
         chatRepository.sendMessage(conversationId, callMessage, new ChatRepository.SendMessageCallback() {
             @Override
             public void onSuccess() {
-                Log.d(TAG, "Call history logged: " + callType);
+                Log.d(TAG, "Call history logged: " + callType + " (isIncoming=" + isIncoming + ", senderId=" + currentUserId + ")");
             }
             
             @Override
@@ -837,6 +849,7 @@ public class CallViewModel extends AndroidViewModel {
             }
         });
     }
+
     
     /**
      * Format duration in seconds to MM:SS

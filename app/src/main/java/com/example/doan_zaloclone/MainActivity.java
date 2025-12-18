@@ -157,6 +157,9 @@ public class MainActivity extends AppCompatActivity {
         boolean isVideo = Call.TYPE_VIDEO.equals(call.getType());
         intent.putExtra(CallActivity.EXTRA_IS_VIDEO, isVideo);
         
+        // FIX: Add conversationId so receiver can log call history
+        intent.putExtra(CallActivity.EXTRA_CONVERSATION_ID, call.getConversationId());
+        
         // Other required extras
         intent.putExtra(CallActivity.EXTRA_IS_INCOMING, true);
         intent.putExtra(CallActivity.EXTRA_CALLER_ID, call.getCallerId());

@@ -115,6 +115,9 @@ public class CallActivity extends AppCompatActivity {
     private String conversationId;
     private String callerId;
     
+    // Call history logging flag
+    private boolean callHistoryLogged = false;
+    
     // Audio
     private AudioManager audioManager;
     
@@ -197,6 +200,15 @@ public class CallActivity extends AppCompatActivity {
         this.conversationId = intent.getStringExtra(EXTRA_CONVERSATION_ID);
         this.callerId = intent.getStringExtra(EXTRA_CALLER_ID);
         this.receiverId = intent.getStringExtra(EXTRA_RECEIVER_ID);  // Store as instance variable
+        
+        // DEBUG: Log call perspective
+        Log.d(TAG, "========================================");
+        Log.d(TAG, "CallActivity created");
+        Log.d(TAG, "isIncoming: " + isIncoming + " (" + (isIncoming ? "RECEIVER" : "CALLER") + ")");
+        Log.d(TAG, "conversationId: " + conversationId);
+        Log.d(TAG, "callerId: " + callerId);
+        Log.d(TAG, "receiverId: " + receiverId);
+        Log.d(TAG, "========================================");
         String callerNameStr = intent.getStringExtra(EXTRA_CALLER_NAME);
         
         // Initialize ViewModel BEFORE initViews()
@@ -523,12 +535,15 @@ public class CallActivity extends AppCompatActivity {
         if (callId != null) {
             callViewModel.rejectCall(callId);
             
-            // Log call history as REJECTED
+            // Log call history as MISSED from receiver's perspective
             if (conversationId != null) {
-                Log.d(TAG, "Logging REJECTED call history");
-                callViewModel.logCallHistory(conversationId, "REJECTED", isVideo, 0);
+                Log.d(TAG, "========== REJECT CALL - LOGGING ==========="  );
+                Log.d(TAG, "Logging MISSED call history (rejected by receiver)");
+                Log.d(TAG, "isIncoming (should be TRUE): " + isIncoming);
+                Log.d(TAG, "conversationId: " + conversationId);
+                callViewModel.logCallHistory(conversationId, "MISSED", isVideo, 0, true);
             } else {
-                Log.e(TAG, "Cannot log REJECTED call - conversationId is NULL!");
+                Log.e(TAG, "Cannot log MISSED call - conversationId is NULL!");
             }
         }
         finish();
@@ -720,16 +735,30 @@ public class CallActivity extends AppCompatActivity {
                 }
                 
                 Log.d(TAG, "Call ENDED - Duration: " + durationSeconds + "s, conversationId: " + conversationId);
+                Log.d(TAG, "Call perspective - isIncoming: " + isIncoming);
                 
                 if (conversationId != null) {
-                    String callType;
-                    if (durationSeconds > 0) {
-                        callType = isIncoming ? "INCOMING" : "OUTGOING";
+                    // Prevent duplicate logging
+                    if (!callHistoryLogged) {
+                        String callType;
+                        if (durationSeconds > 0) {
+                            // Call was accepted and connected
+                            callType = isIncoming ? "INCOMING" : "OUTGOING";
+                        } else {
+                            // Call was not answered
+                            // For receiver: missed call
+                            // For caller: cancelled outgoing call
+                            callType = isIncoming ? "MISSED" : "OUTGOING";
+                        }
+                        Log.d(TAG, "========== ENDED - LOGGING ===========");
+                        Log.d(TAG, "Logging call history on ENDED: type=" + callType + ", isIncoming=" + isIncoming);
+                        Log.d(TAG, "conversationId: " + conversationId);
+                        Log.d(TAG, "durationSeconds: " + durationSeconds);
+                        callViewModel.logCallHistory(conversationId, callType, isVideo, durationSeconds, isIncoming);
+                        callHistoryLogged = true;  // Mark as logged
                     } else {
-                        callType = isIncoming ? "MISSED" : "OUTGOING";
+                        Log.d(TAG, "Call history already logged, skipping duplicate");
                     }
-                    Log.d(TAG, "Logging call history on ENDED: type=" + callType);
-                    callViewModel.logCallHistory(conversationId, callType, isVideo, durationSeconds);
                 } else {
                     Log.e(TAG, "Cannot log call history - conversationId is NULL!");
                 }
