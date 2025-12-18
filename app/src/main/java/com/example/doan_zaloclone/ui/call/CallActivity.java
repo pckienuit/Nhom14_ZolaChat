@@ -726,16 +726,17 @@ public class CallActivity extends AppCompatActivity {
                 onCallConnected();
                 break;
             case Call.STATUS_ENDED:
-                callStatus.setText(R.string.call_ended);
-                
-                // Log call history before finishing
+                // Log call history and navigate
                 long durationSeconds = 0;
                 if (callStartTime > 0) {
                     durationSeconds = (System.currentTimeMillis() - callStartTime) / 1000;
                 }
                 
+                long finalDurationSeconds = durationSeconds;
+                Log.d(TAG, "==========================================");
                 Log.d(TAG, "Call ENDED - Duration: " + durationSeconds + "s, conversationId: " + conversationId);
                 Log.d(TAG, "Call perspective - isIncoming: " + isIncoming);
+                Log.d(TAG, "==========================================");
                 
                 if (conversationId != null) {
                     // Prevent duplicate logging
@@ -746,18 +747,12 @@ public class CallActivity extends AppCompatActivity {
                             callType = isIncoming ? "INCOMING" : "OUTGOING";
                         } else {
                             // Call was not answered
-                            // For receiver: missed call
-                            // For caller: cancelled outgoing call
                             callType = isIncoming ? "MISSED" : "OUTGOING";
                         }
                         Log.d(TAG, "========== ENDED - LOGGING ===========");
                         Log.d(TAG, "Logging call history on ENDED: type=" + callType + ", isIncoming=" + isIncoming);
-                        Log.d(TAG, "conversationId: " + conversationId);
-                        Log.d(TAG, "durationSeconds: " + durationSeconds);
                         callViewModel.logCallHistory(conversationId, callType, isVideo, durationSeconds, isIncoming);
-                        callHistoryLogged = true;  // Mark as logged
-                    } else {
-                        Log.d(TAG, "Call history already logged, skipping duplicate");
+                        callHistoryLogged = true;
                     }
                 } else {
                     Log.e(TAG, "Cannot log call history - conversationId is NULL!");
@@ -766,7 +761,17 @@ public class CallActivity extends AppCompatActivity {
                 stopDurationTimer();
                 stopOngoingCallService();
                 disableProximitySensor();
-                new Handler(Looper.getMainLooper()).postDelayed(this::finish, 1500);
+                
+                // Navigate to conversation if call was accepted
+                if (finalDurationSeconds > 0 && conversationId != null) {
+                    Log.d(TAG, "Call was accepted, navigating to conversation");
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        openConversation(conversationId);
+                    }, 300);  // Minimal delay for smooth transition
+                } else {
+                    Log.d(TAG, "Call was not accepted, just finishing");
+                    new Handler(Looper.getMainLooper()).postDelayed(this::finish, 300);
+                }
                 break;
             case Call.STATUS_REJECTED:
                 callStatus.setText(R.string.call_rejected);
@@ -1102,6 +1107,107 @@ public class CallActivity extends AppCompatActivity {
             PictureInPictureParams params = buildPiPParams();
             setPictureInPictureParams(params);
         }
+    }
+    
+    /**
+     * Show smooth ending UI transition
+     * Displays "Đang kết thúc..." and keeps caller info visible
+     */
+    private void showEndingUI() {
+        // Hide video views first (they might be blocking the overlay)
+        if (remoteVideoView != null) {
+            remoteVideoView.setVisibility(View.GONE);
+        }
+        if (localVideoView != null) {
+            localVideoView.setVisibility(View.GONE);
+        }
+        
+        // Ensure overlay is visible with dark background and bring to front
+        if (contentOverlay != null) {
+            contentOverlay.setVisibility(View.VISIBLE);
+            contentOverlay.bringToFront(); // Important: bring to front
+            // Set dark semi-transparent background so text is visible
+            contentOverlay.setBackgroundColor(0xDD000000); // Darker background
+            contentOverlay.setElevation(100); // High elevation to ensure it's on top
+        }
+        
+        // Update status text
+        if (callStatus != null) {
+            callStatus.setText("Đang kết thúc...");
+            callStatus.setVisibility(View.VISIBLE);
+            callStatus.setTextColor(0xFFFFFFFF); // White text
+            callStatus.setTextSize(22); // Even larger for visibility
+        }
+        
+        // Hide all control buttons for clean UI
+        if (callControls != null) {
+            callControls.setVisibility(View.GONE);
+        }
+        if (incomingCallButtons != null) {
+            incomingCallButtons.setVisibility(View.GONE);
+        }
+        if (outgoingCallButtons != null) {
+            outgoingCallButtons.setVisibility(View.GONE);
+        }
+        
+        // Keep caller info visible and CENTERED
+        if (callerInfoContainer != null) {
+            callerInfoContainer.setVisibility(View.VISIBLE);
+            callerInfoContainer.bringToFront();
+            // Force center gravity on parent LinearLayout
+            if (callerInfoContainer.getLayoutParams() instanceof android.widget.LinearLayout.LayoutParams) {
+                android.widget.LinearLayout.LayoutParams params = (android.widget.LinearLayout.LayoutParams) callerInfoContainer.getLayoutParams();
+                params.weight = 0; // Remove weight so it doesn't get pushed down
+                params.gravity = android.view.Gravity.CENTER;
+                callerInfoContainer.setLayoutParams(params);
+            }
+        }
+        
+        // Keep caller name visible for context
+        if (callerName != null) {
+            callerName.setVisibility(View.VISIBLE);
+        }
+        
+        // Hide duration for cleaner look
+        if (callDuration != null) {
+            callDuration.setVisibility(View.GONE);
+        }
+        
+        // Force UI refresh and parent layout update
+        if (contentOverlay != null) {
+            contentOverlay.invalidate();
+            contentOverlay.requestLayout();
+            // Request parent to redraw
+            if (contentOverlay.getParent() != null) {
+                ((View) contentOverlay.getParent()).invalidate();
+            }
+        }
+        
+        Log.d(TAG, "Showing ending UI - video hidden, overlay brought to front, caller info centered");
+    }
+    
+    /**
+     * Open conversation after call ends
+     * Navigates to RoomActivity with the conversation ID
+     */
+    private void openConversation(String conversationId) {
+        Intent intent = new Intent(this, com.example.doan_zaloclone.ui.room.RoomActivity.class);
+        intent.putExtra("conversationId", conversationId);
+        
+        // Get conversation name from Intent if available
+        String conversationName = getIntent().getStringExtra(EXTRA_CALLER_NAME);
+        if (conversationName != null) {
+            intent.putExtra("conversationName", conversationName);
+        }
+        
+        // Clear call activity from back stack and start conversation
+        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+        
+        // Disable transition animations for seamless switch
+        overridePendingTransition(0, 0);
+        
+        finish();
     }
     
     @Override
