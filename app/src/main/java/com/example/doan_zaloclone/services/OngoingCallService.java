@@ -83,11 +83,24 @@ public class OngoingCallService extends Service {
             callerName = intent.getStringExtra(EXTRA_CALLER_NAME);
             isVideo = intent.getBooleanExtra(EXTRA_IS_VIDEO, false);
             
-            Log.d(TAG, "Starting foreground service for call: " + currentCallId);
+            Log.d(TAG, "Starting foreground service for call: " + currentCallId + " (video=" + isVideo + ")");
             
             // Start foreground with notification
             Notification notification = createOngoingCallNotification("00:00");
-            startForeground(NOTIFICATION_ID, notification);
+            
+            // Conditionally set foreground service type based on call type
+            // Voice calls only need microphone, video calls need both camera and microphone
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                int serviceType = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
+                if (isVideo) {
+                    serviceType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA;
+                }
+                startForeground(NOTIFICATION_ID, notification, serviceType);
+                Log.d(TAG, "Started with foreground service type: " + 
+                    (isVideo ? "camera|microphone" : "microphone"));
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
             
         } else if (ACTION_UPDATE_DURATION.equals(action)) {
             String duration = intent.getStringExtra("duration");

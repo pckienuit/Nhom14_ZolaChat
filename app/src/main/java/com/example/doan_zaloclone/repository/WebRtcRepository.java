@@ -39,6 +39,13 @@ public class WebRtcRepository {
     private static final String AUDIO_TRACK_ID = "audio_track";
     private static final String VIDEO_TRACK_ID = "video_track";
     private static final String STREAM_ID = "stream";
+    // Conservative defaults to prioritize stability on mid/low devices
+    private static final int VIDEO_WIDTH = 540;
+    private static final int VIDEO_HEIGHT = 960;
+    private static final int VIDEO_FPS = 24;
+    private static final int VIDEO_FALLBACK_WIDTH = 480;
+    private static final int VIDEO_FALLBACK_HEIGHT = 640;
+    private static final int VIDEO_FALLBACK_FPS = 15;
     
     private final Context context;
     private PeerConnectionFactory peerConnectionFactory;
@@ -439,8 +446,17 @@ public class WebRtcRepository {
                 videoSource.getCapturerObserver()
         );
         
-        // Start capturing
-        videoCapturer.startCapture(720, 1280, 30);  // Portrait mode
+        // Start capturing with conservative defaults; fallback to an even lower profile on error
+        try {
+            videoCapturer.startCapture(VIDEO_WIDTH, VIDEO_HEIGHT, VIDEO_FPS);
+        } catch (RuntimeException captureError) {
+            Log.e(TAG, "Primary capture profile failed, applying fallback", captureError);
+            try {
+                videoCapturer.startCapture(VIDEO_FALLBACK_WIDTH, VIDEO_FALLBACK_HEIGHT, VIDEO_FALLBACK_FPS);
+            } catch (RuntimeException fallbackError) {
+                Log.e(TAG, "Fallback capture profile failed", fallbackError);
+            }
+        }
         
         // Create video track
         localVideoTrack = peerConnectionFactory.createVideoTrack(VIDEO_TRACK_ID, videoSource);

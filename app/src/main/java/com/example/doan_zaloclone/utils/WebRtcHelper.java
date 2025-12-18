@@ -183,11 +183,12 @@ public class WebRtcHelper {
         MediaConstraints constraints = new MediaConstraints();
         
         // Set video resolution and frame rate
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxWidth", "1280"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxHeight", "720"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minWidth", "640"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minHeight", "480"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxFrameRate", "30"));
+        // Favor stability: lower the envelope to keep render/load balanced
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxWidth", "960"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxHeight", "960"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minWidth", "480"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minHeight", "360"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxFrameRate", "24"));
         constraints.mandatory.add(new MediaConstraints.KeyValuePair("minFrameRate", "15"));
         
         return constraints;

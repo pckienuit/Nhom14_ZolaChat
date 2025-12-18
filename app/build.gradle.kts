@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.example.doan_zaloclone"
-    compileSdk = 36
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.doan_zaloclone"
         minSdk = 28
-        targetSdk = 36
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
 
@@ -55,7 +55,7 @@ dependencies {
     implementation(libs.glide)
 
     // WebRTC
-    implementation("io.getstream:stream-webrtc-android:1.1.1")
+    implementation("io.getstream:stream-webrtc-android:1.3.10")
 
     annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")  // For AppGlideModule
     
@@ -67,9 +67,6 @@ dependencies {
     
     // Cloudinary for image uploads
     implementation("com.cloudinary:cloudinary-android:3.0.2")
-    
-    // WebRTC for voice and video calls
-    implementation("io.getstream:stream-webrtc-android:1.1.1")
     
     // Firebase BoM - quản lý versions tự động
     implementation(platform(libs.firebase.bom))

@@ -70,8 +70,21 @@ public class IncomingCallService extends Service {
         call.setType(isVideo ? Call.TYPE_VIDEO : Call.TYPE_VOICE);
         
         // Start foreground with notification
-        startForeground(NOTIFICATION_ID, 
-            CallNotificationHelper.createIncomingCallNotification(this, call, callerName, null));
+        // Conditionally set foreground service type based on call type
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            int serviceType = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
+            if (isVideo) {
+                serviceType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA;
+            }
+            startForeground(NOTIFICATION_ID, 
+                CallNotificationHelper.createIncomingCallNotification(this, call, callerName, null),
+                serviceType);
+            Log.d(TAG, "Started with foreground service type: " + 
+                (isVideo ? "camera|microphone" : "microphone"));
+        } else {
+            startForeground(NOTIFICATION_ID, 
+                CallNotificationHelper.createIncomingCallNotification(this, call, callerName, null));
+        }
         
         // Start ringtone
         playRingtone();

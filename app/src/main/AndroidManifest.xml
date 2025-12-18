@@ -38,7 +38,8 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.DoAn_ZaloClone">
+        android:theme="@style/Theme.DoAn_ZaloClone"
+        tools:ignore="GoogleAppIndexingWarning">
         
         <!-- Login Activity as Launcher -->
         <activity
