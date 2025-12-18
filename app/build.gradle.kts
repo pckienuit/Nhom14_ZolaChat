@@ -53,6 +53,10 @@ dependencies {
     implementation(libs.recyclerview)
     implementation(libs.cardview)
     implementation(libs.glide)
+
+    // WebRTC
+    implementation("io.getstream:stream-webrtc-android:1.1.1")
+
     annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")  // For AppGlideModule
     
     // ExifInterface for image rotation
@@ -64,6 +68,9 @@ dependencies {
     // Cloudinary for image uploads
     implementation("com.cloudinary:cloudinary-android:3.0.2")
     
+    // WebRTC for voice and video calls
+    implementation("io.getstream:stream-webrtc-android:1.1.1")
+    
     // Firebase BoM - quản lý versions tự động
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
@@ -73,4 +80,6 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+
+    
 }

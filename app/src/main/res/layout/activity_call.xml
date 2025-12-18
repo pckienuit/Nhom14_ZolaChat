@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- Remote video (full screen) - BACKGROUND -->
+    <org.webrtc.SurfaceViewRenderer
+        android:id="@+id/remoteVideoView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="invisible" />
+
+    <!-- Local video preview (small, top-right corner) -->
+    <org.webrtc.SurfaceViewRenderer
+        android:id="@+id/localVideoView"
+        android:layout_width="100dp"
+        android:layout_height="150dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="60dp"
+        android:layout_marginEnd="16dp"
+        android:visibility="invisible" />
+
+    <!-- Content overlay -->
+    <LinearLayout
+        android:id="@+id/contentOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="24dp"
+        android:background="@android:color/transparent"
+        android:clickable="false"
+        android:focusable="false">
+
+        <!-- Call duration (top center, always visible during call) -->
+        <TextView
+            android:id="@+id/callDuration"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:text="00:00"
+            android:textSize="18sp"
+            android:textColor="@android:color/white"
+            android:textStyle="bold"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
+            android:background="#CC000000"
+            android:elevation="16dp"
+            android:layout_marginTop="8dp"
+            android:visibility="gone" />
+
+        <!-- Spacer to push content to center -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Caller information -->
+        <LinearLayout
+            android:id="@+id/callerInfoContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:layout_gravity="center">
+
+            <!-- Caller avatar -->
+            <ImageView
+                android:id="@+id/callerAvatar"
+                android:layout_width="120dp"
+                android:layout_height="120dp"
+                android:src="@drawable/ic_person"
+                android:background="@drawable/circle_background"
+                android:padding="24dp"
+                android:layout_marginBottom="16dp" />
+
+            <!-- Caller name -->
+            <TextView
+                android:id="@+id/callerName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Người gọi"
+                android:textSize="24sp"
+                android:textColor="@android:color/black"
+                android:textStyle="bold"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Call status -->
+            <TextView
+                android:id="@+id/callStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Đang gọi..."
+                android:textSize="16sp"
+                android:textColor="@android:color/black"
+                android:alpha="0.8" />
+        </LinearLayout>
+
+        <!-- Spacer to push content to center (bottom) -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <!-- Incoming call buttons - OUTSIDE overlay so always at bottom -->
+    <LinearLayout
+        android:id="@+id/incomingCallButtons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingTop="16dp"
+        android:paddingBottom="32dp"
+        android:background="#CC000000"
+        android:elevation="16dp"
+        android:visibility="gone">
+
+        <!-- Reject button -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/rejectButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_call_end"
+            app:backgroundTint="@android:color/holo_red_dark"
+            app:tint="@android:color/white"
+            android:layout_marginEnd="32dp" />
+
+        <!-- Accept button -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/acceptButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_call"
+            app:backgroundTint="@android:color/holo_green_dark"
+            app:tint="@android:color/white" />
+    </LinearLayout>
+
+    <!-- Outgoing call buttons (Cancel) - For caller -->
+    <LinearLayout
+        android:id="@+id/outgoingCallButtons"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingTop="16dp"
+        android:paddingBottom="32dp"
+        android:background="#CC000000"
+        android:elevation="16dp"
+        android:visibility="gone">
+
+        <!-- Cancel button -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/cancelButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_call_end"
+            app:backgroundTint="@android:color/holo_red_dark"
+            app:tint="@android:color/white" />
+    </LinearLayout>
+
+    <!-- Call controls - OUTSIDE overlay so always at bottom -->
+    <LinearLayout
+        android:id="@+id/callControls"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingTop="16dp"
+        android:paddingBottom="32dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:background="#CC000000"
+        android:elevation="16dp"
+        android:visibility="gone">
+
+            <!-- Microphone button -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/micButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="8dp"
+                android:src="@drawable/ic_mic"
+                app:backgroundTint="@color/colorPrimary"
+                app:tint="@android:color/white"
+                app:fabSize="normal" />
+
+            <!-- Camera button (video calls only) -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/cameraButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="8dp"
+                android:src="@drawable/ic_videocam"
+                app:backgroundTint="@color/colorPrimary"
+                app:tint="@android:color/white"
+                app:fabSize="normal"
+                android:visibility="gone" />
+
+            <!-- Switch camera button (video calls only) -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/switchCameraButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="8dp"
+                android:src="@drawable/ic_cameraswitch"
+                app:backgroundTint="@color/colorPrimary"
+                app:tint="@android:color/white"
+                app:fabSize="normal"
+                android:visibility="gone" />
+
+            <!-- Speaker button -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/speakerButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="8dp"
+                android:src="@drawable/ic_volume_up"
+                app:backgroundTint="@color/colorPrimary"
+                app:tint="@android:color/white"
+                app:fabSize="normal" />
+
+            <!-- End call button -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/endCallButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="8dp"
+                android:src="@drawable/ic_call_end"
+                app:backgroundTint="@android:color/holo_red_dark"
+                app:tint="@android:color/white"
+                app:fabSize="normal" />
+        </LinearLayout>
+
+</FrameLayout>

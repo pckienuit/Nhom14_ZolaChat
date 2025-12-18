@@ -47,4 +47,17 @@
     <string name="filter_by_domain">Tên miền</string>
     <string name="domain_filter_title">Chọn tên miền</string>
     <string name="all_domains">Tất cả tên miền</string>
+    
+    <!-- Call Strings -->
+    <string name="incoming_call">Cuộc gọi đến</string>
+    <string name="call_calling">Đang gọi...</string>
+    <string name="call_ringing">Đang đổ chuông...</string>
+    <string name="call_connecting">Đang kết nối...</string>
+    <string name="call_ongoing">Đang gọi</string>
+    <string name="call_connected">Đã kết nối</string>
+    <string name="call_missed">Cuộc gọi nhỡ</string>
+    <string name="call_ended">Cuộc gọi đã kết thúc</string>
+    <string name="call_rejected">Cuộc gọi bị từ chối</string>
+    <string name="call_failed">Cuộc gọi thất bại</string>
+    <string name="permission_call_denied">Cần cấp quyền để thực hiện cuộc gọi</string>
 </resources>

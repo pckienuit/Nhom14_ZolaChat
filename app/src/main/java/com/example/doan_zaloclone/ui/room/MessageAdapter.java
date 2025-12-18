@@ -27,6 +27,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private static final int VIEW_TYPE_IMAGE_RECEIVED = 4;
     private static final int VIEW_TYPE_FILE_SENT = 5;
     private static final int VIEW_TYPE_FILE_RECEIVED = 6;
+    private static final int VIEW_TYPE_CALL_HISTORY = 7;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -59,6 +60,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         boolean isSent = message.getSenderId().equals(currentUserId);
         boolean isImage = Message.TYPE_IMAGE.equals(message.getType());
         boolean isFile = Message.TYPE_FILE.equals(message.getType());
+        boolean isCall = Message.TYPE_CALL.equals(message.getType());
+        
+        // Call history messages are always centered
+        if (isCall) {
+            return VIEW_TYPE_CALL_HISTORY;
+        }
         
         if (isSent) {
             if (isFile) return VIEW_TYPE_FILE_SENT;
@@ -98,6 +105,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_file_received, parent, false);
                 return new FileMessageReceivedViewHolder(view);
+            case VIEW_TYPE_CALL_HISTORY:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_call_history, parent, false);
+                return new CallHistoryViewHolder(view);
             default:
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_sent, parent, false);
@@ -120,6 +131,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((FileMessageSentViewHolder) holder).bind(message);
         } else if (holder instanceof FileMessageReceivedViewHolder) {
             ((FileMessageReceivedViewHolder) holder).bind(message);
+        } else if (holder instanceof CallHistoryViewHolder) {
+            ((CallHistoryViewHolder) holder).bind(message);
         }
     }
 
@@ -129,8 +142,23 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
 
     public void updateMessages(List<Message> newMessages) {
-        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new MessageDiffCallback(this.messages, newMessages));
-        this.messages = newMessages;
+        // Filter out call messages from other users
+        // Each user should only see their own call history perspective
+        List<Message> filteredMessages = new java.util.ArrayList<>();
+        for (Message msg : newMessages) {
+            if (Message.TYPE_CALL.equals(msg.getType())) {
+                // Only include call messages from current user
+                if (msg.getSenderId().equals(currentUserId)) {
+                    filteredMessages.add(msg);
+                }
+            } else {
+                // Include all non-call messages
+                filteredMessages.add(msg);
+            }
+        }
+        
+        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new MessageDiffCallback(this.messages, filteredMessages));
+        this.messages = filteredMessages;
         diffResult.dispatchUpdatesTo(this);
     }
 
@@ -457,6 +485,35 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                         });
                     }
                 });
+        }
+    }
+    
+    static class CallHistoryViewHolder extends RecyclerView.ViewHolder {
+        private TextView callHistoryTextView;
+
+        public CallHistoryViewHolder(@NonNull View itemView) {
+            super(itemView);
+            callHistoryTextView = itemView.findViewById(R.id.callHistoryTextView);
+        }
+
+        public void bind(Message message) {
+            String content = message.getContent();
+            callHistoryTextView.setText(content);
+            
+            // Apply color based on call type
+            if (content != null && content.contains("nhỡ")) {
+                // Missed call - RED
+                callHistoryTextView.setTextColor(0xFFE53935);
+            } else if (content != null && content.contains("đi")) {
+                // Outgoing call - LIGHT GRAY
+                callHistoryTextView.setTextColor(0xFFB0B0B0);
+            } else if (content != null && content.contains("đến")) {
+                // Incoming call - STANDARD GRAY
+                callHistoryTextView.setTextColor(0xFF757575);
+            } else {
+                // Default gray (fallback)
+                callHistoryTextView.setTextColor(0xFF757575);
+            }
         }
     }
     

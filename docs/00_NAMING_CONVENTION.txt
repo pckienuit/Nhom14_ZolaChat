@@ -81,6 +81,8 @@ DANH SÁCH FILE HIỆN TẠI
 07_optimization_performance.txt - Tối ưu hiệu năng tổng quát
 08_optimization_recyclerview.txt - Tối ưu RecyclerView
 09_bugfix_filter-chip.txt      - Sửa lỗi filter chip container & circular button
+10_feature_voice-video-call.txt - Tài liệu tổng quát về voice/video call
+11_bugfix_call-system-debug.txt - Debug và fix 9 lỗi hệ thống cuộc gọi
 
 
 CẬP NHẬT
@@ -88,4 +90,4 @@ CẬP NHẬT
 
 Tạo ngày: 16/12/2025
 Cập nhật lần cuối: 16/12/2025
-Tổng số file tài liệu: 10 files (bao gồm file này)
+Tổng số file tài liệu: 11 files (bao gồm file này)

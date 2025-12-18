@@ -1,0 +1,547 @@
+================================================================================
+17. CALL HISTORY UI IMPROVEMENTS - PERSPECTIVE & COLOR CODING
+================================================================================
+
+OVERVIEW
+--------
+This document details the comprehensive UI improvements for call history display,
+implementing proper perspective-based logging, color differentiation, and timestamp
+display. This builds upon the basic call history logging from document #16.
+
+Key improvements:
+- Caller/receiver perspective differentiation ("đi" vs "đến")
+- Color coding for call types (light gray, gray, red)
+- User-specific filtering (each user sees only their perspective)
+- Inline timestamp display
+- Duplicate logging prevention
+- Missed call detection for incoming calls
+
+MOTIVATION
+----------
+Previous implementation (doc #16) had limitations:
+- All calls showed as "INCOMING" or "OUTGOING" without perspective context
+- No visual distinction between outgoing and incoming accepted calls
+- Both users saw both messages in shared conversations
+- Missing conversationId for incoming calls
+- Call status updates triggered duplicate logging
+- No timestamp in call history messages
+
+These enhancements provide a more intuitive and informative call history experience.
+
+
+================================================================================
+PART 1: PERSPECTIVE-BASED CALL LOGGING
+================================================================================
+
+PROBLEM STATEMENT
+-----------------
+The original implementation didn't differentiate between caller and receiver
+perspectives. Both users would see "Cuộc gọi đến" or "Cuộc gọi đi" based on
+the generic call type, not their personal involvement in the call.
+
+SOLUTION: isIncoming Parameter
+-------------------------------
+Added boolean `isIncoming` parameter to `logCallHistory()` to distinguish:
+- Caller perspective (isIncoming = false): "Cuộc gọi đi"
+- Receiver perspective (isIncoming = true): "Cuộc gọi đến"
+- Missed calls: "Cuộc gọi nhỡ" (always for receiver)
+
+IMPLEMENTATION DETAILS
+----------------------
+
+1. CallViewModel Method Signature Update
+   File: viewmodel/CallViewModel.java
+   
+   Changed from:
+   ```java
+   public void logCallHistory(String conversationId, String callType, 
+                              boolean isVideo, long duration)
+   ```
+   
+   To:
+   ```java
+   public void logCallHistory(String conversationId, String callType, 
+                              boolean isVideo, long duration, boolean isIncoming)
+   ```
+
+2. Call Type Text Generation Logic
+   File: viewmodel/CallViewModel.java (lines 793-821)
+   
+   ```java
+   String callTypeText;
+   switch (callType) {
+       case "MISSED":
+           // Always shows "nhỡ" regardless of perspective
+           callTypeText = isVideo ? "📹 Cuộc gọi video nhỡ" 
+                                  : "📞 Cuộc gọi thoại nhỡ";
+           break;
+       case "INCOMING":
+           // Receiver's accepted call: shows "đến"
+           callTypeText = isVideo ? "📹 Cuộc gọi video đến" 
+                                  : "📞 Cuộc gọi thoại đến";
+           if (duration > 0) {
+               callTypeText += " (" + formatDuration(duration) + ")";
+           }
+           break;
+       case "OUTGOING":
+           // Caller's call or cancelled call: shows "đi"
+           callTypeText = isVideo ? "📹 Cuộc gọi video đi" 
+                                  : "📞 Cuộc gọi thoại đi";
+           if (duration > 0) {
+               callTypeText += " (" + formatDuration(duration) + ")";
+           }
+           break;
+   }
+   ```
+   
+   Note: REJECTED case was removed. Rejected calls are now logged as MISSED
+   from the receiver's perspective.
+
+3. CallActivity Integration
+   File: ui/call/CallActivity.java
+   
+   A. Reject Call Handler (lines 535-544)
+   ```java
+   private void rejectCall() {
+       if (callId != null) {
+           callViewModel.rejectCall(callId);
+           
+           if (conversationId != null) {
+               // Log as MISSED with isIncoming=true (receiver perspective)
+               callViewModel.logCallHistory(conversationId, "MISSED", 
+                                          isVideo, 0, true);
+           }
+       }
+       finish();
+   }
+   ```
+   
+   B. STATUS_ENDED Handler (lines 737-762)
+   ```java
+   case Call.STATUS_ENDED:
+       long durationSeconds = 0;
+       if (callStartTime > 0) {
+           durationSeconds = (System.currentTimeMillis() - callStartTime) / 1000;
+       }
+       
+       if (conversationId != null && !callHistoryLogged) {
+           String callType;
+           if (durationSeconds > 0) {
+               // Call was accepted and connected
+               callType = isIncoming ? "INCOMING" : "OUTGOING";
+           } else {
+               // Call was not answered
+               // Receiver: missed call, Caller: cancelled outgoing
+               callType = isIncoming ? "MISSED" : "OUTGOING";
+           }
+           
+           callViewModel.logCallHistory(conversationId, callType, 
+                                      isVideo, durationSeconds, isIncoming);
+           callHistoryLogged = true;  // Prevent duplicates
+       }
+       break;
+   ```
+
+CALL SCENARIOS & LOGGED MESSAGES
+---------------------------------
+
+Scenario 1: Accepted Call
+- Caller sees: "📞 Cuộc gọi thoại đi (MM:SS)" 
+- Receiver sees: "📞 Cuộc gọi thoại đến (MM:SS)"
+
+Scenario 2: Caller Cancels Before Answer
+- Caller sees: "📞 Cuộc gọi thoại đi"
+- Receiver sees: "📞 Cuộc gọi thoại nhỡ"
+
+Scenario 3: Receiver Rejects Call
+- Caller sees: "📞 Cuộc gọi thoại đi"
+- Receiver sees: "📞 Cuộc gọi thoại nhỡ"
+
+Scenario 4: Timeout (no answer within 30s)
+- Caller sees: "📞 Cuộc gọi thoại đi"
+- Receiver sees: "📞 Cuộc gọi thoại nhỡ"
+
+
+================================================================================
+PART 2: COLOR DIFFERENTIATION
+================================================================================
+
+COLOR SCHEME
+------------
+Three distinct colors for better visual recognition:
+- 🔴 Missed calls: #E53935 (Red) - High visibility for missed calls
+- ⚪ Outgoing calls: #B0B0B0 (Light gray) - Lighter than incoming
+- ⚫ Incoming calls: #757575 (Standard gray) - Darker than outgoing
+
+IMPLEMENTATION
+--------------
+File: ui/room/MessageAdapter.java (CallHistoryViewHolder.bind())
+
+```java
+public void bind(Message message) {
+    String content = message.getContent();
+    callHistoryTextView.setText(content);
+    
+    // Apply color based on keywords in message content
+    if (content != null && content.contains("nhỡ")) {
+        // Missed call - RED
+        callHistoryTextView.setTextColor(0xFFE53935);
+    } else if (content != null && content.contains("đi")) {
+        // Outgoing call - LIGHT GRAY
+        callHistoryTextView.setTextColor(0xFFB0B0B0);
+    } else if (content != null && content.contains("đến")) {
+        // Incoming call - STANDARD GRAY
+        callHistoryTextView.setTextColor(0xFF757575);
+    } else {
+        // Default gray (fallback)
+        callHistoryTextView.setTextColor(0xFF757575);
+    }
+}
+```
+
+RATIONALE
+---------
+- Keyword-based detection ("nhỡ", "đi", "đến") is simple and reliable
+- Colors provide instant visual feedback without reading text
+- Red for missed calls follows universal design patterns
+- Gray shades differentiate direction while remaining subtle
+
+
+================================================================================
+PART 3: USER-SPECIFIC FILTERING
+================================================================================
+
+PROBLEM STATEMENT
+-----------------
+In shared conversations, both caller and receiver log their perspective:
+- User A logs: "Cuộc gọi đi"
+- User B logs: "Cuộc gọi đến"
+- BOTH users see BOTH messages in the conversation
+
+This creates confusion as users see the call from both perspectives.
+
+SOLUTION: Sender-Based Filtering
+---------------------------------
+1. Change senderId from "SYSTEM" to actual user ID
+2. Filter call messages in MessageAdapter to show only current user's messages
+
+IMPLEMENTATION DETAILS
+----------------------
+
+1. Updated Call Message Creation
+   File: viewmodel/CallViewModel.java (lines 795-797, 829-832)
+   
+   ```java
+   // Get current user ID to use as senderId
+   String currentUserId = FirebaseAuth.getInstance().getCurrentUser() != null
+           ? FirebaseAuth.getInstance().getCurrentUser().getUid()
+           : "SYSTEM";
+   
+   // Create call history message with current user as sender
+   Message callMessage = new Message(
+       null,              // Auto-generated ID
+       currentUserId,     // Use actual userId instead of "SYSTEM"
+       callTypeText,
+       Message.TYPE_CALL,
+       System.currentTimeMillis()
+   );
+   ```
+
+2. MessageAdapter Filtering
+   File: ui/room/MessageAdapter.java (updateMessages method)
+   
+   ```java
+   public void updateMessages(List<Message> newMessages) {
+       // Filter out call messages from other users
+       List<Message> filteredMessages = new ArrayList<>();
+       for (Message msg : newMessages) {
+           if (Message.TYPE_CALL.equals(msg.getType())) {
+               // Only include call messages from current user
+               if (msg.getSenderId().equals(currentUserId)) {
+                   filteredMessages.add(msg);
+               }
+           } else {
+               // Include all non-call messages
+               filteredMessages.add(msg);
+           }
+       }
+       
+       DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(
+           new MessageDiffCallback(this.messages, filteredMessages));
+       this.messages = filteredMessages;
+       diffResult.dispatchUpdatesTo(this);
+   }
+   ```
+
+RESULT
+------
+Each user now sees only their own perspective:
+- Caller sees: "Cuộc gọi đi"
+- Receiver sees: "Cuộc gọi đến"
+- No duplicate or confusing messages
+
+
+================================================================================
+PART 4: INLINE TIMESTAMP DISPLAY
+================================================================================
+
+REQUIREMENT
+-----------
+Display call time (HH:mm format) inline with call info for better context.
+
+Example: "📞 Cuộc gọi thoại đến (00:04) - 10:30"
+
+IMPLEMENTATION
+--------------
+File: viewmodel/CallViewModel.java (lines 823-826)
+
+```java
+// Append timestamp to call message
+SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
+String timestamp = timeFormat.format(new Date());
+callTypeText += " - " + timestamp;
+```
+
+LAYOUT
+------
+File: res/layout/item_message_call_history.xml
+
+Single TextView centered display:
+```xml
+<TextView
+    android:id="@+id/callHistoryTextView"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_call_history"
+    android:padding="12dp"
+    android:textSize="14sp"
+    android:textColor="#757575" />
+```
+
+Note: Timestamp is part of message content, not a separate TextView.
+
+
+================================================================================
+PART 5: BUG FIXES
+================================================================================
+
+BUG 1: Missing ConversationId for Incoming Calls
+-------------------------------------------------
+SYMPTOM: Receiver could not log call history (conversationId was NULL)
+
+ROOT CAUSE: MainActivity did not pass EXTRA_CONVERSATION_ID when launching
+CallActivity for incoming calls.
+
+FIX: 
+File: MainActivity.java (line 159)
+```java
+// FIX: Add conversationId so receiver can log call history
+intent.putExtra(CallActivity.EXTRA_CONVERSATION_ID, call.getConversationId());
+```
+
+LOCATION: launchIncomingCallActivity() method
+
+
+BUG 2: Duplicate Call History Logging
+--------------------------------------
+SYMPTOM: Call history message appeared twice in conversation
+
+ROOT CAUSE: STATUS_ENDED was triggered multiple times, calling logCallHistory
+each time without checking if already logged.
+
+FIX:
+File: ui/call/CallActivity.java
+
+1. Added instance variable (line 118):
+   ```java
+   private boolean callHistoryLogged = false;
+   ```
+
+2. Added check before logging (lines 740-760):
+   ```java
+   if (!callHistoryLogged) {
+       // ... log call history
+       callHistoryLogged = true;
+   } else {
+       Log.d(TAG, "Call history already logged, skipping duplicate");
+   }
+   ```
+
+
+================================================================================
+TESTING SCENARIOS
+================================================================================
+
+TEST CASE 1: Outgoing Call - Accepted
+--------------------------------------
+Steps:
+1. User A calls User B
+2. User B accepts
+3. Talk for 10 seconds
+4. Either user ends call
+
+Expected Results:
+- User A sees: "📞 Cuộc gọi thoại đi (00:10) - HH:MM" (light gray #B0B0B0)
+- User B sees: "📞 Cuộc gọi thoại đến (00:10) - HH:MM" (gray #757575)
+- Only ONE message per user
+- Timestamp shows actual call time
+
+TEST CASE 2: Outgoing Call - Cancelled
+---------------------------------------
+Steps:
+1. User A calls User B
+2. User A cancels before User B answers
+
+Expected Results:
+- User A sees: "📞 Cuộc gọi thoại đi - HH:MM" (light gray, no duration)
+- User B sees: "📞 Cuộc gọi thoại nhỡ - HH:MM" (red #E53935)
+
+TEST CASE 3: Incoming Call - Rejected
+--------------------------------------
+Steps:
+1. User A calls User B  
+2. User B rejects the call
+
+Expected Results:
+- User A sees: "📞 Cuộc gọi thoại đi - HH:MM" (light gray)
+- User B sees: "📞 Cuộc gọi thoại nhỡ - HH:MM" (red)
+
+TEST CASE 4: Incoming Call - Timeout
+-------------------------------------
+Steps:
+1. User A calls User B
+2. User B doesn't answer (wait 30+ seconds)
+3. Call times out
+
+Expected Results:
+- User A sees: "📞 Cuộc gọi thoại đi - HH:MM" (light gray)
+- User B sees: "📞 Cuộc gọi thoại nhỡ - HH:MM" (red)
+
+TEST CASE 5: Video Call - Accepted
+-----------------------------------
+Steps:
+1. User A video calls User B
+2. User B accepts
+3. Talk for 30 seconds
+4. End call
+
+Expected Results:
+- User A sees: "📹 Cuộc gọi video đi (00:30) - HH:MM" (light gray)
+- User B sees: "📹 Cuộc gọi video đến (00:30) - HH:MM" (gray)
+
+
+================================================================================
+FILES MODIFIED
+================================================================================
+
+1. viewmodel/CallViewModel.java
+   - Updated logCallHistory() signature (+isIncoming parameter)
+   - Changed senderId from "SYSTEM" to actual userId
+   - Added inline timestamp to call message content
+   - Removed REJECTED case (now logged as MISSED)
+
+2. ui/call/CallActivity.java
+   - Added callHistoryLogged flag to prevent duplicates
+   - Updated rejectCall() to log MISSED with isIncoming=true
+   - Enhanced STATUS_ENDED handler to pass isIncoming flag
+   - Added debug logs for call perspective tracking
+
+3. MainActivity.java
+   - Added EXTRA_CONVERSATION_ID to incoming call Intent
+
+4. ui/room/MessageAdapter.java
+   - Enhanced CallHistoryViewHolder color logic (3 colors)
+   - Added filtering in updateMessages() for user-specific call history
+
+5. res/layout/item_message_call_history.xml
+   - No changes (single TextView layout maintained)
+
+
+================================================================================
+FUTURE ENHANCEMENTS
+================================================================================
+
+OPTIONAL IMPROVEMENTS
+---------------------
+
+1. Dedicated Call Direction Field
+   Instead of keyword-based detection, add fields to Message model:
+   ```java
+   private String callDirection;  // "INCOMING", "OUTGOING", "MISSED"
+   private Long callDuration;     // Duration in seconds
+   ```
+   
+   Benefits:
+   - More robust than string matching
+   - Easier to query/filter call history
+   - Supports internationalization
+
+2. Call History Analytics
+   - Track total call time per conversation
+   - Count missed calls per user
+   - Display call statistics in conversation info
+
+3. Call History Search
+   - Filter messages by call type
+   - Search by date range
+   - Export call history
+
+4. Group Call Support
+   - Show participant list in call history
+   - Different text for group calls
+   - Indicate who ended the call
+
+
+================================================================================
+LESSONS LEARNED
+================================================================================
+
+1. Perspective Matters
+   - Same event (call) has different meanings for different users
+   - Always consider user context when logging actions
+
+2. Shared Conversations Require Filtering
+   - Both users logging to same conversation creates duplication
+   - Client-side filtering is necessary for personalized views
+
+3. State Management is Critical
+   - Call state changes trigger multiple events
+   - Flags (callHistoryLogged) prevent duplicate actions
+   - Debug logging is essential for tracking state transitions
+
+4. Color Coding Improves UX
+   - Visual differentiation reduces cognitive load
+   - Red for errors/missed items is intuitive
+   - Subtle gray shades work for informational differences
+
+5. Inline Timestamps > Separate Elements
+   - Simpler layout and logic
+   - Easier to read at a glance
+   - No extra TextView management
+
+
+================================================================================
+REFERENCES
+================================================================================
+
+Related Documents:
+- Doc #16: Basic call history logging implementation
+- Doc #10: Voice and video call feature architecture
+- Doc #11: Call system debugging guide
+
+Code References:
+- CallViewModel.logCallHistory() (lines 781-849)
+- CallActivity.updateUIForCallStatus() (lines 713-762)
+- MessageAdapter.updateMessages() (lines 149-168)
+- MessageAdapter.CallHistoryViewHolder (lines 497-524)
+
+Firestore Structure:
+- Collection: conversations/{conversationId}/messages
+- Message.type: "CALL"
+- Message.senderId: User's UID (not "SYSTEM")
+- Message.content: Formatted call info with timestamp
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================

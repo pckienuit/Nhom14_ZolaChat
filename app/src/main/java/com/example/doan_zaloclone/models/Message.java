@@ -5,6 +5,7 @@ public class Message {
     public static final String TYPE_TEXT = "TEXT";
     public static final String TYPE_IMAGE = "IMAGE";
     public static final String TYPE_FILE = "FILE";
+    public static final String TYPE_CALL = "CALL";
 
     private String id;
     private String senderId;
@@ -130,6 +131,10 @@ public class Message {
     
     public boolean isFileMessage() {
         return TYPE_FILE.equals(this.type);
+    }
+    
+    public boolean isCallMessage() {
+        return TYPE_CALL.equals(this.type);
     }
     
     /**
