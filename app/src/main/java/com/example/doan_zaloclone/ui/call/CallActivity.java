@@ -858,19 +858,34 @@ public class CallActivity extends AppCompatActivity {
         if (isVideo) {
             Log.d(TAG, "Configuring UI for VIDEO call");
             
+            // Ensure caller info container is visible and on top of video
+            if (callerInfoContainer != null) {
+                callerInfoContainer.setVisibility(View.VISIBLE);
+                callerInfoContainer.bringToFront();  // Bring to front of video views
+                // Add padding and semi-transparent background for better readability
+                callerInfoContainer.setBackgroundColor(0x66000000); // 40% black background
+                callerInfoContainer.setPadding(48, 24, 48, 24);
+                callerInfoContainer.requestLayout();
+                callerInfoContainer.invalidate();
+                Log.d(TAG, "Caller info container brought to front with background");
+            }
+            
             // Hide only the avatar, keep the name
             if (callerAvatar != null) {
                 callerAvatar.setVisibility(View.GONE);
                 Log.d(TAG, "Hidden caller avatar for video call");
             }
             
-            // Ensure caller name stays visible
+            // Ensure caller name stays visible (color already white in XML)
             if (callerName != null) {
                 callerName.setVisibility(View.VISIBLE);
                 Log.d(TAG, "Caller name kept visible");
             }
+            
+            // Ensure call status stays visible (color already white in XML)
             if (callStatus != null) {
                 callStatus.setVisibility(View.VISIBLE);
+                Log.d(TAG, "Call status kept visible");
             }
             
             // Verify controls are visible

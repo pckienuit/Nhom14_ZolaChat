@@ -64,7 +64,9 @@
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:gravity="center"
-            android:layout_gravity="center">
+            android:layout_gravity="center"
+            android:elevation="20dp"
+            android:translationZ="20dp">
 
             <!-- Caller avatar -->
             <ImageView
@@ -83,9 +85,13 @@
                 android:layout_height="wrap_content"
                 android:text="Người gọi"
                 android:textSize="24sp"
-                android:textColor="@android:color/black"
+                android:textColor="@android:color/white"
                 android:textStyle="bold"
-                android:layout_marginBottom="8dp" />
+                android:layout_marginBottom="8dp"
+                android:shadowColor="#000000"
+                android:shadowRadius="4"
+                android:shadowDx="0"
+                android:shadowDy="2" />
 
             <!-- Call status -->
             <TextView
@@ -94,8 +100,12 @@
                 android:layout_height="wrap_content"
                 android:text="Đang gọi..."
                 android:textSize="16sp"
-                android:textColor="@android:color/black"
-                android:alpha="0.8" />
+                android:textColor="@android:color/white"
+                android:alpha="0.9"
+                android:shadowColor="#000000"
+                android:shadowRadius="4"
+                android:shadowDx="0"
+                android:shadowDy="2" />
         </LinearLayout>
 
         <!-- Spacer to push content to center (bottom) -->
