@@ -1,0 +1,603 @@
+================================================================================
+16. CALL HISTORY & UI ENHANCEMENTS
+================================================================================
+
+OVERVIEW
+--------
+This document details the implementation of call history logging and UI improvements
+for the calling feature, including:
+- Call history messages in chat conversations
+- Cancel button for outgoing calls
+- Centered caller info UI
+- Realtime call status updates for proper notification dismissal
+- Missed call detection and styling
+
+MOTIVATION
+----------
+Previous implementation lacked essential features:
+- No record of call events (missed, incoming, outgoing)
+- No way to cancel outgoing calls before connection
+- Caller info not centered on screen
+- Incoming call notifications didn't dismiss when caller cancelled
+- No visual distinction for missed calls
+
+These enhancements improve user experience by providing call history tracking
+and better call control.
+
+
+================================================================================
+PART 1: CALL HISTORY LOGGING
+================================================================================
+
+ARCHITECTURE
+------------
+Call history is logged as special system messages in chat conversations:
+
+1. Message Model
+   - Added TYPE_CALL constant for call history messages
+   - Call messages use senderId: "SYSTEM" to distinguish from user messages
+
+2. CallViewModel
+   - New logCallHistory() method to save call events
+   - Automatic formatting of call type and duration
+   - Integration with ChatRepository to send messages
+
+3. CallActivity
+   - Calculates call duration using callStartTime
+   - Logs history when call ends (STATUS_ENDED handler)
+   - Determines call type (INCOMING/OUTGOING/MISSED/REJECTED)
+
+4. MessageAdapter
+   - New VIEW_TYPE_CALL_HISTORY for displaying call messages
+   - CallHistoryViewHolder renders centered system messages
+   - Red color for missed calls, gray for others
+
+IMPLEMENTATION DETAILS
+----------------------
+
+1. Message Type Addition
+   File: models/Message.java
+   
+   Added new constant:
+   ```java
+   public static final String TYPE_CALL = "CALL";
+   
+   public boolean isCallMessage() {
+       return TYPE_CALL.equals(this.type);
+   }
+   ```
+
+2. Call History Logging Method
+   File: viewmodel/CallViewModel.java
+   
+   ```java
+   public void logCallHistory(String conversationId, String callType, 
+                              boolean isVideo, long duration) {
+       String callTypeText;
+       switch (callType) {
+           case "MISSED":
+               callTypeText = isVideo ? "📹 Cuộc gọi video nhỡ" 
+                                      : "📞 Cuộc gọi thoại nhỡ";
+               break;
+           case "INCOMING":
+               callTypeText = isVideo ? "📹 Cuộc gọi video đến" 
+                                      : "📞 Cuộc gọi thoại đến";
+               if (duration > 0) {
+                   callTypeText += " (" + formatDuration(duration) + ")";
+               }
+               break;
+           // ... other cases
+       }
+       
+       Message callMessage = new Message(
+           null, "SYSTEM", callTypeText, Message.TYPE_CALL, 
+           System.currentTimeMillis()
+       );
+       
+       chatRepository.sendMessage(conversationId, callMessage, callback);
+   }
+   ```
+
+3. Call End Detection
+   File: ui/call/CallActivity.java
+   
+   Modified updateUIForCallStatus() to log history:
+   ```java
+   case Call.STATUS_ENDED:
+       // Calculate duration
+       long durationSeconds = 0;
+       if (callStartTime > 0) {
+           durationSeconds = (System.currentTimeMillis() - callStartTime) / 1000;
+       }
+       
+       // Determine call type
+       String callType;
+       if (durationSeconds > 0) {
+           callType = isIncoming ? "INCOMING" : "OUTGOING";
+       } else {
+           callType = isIncoming ? "MISSED" : "OUTGOING";
+       }
+       
+       // Log to chat
+       callViewModel.logCallHistory(conversationId, callType, isVideo, durationSeconds);
+       
+       // Cleanup and finish
+       stopDurationTimer();
+       stopOngoingCallService();
+       disableProximitySensor();
+       new Handler(Looper.getMainLooper()).postDelayed(this::finish, 1500);
+       break;
+   ```
+
+4. UI Display
+   File: ui/room/MessageAdapter.java
+   
+   Added VIEW_TYPE_CALL_HISTORY:
+   ```java
+   private static final int VIEW_TYPE_CALL_HISTORY = 7;
+   
+   @Override
+   public int getItemViewType(int position) {
+       Message message = messages.get(position);
+       boolean isCall = Message.TYPE_CALL.equals(message.getType());
+       
+       if (isCall) {
+           return VIEW_TYPE_CALL_HISTORY;
+       }
+       // ... other types
+   }
+   
+   static class CallHistoryViewHolder extends RecyclerView.ViewHolder {
+       private TextView callHistoryTextView;
+       
+       public void bind(Message message) {
+           String content = message.getContent();
+           callHistoryTextView.setText(content);
+           
+           // Red color for missed calls
+           if (content != null && content.contains("nhỡ")) {
+               callHistoryTextView.setTextColor(0xFFE53935);
+           } else {
+               callHistoryTextView.setTextColor(0xFF757575);
+           }
+       }
+   }
+   ```
+
+5. Layout
+   File: res/layout/item_message_call_history.xml
+   
+   Centered system message layout:
+   ```xml
+   <LinearLayout
+       android:layout_width="match_parent"
+       android:layout_height="wrap_content"
+       android:gravity="center">
+       
+       <TextView
+           android:id="@+id/callHistoryTextView"
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:textSize="12sp"
+           android:textColor="#757575"
+           android:background="@drawable/bg_call_history"
+           android:padding="6dp" />
+   </LinearLayout>
+   ```
+
+CALL TYPES
+----------
+1. MISSED - Incoming call not answered (duration = 0)
+   - Display: Red color
+   - Example: "📞 Cuộc gọi thoại nhỡ"
+
+2. INCOMING - Answered incoming call (duration > 0)
+   - Display: Gray color with duration
+   - Example: "📞 Cuộc gọi thoại đến (02:15)"
+
+3. OUTGOING - Completed outgoing call (duration > 0)
+   - Display: Gray color with duration
+   - Example: "📞 Cuộc gọi thoại đi (01:45)"
+
+4. OUTGOING (cancelled) - Cancelled before answer (duration = 0)
+   - Display: Gray color without duration
+   - Example: "📞 Cuộc gọi thoại đi"
+
+5. REJECTED - Call explicitly rejected
+   - Display: Gray color
+   - Example: "📞 Cuộc gọi thoại bị từ chối"
+
+
+================================================================================
+PART 2: CANCEL BUTTON FOR OUTGOING CALLS
+================================================================================
+
+PROBLEM
+-------
+Users had no way to cancel an outgoing call before the other party answered.
+They had to wait for timeout or for the other person to reject.
+
+SOLUTION
+--------
+Added a Cancel button that appears only during outgoing calls, allowing users
+to end the call at any time before connection.
+
+IMPLEMENTATION
+--------------
+
+1. Layout Addition
+   File: res/layout/activity_call.xml
+   
+   ```xml
+   <LinearLayout
+       android:id="@+id/outgoingCallButtons"
+       android:layout_width="wrap_content"
+       android:layout_height="wrap_content"
+       android:orientation="vertical"
+       android:gravity="center"
+       android:visibility="gone">
+       
+       <com.google.android.material.floatingactionbutton.FloatingActionButton
+           android:id="@+id/cancelButton"
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:src="@drawable/ic_call_end"
+           app:backgroundTint="#E53935" />
+       
+       <TextView
+           android:layout_width="wrap_content"
+           android:layout_height="wrap_content"
+           android:text="Huỷ"
+           android:textColor="@android:color/white" />
+   </LinearLayout>
+   ```
+
+2. UI Controller Methods
+   File: ui/call/CallActivity.java
+   
+   ```java
+   private View outgoingCallButtons;
+   private FloatingActionButton cancelButton;
+   
+   private void initViews() {
+       // Initialize views
+       outgoingCallButtons = findViewById(R.id.outgoingCallButtons);
+       cancelButton = findViewById(R.id.cancelButton);
+       
+       // Setup click listener
+       cancelButton.setOnClickListener(v -> endCall());
+   }
+   
+   private void setupIncomingUI() {
+       incomingCallButtons.setVisibility(View.VISIBLE);
+       outgoingCallButtons.setVisibility(View.GONE);
+       callControls.setVisibility(View.GONE);
+   }
+   
+   private void setupOutgoingUI() {
+       outgoingCallButtons.setVisibility(View.VISIBLE);
+       incomingCallButtons.setVisibility(View.GONE);
+       callControls.setVisibility(View.GONE);
+   }
+   
+   private void handleOutgoingCall(String conversationId, String from, String to) {
+       callStatus.setText(R.string.call_calling);
+       setupOutgoingUI();  // Show cancel button
+       callViewModel.initiateCall(conversationId, from, to, isVideo);
+   }
+   ```
+
+BEHAVIOR
+--------
+1. When making an outgoing call:
+   - Cancel button appears at bottom center
+   - Red circular button with phone icon
+   - Label "Huỷ" underneath
+
+2. When clicking Cancel:
+   - Calls endCall() method
+   - Sets call status to ENDED on Firestore
+   - Logs call history as "OUTGOING" with 0 duration
+   - Closes call screen
+
+3. When call connects:
+   - Cancel button disappears
+   - Regular call controls appear (mute, speaker, camera, etc.)
+
+
+================================================================================
+PART 3: UI LAYOUT FIX - CENTERED CALLER INFO
+================================================================================
+
+PROBLEM
+-------
+Caller name and status were positioned at top of screen, not centered vertically.
+This looked unbalanced and unprofessional.
+
+SOLUTION
+--------
+Added a bottom spacer View with android:layout_weight="1" to push caller info
+to center of screen.
+
+IMPLEMENTATION
+--------------
+File: res/layout/activity_call.xml
+
+```xml
+<LinearLayout
+    android:id="@+id/contentOverlay"
+    android:orientation="vertical"
+    android:layout_weight="1">
+    
+    <!-- Top spacer -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+    
+    <!-- Caller info (centered) -->
+    <LinearLayout
+        android:id="@+id/callerInfoContainer"
+        android:orientation="vertical"
+        android:gravity="center">
+        
+        <TextView android:id="@+id/callerName" ... />
+        <TextView android:id="@+id/callStatus" ... />
+    </LinearLayout>
+    
+    <!-- Bottom spacer (NEW) -->
+    <View
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+</LinearLayout>
+```
+
+RESULT
+------
+Caller name and status now appear perfectly centered on screen during
+incoming/outgoing call states.
+
+
+================================================================================
+PART 4: REALTIME CALL STATUS UPDATES
+================================================================================
+
+PROBLEM
+-------
+When caller cancelled an outgoing call, the receiver's incoming call 
+notification/dialog did not dismiss automatically. The receiver had to manually
+reject or wait for timeout.
+
+ROOT CAUSE
+----------
+1. CallActivity on receiver side only loaded call once (not realtime)
+2. IncomingCallService checked for status changes but missed STATUS_ENDED
+3. No observer pattern for call status updates
+
+SOLUTION
+--------
+Implemented realtime Firestore listeners for call status changes in both
+CallActivity and IncomingCallService.
+
+IMPLEMENTATION
+--------------
+
+1. CallViewModel Enhancement
+   File: viewmodel/CallViewModel.java
+   
+   Added realtime listener method:
+   ```java
+   public void startListeningToCall(String callId) {
+       if (callId == null) return;
+       
+       callRepository.listenToCall(callId, new CallRepository.OnCallChangedListener() {
+           @Override
+           public void onCallChanged(Call call) {
+               currentCall.postValue(Resource.success(call));
+           }
+           
+           @Override
+           public void onError(String errorMsg) {
+               currentCall.postValue(Resource.error(errorMsg, null));
+           }
+       });
+   }
+   ```
+
+2. CallActivity Integration
+   File: ui/call/CallActivity.java
+   
+   ```java
+   private void handleIncomingCall() {
+       callStatus.setText(R.string.incoming_call);
+       setupIncomingUI();
+       
+       // Start listening to call status changes
+       if (callId != null) {
+           callViewModel.startListeningToCall(callId);
+       }
+   }
+   
+   private void setupObservers() {
+       // Observe current call (now receives realtime updates)
+       callViewModel.getCurrentCall().observe(this, resource -> {
+           if (resource.isSuccess()) {
+               Call call = resource.getData();
+               if (call != null) {
+                   updateUIForCallStatus(call.getStatus());  // Will finish() on ENDED
+               }
+           }
+       });
+   }
+   ```
+
+3. IncomingCallService Fix
+   File: services/IncomingCallService.java
+   
+   Updated to check for STATUS_ENDED:
+   ```java
+   private void listenToCallUpdates() {
+       callListener = callRepository.listenToCall(currentCallId, 
+           new CallRepository.OnCallChangedListener() {
+               @Override
+               public void onCallChanged(Call call) {
+                   // Stop service if call ended/cancelled
+                   if (call.isEnded() || 
+                       Call.STATUS_MISSED.equals(call.getStatus()) ||
+                       Call.STATUS_ENDED.equals(call.getStatus())) {
+                       stopService();
+                   }
+               }
+           });
+   }
+   ```
+
+FLOW
+----
+1. User A calls User B (creates call with STATUS_CALLING)
+2. User B receives notification (IncomingCallService starts)
+3. User B's CallActivity starts and begins listening to call status
+4. User A clicks Cancel button
+5. Call status changes to STATUS_ENDED on Firestore
+6. User B's CallActivity receives update → calls finish()
+7. User B's IncomingCallService receives update → calls stopService()
+8. Notification dismisses, dialog closes automatically
+
+
+================================================================================
+TESTING
+================================================================================
+
+TEST SCENARIOS
+--------------
+
+1. Outgoing Call - Completed
+   Steps:
+   - User A calls User B
+   - User B answers
+   - Talk for 1 minute
+   - Either party ends call
+   
+   Expected:
+   - Both users see call history "Cuộc gọi thoại đến/đi (01:00)"
+   - Gray color, includes duration
+
+2. Outgoing Call - Cancelled
+   Steps:
+   - User A calls User B
+   - User A clicks Cancel before B answers
+   
+   Expected:
+   - User A sees "Cuộc gọi thoại đi" (no duration)
+   - User B sees "Cuộc gọi thoại nhỡ" in RED
+   - User B's notification dismisses immediately
+
+3. Incoming Call - Missed
+   Steps:
+   - User A calls User B
+   - User B does not answer (timeout)
+   
+   Expected:
+   - User A sees "Cuộc gọi thoại đi"
+   - User B sees "Cuộc gọi thoại nhỡ" in RED
+
+4. Incoming Call - Rejected
+   Steps:
+   - User A calls User B
+   - User B clicks Reject
+   
+   Expected:
+   - Both users see "Cuộc gọi thoại bị từ chối"
+   - Gray color
+
+5. UI Tests
+   - Caller info is centered vertically on screen
+   - Cancel button appears for outgoing calls
+   - Cancel button has red background
+   - Call history messages are centered in chat
+
+
+================================================================================
+MAINTENANCE NOTES
+================================================================================
+
+IMPORTANT CONSIDERATIONS
+------------------------
+
+1. Single Call History Log
+   - Call history is ONLY logged in STATUS_ENDED handler
+   - Do NOT log in endCall() method to avoid duplicates
+   - endCall() just calls callViewModel.endCall() which sets status to ENDED
+
+2. Call Duration Tracking
+   - callStartTime is set in startDurationTimer() when call connects
+   - If callStartTime > 0: call was connected (show duration)
+   - If callStartTime = 0: call never connected (no duration)
+
+3. Realtime Listeners
+   - Always call startListeningToCall() for incoming calls
+   - This ensures receiver knows when caller cancels
+   - Without this, notification won't dismiss automatically
+
+4. Color Coding
+   - Missed calls MUST be red (#E53935) for visibility
+   - Detection based on text containing "nhỡ"
+   - Other calls use gray (#757575)
+
+POTENTIAL ENHANCEMENTS
+----------------------
+
+1. Add callType field to Message model
+   - Currently detecting missed calls by checking text content
+   - Better to store callType explicitly in Message
+   - Allows for more robust styling and filtering
+
+2. Call history filtering
+   - Allow users to view only calls in chat
+   - Filter by call type (missed, incoming, outgoing)
+
+3. Call redial
+   - Tap on call history to redial
+   - Quick action from chat
+
+4. Call statistics
+   - Total call time per contact
+   - Number of missed calls
+   - Call frequency analysis
+
+
+================================================================================
+FILES MODIFIED
+================================================================================
+
+Core Logic:
+- models/Message.java (added TYPE_CALL constant)
+- viewmodel/CallViewModel.java (added logCallHistory, startListeningToCall)
+- ui/call/CallActivity.java (call history logging, cancel button, realtime listener)
+
+UI Components:
+- ui/room/MessageAdapter.java (CallHistoryViewHolder, color styling)
+- res/layout/item_message_call_history.xml (new layout)
+- res/layout/activity_call.xml (cancel button, centered caller info)
+- res/drawable/bg_call_history.xml (background for history messages)
+
+Services:
+- services/IncomingCallService.java (STATUS_ENDED detection)
+
+
+================================================================================
+CONCLUSION
+================================================================================
+
+This enhancement adds essential call tracking and UX improvements:
+
+✅ Complete call history logging (missed, incoming, outgoing, rejected)
+✅ Visual distinction for missed calls (red color)
+✅ Cancel button for outgoing calls
+✅ Better UI layout with centered caller info
+✅ Realtime notification dismissal when caller cancels
+✅ Proper duration tracking and formatting
+
+These changes align with modern messaging app standards and significantly
+improve the calling experience.

@@ -482,7 +482,15 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
 
         public void bind(Message message) {
-            callHistoryTextView.setText(message.getContent());
+            String content = message.getContent();
+            callHistoryTextView.setText(content);
+            
+            // Set red color for missed calls
+            if (content != null && content.contains("nhỡ")) {
+                callHistoryTextView.setTextColor(0xFFE53935); // Red color for missed calls
+            } else {
+                callHistoryTextView.setTextColor(0xFF757575); // Default gray color
+            }
         }
     }
     

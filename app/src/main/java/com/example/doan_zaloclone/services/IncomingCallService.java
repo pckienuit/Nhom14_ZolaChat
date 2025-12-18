@@ -114,8 +114,10 @@ public class IncomingCallService extends Service {
         callListener = callRepository.listenToCall(currentCallId, new CallRepository.OnCallChangedListener() {
             @Override
             public void onCallChanged(Call call) {
-                // If call ended/rejected/missed, stop service
-                if (call.isEnded() || Call.STATUS_MISSED.equals(call.getStatus())) {
+                // If call ended/rejected/missed/cancelled, stop service
+                if (call.isEnded() || 
+                    Call.STATUS_MISSED.equals(call.getStatus()) ||
+                    Call.STATUS_ENDED.equals(call.getStatus())) {
                     stopService();
                 }
             }

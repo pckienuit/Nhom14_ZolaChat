@@ -853,6 +853,26 @@ public class CallViewModel extends AndroidViewModel {
         return currentCall;
     }
     
+    /**
+     * Start listening to call status changes in realtime
+     * This is essential so the receiver knows when caller cancels
+     */
+    public void startListeningToCall(String callId) {
+        if (callId == null) return;
+        
+        callRepository.listenToCall(callId, new CallRepository.OnCallChangedListener() {
+            @Override
+            public void onCallChanged(Call call) {
+                currentCall.postValue(Resource.success(call));
+            }
+            
+            @Override
+            public void onError(String errorMsg) {
+                currentCall.postValue(Resource.error(errorMsg, null));
+            }
+        });
+    }
+    
     public LiveData<String> getConnectionState() {
         return connectionState;
     }

@@ -465,7 +465,12 @@ public class CallActivity extends AppCompatActivity {
     private void handleIncomingCall() {
         Log.d(TAG, "Handling incoming call: " + callId);
         callStatus.setText(R.string.incoming_call);
-        showIncomingCallUI();
+        setupIncomingUI();
+        
+        // Listen to call status changes in realtime
+        if (callId != null) {
+            callViewModel.startListeningToCall(callId);
+        }
     }
     
     private void handleOutgoingCall(String conversationId, String from, String to) {
@@ -473,7 +478,7 @@ public class CallActivity extends AppCompatActivity {
         callStatus.setText(R.string.call_calling);
         
         // Show outgoing UI
-        showOutgoingCallUI();
+        setupOutgoingUI();
         
         // Initiate call via ViewModel (this calls initializePeerConnection)
         callViewModel.initiateCall(conversationId, from, to, isVideo);
@@ -531,35 +536,6 @@ public class CallActivity extends AppCompatActivity {
     
     private void endCall() {
         Log.d(TAG, "Ending call");
-        
-        // Calculate call duration
-        long durationSeconds = 0;
-        if (callStartTime > 0) {
-            durationSeconds = (System.currentTimeMillis() - callStartTime) / 1000;
-        }
-        
-        Log.d(TAG, "Call duration: " + durationSeconds + " seconds");
-        Log.d(TAG, "conversationId: " + conversationId);
-        Log.d(TAG, "isIncoming: " + isIncoming);
-        Log.d(TAG, "isVideo: " + isVideo);
-        
-        // Log call history
-        if (conversationId != null) {
-            // Determine call type based on isIncoming and duration
-            String callType;
-            if (durationSeconds > 0) {
-                // Call was connected
-                callType = isIncoming ? "INCOMING" : "OUTGOING";
-            } else {
-                // Call ended without connecting (missed or cancelled)
-                callType = isIncoming ? "MISSED" : "OUTGOING";  // Cancelled outgoing shows as OUTGOING with 0 duration
-            }
-            
-            Log.d(TAG, "Logging call history: type=" + callType + ", duration=" + durationSeconds);
-            callViewModel.logCallHistory(conversationId, callType, isVideo, durationSeconds);
-        } else {
-            Log.e(TAG, "Cannot log call history - conversationId is NULL!");
-        }
         
         callViewModel.endCall();
         
@@ -802,6 +778,19 @@ public class CallActivity extends AppCompatActivity {
         incomingCallButtons.setVisibility(View.GONE);
         callControls.setVisibility(View.GONE);
         callDuration.setVisibility(View.GONE);
+    }
+    
+    private void setupIncomingUI() {
+        incomingCallButtons.setVisibility(View.VISIBLE);
+        outgoingCallButtons.setVisibility(View.GONE);
+        callControls.setVisibility(View.GONE);
+    }
+    
+    private void setupOutgoingUI() {
+        Log.d(TAG, "Showing outgoing call UI (cancel button)");
+        outgoingCallButtons.setVisibility(View.VISIBLE);
+        incomingCallButtons.setVisibility(View.GONE);
+        callControls.setVisibility(View.GONE);
     }
     
     private void showOngoingCallUI() {
