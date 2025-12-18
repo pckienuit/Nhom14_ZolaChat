@@ -854,38 +854,20 @@ public class CallActivity extends AppCompatActivity {
         Log.d(TAG, "Call controls visibility set to VISIBLE");
         Log.d(TAG, "Call duration visibility set to VISIBLE");
         
-        // For video calls: only hide avatar, keep caller name visible
+        // For video calls: hide caller info, only show duration
         if (isVideo) {
             Log.d(TAG, "Configuring UI for VIDEO call");
             
-            // Ensure caller info container is visible and on top of video
+            // Ensure call duration is visible (already has high z-order in XML)
+            if (callDuration != null) {
+                callDuration.setVisibility(View.VISIBLE);
+                Log.d(TAG, "Call duration set to VISIBLE");
+            }
+            
+            // Hide caller info container for clean video call UI
             if (callerInfoContainer != null) {
-                callerInfoContainer.setVisibility(View.VISIBLE);
-                callerInfoContainer.bringToFront();  // Bring to front of video views
-                // Add padding and semi-transparent background for better readability
-                callerInfoContainer.setBackgroundColor(0x66000000); // 40% black background
-                callerInfoContainer.setPadding(48, 24, 48, 24);
-                callerInfoContainer.requestLayout();
-                callerInfoContainer.invalidate();
-                Log.d(TAG, "Caller info container brought to front with background");
-            }
-            
-            // Hide only the avatar, keep the name
-            if (callerAvatar != null) {
-                callerAvatar.setVisibility(View.GONE);
-                Log.d(TAG, "Hidden caller avatar for video call");
-            }
-            
-            // Ensure caller name stays visible (color already white in XML)
-            if (callerName != null) {
-                callerName.setVisibility(View.VISIBLE);
-                Log.d(TAG, "Caller name kept visible");
-            }
-            
-            // Ensure call status stays visible (color already white in XML)
-            if (callStatus != null) {
-                callStatus.setVisibility(View.VISIBLE);
-                Log.d(TAG, "Call status kept visible");
+                callerInfoContainer.setVisibility(View.GONE);
+                Log.d(TAG, "Caller info container hidden for video call");
             }
             
             // Verify controls are visible
