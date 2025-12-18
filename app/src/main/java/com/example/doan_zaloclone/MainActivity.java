@@ -27,6 +27,7 @@ public class MainActivity extends AppCompatActivity {
     // Cache fragments to preserve state
     private HomeFragment homeFragment;
     private ContactFragment contactFragment;
+//    private NewsfeedFragment newsfeedFragment;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -140,6 +141,14 @@ public class MainActivity extends AppCompatActivity {
                     transaction.show(contactFragment);
                 }
                 break;
+//            case 2: // Newsfeed
+//                if (newsfeedFragment == null) {
+//                    newsfeedFragment = new NewsfeedFragment();
+//                    transaction.add(R.id.fragmentContainer, newsfeedFragment, "NEWSFEED");
+//                } else {
+//                    transaction.show(newsfeedFragment);
+//                }
+//                break;
         }
         
         transaction.commit();
