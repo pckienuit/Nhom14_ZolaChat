@@ -301,8 +301,10 @@ public class RoomActivity extends AppCompatActivity {
         if (position >= 0) {
             messagesRecyclerView.smoothScrollToPosition(position);
 
-            // Optional: highlight the message briefly
-            // (you can implement this later with a ViewHolder highlight animation)
+            // Highlight the message briefly after scroll completes
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                messageAdapter.highlightMessage(messageId);
+            }, 300); // Small delay to let scroll complete
         }
     }
     private void scrollToLatestPinnedMessage() {
@@ -1229,6 +1231,10 @@ public class RoomActivity extends AppCompatActivity {
             if (pinnedMessagesContainer != null) {
                 pinnedMessagesContainer.setVisibility(View.GONE);
             }
+            // Clear pinned status in adapter
+            if (messageAdapter != null) {
+                messageAdapter.setPinnedMessageIds(null);
+            }
             return;
         }
 
@@ -1249,9 +1255,18 @@ public class RoomActivity extends AppCompatActivity {
             pinnedMessagesCount.setText("(" + pinnedMessages.size() + ")");
         }
 
-        // Update adapter
+        // Update pinned messages adapter
         if (pinnedMessagesAdapter != null) {
             pinnedMessagesAdapter.setPinnedMessages(pinnedMessages);
+        }
+        
+        // Update main message adapter with pinned IDs for icons and smart context menu
+        if (messageAdapter != null) {
+            java.util.List<String> pinnedIds = new java.util.ArrayList<>();
+            for (Message msg : pinnedMessages) {
+                pinnedIds.add(msg.getId());
+            }
+            messageAdapter.setPinnedMessageIds(pinnedIds);
         }
     }
     private String getMessagePreview(Message message) {

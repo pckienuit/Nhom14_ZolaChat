@@ -1426,9 +1426,19 @@ public class FirestoreManager {
                         
                         fetchedCount[0]++;
                         if (fetchedCount[0] == messageIds.size()) {
-                            // All messages fetched, sort by timestamp descending (newest first)
-                            pinnedMessages.sort((m1, m2) -> Long.compare(m2.getTimestamp(), m1.getTimestamp()));
-                            Log.d(TAG, "Loaded " + pinnedMessages.size() + " pinned messages");
+                            // Sort by pin order: last in array = most recently pinned = first in list
+                            // Create a map for quick lookup of original order
+                            java.util.Map<String, Integer> orderMap = new java.util.HashMap<>();
+                            for (int i = 0; i < messageIds.size(); i++) {
+                                orderMap.put(messageIds.get(i), i);
+                            }
+                            // Sort descending by order (higher index = more recent pin = first)
+                            pinnedMessages.sort((m1, m2) -> {
+                                int order1 = orderMap.getOrDefault(m1.getId(), 0);
+                                int order2 = orderMap.getOrDefault(m2.getId(), 0);
+                                return Integer.compare(order2, order1); // Descending
+                            });
+                            Log.d(TAG, "Loaded " + pinnedMessages.size() + " pinned messages (sorted by pin order)");
                             listener.onSuccess(pinnedMessages);
                         }
                     })
@@ -1436,7 +1446,16 @@ public class FirestoreManager {
                         Log.w(TAG, "Failed to fetch pinned message: " + messageId, error);
                         fetchedCount[0]++;
                         if (fetchedCount[0] == messageIds.size()) {
-                            pinnedMessages.sort((m1, m2) -> Long.compare(m2.getTimestamp(), m1.getTimestamp()));
+                            // Same sorting logic
+                            java.util.Map<String, Integer> orderMap = new java.util.HashMap<>();
+                            for (int i = 0; i < messageIds.size(); i++) {
+                                orderMap.put(messageIds.get(i), i);
+                            }
+                            pinnedMessages.sort((m1, m2) -> {
+                                int order1 = orderMap.getOrDefault(m1.getId(), 0);
+                                int order2 = orderMap.getOrDefault(m2.getId(), 0);
+                                return Integer.compare(order2, order1);
+                            });
                             listener.onSuccess(pinnedMessages);
                         }
                     });
