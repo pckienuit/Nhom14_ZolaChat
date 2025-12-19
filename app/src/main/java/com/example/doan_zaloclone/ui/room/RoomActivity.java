@@ -308,13 +308,22 @@ public class RoomActivity extends AppCompatActivity {
         }
     }
     private void scrollToLatestPinnedMessage() {
-        // Scroll to the most recent pinned message
-        roomViewModel.getPinnedMessages(conversationId).observe(this, resource -> {
-            if (resource != null && resource.isSuccess() && resource.getData() != null) {
-                List<Message> pinnedMsgs = resource.getData();
-                if (!pinnedMsgs.isEmpty()) {
-                    // Messages are sorted newest first, so get first one
-                    scrollToMessage(pinnedMsgs.get(0).getId());
+        // Scroll to the most recent pinned message (one-time observation)
+        androidx.lifecycle.LiveData<com.example.doan_zaloclone.utils.Resource<List<Message>>> liveData = 
+            roomViewModel.getPinnedMessages(conversationId);
+        
+        liveData.observe(this, new androidx.lifecycle.Observer<com.example.doan_zaloclone.utils.Resource<List<Message>>>() {
+            @Override
+            public void onChanged(com.example.doan_zaloclone.utils.Resource<List<Message>> resource) {
+                // Remove observer immediately to prevent repeated calls
+                liveData.removeObserver(this);
+                
+                if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                    List<Message> pinnedMsgs = resource.getData();
+                    if (!pinnedMsgs.isEmpty()) {
+                        // Messages are sorted newest first, so get first one
+                        scrollToMessage(pinnedMsgs.get(0).getId());
+                    }
                 }
             }
         });

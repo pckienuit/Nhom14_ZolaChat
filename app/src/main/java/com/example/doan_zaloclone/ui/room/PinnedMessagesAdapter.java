@@ -69,8 +69,29 @@ public class PinnedMessagesAdapter extends RecyclerView.Adapter<PinnedMessagesAd
         }
 
         public void bind(Message message, OnPinnedMessageClickListener listener) {
-            // Set sender name (you may need to fetch this from user data)
-            senderName.setText(message.getSenderId());
+            // Fetch sender name from Firestore
+            String senderId = message.getSenderId();
+            senderName.setText("Loading..."); // Placeholder while loading
+            
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(senderId)
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        String name = documentSnapshot.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            senderName.setText(name);
+                        } else {
+                            senderName.setText("User");
+                        }
+                    } else {
+                        senderName.setText("User");
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    senderName.setText("User");
+                });
 
             // Set message content based on type
             String content = getMessagePreview(message);
