@@ -239,8 +239,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
      * Helper method to apply pin indicator and highlight effect to a message view
      */
     private static void applyPinAndHighlight(View itemView, boolean isPinned, boolean isHighlighted) {
-        // Find or create pin indicator
-        ImageView pinIndicator = itemView.findViewById(R.id.pinIndicator);
+        // Find pin indicator (can be ImageView or CardView)
+        View pinIndicator = itemView.findViewById(R.id.pinIndicator);
         if (pinIndicator != null) {
             pinIndicator.setVisibility(isPinned ? View.VISIBLE : View.GONE);
         }

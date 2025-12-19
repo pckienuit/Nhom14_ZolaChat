@@ -1,14 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="end"
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:paddingTop="6dp"
+    android:paddingStart="6dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="8dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
+    <!-- Image bubble with pin indicator -->
+    <FrameLayout
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="end"
-        android:padding="8dp">
+        android:clipChildren="false"
+        android:clipToPadding="false">
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -36,18 +45,28 @@
 
         </LinearLayout>
 
-    </LinearLayout>
+        <!-- Pin indicator at top-left corner -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/pinIndicator"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_gravity="top|start"
+            android:layout_marginTop="-6dp"
+            android:layout_marginStart="-6dp"
+            app:cardCornerRadius="9dp"
+            app:cardElevation="4dp"
+            app:cardBackgroundColor="#CC000000"
+            android:visibility="gone">
 
-    <!-- Pin indicator - MUST be after content to appear on top -->
-    <ImageView
-        android:id="@+id/pinIndicator"
-        android:layout_width="16dp"
-        android:layout_height="16dp"
-        android:layout_gravity="top|end"
-        android:layout_marginTop="4dp"
-        android:layout_marginEnd="12dp"
-        android:src="@drawable/ic_pin"
-        android:visibility="gone"
-        android:contentDescription="@string/pinned_message" />
+            <ImageView
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_pin_white"
+                android:contentDescription="@string/pinned_message" />
 
-</FrameLayout>
+        </androidx.cardview.widget.CardView>
+
+    </FrameLayout>
+
+</LinearLayout>
