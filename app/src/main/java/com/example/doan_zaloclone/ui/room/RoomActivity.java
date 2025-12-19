@@ -464,6 +464,14 @@ public class RoomActivity extends AppCompatActivity {
             }
         });
         
+        // Set reply preview click listener - navigate to original message
+        messageAdapter.setOnReplyPreviewClickListener(new MessageAdapter.OnReplyPreviewClickListener() {
+            @Override
+            public void onReplyPreviewClick(String replyToMessageId) {
+                scrollToMessage(replyToMessageId);
+            }
+        });
+        
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         messagesRecyclerView.setLayoutManager(layoutManager);

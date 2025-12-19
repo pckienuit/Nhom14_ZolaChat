@@ -50,8 +50,13 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         void onReplyMessage(Message message);
     }
     
+    public interface OnReplyPreviewClickListener {
+        void onReplyPreviewClick(String replyToMessageId);
+    }
+    
     private OnMessageLongClickListener longClickListener;
     private OnMessageReplyListener replyListener;
+    private OnReplyPreviewClickListener replyPreviewClickListener;
 
     public MessageAdapter(List<Message> messages, String currentUserId) {
         this.messages = messages;
@@ -76,6 +81,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     
     public void setOnMessageReplyListener(OnMessageReplyListener listener) {
         this.replyListener = listener;
+    }
+    
+    public void setOnReplyPreviewClickListener(OnReplyPreviewClickListener listener) {
+        this.replyPreviewClickListener = listener;
     }
     
     public void setPinnedMessageIds(java.util.List<String> pinnedIds) {
@@ -172,17 +181,17 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         boolean isHighlighted = message.getId() != null && message.getId().equals(highlightedMessageId);
         
         if (holder instanceof SentMessageViewHolder) {
-            ((SentMessageViewHolder) holder).bind(message, longClickListener, replyListener, isPinned, isHighlighted);
+            ((SentMessageViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof ReceivedMessageViewHolder) {
-            ((ReceivedMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, isPinned, isHighlighted);
+            ((ReceivedMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof ImageSentViewHolder) {
-            ((ImageSentViewHolder) holder).bind(message, longClickListener, replyListener, isPinned, isHighlighted);
+            ((ImageSentViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof ImageReceivedViewHolder) {
-            ((ImageReceivedViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, isPinned, isHighlighted);
+            ((ImageReceivedViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof FileMessageSentViewHolder) {
-            ((FileMessageSentViewHolder) holder).bind(message, longClickListener, replyListener, isPinned, isHighlighted);
+            ((FileMessageSentViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof FileMessageReceivedViewHolder) {
-            ((FileMessageReceivedViewHolder) holder).bind(message, longClickListener, replyListener, isPinned, isHighlighted);
+            ((FileMessageReceivedViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof CallHistoryViewHolder) {
             ((CallHistoryViewHolder) holder).bind(message);
         }
@@ -285,7 +294,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             replyToContent = itemView.findViewById(R.id.replyToContent);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
             this.replyListener = replyListener;
             messageTextView.setText(message.getContent());
@@ -306,8 +315,16 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 if (replyToContent != null) {
                     replyToContent.setText(message.getReplyToContent() != null ? message.getReplyToContent() : "");
                 }
+                // Set click listener to navigate to original message
+                final String replyToId = message.getReplyToId();
+                replyPreviewContainer.setOnClickListener(v -> {
+                    if (previewClickListener != null && replyToId != null) {
+                        previewClickListener.onReplyPreviewClick(replyToId);
+                    }
+                });
             } else if (replyPreviewContainer != null) {
                 replyPreviewContainer.setVisibility(View.GONE);
+                replyPreviewContainer.setOnClickListener(null);
             }
             
             applyPinAndHighlight(itemView, isPinned, isHighlighted);
@@ -339,7 +356,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             replyToContent = itemView.findViewById(R.id.replyToContent);
         }
 
-        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
             this.replyListener = replyListener;
             messageTextView.setText(message.getContent());
@@ -354,8 +371,16 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 if (replyToContent != null) {
                     replyToContent.setText(message.getReplyToContent() != null ? message.getReplyToContent() : "");
                 }
+                // Set click listener to navigate to original message
+                final String replyToId = message.getReplyToId();
+                replyPreviewContainer.setOnClickListener(v -> {
+                    if (previewClickListener != null && replyToId != null) {
+                        previewClickListener.onReplyPreviewClick(replyToId);
+                    }
+                });
             } else if (replyPreviewContainer != null) {
                 replyPreviewContainer.setVisibility(View.GONE);
+                replyPreviewContainer.setOnClickListener(null);
             }
             
             // Show sender name only in group chats
@@ -406,7 +431,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
             Glide.with(itemView.getContext())
                     .load(message.getContent())
@@ -435,7 +460,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
         }
 
-        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
             Glide.with(itemView.getContext())
                     .load(message.getContent())
@@ -494,7 +519,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
             fileName.setText(message.getFileName());
             
@@ -600,7 +625,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
             fileName.setText(message.getFileName());
             
