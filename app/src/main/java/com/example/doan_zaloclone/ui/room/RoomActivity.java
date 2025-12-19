@@ -478,8 +478,7 @@ public class RoomActivity extends AppCompatActivity {
                     Message message = messageAdapter.getMessageAt(position);
                     if (message != null) {
                         showReplyBar(message);
-                        // Reset the swiped item
-                        messageAdapter.notifyItemChanged(position);
+                        // Animation is handled by SwipeToReplyCallback.clearView()
                     }
                 }
             }
