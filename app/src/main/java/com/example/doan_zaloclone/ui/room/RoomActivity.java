@@ -96,6 +96,17 @@ public class RoomActivity extends AppCompatActivity {
     private FilePreviewAdapter filePreviewAdapter;
     private List<FilePreviewAdapter.FileItem> selectedFilesForPreview = new ArrayList<>();
 
+    // Pinned messages UI
+    private FrameLayout pinnedMessagesContainer;
+    private View pinnedBarCollapsed;
+    private TextView pinnedMessagePreview;
+    private ImageButton expandCollapseButton;
+    private FrameLayout pinnedListContainer;
+    private RecyclerView pinnedMessagesRecyclerView;
+    private TextView pinnedMessagesCount;
+    private PinnedMessagesAdapter pinnedMessagesAdapter;
+    private boolean isPinnedListExpanded = false;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -200,8 +211,123 @@ public class RoomActivity extends AppCompatActivity {
         
         // Initialize QuickActionManager
         quickActionManager = com.example.doan_zaloclone.ui.room.actions.QuickActionManager.getInstance();
+
+        initPinnedMessagesViews();
     }
 
+    private void initPinnedMessagesViews() {
+        pinnedMessagesContainer = findViewById(R.id.pinnedMessagesContainer);
+
+        if (pinnedMessagesContainer != null) {
+            // Find views within included layout
+            View includedView = pinnedMessagesContainer.getChildAt(0); // layout_pinned_message_bar
+            if (includedView != null) {
+                pinnedBarCollapsed = includedView.findViewById(R.id.pinnedBarCollapsed);
+                pinnedMessagePreview = includedView.findViewById(R.id.pinnedMessagePreview);
+                expandCollapseButton = includedView.findViewById(R.id.expandCollapseButton);
+                pinnedListContainer = includedView.findViewById(R.id.pinnedListContainer);
+
+                // Find views in expanded list
+                if (pinnedListContainer != null) {
+                    View expandedView = pinnedListContainer.getChildAt(0);
+                    if (expandedView != null) {
+                        pinnedMessagesRecyclerView = expandedView.findViewById(R.id.pinnedMessagesRecyclerView);
+                        pinnedMessagesCount = expandedView.findViewById(R.id.pinnedMessagesCount);
+                    }
+                }
+            }
+        }
+
+        // Setup pinned messages RecyclerView
+        setupPinnedMessagesRecyclerView();
+
+        // Setup click listeners
+        if (pinnedBarCollapsed != null) {
+            pinnedBarCollapsed.setOnClickListener(v -> {
+                // Clicking bar scrolls to latest pinned message
+                scrollToLatestPinnedMessage();
+            });
+        }
+
+        if (expandCollapseButton != null) {
+            expandCollapseButton.setOnClickListener(v -> {
+                togglePinnedList();
+            });
+        }
+    }
+    private void setupPinnedMessagesRecyclerView() {
+        if (pinnedMessagesRecyclerView == null) return;
+
+        pinnedMessagesAdapter = new PinnedMessagesAdapter(new PinnedMessagesAdapter.OnPinnedMessageClickListener() {
+            @Override
+            public void onPinnedMessageClick(Message message) {
+                scrollToMessage(message.getId());
+                // Optional: collapse list after clicking
+                if (isPinnedListExpanded) {
+                    togglePinnedList();
+                }
+            }
+
+            @Override
+            public void onUnpinClick(Message message) {
+                // Unpin message via ViewModel
+                roomViewModel.unpinMessage(conversationId, message.getId());
+            }
+        });
+
+        LinearLayoutManager layoutManager = new LinearLayoutManager(this);
+        pinnedMessagesRecyclerView.setLayoutManager(layoutManager);
+        pinnedMessagesRecyclerView.setAdapter(pinnedMessagesAdapter);
+    }
+    private void togglePinnedList() {
+        if (pinnedListContainer == null || expandCollapseButton == null) return;
+
+        isPinnedListExpanded = !isPinnedListExpanded;
+
+        if (isPinnedListExpanded) {
+            // Expand
+            pinnedListContainer.setVisibility(View.VISIBLE);
+            expandCollapseButton.setRotation(180); // Arrow up
+        } else {
+            // Collapse
+            pinnedListContainer.setVisibility(View.GONE);
+            expandCollapseButton.setRotation(0); // Arrow down
+        }
+    }
+    private void scrollToMessage(String messageId) {
+        if (messageAdapter == null || messageId == null) return;
+
+        int position = messageAdapter.getPositionOfMessage(messageId);
+        if (position >= 0) {
+            messagesRecyclerView.smoothScrollToPosition(position);
+
+            // Highlight the message briefly after scroll completes
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                messageAdapter.highlightMessage(messageId);
+            }, 300); // Small delay to let scroll complete
+        }
+    }
+    private void scrollToLatestPinnedMessage() {
+        // Scroll to the most recent pinned message (one-time observation)
+        androidx.lifecycle.LiveData<com.example.doan_zaloclone.utils.Resource<List<Message>>> liveData = 
+            roomViewModel.getPinnedMessages(conversationId);
+        
+        liveData.observe(this, new androidx.lifecycle.Observer<com.example.doan_zaloclone.utils.Resource<List<Message>>>() {
+            @Override
+            public void onChanged(com.example.doan_zaloclone.utils.Resource<List<Message>> resource) {
+                // Remove observer immediately to prevent repeated calls
+                liveData.removeObserver(this);
+                
+                if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                    List<Message> pinnedMsgs = resource.getData();
+                    if (!pinnedMsgs.isEmpty()) {
+                        // Messages are sorted newest first, so get first one
+                        scrollToMessage(pinnedMsgs.get(0).getId());
+                    }
+                }
+            }
+        });
+    }
     private void setupToolbar() {
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
@@ -295,6 +421,20 @@ public class RoomActivity extends AppCompatActivity {
                 ? firebaseAuth.getCurrentUser().getUid() 
                 : "";
         messageAdapter = new MessageAdapter(new ArrayList<>(), currentUserId);
+        
+        // Set long-click listener for pin/unpin
+        messageAdapter.setOnMessageLongClickListener(new MessageAdapter.OnMessageLongClickListener() {
+            @Override
+            public void onPinMessage(Message message) {
+                roomViewModel.pinMessage(conversationId, message.getId());
+            }
+            
+            @Override
+            public void onUnpinMessage(Message message) {
+                roomViewModel.unpinMessage(conversationId, message.getId());
+            }
+        });
+        
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         messagesRecyclerView.setLayoutManager(layoutManager);
@@ -318,6 +458,41 @@ public class RoomActivity extends AppCompatActivity {
             } else if (resource.isError()) {
                 Toast.makeText(this, "Error loading messages: " + resource.getMessage(), 
                     Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // Observe pinned messages
+        roomViewModel.getPinnedMessages(conversationId).observe(this, resource -> {
+            android.util.Log.d("RoomActivity", "Pinned messages observer called, resource: " + resource);
+            if (resource == null) {
+                android.util.Log.d("RoomActivity", "Pinned messages resource is null");
+                return;
+            }
+
+            if (resource.isLoading()) {
+                android.util.Log.d("RoomActivity", "Pinned messages: LOADING");
+                return;
+            }
+
+            if (resource.isSuccess() && resource.getData() != null) {
+                List<Message> pinnedMessages = resource.getData();
+                android.util.Log.d("RoomActivity", "Pinned messages SUCCESS: count=" + pinnedMessages.size());
+                updatePinnedMessagesUI(pinnedMessages);
+            } else if (resource.isError()) {
+                android.util.Log.e("RoomActivity", "Error loading pinned messages: " + resource.getMessage());
+            }
+        });
+        // Observe pin/unpin operations
+        roomViewModel.getPinMessageState().observe(this, resource -> {
+            if (resource == null) return;
+
+            if (resource.isSuccess()) {
+                // Reload pinned messages will happen automatically via auto-reload in ViewModel
+                Toast.makeText(this, "Đã cập nhật ghim", Toast.LENGTH_SHORT).show();
+                roomViewModel.resetPinMessageState();
+            } else if (resource.isError()) {
+                Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                roomViewModel.resetPinMessageState();
             }
         });
     }
@@ -1057,6 +1232,70 @@ public class RoomActivity extends AppCompatActivity {
         intent.putExtra(CallActivity.EXTRA_IS_INCOMING, false);
         intent.putExtra(CallActivity.EXTRA_CALLER_NAME, conversationName);
         startActivity(intent);
+    }
+
+    private void updatePinnedMessagesUI(List<Message> pinnedMessages) {
+        if (pinnedMessages == null || pinnedMessages.isEmpty()) {
+            // Hide pinned bar
+            if (pinnedMessagesContainer != null) {
+                pinnedMessagesContainer.setVisibility(View.GONE);
+            }
+            // Clear pinned status in adapter
+            if (messageAdapter != null) {
+                messageAdapter.setPinnedMessageIds(null);
+            }
+            return;
+        }
+
+        // Show pinned bar
+        if (pinnedMessagesContainer != null) {
+            pinnedMessagesContainer.setVisibility(View.VISIBLE);
+        }
+
+        // Update preview with latest pinned message
+        Message latestPinned = pinnedMessages.get(0); // Already sorted newest first
+        if (pinnedMessagePreview != null) {
+            String preview = getMessagePreview(latestPinned);
+            pinnedMessagePreview.setText(preview);
+        }
+
+        // Update count
+        if (pinnedMessagesCount != null) {
+            pinnedMessagesCount.setText("(" + pinnedMessages.size() + ")");
+        }
+
+        // Update pinned messages adapter
+        if (pinnedMessagesAdapter != null) {
+            pinnedMessagesAdapter.setPinnedMessages(pinnedMessages);
+        }
+        
+        // Update main message adapter with pinned IDs for icons and smart context menu
+        if (messageAdapter != null) {
+            java.util.List<String> pinnedIds = new java.util.ArrayList<>();
+            for (Message msg : pinnedMessages) {
+                pinnedIds.add(msg.getId());
+            }
+            messageAdapter.setPinnedMessageIds(pinnedIds);
+        }
+    }
+    private String getMessagePreview(Message message) {
+        if (message == null) return "";
+
+        switch (message.getType()) {
+            case Message.TYPE_IMAGE:
+                return "📷 Hình ảnh";
+            case Message.TYPE_FILE:
+                String fileName = message.getFileName();
+                if (fileName != null && !fileName.isEmpty()) {
+                    return "📎 " + fileName;
+                }
+                return "📎 File";
+            case Message.TYPE_CALL:
+                return "📞 Cuộc gọi";
+            case Message.TYPE_TEXT:
+            default:
+                return message.getContent() != null ? message.getContent() : "";
+        }
     }
     
     @Override

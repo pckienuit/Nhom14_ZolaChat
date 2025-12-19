@@ -1307,5 +1307,175 @@ public class FirestoreManager {
                     }
                 });
     }
+    
+    // ===================== PINNED MESSAGES METHODS =====================
+    
+    /**
+     * Pin a message in a conversation
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to pin
+     * @param listener Callback for result
+     */
+    public void pinMessage(@NonNull String conversationId,
+                          @NonNull String messageId,
+                          @NonNull OnPinMessageListener listener) {
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update("pinnedMessageIds", com.google.firebase.firestore.FieldValue.arrayUnion(messageId))
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Message pinned: " + messageId + " in conversation: " + conversationId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error pinning message: " + messageId, e);
+                    listener.onFailure(e);
+                });
+    }
+    
+    /**
+     * Unpin a message from a conversation
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to unpin
+     * @param listener Callback for result
+     */
+    public void unpinMessage(@NonNull String conversationId,
+                            @NonNull String messageId,
+                            @NonNull OnPinMessageListener listener) {
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update("pinnedMessageIds", com.google.firebase.firestore.FieldValue.arrayRemove(messageId))
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Message unpinned: " + messageId + " from conversation: " + conversationId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error unpinning message: " + messageId, e);
+                    listener.onFailure(e);
+                });
+    }
+    
+    /**
+     * Get all pinned messages for a conversation
+     * Fetches full Message objects for each pinned message ID
+     * @param conversationId ID of the conversation
+     * @param listener Callback with list of pinned messages
+     */
+    public void getPinnedMessages(@NonNull String conversationId,
+                                 @NonNull OnPinnedMessagesListener listener) {
+        // First get the conversation to retrieve pinnedMessageIds
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (!doc.exists()) {
+                        listener.onFailure(new Exception("Conversation not found"));
+                        return;
+                    }
+                    
+                    Conversation conversation = doc.toObject(Conversation.class);
+                    if (conversation == null) {
+                        listener.onFailure(new Exception("Failed to parse conversation"));
+                        return;
+                    }
+                    
+                    List<String> pinnedIds = conversation.getPinnedMessageIds();
+                    if (pinnedIds.isEmpty()) {
+                        Log.d(TAG, "No pinned messages in conversation: " + conversationId);
+                        listener.onSuccess(new ArrayList<>());
+                        return;
+                    }
+                    
+                    Log.d(TAG, "Found " + pinnedIds.size() + " pinned message IDs in conversation: " + conversationId);
+                    
+                    // Fetch all pinned messages from messages subcollection
+                    // Note: We'll fetch them one by one since Firestore doesn't have a native "whereIn" for document IDs
+                    fetchPinnedMessagesByIds(conversationId, pinnedIds, listener);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error fetching conversation for pinned messages", e);
+                    listener.onFailure(e);
+                });
+    }
+    
+    /**
+     * Helper method to fetch multiple messages by their IDs
+     */
+    private void fetchPinnedMessagesByIds(@NonNull String conversationId,
+                                         @NonNull List<String> messageIds,
+                                         @NonNull OnPinnedMessagesListener listener) {
+        List<com.example.doan_zaloclone.models.Message> pinnedMessages = new ArrayList<>();
+        int[] fetchedCount = {0};
+        
+        for (String messageId : messageIds) {
+            db.collection(COLLECTION_CONVERSATIONS)
+                    .document(conversationId)
+                    .collection("messages")
+                    .document(messageId)
+                    .get()
+                    .addOnSuccessListener(messageDoc -> {
+                        if (messageDoc.exists()) {
+                            com.example.doan_zaloclone.models.Message message = 
+                                messageDoc.toObject(com.example.doan_zaloclone.models.Message.class);
+                            if (message != null) {
+                                message.setId(messageDoc.getId());
+                                pinnedMessages.add(message);
+                            }
+                        } else {
+                            Log.w(TAG, "Pinned message not found: " + messageId);
+                        }
+                        
+                        fetchedCount[0]++;
+                        if (fetchedCount[0] == messageIds.size()) {
+                            // Sort by pin order: last in array = most recently pinned = first in list
+                            // Create a map for quick lookup of original order
+                            java.util.Map<String, Integer> orderMap = new java.util.HashMap<>();
+                            for (int i = 0; i < messageIds.size(); i++) {
+                                orderMap.put(messageIds.get(i), i);
+                            }
+                            // Sort descending by order (higher index = more recent pin = first)
+                            pinnedMessages.sort((m1, m2) -> {
+                                int order1 = orderMap.getOrDefault(m1.getId(), 0);
+                                int order2 = orderMap.getOrDefault(m2.getId(), 0);
+                                return Integer.compare(order2, order1); // Descending
+                            });
+                            Log.d(TAG, "Loaded " + pinnedMessages.size() + " pinned messages (sorted by pin order)");
+                            listener.onSuccess(pinnedMessages);
+                        }
+                    })
+                    .addOnFailureListener(error -> {
+                        Log.w(TAG, "Failed to fetch pinned message: " + messageId, error);
+                        fetchedCount[0]++;
+                        if (fetchedCount[0] == messageIds.size()) {
+                            // Same sorting logic
+                            java.util.Map<String, Integer> orderMap = new java.util.HashMap<>();
+                            for (int i = 0; i < messageIds.size(); i++) {
+                                orderMap.put(messageIds.get(i), i);
+                            }
+                            pinnedMessages.sort((m1, m2) -> {
+                                int order1 = orderMap.getOrDefault(m1.getId(), 0);
+                                int order2 = orderMap.getOrDefault(m2.getId(), 0);
+                                return Integer.compare(order2, order1);
+                            });
+                            listener.onSuccess(pinnedMessages);
+                        }
+                    });
+        }
+    }
+    
+    /**
+     * Listener for pin/unpin operations
+     */
+    public interface OnPinMessageListener {
+        void onSuccess();
+        void onFailure(Exception e);
+    }
+    
+    /**
+     * Listener for fetching pinned messages
+     */
+    public interface OnPinnedMessagesListener {
+        void onSuccess(List<com.example.doan_zaloclone.models.Message> messages);
+        void onFailure(Exception e);
+    }
 }
 
