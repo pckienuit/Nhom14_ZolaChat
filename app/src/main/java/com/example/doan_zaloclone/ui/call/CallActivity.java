@@ -313,6 +313,275 @@ public class CallActivity extends AppCompatActivity {
         endCallButton.setOnClickListener(v -> endCall());
         micButton.setOnClickListener(v -> toggleMicrophone());
         speakerButton.setOnClickListener(v -> toggleSpeaker());
+
+        // Video specific setup
+        if (isVideo) {
+            cameraButton.setVisibility(com.google.ar.imp.view.View.VISIBLE);
+            switchCameraButton.setVisibility(com.google.ar.imp.view.View.VISIBLE);
+
+            cameraButton.setOnClickListener(v -> {                boolean isVideoEnabled = !callViewModel.isVideoEnabled();
+                callViewModel.setVideoEnabled(isVideoEnabled);
+                cameraButton.setImageResource(isVideoEnabled ? R.drawable.ic_videocam : R.drawable.ic_videocam_off);
+            });
+
+            switchCameraButton.setOnClickListener(v -> callViewModel.switchCamera());
+
+            // Setup WebRTC views
+            setupVideoViews();
+        } else {
+            cameraButton.setVisibility(com.google.ar.imp.view.View.GONE);
+            switchCameraButton.setVisibility(com.google.ar.imp.view.View.GONE);
+            localVideoView.setVisibility(com.google.ar.imp.view.View.GONE);
+            remoteVideoView.setVisibility(com.google.ar.imp.view.View.GONE);
+        }
+    }
+
+    private void setupVideoViews() {
+        eglBase = EglBase.create();
+
+        localVideoView.init(eglBase.getEglBaseContext(), null);
+        localVideoView.setMirror(true);
+        localVideoView.setEnableHardwareScaler(true);
+        localVideoView.setZOrderMediaOverlay(true);
+
+        remoteVideoView.init(eglBase.getEglBaseContext(), null);
+        remoteVideoView.setMirror(false);
+        remoteVideoView.setEnableHardwareScaler(true);
+
+        // Pass surface views to ViewModel to init peer connection
+        callViewModel.setupLocalVideo(localVideoView);
+        callViewModel.setupRemoteVideo(remoteVideoView);
+    }
+    /**
+     * Setup LiveData observers
+     */
+    private void setupObservers() {
+        // Observe call state        callViewModel.getCallState().observe(this, state -> {
+        androidx.camera.camera2.pipe.core.Log.d(TAG, "Call state changed to: " + state);
+        switch (state) {
+            case CONNECTED:
+                androidx.camera.camera2.pipe.core.Log.d(TAG, "Call CONNECTED");
+                callStatus.setText("Đang gọi");
+                startDurationTimer();
+                updateUiForConnectedState();
+                break;
+            case DISCONNECTED:
+            case ENDED:
+            case BUSY:
+            case NO_ANSWER:
+            case FAILED:
+                androidx.camera.camera2.pipe.core.Log.d(TAG, "Call ENDED/FAILED: " + state);
+                stopDurationTimer();
+                String statusMsg = "Cuộc gọi kết thúc";
+                if (state == CallViewModel.CallState.BUSY) statusMsg = "Người dùng bận";
+                else if (state == CallViewModel.CallState.NO_ANSWER) statusMsg = "Không trả lời";
+                else if (state == CallViewModel.CallState.FAILED) statusMsg = "Lỗi kết nối";
+
+                callStatus.setText(statusMsg);
+
+                // Delay finishing to show status
+                new Handler(Looper.getMainLooper()).postDelayed(this::finish, 1500);
+                break;
+        }
+    });
+
+    // Observe remote user info if needed
+    // ...
+}
+
+private void handleIncomingCall() {
+    androidx.camera.camera2.pipe.core.Log.d(TAG, "Handling INCOMING call");
+    callStatus.setText("Cuộc gọi đến...");
+    incomingCallButtons.setVisibility(com.google.ar.imp.view.View.VISIBLE);
+    outgoingCallButtons.setVisibility(com.google.ar.imp.view.View.GONE);
+    callControls.setVisibility(com.google.ar.imp.view.View.GONE);
+
+    // Start ringing sound via service or sound pool here if needed
+}
+
+private void handleOutgoingCall(String conversationId, String callerId, String receiverId) {
+    androidx.camera.camera2.pipe.core.Log.d(TAG, "Handling OUTGOING call");
+    callStatus.setText("Đang kết nối...");
+    incomingCallButtons.setVisibility(com.google.ar.imp.view.View.GONE);
+    outgoingCallButtons.setVisibility(com.google.ar.imp.view.View.VISIBLE);
+    callControls.setVisibility(com.google.ar.imp.view.View.GONE);
+
+    // Initiate call via ViewModel
+    callViewModel.startCall(conversationId, callerId, receiverId, isVideo);
+
+    // Start service
+    startCallService();
+}
+
+private void acceptCall() {
+    androidx.camera.camera2.pipe.core.Log.d(TAG, "User ACCEPTED call");
+    callViewModel.acceptCall(callId);
+    updateUiForConnectedState();
+}
+
+private void rejectCall() {
+    androidx.camera.camera2.pipe.core.Log.d(TAG, "User REJECTED call");
+    callViewModel.endCall(); // Or rejectCall logic
+    finish();
+}
+
+private void endCall() {
+    androidx.camera.camera2.pipe.core.Log.d(TAG, "User ENDED call");
+    callViewModel.endCall();
+    finish();
+}
+
+private void updateUiForConnectedState() {
+    incomingCallButtons.setVisibility(com.google.ar.imp.view.View.GONE);
+    outgoingCallButtons.setVisibility(com.google.ar.imp.view.View.GONE);
+    callControls.setVisibility(com.google.ar.imp.view.View.VISIBLE);
+
+    // Hide overlay info after delay for better video experience
+    if (isVideo) {
+        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+            callerInfoContainer.setVisibility(com.google.ar.imp.view.View.GONE);
+            contentOverlay.setVisibility(com.google.ar.imp.view.View.GONE); // Hide dark overlay
+        }, 3000);
+    }
+}
+
+private void toggleMicrophone() {
+    isMicEnabled = !isMicEnabled;
+    callViewModel.setMicrophoneEnabled(isMicEnabled);
+    micButton.setImageResource(isMicEnabled ? R.drawable.ic_mic : R.drawable.ic_mic_off);
+}
+
+private void toggleSpeaker() {
+    isSpeakerOn = !isSpeakerOn;
+    audioManager.setSpeakerphoneOn(isSpeakerOn);
+    speakerButton.setImageResource(isSpeakerOn ? R.drawable.ic_speaker : R.drawable.ic_speaker_off);
+}
+
+private void configureAudioRouting() {
+    if (audioManager == null) return;
+
+    if (isVideo) {
+        // Video calls default to speaker
+        audioManager.setSpeakerphoneOn(true);
+        isSpeakerOn = true;
+        speakerButton.setImageResource(R.drawable.ic_speaker);
+    } else {
+        // Voice calls default to earpiece
+        audioManager.setSpeakerphoneOn(false);
+        isSpeakerOn = false;
+        speakerButton.setImageResource(R.drawable.ic_speaker_off);
+    }
+}
+
+private void registerAudioDeviceListener() {
+    IntentFilter filter = new IntentFilter();
+    filter.addAction(AudioManager.ACTION_HEADSET_PLUG);
+    filter.addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+    registerReceiver(audioDeviceChangeReceiver, filter);
+}
+
+// --- Proximity Sensor Logic ---
+private void setupProximitySensor() {
+    sensorManager = (SensorManager) getSystemService(android.databinding.tool.Context.SENSOR_SERVICE);
+    if (sensorManager != null) {
+        proximitySensor = sensorManager.getDefaultSensor(Sensor.TYPE_PROXIMITY);
+        if (proximitySensor != null) {
+            sensorManager.registerListener(proximitySensorListener,
+                    proximitySensor, SensorManager.SENSOR_DELAY_UI);
+        }
+    }
+}
+
+private void handleProximityChange() {
+    if (isProximityNear) {
+        // Screen off logic (or black overlay) to prevent accidental touches
+        // Note: WakeLock is better for actually turning screen off
+        rootLayout.setAlpha(0.1f);
+    } else {
+        rootLayout.setAlpha(1.0f);
+    }
+}
+
+// --- Service & Timer Logic ---
+
+private void startCallService() {
+    Intent serviceIntent = new Intent(this, OngoingCallService.class);
+    startService(serviceIntent);
+    bindService(serviceIntent, serviceConnection, android.databinding.tool.Context.BIND_AUTO_CREATE);
+}
+
+private void startDurationTimer() {
+    callStartTime = System.currentTimeMillis();
+    durationHandler = new Handler(Looper.getMainLooper());
+    durationRunnable = new kotlinx.coroutines.Runnable() {
+        @Override
+        public void run() {
+            long duration = System.currentTimeMillis() - callStartTime;
+            long seconds = (duration / 1000) % 60;
+            long minutes = (duration / (1000 * 60)) % 60;
+            long hours = (duration / (1000 * 60 * 60));
+
+            String time;
+            if (hours > 0) {
+                time = String.format("%02d:%02d:%02d", hours, minutes, seconds);
+            } else {
+                time = String.format("%02d:%02d", minutes, seconds);
+            }
+
+            callDuration.setText(time);
+            durationHandler.postDelayed(this, 1000);
+        }
+    };
+    durationHandler.post(durationRunnable);
+}
+
+private void stopDurationTimer() {
+    if (durationHandler != null && durationRunnable != null) {
+        durationHandler.removeCallbacks(durationRunnable);
+    }
+}
+
+@Override
+protected void onDestroy() {
+    super.onDestroy();
+    stopDurationTimer();
+
+    // Unregister receivers
+    try {
+        unregisterReceiver(audioDeviceChangeReceiver);
+    } catch (IllegalArgumentException e) {
+        // Ignore if not registered
+    }
+
+    if (sensorManager != null) {
+        sensorManager.unregisterListener(proximitySensorListener);
+    }
+
+    // Release video resources
+    if (localVideoView != null) localVideoView.release();
+    if (remoteVideoView != null) remoteVideoView.release();
+    if (eglBase != null) eglBase.release();
+
+    // Unbind service
+    if (serviceBound) {
+        unbindService(serviceConnection);
+        serviceBound = false;
+    }
+}
+
+@Override
+public void onBackPressed() {
+    // Prevent accidental back press during call
+    new androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Kết thúc cuộc gọi?")
+            .setMessage("Bạn có muốn kết thúc cuộc gọi này không?")
+            .setPositiveButton("Kết thúc", (dialog, which) -> endCall())
+            .setNegativeButton("Không", null)
+            .show();
+}
+}
+
+        speakerButton.setOnClickListener(v -> toggleSpeaker());
         
         // Video button listeners
         cameraButton.setOnClickListener(v -> callViewModel.toggleCamera());
