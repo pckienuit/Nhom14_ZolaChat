@@ -1,0 +1,267 @@
+================================================================================
+TÍNH NĂNG TRẢ LỜI TIN NHẮN (Reply Message Feature)
+================================================================================
+
+NGÀY TẠO: 20/12/2025
+LOẠI: Feature
+TÍNH NĂNG: Reply/Quote tin nhắn trong cuộc trò chuyện
+KIẾN TRÚC: MVVM (Repository → ViewModel → View)
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Tính năng cho phép người dùng trả lời (reply) một tin nhắn cụ thể trong cuộc 
+trò chuyện. Tin nhắn trả lời sẽ hiển thị trích dẫn (preview) của tin nhắn gốc 
+ngay phía trên nội dung trả lời.
+
+TÍNH NĂNG CHÍNH:
+- Swipe gesture để reply nhanh (vuốt trái/phải tùy loại tin nhắn)
+- Context menu "Trả lời" khi long-press
+- Reply preview box hiển thị tên người gửi và nội dung gốc
+- Click vào preview để navigate đến tin nhắn gốc và highlight
+
+================================================================================
+2. DATA MODEL CHANGES
+================================================================================
+
+2.1. MESSAGE MODEL (models/Message.java)
+
+Thêm các fields mới:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Field               │ Type    │ Mô tả                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ replyToId           │ String  │ ID của tin nhắn gốc đang reply             │
+│ replyToContent      │ String  │ Nội dung tin nhắn gốc (cache để hiển thị)  │
+│ replyToSenderId     │ String  │ ID người gửi tin nhắn gốc                  │
+│ replyToSenderName   │ String  │ Tên người gửi tin nhắn gốc                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Thêm methods:
+- isReplyMessage(): boolean - Kiểm tra tin nhắn có phải là reply (replyToId != null)
+- Getters/Setters cho các fields trên
+
+2.2. FIRESTORE STRUCTURE
+
+conversations/{conversationId}/messages/{messageId}
+  - (các fields hiện tại)
+  - replyToId: string (nullable)
+  - replyToContent: string (nullable)
+  - replyToSenderId: string (nullable)
+  - replyToSenderName: string (nullable)
+
+================================================================================
+3. UI COMPONENTS
+================================================================================
+
+3.1. LAYOUTS MỚI
+
+layout_reply_bar.xml
+- Thanh reply hiển thị phía trên input box khi đang ở chế độ reply
+- Bao gồm:
+  + Thanh màu bên trái (color indicator)
+  + Tên người gửi gốc
+  + Nội dung preview (truncated)
+  + Nút Cancel (X) để hủy reply
+
+3.2. LAYOUTS SỬA ĐỔI
+
+item_message_sent.xml & item_message_received.xml:
+- Thêm `replyPreviewContainer` (LinearLayout) bên trong message bubble
+- Container bao gồm:
+  + Thanh màu bên trái (3dp width)
+  + replyToSenderName (TextView, bold)
+  + replyToContent (TextView, 2 dòng max, ellipsize)
+- Visibility: GONE (mặc định), VISIBLE khi message.isReplyMessage()
+
+activity_room.xml:
+- Đổi inputContainer từ FrameLayout sang LinearLayout (orientation: vertical)
+- Include layout_reply_bar.xml phía trên normalInputLayout
+
+3.3. DRAWABLES MỚI
+
+bg_reply_preview.xml:
+- Background cho reply preview trong tin nhắn nhận
+- Màu: #E8F4FD (xanh nhạt)
+
+bg_reply_preview_sent.xml:
+- Background cho reply preview trong tin nhắn gửi  
+- Màu: #30FFFFFF (trắng mờ 30%, nổi bật trên nền primary)
+
+================================================================================
+4. SWIPE-TO-REPLY GESTURE
+================================================================================
+
+4.1. IMPLEMENTATION (ui/room/SwipeToReplyCallback.java)
+
+Class kế thừa ItemTouchHelper.SimpleCallback:
+- Tin nhắn GỬI (Sent): Chỉ vuốt TRÁI (LEFT)
+- Tin nhắn NHẬN (Received): Chỉ vuốt PHẢI (RIGHT)
+- Call history: Không hỗ trợ swipe
+
+4.2. ANIMATION & BEHAVIOR
+
+- Max swipe distance: 80dp
+- Trigger threshold: 60dp (khi thả tay)
+- Reply icon: android.R.drawable.ic_menu_revert, 24dp, màu colorPrimary
+- Icon hiển thị khi swipe > 10dp, alpha fade-in theo khoảng cách
+- Smooth spring-back animation khi thả tay (dùng getDefaultUIUtil())
+
+4.3. PARAMETERS
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Parameter              │ Value    │ Mô tả                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ iconSize               │ 24dp     │ Kích thước icon reply                  │
+│ triggerDistancePx      │ 60dp     │ Khoảng cách vuốt để trigger reply      │
+│ maxSwipe               │ 80dp     │ Khoảng cách vuốt tối đa                │
+│ getSwipeThreshold()    │ 1.0f     │ Ngăn onSwiped() tự động (ta tự handle) │
+│ getSwipeEscapeVelocity │ MAX_VALUE│ Ngăn fling gesture                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+================================================================================
+5. LOGIC & INTERACTION
+================================================================================
+
+5.1. REPLY FLOW
+
+1. User vuốt tin nhắn hoặc long-press → chọn "↩️ Trả lời"
+2. RoomActivity.showReplyBar(Message) được gọi
+3. Reply bar hiển thị với tên người gửi + nội dung preview
+4. User nhập nội dung trả lời
+5. User nhấn Send
+6. RoomActivity.handleSendMessage() kiểm tra replyingToMessage
+7. Nếu có, populate các fields reply* vào Message mới
+8. ChatRepository.sendMessage() save message với reply metadata
+9. Reply bar ẩn đi, focus giữ ở input
+
+5.2. NAVIGATION FLOW (Click vào Reply Preview)
+
+1. User tap vào replyPreviewContainer trong tin nhắn
+2. MessageAdapter trigger OnReplyPreviewClickListener.onReplyPreviewClick(replyToId)
+3. RoomActivity.scrollToMessage(replyToId) được gọi
+4. RecyclerView smoothScrollToPosition đến tin nhắn gốc
+5. MessageAdapter.highlightMessage(replyToId) highlight vàng trong 2 giây
+
+5.3. CONTEXT MENU
+
+showMessageContextMenu() (trong MessageAdapter.java):
+- Thêm option: "↩️ Trả lời" (itemId = 3)
+- Khi chọn: gọi replyListener.onReplyMessage(message)
+
+================================================================================
+6. FILES ẢNH HƯỞNG
+================================================================================
+
+6.1. JAVA FILES
+
+models/Message.java:
+- Thêm 4 fields reply*
+- Thêm getters/setters
+- Thêm isReplyMessage() method
+
+repository/ChatRepository.java:
+- sendMessage(): Thêm reply* fields vào messageData map
+
+ui/room/MessageAdapter.java:
+- Thêm OnReplyPreviewClickListener interface
+- Cập nhật tất cả ViewHolders để:
+  + Bind reply preview data
+  + Set click listener cho replyPreviewContainer
+  + Pass previewClickListener trong bind()
+- Cập nhật onBindViewHolder() để pass replyPreviewClickListener
+
+ui/room/RoomActivity.java:
+- Thêm fields: replyBarLayout, replyingToName, replyToContent, 
+  cancelReplyButton, replyingToMessage
+- initReplyBarViews(): Initialize reply bar views
+- showReplyBar(Message): Hiển thị reply bar với thông tin
+- hideReplyBar(): Ẩn reply bar và reset state
+- handleSendMessage(): Populate reply fields nếu đang reply
+- setupRecyclerView(): Set OnReplyPreviewClickListener
+
+ui/room/SwipeToReplyCallback.java [NEW]:
+- Custom ItemTouchHelper.SimpleCallback
+- Handle swipe gesture & animation
+
+6.2. XML FILES
+
+res/layout/layout_reply_bar.xml [NEW]
+res/layout/item_message_sent.xml [MODIFIED]
+res/layout/item_message_received.xml [MODIFIED]
+res/layout/activity_room.xml [MODIFIED]
+res/drawable/bg_reply_preview.xml [NEW]
+res/drawable/bg_reply_preview_sent.xml [NEW]
+
+================================================================================
+7. INTERFACES & LISTENERS
+================================================================================
+
+7.1. OnMessageReplyListener (trong MessageAdapter.java)
+```java
+public interface OnMessageReplyListener {
+    void onReplyMessage(Message message);
+}
+```
+- Trigger khi user chọn "Trả lời" từ context menu
+
+7.2. OnReplyPreviewClickListener (trong MessageAdapter.java)
+```java
+public interface OnReplyPreviewClickListener {
+    void onReplyPreviewClick(String replyToMessageId);
+}
+```
+- Trigger khi user tap vào reply preview trong tin nhắn
+
+7.3. SwipeToReplyListener (trong SwipeToReplyCallback.java)
+```java
+public interface SwipeToReplyListener {
+    void onSwipeToReply(int position);
+}
+```
+- Trigger khi user vuốt đủ khoảng cách và thả tay
+
+================================================================================
+8. TESTING CHECKLIST
+================================================================================
+
+□ Vuốt TRÁI tin nhắn gửi → Reply bar xuất hiện
+□ Vuốt PHẢI tin nhắn nhận → Reply bar xuất hiện
+□ Vuốt tin nhắn call history → Không có gì xảy ra
+□ Long-press tin nhắn → Menu có option "Trả lời"
+□ Chọn "Trả lời" từ menu → Reply bar xuất hiện
+□ Nhấn X trên reply bar → Reply bar ẩn
+□ Gửi tin nhắn reply → Tin nhắn hiển thị preview của tin gốc
+□ Click vào reply preview → Scroll và highlight tin nhắn gốc
+□ Reply preview hiển thị đúng tên người gửi
+□ Reply preview hiển thị đúng nội dung (truncated nếu dài)
+□ Styling reply preview phù hợp với tin nhắn gửi/nhận
+
+================================================================================
+9. KNOWN LIMITATIONS
+================================================================================
+
+- Chỉ hỗ trợ reply 1 level (không nested replies)
+- Preview chỉ cache text content, không preview image/file thumbnail
+- Không hỗ trợ edit reply sau khi gửi
+- Nếu tin nhắn gốc bị xóa, preview vẫn hiển thị nội dung cached
+
+================================================================================
+10. FUTURE IMPROVEMENTS
+================================================================================
+
+- Nested replies (reply to reply)
+- Image/File thumbnail trong preview
+- Thread view cho reply chains
+- Reply count indicator trên tin nhắn được reply nhiều
+- Swipe gesture với haptic feedback
+- Long-press trên preview để copy nội dung
+
+================================================================================
+PHIÊN BẢN
+================================================================================
+
+Tạo ngày: 20/12/2025
+Cập nhật lần cuối: 20/12/2025
+Phiên bản: 1.0
+Trạng thái: Hoàn thành
