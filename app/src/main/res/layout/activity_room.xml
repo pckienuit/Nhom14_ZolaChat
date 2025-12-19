@@ -92,13 +92,19 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <!-- Container for input layouts -->
-    <FrameLayout
+    <LinearLayout
         android:id="@+id/inputContainer"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:orientation="vertical"
         app:layout_constraintBottom_toTopOf="@id/imagePickerContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Reply bar (hidden by default) -->
+        <include 
+            android:id="@+id/replyBarLayout"
+            layout="@layout/layout_reply_bar" />
 
         <!-- Normal input layout (default) -->
         <LinearLayout
@@ -201,7 +207,7 @@
 
         </LinearLayout>
 
-    </FrameLayout>
+    </LinearLayout>
 
     <!-- Container for image picker bottom sheet -->
     <FrameLayout

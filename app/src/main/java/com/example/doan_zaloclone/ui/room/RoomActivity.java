@@ -106,6 +106,13 @@ public class RoomActivity extends AppCompatActivity {
     private TextView pinnedMessagesCount;
     private PinnedMessagesAdapter pinnedMessagesAdapter;
     private boolean isPinnedListExpanded = false;
+    
+    // Reply bar UI
+    private View replyBarLayout;
+    private TextView replyingToName;
+    private TextView replyingToContent;
+    private ImageButton cancelReplyButton;
+    private Message replyingToMessage = null;
 
 
     @Override
@@ -213,6 +220,20 @@ public class RoomActivity extends AppCompatActivity {
         quickActionManager = com.example.doan_zaloclone.ui.room.actions.QuickActionManager.getInstance();
 
         initPinnedMessagesViews();
+        initReplyBarViews();
+    }
+    
+    private void initReplyBarViews() {
+        replyBarLayout = findViewById(R.id.replyBarLayout);
+        if (replyBarLayout != null) {
+            replyingToName = replyBarLayout.findViewById(R.id.replyingToName);
+            replyingToContent = replyBarLayout.findViewById(R.id.replyingToContent);
+            cancelReplyButton = replyBarLayout.findViewById(R.id.cancelReplyButton);
+            
+            if (cancelReplyButton != null) {
+                cancelReplyButton.setOnClickListener(v -> hideReplyBar());
+            }
+        }
     }
 
     private void initPinnedMessagesViews() {
@@ -435,11 +456,96 @@ public class RoomActivity extends AppCompatActivity {
             }
         });
         
+        // Set reply listener
+        messageAdapter.setOnMessageReplyListener(new MessageAdapter.OnMessageReplyListener() {
+            @Override
+            public void onReplyMessage(Message message) {
+                showReplyBar(message);
+            }
+        });
+        
+        // Set reply preview click listener - navigate to original message
+        messageAdapter.setOnReplyPreviewClickListener(new MessageAdapter.OnReplyPreviewClickListener() {
+            @Override
+            public void onReplyPreviewClick(String replyToMessageId) {
+                scrollToMessage(replyToMessageId);
+            }
+        });
+        
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         messagesRecyclerView.setLayoutManager(layoutManager);
         // Note: Not using setHasFixedSize(true) because messages have variable heights (text vs images)
         messagesRecyclerView.setAdapter(messageAdapter);
+        
+        // Setup swipe-to-reply gesture
+        SwipeToReplyCallback swipeCallback = new SwipeToReplyCallback(this, messageAdapter, new SwipeToReplyCallback.SwipeToReplyListener() {
+            @Override
+            public void onSwipeToReply(int position) {
+                if (position >= 0 && position < messageAdapter.getItemCount()) {
+                    Message message = messageAdapter.getMessageAt(position);
+                    if (message != null) {
+                        showReplyBar(message);
+                        // Animation is handled by SwipeToReplyCallback.clearView()
+                    }
+                }
+            }
+        });
+        androidx.recyclerview.widget.ItemTouchHelper itemTouchHelper = new androidx.recyclerview.widget.ItemTouchHelper(swipeCallback);
+        itemTouchHelper.attachToRecyclerView(messagesRecyclerView);
+    }
+    
+    private void showReplyBar(Message message) {
+        replyingToMessage = message;
+        if (replyBarLayout != null) {
+            replyBarLayout.setVisibility(View.VISIBLE);
+            
+            // Fetch sender name
+            String senderId = message.getSenderId();
+            String currentUserId = firebaseAuth.getCurrentUser() != null 
+                    ? firebaseAuth.getCurrentUser().getUid() : "";
+            
+            if (senderId.equals(currentUserId)) {
+                if (replyingToName != null) {
+                    replyingToName.setText("You");
+                }
+            } else {
+                // Fetch name from Firestore
+                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(senderId)
+                    .get()
+                    .addOnSuccessListener(doc -> {
+                        if (doc.exists()) {
+                            String senderName = doc.getString("name");
+                            if (replyingToName != null) {
+                                replyingToName.setText(senderName != null ? senderName : "User");
+                            }
+                        }
+                    });
+            }
+            
+            // Set content preview
+            if (replyingToContent != null) {
+                String preview = message.getContent();
+                if (message.isImageMessage()) {
+                    preview = "📷 Hình ảnh";
+                } else if (message.isFileMessage()) {
+                    preview = "📎 " + (message.getFileName() != null ? message.getFileName() : "File");
+                }
+                replyingToContent.setText(preview);
+            }
+            
+            // Focus on input
+            messageEditText.requestFocus();
+        }
+    }
+    
+    private void hideReplyBar() {
+        replyingToMessage = null;
+        if (replyBarLayout != null) {
+            replyBarLayout.setVisibility(View.GONE);
+        }
     }
 
     private void observeViewModel() {
@@ -889,6 +995,34 @@ public class RoomActivity extends AppCompatActivity {
                 Message.TYPE_TEXT,
                 System.currentTimeMillis()
         );
+        
+        // Debug: Check replyingToMessage state
+        android.util.Log.d("RoomActivity", "handleSendMessage - replyingToMessage: " + 
+            (replyingToMessage != null ? "SET (id=" + replyingToMessage.getId() + ")" : "NULL"));
+        
+        // Add reply data if replying to a message
+        if (replyingToMessage != null) {
+            newMessage.setReplyToId(replyingToMessage.getId());
+            
+            // Set reply content preview
+            String replyContent = replyingToMessage.getContent();
+            if (replyingToMessage.isImageMessage()) {
+                replyContent = "📷 Hình ảnh";
+            } else if (replyingToMessage.isFileMessage()) {
+                replyContent = "📎 " + (replyingToMessage.getFileName() != null ? replyingToMessage.getFileName() : "File");
+            }
+            newMessage.setReplyToContent(replyContent);
+            
+            newMessage.setReplyToSenderId(replyingToMessage.getSenderId());
+            
+            // Set sender name - get from UI if available
+            if (replyingToName != null) {
+                newMessage.setReplyToSenderName(replyingToName.getText().toString());
+            }
+            
+            // Hide reply bar after setting data
+            hideReplyBar();
+        }
         
         // Send message via ViewModel
         roomViewModel.sendMessage(conversationId, newMessage);

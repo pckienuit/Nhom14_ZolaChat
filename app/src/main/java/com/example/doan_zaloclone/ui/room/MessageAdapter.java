@@ -21,13 +21,13 @@ import java.util.Locale;
 
 public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
-    private static final int VIEW_TYPE_SENT = 1;
-    private static final int VIEW_TYPE_RECEIVED = 2;
-    private static final int VIEW_TYPE_IMAGE_SENT = 3;
-    private static final int VIEW_TYPE_IMAGE_RECEIVED = 4;
-    private static final int VIEW_TYPE_FILE_SENT = 5;
-    private static final int VIEW_TYPE_FILE_RECEIVED = 6;
-    private static final int VIEW_TYPE_CALL_HISTORY = 7;
+    public static final int VIEW_TYPE_SENT = 1;
+    public static final int VIEW_TYPE_RECEIVED = 2;
+    public static final int VIEW_TYPE_IMAGE_SENT = 3;
+    public static final int VIEW_TYPE_IMAGE_RECEIVED = 4;
+    public static final int VIEW_TYPE_FILE_SENT = 5;
+    public static final int VIEW_TYPE_FILE_RECEIVED = 6;
+    public static final int VIEW_TYPE_CALL_HISTORY = 7;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -45,7 +45,18 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         void onUnpinMessage(Message message);
     }
     
+    // Listener for reply action
+    public interface OnMessageReplyListener {
+        void onReplyMessage(Message message);
+    }
+    
+    public interface OnReplyPreviewClickListener {
+        void onReplyPreviewClick(String replyToMessageId);
+    }
+    
     private OnMessageLongClickListener longClickListener;
+    private OnMessageReplyListener replyListener;
+    private OnReplyPreviewClickListener replyPreviewClickListener;
 
     public MessageAdapter(List<Message> messages, String currentUserId) {
         this.messages = messages;
@@ -66,6 +77,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     
     public void setOnMessageLongClickListener(OnMessageLongClickListener listener) {
         this.longClickListener = listener;
+    }
+    
+    public void setOnMessageReplyListener(OnMessageReplyListener listener) {
+        this.replyListener = listener;
+    }
+    
+    public void setOnReplyPreviewClickListener(OnReplyPreviewClickListener listener) {
+        this.replyPreviewClickListener = listener;
     }
     
     public void setPinnedMessageIds(java.util.List<String> pinnedIds) {
@@ -162,17 +181,17 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         boolean isHighlighted = message.getId() != null && message.getId().equals(highlightedMessageId);
         
         if (holder instanceof SentMessageViewHolder) {
-            ((SentMessageViewHolder) holder).bind(message, longClickListener, isPinned, isHighlighted);
+            ((SentMessageViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof ReceivedMessageViewHolder) {
-            ((ReceivedMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, isPinned, isHighlighted);
+            ((ReceivedMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof ImageSentViewHolder) {
-            ((ImageSentViewHolder) holder).bind(message, longClickListener, isPinned, isHighlighted);
+            ((ImageSentViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof ImageReceivedViewHolder) {
-            ((ImageReceivedViewHolder) holder).bind(message, isGroupChat, longClickListener, isPinned, isHighlighted);
+            ((ImageReceivedViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof FileMessageSentViewHolder) {
-            ((FileMessageSentViewHolder) holder).bind(message, longClickListener, isPinned, isHighlighted);
+            ((FileMessageSentViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof FileMessageReceivedViewHolder) {
-            ((FileMessageReceivedViewHolder) holder).bind(message, longClickListener, isPinned, isHighlighted);
+            ((FileMessageReceivedViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, isPinned, isHighlighted);
         } else if (holder instanceof CallHistoryViewHolder) {
             ((CallHistoryViewHolder) holder).bind(message);
         }
@@ -208,10 +227,13 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         return messages;
     }
     
-    private static void showMessageContextMenu(View view, Message message, OnMessageLongClickListener listener, boolean isPinned) {
+    private static void showMessageContextMenu(View view, Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, boolean isPinned) {
         android.widget.PopupMenu popup = new android.widget.PopupMenu(view.getContext(), view);
         
-        // Only show relevant option based on pin status
+        // Add reply option
+        popup.getMenu().add(0, 3, 0, "↩️ Trả lời");
+        
+        // Add pin/unpin option based on status
         if (isPinned) {
             popup.getMenu().add(0, 2, 0, "📌 Bỏ ghim tin nhắn");
         } else {
@@ -219,14 +241,15 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
         
         popup.setOnMenuItemClickListener(item -> {
-            if (listener == null) return false;
-            
             int itemId = item.getItemId();
-            if (itemId == 1) {
+            if (itemId == 1 && listener != null) {
                 listener.onPinMessage(message);
                 return true;
-            } else if (itemId == 2) {
+            } else if (itemId == 2 && listener != null) {
                 listener.onUnpinMessage(message);
+                return true;
+            } else if (itemId == 3 && replyListener != null) {
+                replyListener.onReplyMessage(message);
                 return true;
             }
             return false;
@@ -256,23 +279,58 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     static class SentMessageViewHolder extends RecyclerView.ViewHolder {
         private TextView messageTextView;
         private TextView timestampTextView;
+        private View replyPreviewContainer;
+        private TextView replyToSenderName;
+        private TextView replyToContent;
         private OnMessageLongClickListener listener;
+        private OnMessageReplyListener replyListener;
 
         public SentMessageViewHolder(@NonNull View itemView) {
             super(itemView);
             messageTextView = itemView.findViewById(R.id.messageTextView);
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
+            replyPreviewContainer = itemView.findViewById(R.id.replyPreviewContainer);
+            replyToSenderName = itemView.findViewById(R.id.replyToSenderName);
+            replyToContent = itemView.findViewById(R.id.replyToContent);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
+            this.replyListener = replyListener;
             messageTextView.setText(message.getContent());
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            
+            // Debug log for reply data
+            android.util.Log.d("MessageAdapter", "bind() - messageId: " + message.getId() + 
+                ", isReplyMessage: " + message.isReplyMessage() + 
+                ", replyToId: " + message.getReplyToId() +
+                ", replyToSenderName: " + message.getReplyToSenderName());
+            
+            // Bind reply preview if this is a reply message
+            if (message.isReplyMessage() && replyPreviewContainer != null) {
+                replyPreviewContainer.setVisibility(View.VISIBLE);
+                if (replyToSenderName != null) {
+                    replyToSenderName.setText(message.getReplyToSenderName() != null ? message.getReplyToSenderName() : "User");
+                }
+                if (replyToContent != null) {
+                    replyToContent.setText(message.getReplyToContent() != null ? message.getReplyToContent() : "");
+                }
+                // Set click listener to navigate to original message
+                final String replyToId = message.getReplyToId();
+                replyPreviewContainer.setOnClickListener(v -> {
+                    if (previewClickListener != null && replyToId != null) {
+                        previewClickListener.onReplyPreviewClick(replyToId);
+                    }
+                });
+            } else if (replyPreviewContainer != null) {
+                replyPreviewContainer.setVisibility(View.GONE);
+                replyPreviewContainer.setOnClickListener(null);
+            }
             
             applyPinAndHighlight(itemView, isPinned, isHighlighted);
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, isPinned);
+                showMessageContextMenu(v, message, listener, replyListener, isPinned);
                 return true;
             });
         }
@@ -282,19 +340,48 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private TextView messageTextView;
         private TextView timestampTextView;
         private TextView senderNameTextView;
+        private View replyPreviewContainer;
+        private TextView replyToSenderName;
+        private TextView replyToContent;
         private OnMessageLongClickListener listener;
+        private OnMessageReplyListener replyListener;
 
         public ReceivedMessageViewHolder(@NonNull View itemView) {
             super(itemView);
             messageTextView = itemView.findViewById(R.id.messageTextView);
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
             senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
+            replyPreviewContainer = itemView.findViewById(R.id.replyPreviewContainer);
+            replyToSenderName = itemView.findViewById(R.id.replyToSenderName);
+            replyToContent = itemView.findViewById(R.id.replyToContent);
         }
 
-        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
+            this.replyListener = replyListener;
             messageTextView.setText(message.getContent());
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            
+            // Bind reply preview if this is a reply message
+            if (message.isReplyMessage() && replyPreviewContainer != null) {
+                replyPreviewContainer.setVisibility(View.VISIBLE);
+                if (replyToSenderName != null) {
+                    replyToSenderName.setText(message.getReplyToSenderName() != null ? message.getReplyToSenderName() : "User");
+                }
+                if (replyToContent != null) {
+                    replyToContent.setText(message.getReplyToContent() != null ? message.getReplyToContent() : "");
+                }
+                // Set click listener to navigate to original message
+                final String replyToId = message.getReplyToId();
+                replyPreviewContainer.setOnClickListener(v -> {
+                    if (previewClickListener != null && replyToId != null) {
+                        previewClickListener.onReplyPreviewClick(replyToId);
+                    }
+                });
+            } else if (replyPreviewContainer != null) {
+                replyPreviewContainer.setVisibility(View.GONE);
+                replyPreviewContainer.setOnClickListener(null);
+            }
             
             // Show sender name only in group chats
             if (senderNameTextView != null) {
@@ -327,7 +414,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             applyPinAndHighlight(itemView, isPinned, isHighlighted);
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, isPinned);
+                showMessageContextMenu(v, message, listener, replyListener, isPinned);
                 return true;
             });
         }
@@ -344,7 +431,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
             Glide.with(itemView.getContext())
                     .load(message.getContent())
@@ -354,7 +441,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             applyPinAndHighlight(itemView, isPinned, isHighlighted);
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, isPinned);
+                showMessageContextMenu(v, message, listener, replyListener, isPinned);
                 return true;
             });
         }
@@ -373,7 +460,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
         }
 
-        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
             Glide.with(itemView.getContext())
                     .load(message.getContent())
@@ -411,7 +498,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             applyPinAndHighlight(itemView, isPinned, isHighlighted);
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, isPinned);
+                showMessageContextMenu(v, message, listener, replyListener, isPinned);
                 return true;
             });
         }
@@ -432,7 +519,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
             fileName.setText(message.getFileName());
             
@@ -453,7 +540,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             itemView.setOnClickListener(v -> openFile(message));
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, isPinned);
+                showMessageContextMenu(v, message, listener, replyListener, isPinned);
                 return true;
             });
         }
@@ -538,7 +625,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, boolean isPinned, boolean isHighlighted) {
             this.listener = listener;
             fileName.setText(message.getFileName());
             
@@ -559,7 +646,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             itemView.setOnClickListener(v -> openFile(message));
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, isPinned);
+                showMessageContextMenu(v, message, listener, replyListener, isPinned);
                 return true;
             });
         }
@@ -713,5 +800,17 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
         }
         return -1;
+    }
+    
+    /**
+     * Get message at specific position
+     * @param position Position in adapter
+     * @return Message at position, or null if invalid
+     */
+    public Message getMessageAt(int position) {
+        if (position < 0 || position >= messages.size()) {
+            return null;
+        }
+        return messages.get(position);
     }
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Background for reply preview in SENT messages (on primary color bubble) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Slightly darker/more opaque version of primary for contrast -->
+    <solid android:color="#30FFFFFF" />
+    <corners android:radius="6dp" />
+</shape>
