@@ -972,6 +972,10 @@ public class RoomActivity extends AppCompatActivity {
                 System.currentTimeMillis()
         );
         
+        // Debug: Check replyingToMessage state
+        android.util.Log.d("RoomActivity", "handleSendMessage - replyingToMessage: " + 
+            (replyingToMessage != null ? "SET (id=" + replyingToMessage.getId() + ")" : "NULL"));
+        
         // Add reply data if replying to a message
         if (replyingToMessage != null) {
             newMessage.setReplyToId(replyingToMessage.getId());

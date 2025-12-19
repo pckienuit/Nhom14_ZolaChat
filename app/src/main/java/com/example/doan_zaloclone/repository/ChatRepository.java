@@ -104,6 +104,20 @@ public class ChatRepository {
                 messageData.put("fileMimeType", message.getFileMimeType());
             }
         }
+        
+        // Add reply fields if this is a reply message
+        if (message.getReplyToId() != null && !message.getReplyToId().isEmpty()) {
+            messageData.put("replyToId", message.getReplyToId());
+            if (message.getReplyToContent() != null) {
+                messageData.put("replyToContent", message.getReplyToContent());
+            }
+            if (message.getReplyToSenderId() != null) {
+                messageData.put("replyToSenderId", message.getReplyToSenderId());
+            }
+            if (message.getReplyToSenderName() != null) {
+                messageData.put("replyToSenderName", message.getReplyToSenderName());
+            }
+        }
 
         // Save message to Firestore
         messageRef.set(messageData)

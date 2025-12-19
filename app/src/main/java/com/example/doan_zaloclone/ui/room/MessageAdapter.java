@@ -291,6 +291,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             messageTextView.setText(message.getContent());
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
             
+            // Debug log for reply data
+            android.util.Log.d("MessageAdapter", "bind() - messageId: " + message.getId() + 
+                ", isReplyMessage: " + message.isReplyMessage() + 
+                ", replyToId: " + message.getReplyToId() +
+                ", replyToSenderName: " + message.getReplyToSenderName());
+            
             // Bind reply preview if this is a reply message
             if (message.isReplyMessage() && replyPreviewContainer != null) {
                 replyPreviewContainer.setVisibility(View.VISIBLE);
