@@ -60,4 +60,10 @@
     <string name="call_rejected">Cuộc gọi bị từ chối</string>
     <string name="call_failed">Cuộc gọi thất bại</string>
     <string name="permission_call_denied">Cần cấp quyền để thực hiện cuộc gọi</string>
+    
+    <!-- Pinned Messages Strings -->
+    <string name="pinned_message">Tin nhắn đã ghim</string>
+    <string name="expand_pinned_messages">Mở rộng tin nhắn đã ghim</string>
+    <string name="unpin_message">Gỡ ghim tin nhắn</string>
+    <string name="pin_message">Ghim tin nhắn</string>
 </resources>
