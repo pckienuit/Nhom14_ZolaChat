@@ -452,15 +452,20 @@ public class RoomActivity extends AppCompatActivity {
 
         // Observe pinned messages
         roomViewModel.getPinnedMessages(conversationId).observe(this, resource -> {
-            if (resource == null) return;
+            android.util.Log.d("RoomActivity", "Pinned messages observer called, resource: " + resource);
+            if (resource == null) {
+                android.util.Log.d("RoomActivity", "Pinned messages resource is null");
+                return;
+            }
 
             if (resource.isLoading()) {
-                // Optional: show loading state
+                android.util.Log.d("RoomActivity", "Pinned messages: LOADING");
                 return;
             }
 
             if (resource.isSuccess() && resource.getData() != null) {
                 List<Message> pinnedMessages = resource.getData();
+                android.util.Log.d("RoomActivity", "Pinned messages SUCCESS: count=" + pinnedMessages.size());
                 updatePinnedMessagesUI(pinnedMessages);
             } else if (resource.isError()) {
                 android.util.Log.e("RoomActivity", "Error loading pinned messages: " + resource.getMessage());

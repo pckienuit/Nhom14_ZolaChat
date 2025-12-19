@@ -111,6 +111,7 @@ public class RoomViewModel extends BaseViewModel {
     // ===================== PINNED MESSAGES METHODS =====================
     
     private MutableLiveData<String> currentConversationId = new MutableLiveData<>();
+    private MutableLiveData<Long> pinnedMessagesRefreshTrigger = new MutableLiveData<>(0L);
     private LiveData<Resource<List<Message>>> pinnedMessages;
     private final MutableLiveData<Resource<Boolean>> pinMessageState = new MutableLiveData<>();
     
@@ -120,12 +121,18 @@ public class RoomViewModel extends BaseViewModel {
      * @return LiveData containing list of pinned messages
      */
     public LiveData<Resource<List<Message>>> getPinnedMessages(@NonNull String conversationId) {
-        // Store conversation ID for reload
+        // Store conversation ID
         currentConversationId.setValue(conversationId);
         
-        // Only load if not already loaded for this conversation
-        if (pinnedMessages == null || !conversationId.equals(currentConversationId.getValue())) {
-            pinnedMessages = chatRepository.getPinnedMessages(conversationId);
+        // Use switchMap to automatically reload when trigger changes
+        if (pinnedMessages == null) {
+            pinnedMessages = Transformations.switchMap(pinnedMessagesRefreshTrigger, trigger -> {
+                String convId = currentConversationId.getValue();
+                if (convId != null) {
+                    return chatRepository.getPinnedMessages(convId);
+                }
+                return new MutableLiveData<>();
+            });
         }
         return pinnedMessages;
     }
@@ -134,10 +141,9 @@ public class RoomViewModel extends BaseViewModel {
      * Reload pinned messages (useful after pin/unpin operations)
      */
     public void reloadPinnedMessages() {
-        String conversationId = currentConversationId.getValue();
-        if (conversationId != null) {
-            pinnedMessages = chatRepository.getPinnedMessages(conversationId);
-        }
+        // Trigger switchMap by changing the value
+        Long current = pinnedMessagesRefreshTrigger.getValue();
+        pinnedMessagesRefreshTrigger.setValue(current != null ? current + 1 : 1L);
     }
     
     /**
