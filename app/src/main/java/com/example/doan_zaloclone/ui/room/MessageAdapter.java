@@ -556,4 +556,21 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                    oldMessage.getType().equals(newMessage.getType());
         }
     }
+
+    /**
+     * Get position of message by ID
+     * @param messageId Message ID to find
+     * @return Position in adapter, or -1 if not found
+     */
+    public int getPositionOfMessage(String messageId) {
+        if (messageId == null || messages == null) return -1;
+
+        for (int i = 0; i < messages.size(); i++) {
+            Message msg = messages.get(i);
+            if (msg != null && messageId.equals(msg.getId())) {
+                return i;
+            }
+        }
+        return -1;
+    }
 }
