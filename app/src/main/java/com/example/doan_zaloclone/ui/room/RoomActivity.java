@@ -410,6 +410,20 @@ public class RoomActivity extends AppCompatActivity {
                 ? firebaseAuth.getCurrentUser().getUid() 
                 : "";
         messageAdapter = new MessageAdapter(new ArrayList<>(), currentUserId);
+        
+        // Set long-click listener for pin/unpin
+        messageAdapter.setOnMessageLongClickListener(new MessageAdapter.OnMessageLongClickListener() {
+            @Override
+            public void onPinMessage(Message message) {
+                roomViewModel.pinMessage(conversationId, message.getId());
+            }
+            
+            @Override
+            public void onUnpinMessage(Message message) {
+                roomViewModel.unpinMessage(conversationId, message.getId());
+            }
+        });
+        
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         messagesRecyclerView.setLayoutManager(layoutManager);

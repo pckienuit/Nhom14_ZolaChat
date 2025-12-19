@@ -36,6 +36,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private List<Message> messages;
     private String currentUserId;
     private boolean isGroupChat;
+    
+    // Listener for pin/unpin actions
+    public interface OnMessageLongClickListener {
+        void onPinMessage(Message message);
+        void onUnpinMessage(Message message);
+    }
+    
+    private OnMessageLongClickListener longClickListener;
 
     public MessageAdapter(List<Message> messages, String currentUserId) {
         this.messages = messages;
@@ -52,6 +60,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public void setGroupChat(boolean isGroupChat) {
         this.isGroupChat = isGroupChat;
         notifyDataSetChanged();
+    }
+    
+    public void setOnMessageLongClickListener(OnMessageLongClickListener listener) {
+        this.longClickListener = listener;
     }
 
     @Override
@@ -120,17 +132,17 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         Message message = messages.get(position);
         if (holder instanceof SentMessageViewHolder) {
-            ((SentMessageViewHolder) holder).bind(message);
+            ((SentMessageViewHolder) holder).bind(message, longClickListener);
         } else if (holder instanceof ReceivedMessageViewHolder) {
-            ((ReceivedMessageViewHolder) holder).bind(message, isGroupChat);
+            ((ReceivedMessageViewHolder) holder).bind(message, isGroupChat, longClickListener);
         } else if (holder instanceof ImageSentViewHolder) {
-            ((ImageSentViewHolder) holder).bind(message);
+            ((ImageSentViewHolder) holder).bind(message, longClickListener);
         } else if (holder instanceof ImageReceivedViewHolder) {
-            ((ImageReceivedViewHolder) holder).bind(message, isGroupChat);
+            ((ImageReceivedViewHolder) holder).bind(message, isGroupChat, longClickListener);
         } else if (holder instanceof FileMessageSentViewHolder) {
-            ((FileMessageSentViewHolder) holder).bind(message);
+            ((FileMessageSentViewHolder) holder).bind(message, longClickListener);
         } else if (holder instanceof FileMessageReceivedViewHolder) {
-            ((FileMessageReceivedViewHolder) holder).bind(message);
+            ((FileMessageReceivedViewHolder) holder).bind(message, longClickListener);
         } else if (holder instanceof CallHistoryViewHolder) {
             ((CallHistoryViewHolder) holder).bind(message);
         }
@@ -165,10 +177,34 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public List<Message> getMessages() {
         return messages;
     }
+    
+    private static void showMessageContextMenu(View view, Message message, OnMessageLongClickListener listener) {
+        android.widget.PopupMenu popup = new android.widget.PopupMenu(view.getContext(), view);
+        
+        popup.getMenu().add(0, 1, 0, "📌 Ghim tin nhắn");
+        popup.getMenu().add(0, 2, 0, "📌 Gỡ ghim");
+        
+        popup.setOnMenuItemClickListener(item -> {
+            if (listener == null) return false;
+            
+            int itemId = item.getItemId();
+            if (itemId == 1) {
+                listener.onPinMessage(message);
+                return true;
+            } else if (itemId == 2) {
+                listener.onUnpinMessage(message);
+                return true;
+            }
+            return false;
+        });
+        
+        popup.show();
+    }
 
     static class SentMessageViewHolder extends RecyclerView.ViewHolder {
         private TextView messageTextView;
         private TextView timestampTextView;
+        private OnMessageLongClickListener listener;
 
         public SentMessageViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -176,9 +212,15 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
         }
 
-        public void bind(Message message) {
+        public void bind(Message message, OnMessageLongClickListener listener) {
+            this.listener = listener;
             messageTextView.setText(message.getContent());
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            
+            itemView.setOnLongClickListener(v -> {
+                showMessageContextMenu(v, message, listener);
+                return true;
+            });
         }
     }
 
@@ -186,6 +228,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private TextView messageTextView;
         private TextView timestampTextView;
         private TextView senderNameTextView;
+        private OnMessageLongClickListener listener;
 
         public ReceivedMessageViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -194,7 +237,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
         }
 
-        public void bind(Message message, boolean isGroupChat) {
+        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener) {
+            this.listener = listener;
             messageTextView.setText(message.getContent());
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
             
@@ -225,12 +269,18 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     senderNameTextView.setVisibility(View.GONE);
                 }
             }
+            
+            itemView.setOnLongClickListener(v -> {
+                showMessageContextMenu(v, message, listener);
+                return true;
+            });
         }
     }
     
     static class ImageSentViewHolder extends RecyclerView.ViewHolder {
         private ImageView messageImageView;
         private TextView timestampTextView;
+        private OnMessageLongClickListener listener;
 
         public ImageSentViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -238,11 +288,17 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
         }
 
-        public void bind(Message message) {
+        public void bind(Message message, OnMessageLongClickListener listener) {
+            this.listener = listener;
             Glide.with(itemView.getContext())
                     .load(message.getContent())
                     .into(messageImageView);
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            
+            itemView.setOnLongClickListener(v -> {
+                showMessageContextMenu(v, message, listener);
+                return true;
+            });
         }
     }
     
@@ -250,6 +306,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private ImageView messageImageView;
         private TextView timestampTextView;
         private TextView senderNameTextView;
+        private OnMessageLongClickListener listener;
 
         public ImageReceivedViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -258,7 +315,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
         }
 
-        public void bind(Message message, boolean isGroupChat) {
+        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener) {
+            this.listener = listener;
             Glide.with(itemView.getContext())
                     .load(message.getContent())
                     .into(messageImageView);
@@ -291,6 +349,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     senderNameTextView.setVisibility(View.GONE);
                 }
             }
+            
+            itemView.setOnLongClickListener(v -> {
+                showMessageContextMenu(v, message, listener);
+                return true;
+            });
         }
     }
     
@@ -299,6 +362,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private TextView fileName;
         private TextView fileSize;
         private TextView timestampTextView;
+        private OnMessageLongClickListener listener;
 
         public FileMessageSentViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -308,7 +372,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
         }
 
-        public void bind(Message message) {
+        public void bind(Message message, OnMessageLongClickListener listener) {
+            this.listener = listener;
             fileName.setText(message.getFileName());
             
             // Display "FileType - Size" format
@@ -324,6 +389,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             
             // Add click listener to open file
             itemView.setOnClickListener(v -> openFile(message));
+            
+            itemView.setOnLongClickListener(v -> {
+                showMessageContextMenu(v, message, listener);
+                return true;
+            });
         }
         
         private void openFile(Message message) {
@@ -396,6 +466,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private TextView fileName;
         private TextView fileSize;
         private TextView timestampTextView;
+        private OnMessageLongClickListener listener;
 
         public FileMessageReceivedViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -405,7 +476,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
         }
 
-        public void bind(Message message) {
+        public void bind(Message message, OnMessageLongClickListener listener) {
+            this.listener = listener;
             fileName.setText(message.getFileName());
             
             // Display "FileType - Size" format
@@ -421,6 +493,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             
             // Add click listener to open file
             itemView.setOnClickListener(v -> openFile(message));
+            
+            itemView.setOnLongClickListener(v -> {
+                showMessageContextMenu(v, message, listener);
+                return true;
+            });
         }
         
         private void openFile(Message message) {
