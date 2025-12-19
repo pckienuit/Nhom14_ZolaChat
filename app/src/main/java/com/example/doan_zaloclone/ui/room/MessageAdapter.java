@@ -21,13 +21,13 @@ import java.util.Locale;
 
 public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
-    private static final int VIEW_TYPE_SENT = 1;
-    private static final int VIEW_TYPE_RECEIVED = 2;
-    private static final int VIEW_TYPE_IMAGE_SENT = 3;
-    private static final int VIEW_TYPE_IMAGE_RECEIVED = 4;
-    private static final int VIEW_TYPE_FILE_SENT = 5;
-    private static final int VIEW_TYPE_FILE_RECEIVED = 6;
-    private static final int VIEW_TYPE_CALL_HISTORY = 7;
+    public static final int VIEW_TYPE_SENT = 1;
+    public static final int VIEW_TYPE_RECEIVED = 2;
+    public static final int VIEW_TYPE_IMAGE_SENT = 3;
+    public static final int VIEW_TYPE_IMAGE_RECEIVED = 4;
+    public static final int VIEW_TYPE_FILE_SENT = 5;
+    public static final int VIEW_TYPE_FILE_RECEIVED = 6;
+    public static final int VIEW_TYPE_CALL_HISTORY = 7;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -775,5 +775,17 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
         }
         return -1;
+    }
+    
+    /**
+     * Get message at specific position
+     * @param position Position in adapter
+     * @return Message at position, or null if invalid
+     */
+    public Message getMessageAt(int position) {
+        if (position < 0 || position >= messages.size()) {
+            return null;
+        }
+        return messages.get(position);
     }
 }

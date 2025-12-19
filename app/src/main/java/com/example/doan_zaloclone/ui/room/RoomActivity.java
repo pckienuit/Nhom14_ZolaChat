@@ -469,6 +469,23 @@ public class RoomActivity extends AppCompatActivity {
         messagesRecyclerView.setLayoutManager(layoutManager);
         // Note: Not using setHasFixedSize(true) because messages have variable heights (text vs images)
         messagesRecyclerView.setAdapter(messageAdapter);
+        
+        // Setup swipe-to-reply gesture
+        SwipeToReplyCallback swipeCallback = new SwipeToReplyCallback(this, messageAdapter, new SwipeToReplyCallback.SwipeToReplyListener() {
+            @Override
+            public void onSwipeToReply(int position) {
+                if (position >= 0 && position < messageAdapter.getItemCount()) {
+                    Message message = messageAdapter.getMessageAt(position);
+                    if (message != null) {
+                        showReplyBar(message);
+                        // Reset the swiped item
+                        messageAdapter.notifyItemChanged(position);
+                    }
+                }
+            }
+        });
+        androidx.recyclerview.widget.ItemTouchHelper itemTouchHelper = new androidx.recyclerview.widget.ItemTouchHelper(swipeCallback);
+        itemTouchHelper.attachToRecyclerView(messagesRecyclerView);
     }
     
     private void showReplyBar(Message message) {
