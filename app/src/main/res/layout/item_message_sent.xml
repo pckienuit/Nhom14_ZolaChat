@@ -27,15 +27,52 @@
             app:cardElevation="2dp"
             app:cardBackgroundColor="@color/colorPrimary">
 
-            <TextView
-                android:id="@+id/messageTextView"
+            <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Message content"
-                android:textSize="16sp"
-                android:textColor="@color/white"
-                android:padding="12dp"
-                android:maxWidth="280dp" />
+                android:orientation="vertical"
+                android:maxWidth="280dp">
+
+                <!-- Reply Preview (visible only when replying to another message) -->
+                <LinearLayout
+                    android:id="@+id/replyPreviewContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#40FFFFFF"
+                    android:padding="8dp"
+                    android:layout_margin="4dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/replyToSenderName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Sender Name"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/white" />
+
+                    <TextView
+                        android:id="@+id/replyToContent"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Reply content"
+                        android:textSize="13sp"
+                        android:textColor="#E0FFFFFF"
+                        android:maxLines="2"
+                        android:ellipsize="end" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/messageTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Message content"
+                    android:textSize="16sp"
+                    android:textColor="@color/white"
+                    android:padding="12dp" />
+            </LinearLayout>
 
         </androidx.cardview.widget.CardView>
 
