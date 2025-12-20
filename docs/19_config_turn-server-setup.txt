@@ -1,0 +1,156 @@
+================================================================================
+CẤU HÌNH TURN SERVER CHO WEBRTC CALL (TURN Server Configuration)
+================================================================================
+
+MỤC ĐÍCH
+--------
+Tài liệu hướng dẫn cấu hình TURN server để đảm bảo cuộc gọi WebRTC hoạt động
+trong mọi điều kiện mạng, đặc biệt khi NAT traversal thất bại.
+
+
+VẤN ĐỀ GẶP PHẢI
+---------------
+- Cuộc gọi WebRTC thất bại khi 2 thiết bị ở mạng khác nhau (WiFi vs 4G)
+- STUN server không đủ để vượt qua NAT phức tạp (Symmetric NAT)
+- Cần TURN server để relay media traffic
+
+
+GIẢI PHÁP
+---------
+Sử dụng Metered.ca - dịch vụ TURN server miễn phí và đáng tin cậy với
+servers phân bố toàn cầu.
+
+
+CẤU HÌNH HIỆN TẠI
+-----------------
+
+File: WebRtcHelper.java
+Location: app/src/main/java/com/example/doan_zaloclone/utils/WebRtcHelper.java
+
+ICE Servers được cấu hình:
+
+1. STUN Servers (Google):
+   - stun:stun.l.google.com:19302
+   - stun:stun1.l.google.com:19302
+   - stun:stun2.l.google.com:19302
+
+2. STUN Server (Metered.ca):
+   - stun:stun.relay.metered.ca:80
+
+3. TURN Servers (Metered.ca):
+   - turn:standard.relay.metered.ca:80 (UDP - ưu tiên cho media)
+   - turn:standard.relay.metered.ca:80?transport=tcp (TCP fallback)
+   - turn:standard.relay.metered.ca:443 (TLS)
+   - turns:standard.relay.metered.ca:443?transport=tcp (TLS + TCP)
+
+
+CÁCH LẤY TURN CREDENTIALS TỪ METERED.CA
+---------------------------------------
+
+1. Đăng ký tài khoản tại: https://www.metered.ca/
+2. Tạo application mới trong Dashboard
+3. Chọn mục "TURN Server" trong menu
+4. Copy credentials:
+   - Username (ví dụ: 04c65f997e7fa31bf7a528b2)
+   - Credential/Password (ví dụ: /ag6A13UAeb6YeT/)
+5. Cập nhật vào file WebRtcHelper.java
+
+
+CÁCH TEST TURN SERVER
+---------------------
+
+1. Truy cập: https://webrtc.github.io/samples/src/content/peerconnection/trickle-ice/
+
+2. Nhập thông tin TURN server:
+   - STUN or TURN URI: turn:standard.relay.metered.ca:80
+   - TURN username: [username từ Metered.ca]
+   - TURN password: [credential từ Metered.ca]
+
+3. Click "Add Server"
+
+4. Click "Gather candidates"
+
+5. Kiểm tra kết quả:
+   - "host" - Local IP (OK)
+   - "srflx" - Server-Reflexive/STUN (OK)
+   - "relay" - TURN relay (BẮT BUỘC PHẢI CÓ)
+
+6. Nếu thấy "relay" candidate → TURN server hoạt động tốt
+
+
+CÁC LỖI THƯỜNG GẶP
+------------------
+
+1. Error 401 (Unauthorized):
+   - Nguyên nhân: Credentials sai hoặc hết hạn
+   - Giải pháp: Lấy credentials mới từ Metered.ca Dashboard
+
+2. Error 701 (Host lookup failed):
+   - Nguyên nhân: Không thể resolve hostname hoặc credentials sai
+   - Giải pháp: Kiểm tra kết nối mạng và credentials
+
+3. "Forbidden IP" (Error 403):
+   - Nguyên nhân: IP bị block bởi TURN server
+   - Giải pháp: Sử dụng TURN service khác (Metered.ca)
+
+4. ICE connection FAILED:
+   - Nguyên nhân: TURN server không relay được media
+   - Kiểm tra: VPS có block UDP không (cần port 49152-65535 UDP)
+   - Giải pháp: Dùng dịch vụ TURN chuyên dụng thay vì self-host
+
+
+TẠI SAO KHÔNG DÙNG SELF-HOSTED COTURN?
+--------------------------------------
+
+Đã thử self-hosted Coturn trên VPS với các vấn đề:
+
+1. VPS block UDP traffic trên relay ports (49152-65535)
+2. "Forbidden IP" errors do blacklist mặc định của Coturn
+3. TCP-only relay không hoạt động tốt với WebRTC media
+4. Cần cấu hình phức tạp và maintain server
+
+Kết luận: Sử dụng dịch vụ TURN chuyên dụng (Metered.ca) hiệu quả 
+và tiết kiệm thời gian hơn self-hosting.
+
+
+GÓI MIỄN PHÍ METERED.CA
+-----------------------
+- 500 MB/tháng cho TURN relay
+- 50 concurrent connections
+- Global servers (nhiều region)
+- Đủ cho development và testing
+- Upgrade nếu cần production scale
+
+
+LƯU Ý QUAN TRỌNG
+----------------
+
+1. TURN credentials có thể hết hạn - kiểm tra định kỳ
+
+2. Nếu cuộc gọi thất bại, kiểm tra:
+   - Trickle ICE test có relay candidate không?
+   - Logcat có lỗi ICE connection không?
+   - Cả 2 thiết bị đều có kết nối mạng?
+
+3. Thứ tự ưu tiên kết nối WebRTC:
+   - Direct P2P (cùng mạng)
+   - STUN (NAT traversal đơn giản)
+   - TURN relay (NAT phức tạp - cần thiết cho WiFi/4G khác mạng)
+
+
+FILES LIÊN QUAN
+---------------
+
+- WebRtcHelper.java: Cấu hình ICE servers
+- WebRtcRepository.java: Quản lý PeerConnection
+- CallViewModel.java: Xử lý logic cuộc gọi
+- CallActivity.java: UI cuộc gọi
+
+
+CẬP NHẬT
+--------
+
+Tạo ngày: 20/12/2025
+Vấn đề: Cuộc gọi thất bại giữa WiFi và 4G
+Giải pháp: Cấu hình Metered.ca TURN server
+Kết quả: Cuộc gọi hoạt động thành công
