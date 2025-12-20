@@ -1614,7 +1614,10 @@ public class RoomActivity extends AppCompatActivity {
         final int[] errorCount = {0};
         final int totalCount = friendIds.size();
         
+        android.util.Log.d("RoomActivity", "forwardMessageToFriends - currentUserId: " + currentUserId + ", friendIds: " + friendIds);
+        
         for (String friendId : friendIds) {
+            android.util.Log.d("RoomActivity", "Forwarding to friendId: " + friendId);
             // Get or create conversation with friend
             chatRepository.getOrCreateConversationWithFriend(currentUserId, friendId, new ChatRepository.ConversationCallback() {
                 @Override

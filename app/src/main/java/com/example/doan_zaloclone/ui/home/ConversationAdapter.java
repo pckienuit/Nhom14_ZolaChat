@@ -101,6 +101,8 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             
             // Display name logic
             String displayName;
+            boolean needsAsyncNameFetch = false;
+            
             if (isGroupChat) {
                 // For group chats, use the conversation name
                 displayName = conversation.getName();
@@ -118,12 +120,16 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
                                       ", memberIds: " + (conversation.getMemberIds() != null ? conversation.getMemberIds().size() : "null") +
                                       ", displayName: " + displayName);
                     
-                    // If name is "User" (placeholder), fetch real name from Firestore
-                    if (displayName != null && displayName.equals("User")) {
-                        // Find other user ID
+                    // If name is empty or "User" (placeholder), fetch real name from Firestore
+                    if (displayName == null || displayName.isEmpty() || displayName.equals("User")) {
+                        // Find other user ID and fetch name
                         if (conversation.getMemberIds() != null && conversation.getMemberIds().size() == 2) {
                             for (String memberId : conversation.getMemberIds()) {
                                 if (!memberId.equals(currentUserId)) {
+                                    // Set temporary display name
+                                    displayName = "Đang tải...";
+                                    needsAsyncNameFetch = true;
+                                    
                                     // Fetch real name from Firestore
                                     com.google.firebase.firestore.FirebaseFirestore.getInstance()
                                         .collection("users")
@@ -143,19 +149,19 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
                                 }
                             }
                         }
-                    }
-                    
-                    if (displayName == null || displayName.isEmpty()) {
-                        // Fallback: try to get other user ID
-                        if (conversation.getMemberIds() != null && conversation.getMemberIds().size() == 2) {
-                            for (String memberId : conversation.getMemberIds()) {
-                                if (!memberId.equals(currentUserId)) {
-                                    displayName = "User " + memberId.substring(0, Math.min(8, memberId.length()));
-                                    break;
+                        
+                        // If still no name and didn't trigger async fetch
+                        if (!needsAsyncNameFetch && (displayName == null || displayName.isEmpty())) {
+                            if (conversation.getMemberIds() != null && conversation.getMemberIds().size() == 2) {
+                                for (String memberId : conversation.getMemberIds()) {
+                                    if (!memberId.equals(currentUserId)) {
+                                        displayName = "User " + memberId.substring(0, Math.min(8, memberId.length()));
+                                        break;
+                                    }
                                 }
+                            } else {
+                                displayName = "Conversation";
                             }
-                        } else {
-                            displayName = "Conversation";
                         }
                     }
                 } else {
