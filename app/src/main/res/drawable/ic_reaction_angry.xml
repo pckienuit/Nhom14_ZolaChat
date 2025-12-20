@@ -1,0 +1,36 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Angry face emoji -->
+    <path
+        android:fillColor="#FF6347"
+        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"/>
+    <!-- Left eyebrow (angled down) -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#8B0000"
+        android:strokeWidth="2"
+        android:pathData="M6,8L10,9.5"/>
+    <!-- Right eyebrow (angled down) -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#8B0000"
+        android:strokeWidth="2"
+        android:pathData="M18,8L14,9.5"/>
+    <!-- Left eye -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M8.5,11m-1.2,0a1.2,1.2 0,1 1,2.4 0a1.2,1.2 0,1 1,-2.4 0"/>
+    <!-- Right eye -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M15.5,11m-1.2,0a1.2,1.2 0,1 1,2.4 0a1.2,1.2 0,1 1,-2.4 0"/>
+    <!-- Angry mouth (frown) -->
+    <path
+        android:fillColor="@android:color/transparent"
+        android:strokeColor="#000000"
+        android:strokeWidth="1.8"
+        android:pathData="M8,17c0,-2.21 1.79,-4 4,-4s4,1.79 4,4"/>
+</vector>
