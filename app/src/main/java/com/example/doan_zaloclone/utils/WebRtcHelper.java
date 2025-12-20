@@ -28,6 +28,7 @@ public class WebRtcHelper {
     /**
      * Get default ICE servers for WebRTC connection
      * Uses Google's free STUN servers for NAT traversal
+     * Includes multiple TURN servers for reliable cross-network connectivity
      * 
      * @return List of ICE servers
      */
@@ -39,26 +40,44 @@ public class WebRtcHelper {
         iceServers.add(PeerConnection.IceServer.builder(STUN_SERVER_2).createIceServer());
         iceServers.add(PeerConnection.IceServer.builder(STUN_SERVER_3).createIceServer());
         
-        // Add FREE TURN servers from Metered.ca
-        // More reliable than Open Relay Project for testing
+        // ============================================================
+        // TURN SERVER - Metered.ca (reliable global relay)
+        // ============================================================
+        String meteredUsername = "04c65f997e7fa31bf7a528b2";
+        String meteredCredential = "/ag6A13UAeb6YeT/";
+        
+        // STUN server
+        iceServers.add(PeerConnection.IceServer.builder("stun:stun.relay.metered.ca:80").createIceServer());
+        
+        // TURN UDP (preferred for media)
         iceServers.add(
-            PeerConnection.IceServer.builder("turn:a.relay.metered.ca:80")
-                .setUsername("87662b8ca63f0c36f8afb86f")
-                .setPassword("W91wCu2RKr6GmGd/")
+            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:80")
+                .setUsername(meteredUsername)
+                .setPassword(meteredCredential)
                 .createIceServer()
         );
         
+        // TURN TCP (fallback)
         iceServers.add(
-            PeerConnection.IceServer.builder("turn:a.relay.metered.ca:443")
-                .setUsername("87662b8ca63f0c36f8afb86f")
-                .setPassword("W91wCu2RKr6GmGd/")
+            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:80?transport=tcp")
+                .setUsername(meteredUsername)
+                .setPassword(meteredCredential)
                 .createIceServer()
         );
         
+        // TURN TLS (secure fallback)
         iceServers.add(
-            PeerConnection.IceServer.builder("turn:a.relay.metered.ca:443?transport=tcp")
-                .setUsername("87662b8ca63f0c36f8afb86f")
-                .setPassword("W91wCu2RKr6GmGd/")
+            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:443")
+                .setUsername(meteredUsername)
+                .setPassword(meteredCredential)
+                .createIceServer()
+        );
+        
+        // TURNS (TLS + TCP)
+        iceServers.add(
+            PeerConnection.IceServer.builder("turns:standard.relay.metered.ca:443?transport=tcp")
+                .setUsername(meteredUsername)
+                .setPassword(meteredCredential)
                 .createIceServer()
         );
         
