@@ -41,43 +41,25 @@ public class WebRtcHelper {
         iceServers.add(PeerConnection.IceServer.builder(STUN_SERVER_3).createIceServer());
         
         // ============================================================
-        // TURN SERVER - Metered.ca (reliable global relay)
+        // TURN SERVER - Self-hosted Coturn VPS (UDP supported)
         // ============================================================
-        String meteredUsername = "04c65f997e7fa31bf7a528b2";
-        String meteredCredential = "/ag6A13UAeb6YeT/";
-        
-        // STUN server
-        iceServers.add(PeerConnection.IceServer.builder("stun:stun.relay.metered.ca:80").createIceServer());
+        String coturnUsername = "pckien";
+        String coturnCredential = "18092005";
+        String coturnServer = "163.61.182.20";
         
         // TURN UDP (preferred for media)
         iceServers.add(
-            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:80")
-                .setUsername(meteredUsername)
-                .setPassword(meteredCredential)
+            PeerConnection.IceServer.builder("turn:" + coturnServer + ":3478")
+                .setUsername(coturnUsername)
+                .setPassword(coturnCredential)
                 .createIceServer()
         );
         
         // TURN TCP (fallback)
         iceServers.add(
-            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:80?transport=tcp")
-                .setUsername(meteredUsername)
-                .setPassword(meteredCredential)
-                .createIceServer()
-        );
-        
-        // TURN TLS (secure fallback)
-        iceServers.add(
-            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:443")
-                .setUsername(meteredUsername)
-                .setPassword(meteredCredential)
-                .createIceServer()
-        );
-        
-        // TURNS (TLS + TCP)
-        iceServers.add(
-            PeerConnection.IceServer.builder("turns:standard.relay.metered.ca:443?transport=tcp")
-                .setUsername(meteredUsername)
-                .setPassword(meteredCredential)
+            PeerConnection.IceServer.builder("turn:" + coturnServer + ":3478?transport=tcp")
+                .setUsername(coturnUsername)
+                .setPassword(coturnCredential)
                 .createIceServer()
         );
         
