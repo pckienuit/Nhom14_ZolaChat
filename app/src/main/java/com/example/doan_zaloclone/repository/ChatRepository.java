@@ -814,6 +814,150 @@ public class ChatRepository {
         return result;
     }
 
+    // ===================== MESSAGE REACTIONS METHODS =====================
+    
+    /**
+     * Add or update a reaction to a message
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to react to
+     * @param userId ID of the user adding the reaction
+     * @param reactionType Type of reaction (heart, haha, sad, angry, wow, like)
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> addReaction(@NonNull String conversationId,
+                                                    @NonNull String messageId,
+                                                    @NonNull String userId,
+                                                    @NonNull String reactionType) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        // Validate reaction type
+        if (!com.example.doan_zaloclone.models.MessageReaction.isValidReactionType(reactionType)) {
+            result.setValue(Resource.error("Loại cảm xúc không hợp lệ"));
+            return result;
+        }
+        
+        // Update the reactions map field in Firestore
+        DocumentReference messageRef = firestore
+                .collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document(messageId);
+        
+        // Use Firestore's Map field update to add/update the user's reaction
+        messageRef.update("reactions." + userId, reactionType)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d("ChatRepository", "Reaction added: " + reactionType + " by user: " + userId);
+                    result.setValue(Resource.success(true));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("ChatRepository", "Error adding reaction", e);
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Không thể thêm cảm xúc";
+                    result.setValue(Resource.error(errorMessage));
+                });
+        
+        return result;
+    }
+    
+    /**
+     * Remove a user's reaction from a message
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message
+     * @param userId ID of the user removing their reaction
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId,
+                                                       @NonNull String messageId,
+                                                       @NonNull String userId) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        DocumentReference messageRef = firestore
+                .collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document(messageId);
+        
+        // Use Firestore's FieldValue.delete() to remove the user's reaction from the map
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("reactions." + userId, com.google.firebase.firestore.FieldValue.delete());
+        
+        messageRef.update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d("ChatRepository", "Reaction removed by user: " + userId);
+                    result.setValue(Resource.success(true));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("ChatRepository", "Error removing reaction", e);
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Không thể xóa cảm xúc";
+                    result.setValue(Resource.error(errorMessage));
+                });
+        
+        return result;
+    }
+    
+    /**
+     * Toggle a reaction - if user already has this reaction type, remove it; otherwise add/update it
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message
+     * @param userId ID of the user toggling the reaction
+     * @param reactionType Type of reaction to toggle
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> toggleReaction(@NonNull String conversationId,
+                                                       @NonNull String messageId,
+                                                       @NonNull String userId,
+                                                       @NonNull String reactionType) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        // First, fetch the current message to check existing reaction
+        DocumentReference messageRef = firestore
+                .collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document(messageId);
+        
+        messageRef.get()
+                .addOnSuccessListener(doc -> {
+                    if (!doc.exists()) {
+                        result.setValue(Resource.error("Tin nhắn không tồn tại"));
+                        return;
+                    }
+                    
+                    Message message = doc.toObject(Message.class);
+                    if (message == null) {
+                        result.setValue(Resource.error("Không thể đọc tin nhắn"));
+                        return;
+                    }
+                    
+                    String currentReaction = message.getUserReaction(userId);
+                    
+                    // If user already has this exact reaction, remove it
+                    if (reactionType.equals(currentReaction)) {
+                        LiveData<Resource<Boolean>> removeResult = removeReaction(conversationId, messageId, userId);
+                        removeResult.observeForever(resource -> result.setValue(resource));
+                    } else {
+                        // Otherwise add/update the reaction
+                        LiveData<Resource<Boolean>> addResult = addReaction(conversationId, messageId, userId, reactionType);
+                        addResult.observeForever(resource -> result.setValue(resource));
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("ChatRepository", "Error fetching message for toggle reaction", e);
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Không thể thay đổi cảm xúc";
+                    result.setValue(Resource.error(errorMessage));
+                });
+        
+        return result;
+    }
+
     /**
      * Recall a message (mark as recalled and clear content)
      * @param conversationId ID of the conversation
