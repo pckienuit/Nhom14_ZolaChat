@@ -1,5 +1,7 @@
 package com.example.doan_zaloclone.models;
 
+import java.util.Map;
+
 public class Message {
     // Message types
     public static final String TYPE_TEXT = "TEXT";
@@ -31,6 +33,9 @@ public class Message {
     private boolean isForwarded;        // Message is forwarded
     private String originalSenderId;    // Original sender ID if forwarded
     private String originalSenderName;  // Original sender name if forwarded
+    
+    // Reaction field - Map of userId to reaction type (heart, haha, sad, angry, wow, like)
+    private Map<String, String> reactions;
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Message() {
@@ -142,6 +147,10 @@ public class Message {
     public String getOriginalSenderName() {
         return originalSenderName;
     }
+    
+    public Map<String, String> getReactions() {
+        return reactions;
+    }
 
     // Setters (cần cho Firestore)
     public void setId(String id) {
@@ -217,6 +226,10 @@ public class Message {
     public void setOriginalSenderName(String originalSenderName) {
         this.originalSenderName = originalSenderName;
     }
+    
+    public void setReactions(Map<String, String> reactions) {
+        this.reactions = reactions;
+    }
 
     // Helper methods
     public boolean isTextMessage() {
@@ -282,5 +295,47 @@ public class Message {
         } else {
             return String.format("%.2f GB", fileSize / (1024.0 * 1024.0 * 1024.0));
         }
+    }
+    
+    /**
+     * Check if this message has any reactions
+     * @return true if message has at least one reaction
+     */
+    public boolean hasReactions() {
+        return reactions != null && !reactions.isEmpty();
+    }
+    
+    /**
+     * Get total reaction count
+     * @return Number of users who reacted
+     */
+    public int getReactionCount() {
+        return MessageReaction.getReactionCount(reactions);
+    }
+    
+    /**
+     * Get formatted reaction count for display
+     * @return Formatted string (e.g., "5", "99+")
+     */
+    public String getFormattedReactionCount() {
+        return MessageReaction.getFormattedReactionCount(reactions);
+    }
+    
+    /**
+     * Get user's reaction type
+     * @param userId User ID to check
+     * @return Reaction type or null if user hasn't reacted
+     */
+    public String getUserReaction(String userId) {
+        return MessageReaction.getUserReaction(reactions, userId);
+    }
+    
+    /**
+     * Check if a specific user has reacted
+     * @param userId User ID to check
+     * @return true if user has reacted
+     */
+    public boolean hasUserReacted(String userId) {
+        return MessageReaction.hasUserReacted(reactions, userId);
     }
 }
