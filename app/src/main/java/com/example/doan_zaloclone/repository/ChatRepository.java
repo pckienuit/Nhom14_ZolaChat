@@ -118,6 +118,17 @@ public class ChatRepository {
                 messageData.put("replyToSenderName", message.getReplyToSenderName());
             }
         }
+        
+        // Add forward fields if this is a forwarded message
+        if (message.isForwarded()) {
+            messageData.put("isForwarded", true);
+            if (message.getOriginalSenderId() != null) {
+                messageData.put("originalSenderId", message.getOriginalSenderId());
+            }
+            if (message.getOriginalSenderName() != null) {
+                messageData.put("originalSenderName", message.getOriginalSenderName());
+            }
+        }
 
         // Save message to Firestore
         messageRef.set(messageData)
@@ -843,6 +854,59 @@ public class ChatRepository {
     }
 
     /**
+     * Forward a message to a target conversation
+     * @param targetConversationId ID of the conversation to forward to
+     * @param originalMessage Original message to forward
+     * @param newSenderId ID of the user forwarding the message
+     * @param originalSenderName Name of the original sender (for display)
+     * @param callback Callback for success/error
+     */
+    public void forwardMessage(String targetConversationId, Message originalMessage, 
+                               String newSenderId, String originalSenderName, 
+                               ForwardMessageCallback callback) {
+        // Clone the message with new sender
+        Message forwardedMessage = new Message();
+        forwardedMessage.setSenderId(newSenderId);
+        forwardedMessage.setContent(originalMessage.getContent());
+        forwardedMessage.setType(originalMessage.getType());
+        forwardedMessage.setTimestamp(System.currentTimeMillis());
+        
+        // Copy file metadata if applicable
+        if (Message.TYPE_FILE.equals(originalMessage.getType()) || 
+            Message.TYPE_IMAGE.equals(originalMessage.getType())) {
+            forwardedMessage.setFileName(originalMessage.getFileName());
+            forwardedMessage.setFileSize(originalMessage.getFileSize());
+            forwardedMessage.setFileMimeType(originalMessage.getFileMimeType());
+        }
+        
+        // Set forward metadata
+        forwardedMessage.setForwarded(true);
+        forwardedMessage.setOriginalSenderId(originalMessage.getSenderId());
+        forwardedMessage.setOriginalSenderName(originalSenderName);
+        
+        // Send the forwarded message
+        sendMessage(targetConversationId, forwardedMessage, new SendMessageCallback() {
+            @Override
+            public void onSuccess() {
+                callback.onSuccess();
+            }
+            
+            @Override
+            public void onError(String error) {
+                callback.onError(error);
+            }
+        });
+    }
+
+    /**
+     * Callback interface for forward message operations
+     */
+    public interface ForwardMessageCallback {
+        void onSuccess();
+        void onError(String error);
+    }
+
+    /**
      * Callback interface for send message operations
      */
     public interface SendMessageCallback {
@@ -856,5 +920,178 @@ public class ChatRepository {
     public interface MessagesListener {
         void onMessagesChanged(List<Message> messages);
         void onError(String error);
+    }
+    
+    /**
+     * Callback interface for conversation operations
+     */
+    public interface ConversationCallback {
+        void onSuccess(String conversationId);
+        void onError(String error);
+    }
+    
+    /**
+     * Get or create a conversation with a friend
+     * If existing conversation is missing memberNames, it will be updated
+     */
+    public void getOrCreateConversationWithFriend(String currentUserId, String friendId, ConversationCallback callback) {
+        android.util.Log.d("ChatRepository", "getOrCreateConversationWithFriend - currentUserId: " + currentUserId + ", friendId: " + friendId);
+        
+        // Query for existing conversation between these two users
+        // Don't filter by type - old conversations may not have type field
+        firestore.collection("conversations")
+            .whereArrayContains("memberIds", currentUserId)
+            .get()
+            .addOnSuccessListener(querySnapshot -> {
+                android.util.Log.d("ChatRepository", "Found " + querySnapshot.size() + " conversations containing currentUser");
+                
+                com.google.firebase.firestore.DocumentSnapshot existingDoc = null;
+                
+                // Find 1-1 conversation that contains both users
+                for (com.google.firebase.firestore.DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                    java.util.List<String> memberIds = (java.util.List<String>) doc.get("memberIds");
+                    String type = doc.getString("type");
+                    
+                    android.util.Log.d("ChatRepository", "Checking conversation " + doc.getId() + 
+                        " - memberIds: " + memberIds + ", type: " + type + 
+                        ", containsFriend: " + (memberIds != null && memberIds.contains(friendId)));
+                    
+                    // Check if this is a 1-1 conversation (2 members, and type is FRIEND or null/empty)
+                    if (memberIds != null && memberIds.contains(friendId) && memberIds.size() == 2) {
+                        // Accept conversations with type=FRIEND, type=null, or type="" (for backward compatibility)
+                        if (type == null || type.isEmpty() || "FRIEND".equals(type)) {
+                            android.util.Log.d("ChatRepository", "Found existing conversation: " + doc.getId());
+                            existingDoc = doc;
+                            break;
+                        }
+                    }
+                }
+                
+                if (existingDoc != null) {
+                    final String conversationId = existingDoc.getId();
+                    android.util.Log.d("ChatRepository", "Using existing conversation: " + conversationId);
+                    
+                    // Check if conversation has memberNames and type
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, String> existingMemberNames = 
+                        (java.util.Map<String, String>) existingDoc.get("memberNames");
+                    String existingType = existingDoc.getString("type");
+                    
+                    if (existingMemberNames == null || existingMemberNames.isEmpty() || 
+                        existingType == null || existingType.isEmpty()) {
+                        // Missing memberNames or type - update the existing conversation
+                        updateConversationMemberNamesAndType(conversationId, currentUserId, friendId, callback);
+                    } else {
+                        callback.onSuccess(conversationId);
+                    }
+                } else {
+                    android.util.Log.d("ChatRepository", "No existing conversation found, creating new one");
+                    // Create new conversation
+                    createConversationWithFriend(currentUserId, friendId, callback);
+                }
+            })
+            .addOnFailureListener(e -> {
+                android.util.Log.e("ChatRepository", "Error querying conversations", e);
+                callback.onError(e.getMessage());
+            });
+    }
+    
+    /**
+     * Update memberNames and type for an existing conversation that's missing them
+     */
+    private void updateConversationMemberNamesAndType(String conversationId, String currentUserId, String friendId, ConversationCallback callback) {
+        // Fetch both user names
+        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> currentUserTask = 
+            firestore.collection("users").document(currentUserId).get();
+        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> friendTask = 
+            firestore.collection("users").document(friendId).get();
+        
+        com.google.android.gms.tasks.Tasks.whenAllSuccess(currentUserTask, friendTask)
+            .addOnSuccessListener(results -> {
+                com.google.firebase.firestore.DocumentSnapshot currentUserDoc = 
+                    (com.google.firebase.firestore.DocumentSnapshot) results.get(0);
+                com.google.firebase.firestore.DocumentSnapshot friendDoc = 
+                    (com.google.firebase.firestore.DocumentSnapshot) results.get(1);
+                
+                String currentUserName = currentUserDoc.exists() && currentUserDoc.getString("name") != null 
+                    ? currentUserDoc.getString("name") : "User";
+                String friendName = friendDoc.exists() && friendDoc.getString("name") != null 
+                    ? friendDoc.getString("name") : "User";
+                
+                // Update conversation with memberNames and type
+                java.util.Map<String, String> memberNames = new java.util.HashMap<>();
+                memberNames.put(currentUserId, currentUserName);
+                memberNames.put(friendId, friendName);
+                
+                java.util.Map<String, Object> updates = new java.util.HashMap<>();
+                updates.put("memberNames", memberNames);
+                updates.put("type", "FRIEND");
+                
+                firestore.collection("conversations")
+                    .document(conversationId)
+                    .update(updates)
+                    .addOnSuccessListener(aVoid -> callback.onSuccess(conversationId))
+                    .addOnFailureListener(e -> {
+                        // Still return success even if update fails - the conversation exists
+                        android.util.Log.e("ChatRepository", "Failed to update memberNames/type", e);
+                        callback.onSuccess(conversationId);
+                    });
+            })
+            .addOnFailureListener(e -> {
+                // Still return success - the conversation exists
+                android.util.Log.e("ChatRepository", "Failed to fetch user names for update", e);
+                callback.onSuccess(conversationId);
+            });
+    }
+    
+    /**
+     * Create a new conversation with a friend
+     * Fetches user names from Firestore to properly populate memberNames
+     */
+    private void createConversationWithFriend(String currentUserId, String friendId, ConversationCallback callback) {
+        // First, fetch both user names
+        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> currentUserTask = 
+            firestore.collection("users").document(currentUserId).get();
+        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> friendTask = 
+            firestore.collection("users").document(friendId).get();
+        
+        com.google.android.gms.tasks.Tasks.whenAllSuccess(currentUserTask, friendTask)
+            .addOnSuccessListener(results -> {
+                com.google.firebase.firestore.DocumentSnapshot currentUserDoc = 
+                    (com.google.firebase.firestore.DocumentSnapshot) results.get(0);
+                com.google.firebase.firestore.DocumentSnapshot friendDoc = 
+                    (com.google.firebase.firestore.DocumentSnapshot) results.get(1);
+                
+                String currentUserName = currentUserDoc.exists() && currentUserDoc.getString("name") != null 
+                    ? currentUserDoc.getString("name") : "User";
+                String friendName = friendDoc.exists() && friendDoc.getString("name") != null 
+                    ? friendDoc.getString("name") : "User";
+                
+                // Create conversation with proper memberNames
+                java.util.Map<String, Object> conversationData = new java.util.HashMap<>();
+                java.util.List<String> memberIds = java.util.Arrays.asList(currentUserId, friendId);
+                conversationData.put("memberIds", memberIds);
+                conversationData.put("type", "FRIEND");
+                conversationData.put("name", ""); // Empty for 1-1 chats
+                conversationData.put("timestamp", System.currentTimeMillis());
+                conversationData.put("lastMessage", "");
+                
+                // Store member names for proper display
+                java.util.Map<String, String> memberNames = new java.util.HashMap<>();
+                memberNames.put(currentUserId, currentUserName);
+                memberNames.put(friendId, friendName);
+                conversationData.put("memberNames", memberNames);
+                
+                firestore.collection("conversations")
+                    .add(conversationData)
+                    .addOnSuccessListener(docRef -> {
+                        // Update document with its own ID
+                        docRef.update("id", docRef.getId())
+                            .addOnSuccessListener(aVoid -> callback.onSuccess(docRef.getId()))
+                            .addOnFailureListener(e -> callback.onSuccess(docRef.getId())); // Still succeed even if id update fails
+                    })
+                    .addOnFailureListener(e -> callback.onError(e.getMessage()));
+            })
+            .addOnFailureListener(e -> callback.onError("Failed to fetch user names: " + e.getMessage()));
     }
 }

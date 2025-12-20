@@ -35,6 +35,7 @@ import com.example.doan_zaloclone.utils.ImageUtils;
 import com.example.doan_zaloclone.utils.MediaStoreHelper;
 import com.example.doan_zaloclone.utils.PermissionHelper;
 import com.example.doan_zaloclone.viewmodel.RoomViewModel;
+import com.example.doan_zaloclone.viewmodel.ContactViewModel;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.ListenerRegistration;
 import androidx.lifecycle.ViewModelProvider;
@@ -55,6 +56,7 @@ public class RoomActivity extends AppCompatActivity {
     private String conversationName;
     
     private RoomViewModel roomViewModel;
+    private ContactViewModel contactViewModel;
     private ChatRepository chatRepository; // For backward compatibility with image uploads
     private FirebaseAuth firebaseAuth;
     
@@ -125,6 +127,7 @@ public class RoomActivity extends AppCompatActivity {
         
         // Initialize ViewModel
         roomViewModel = new ViewModelProvider(this).get(RoomViewModel.class);
+        contactViewModel = new ViewModelProvider(this).get(ContactViewModel.class);
         chatRepository = new ChatRepository(); // For legacy image upload operations
         firebaseAuth = FirebaseAuth.getInstance();
         
@@ -477,6 +480,14 @@ public class RoomActivity extends AppCompatActivity {
             @Override
             public void onRecallMessage(Message message) {
                 showRecallConfirmDialog(message);
+            }
+        });
+        
+        // Set forward listener - show forward dialog
+        messageAdapter.setOnMessageForwardListener(new MessageAdapter.OnMessageForwardListener() {
+            @Override
+            public void onForwardMessage(Message message) {
+                showForwardDialog(message);
             }
         });
         
@@ -1474,6 +1485,180 @@ public class RoomActivity extends AppCompatActivity {
                 Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
             }
         });
+    }
+    
+    /**
+     * Show forward message dialog
+     */
+    private void showForwardDialog(Message message) {
+        // Inflate dialog layout
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_forward_message, null);
+        
+        // Find views
+        EditText searchEditText = dialogView.findViewById(R.id.searchEditText);
+        TextView selectedCountText = dialogView.findViewById(R.id.selectedCountText);
+        RecyclerView friendsRecyclerView = dialogView.findViewById(R.id.friendsRecyclerView);
+        TextView emptyStateText = dialogView.findViewById(R.id.emptyStateText);
+        
+        // Create final reference for use in callbacks
+        final View sendBtn = dialogView.findViewById(R.id.sendButton);
+        
+        // Setup RecyclerView
+        ForwardFriendsAdapter adapter = new ForwardFriendsAdapter(new ArrayList<>(), selectedCount -> {
+            // Handle selection change - update UI
+            if (selectedCount > 0) {
+                selectedCountText.setVisibility(View.VISIBLE);
+                selectedCountText.setText("Đã chọn " + selectedCount + " bạn");
+                sendBtn.setEnabled(true);
+            } else {
+                selectedCountText.setVisibility(View.GONE);
+                sendBtn.setEnabled(false);
+            }
+        });
+        
+        friendsRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        friendsRecyclerView.setAdapter(adapter);
+        
+        // Create dialog
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(dialogView)
+                .create();
+        
+        // Setup buttons
+        dialogView.findViewById(R.id.cancelButton).setOnClickListener(v -> dialog.dismiss());
+        
+        dialogView.findViewById(R.id.sendButton).setOnClickListener(v -> {
+            java.util.List<String> selectedFriendIds = adapter.getSelectedFriendIds();
+            if (selectedFriendIds.isEmpty()) {
+                Toast.makeText(this, "Vui lòng chọn ít nhất một người nhận", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // Forward message to all selected friends
+            String currentUserId = firebaseAuth.getCurrentUser() != null 
+                    ? firebaseAuth.getCurrentUser().getUid() : "";
+            
+            // Get sender name for forwarding
+            fetchSenderNameAndForward(message, selectedFriendIds, currentUserId, dialog);
+        });
+        
+        // Disable send button initially (enabled via selection listener)
+        dialogView.findViewById(R.id.sendButton).setEnabled(false);
+        
+        // Setup search
+        searchEditText.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                adapter.filter(s.toString());
+            }
+            
+            @Override
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+        
+        // Load friends
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+                ? firebaseAuth.getCurrentUser().getUid() : "";
+        contactViewModel.getFriends(currentUserId).observe(this, resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                java.util.List<com.example.doan_zaloclone.models.User> friends = resource.getData();
+                if (friends.isEmpty()) {
+                    emptyStateText.setVisibility(View.VISIBLE);
+                    friendsRecyclerView.setVisibility(View.GONE);
+                } else {
+                    emptyStateText.setVisibility(View.GONE);
+                    friendsRecyclerView.setVisibility(View.VISIBLE);
+                    adapter.updateFriends(friends);
+                }
+            }
+        });
+        
+        dialog.show();
+    }
+    
+    /**
+     * Fetch sender name and forward message
+     */
+    private void fetchSenderNameAndForward(Message message, java.util.List<String> friendIds, String currentUserId, AlertDialog dialog) {
+        String senderId = message.getSenderId();
+        
+        // Fetch sender name
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(senderId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    String senderName = "User";
+                    if (doc.exists()) {
+                        senderName = doc.getString("name");
+                        if (senderName == null) senderName = "User";
+                    }
+                    
+                    // Forward to each selected friend
+                    forwardMessageToFriends(message, friendIds, currentUserId, senderName, dialog);
+                })
+                .addOnFailureListener(e -> {
+                    // Use default name on error
+                    forwardMessageToFriends(message, friendIds, currentUserId, "User", dialog);
+                });
+    }
+    
+    /**
+     * Forward message to selected friends
+     */
+    private void forwardMessageToFriends(Message message, java.util.List<String> friendIds, String currentUserId, String originalSenderName, AlertDialog dialog) {
+        final int[] successCount = {0};
+        final int[] errorCount = {0};
+        final int totalCount = friendIds.size();
+        
+        android.util.Log.d("RoomActivity", "forwardMessageToFriends - currentUserId: " + currentUserId + ", friendIds: " + friendIds);
+        
+        for (String friendId : friendIds) {
+            android.util.Log.d("RoomActivity", "Forwarding to friendId: " + friendId);
+            // Get or create conversation with friend
+            chatRepository.getOrCreateConversationWithFriend(currentUserId, friendId, new ChatRepository.ConversationCallback() {
+                @Override
+                public void onSuccess(String targetConversationId) {
+                    // Forward the message
+                    chatRepository.forwardMessage(targetConversationId, message, currentUserId, originalSenderName, new ChatRepository.ForwardMessageCallback() {
+                        @Override
+                        public void onSuccess() {
+                            successCount[0]++;
+                            checkForwardCompletion(successCount[0], errorCount[0], totalCount, dialog);
+                        }
+                        
+                        @Override
+                        public void onError(String error) {
+                            errorCount[0]++;
+                            checkForwardCompletion(successCount[0], errorCount[0], totalCount, dialog);
+                        }
+                    });
+                }
+                
+                @Override
+                public void onError(String error) {
+                    errorCount[0]++;
+                    checkForwardCompletion(successCount[0], errorCount[0], totalCount, dialog);
+                }
+            });
+        }
+    }
+    
+    /**
+     * Check if all forward operations completed
+     */
+    private void checkForwardCompletion(int successCount, int errorCount, int totalCount, AlertDialog dialog) {
+        if (successCount + errorCount == totalCount) {
+            dialog.dismiss();
+            if (errorCount == 0) {
+                Toast.makeText(this, "Đã chuyển tiếp tin nhắn đến " + successCount + " người", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Đã chuyển tiếp: " + successCount + ", Lỗi: " + errorCount, Toast.LENGTH_SHORT).show();
+            }
+        }
     }
     
     @Override
