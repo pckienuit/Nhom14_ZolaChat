@@ -364,56 +364,50 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             return; // Layout doesn't have reaction views
         }
         
-        // Check if message has reactions
-        if (message.hasReactions()) {
-            reactionIndicator.setVisibility(View.VISIBLE);
-            
-            // Get user's reaction or null if they haven't reacted
-            String userReaction = message.getUserReaction(currentUserId);
-            
-            // Set the appropriate icon
-            if (userReaction != null) {
-                // Show user's reaction icon
-                int iconRes = getReactionIconResource(userReaction);
-                reactionIcon.setImageResource(iconRes);
-            } else {
-                // Show default heart outline
-                reactionIcon.setImageResource(R.drawable.ic_reaction_heart_outline);
-            }
-            
-            // Show reaction count if > 0
-            int count = message.getReactionCount();
-            if (count > 0 && reactionCount != null) {
-                reactionCount.setVisibility(View.VISIBLE);
-                reactionCount.setText(message.getFormattedReactionCount());
-            } else if (reactionCount != null) {
-                reactionCount.setVisibility(View.GONE);
-            }
-            
-            // Set click listener - toggle user's default reaction
-            reactionIndicator.setOnClickListener(v -> {
-                if (reactionListener != null) {
-                    // If user has a reaction, use it; otherwise use heart
-                    String reactionType = userReaction != null 
-                            ? userReaction 
-                            : com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART;
-                    reactionListener.onReactionClick(message, reactionType);
-                }
-            });
-            
-            // Set long-press listener - show reaction picker
-            reactionIndicator.setOnLongClickListener(v -> {
-                if (reactionListener != null) {
-                    reactionListener.onReactionLongPress(message, v);
-                    return true;
-                }
-                return false;
-            });
-            
+        // Always show the reaction indicator to allow users to add reactions
+        reactionIndicator.setVisibility(View.VISIBLE);
+        
+        // Get user's reaction or null if they haven't reacted
+        String userReaction = message.getUserReaction(currentUserId);
+        
+        // Set the appropriate icon
+        if (userReaction != null) {
+            // Show user's reaction icon
+            int iconRes = getReactionIconResource(userReaction);
+            reactionIcon.setImageResource(iconRes);
         } else {
-            // No reactions - hide indicator
-            reactionIndicator.setVisibility(View.GONE);
+            // Show default heart outline (allows user to click to add heart reaction)
+            reactionIcon.setImageResource(R.drawable.ic_reaction_heart_outline);
         }
+        
+        // Show reaction count if > 0
+        int count = message.getReactionCount();
+        if (count > 0 && reactionCount != null) {
+            reactionCount.setVisibility(View.VISIBLE);
+            reactionCount.setText(message.getFormattedReactionCount());
+        } else if (reactionCount != null) {
+            reactionCount.setVisibility(View.GONE);
+        }
+        
+        // Set click listener - toggle user's default reaction (heart if no reaction, or their current reaction)
+        reactionIndicator.setOnClickListener(v -> {
+            if (reactionListener != null) {
+                // If user has a reaction, toggle it off; otherwise toggle heart on
+                String reactionType = userReaction != null 
+                        ? userReaction 
+                        : com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART;
+                reactionListener.onReactionClick(message, reactionType);
+            }
+        });
+        
+        // Set long-press listener - show reaction picker
+        reactionIndicator.setOnLongClickListener(v -> {
+            if (reactionListener != null) {
+                reactionListener.onReactionLongPress(message, v);
+                return true;
+            }
+            return false;
+        });
     }
     
     /**
