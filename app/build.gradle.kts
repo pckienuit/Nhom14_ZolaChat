@@ -77,6 +77,11 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+    // Thư viện bo tròn ảnh (CircleImageView) - Cần cho Newsfeed
+    implementation("de.hdodenhof:circleimageview:3.1.0")
 
-    
+    // (Tùy chọn) Thư viện hiển thị thời gian kiểu "vừa xong", "1 giờ trước"
+    implementation("org.ocpsoft.prettytime:prettytime:5.0.4.Final")
+
+
 }
