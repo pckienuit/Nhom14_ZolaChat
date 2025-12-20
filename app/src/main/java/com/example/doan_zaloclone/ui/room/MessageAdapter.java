@@ -126,6 +126,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public int getItemViewType(int position) {
         Message message = messages.get(position);
         
+        // Debug log
+        android.util.Log.d("MessageAdapter", "getItemViewType - position: " + position + 
+            ", messageId: " + message.getId() + 
+            ", isRecalled: " + message.isRecalled());
+        
         // Check if message is recalled first (takes precedence)
         if (message.isRecalled()) {
             return VIEW_TYPE_RECALLED;
@@ -250,12 +255,15 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
     
     private static void showMessageContextMenu(View view, Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnMessageRecallListener recallListener, boolean isPinned, String currentUserId) {
+        // Don't show context menu for recalled messages
+        if (message.isRecalled()) {
+            return;
+        }
+        
         android.widget.PopupMenu popup = new android.widget.PopupMenu(view.getContext(), view);
         
-        // Add reply option (not for recalled messages)
-        if (!message.isRecalled()) {
-            popup.getMenu().add(0, 3, 0, "↩️ Trả lời");
-        }
+        // Add reply option
+        popup.getMenu().add(0, 3, 0, "↩️ Trả lời");
         
         // Add pin/unpin option based on status
         if (isPinned) {

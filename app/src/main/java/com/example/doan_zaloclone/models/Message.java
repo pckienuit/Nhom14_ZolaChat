@@ -120,6 +120,11 @@ public class Message {
         return isRecalled;
     }
     
+    // Alias for Firestore deserialization (maps 'isRecalled' field to this getter)
+    public boolean getIsRecalled() {
+        return isRecalled;
+    }
+    
     public boolean isForwarded() {
         return isForwarded;
     }
@@ -179,6 +184,11 @@ public class Message {
     
     public void setRecalled(boolean recalled) {
         isRecalled = recalled;
+    }
+    
+    // Alias for Firestore deserialization
+    public void setIsRecalled(boolean isRecalled) {
+        this.isRecalled = isRecalled;
     }
     
     public void setForwarded(boolean forwarded) {

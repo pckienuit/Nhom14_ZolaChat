@@ -29,7 +29,10 @@ service cloud.firestore {
     match /conversations/{conversationId}/messages/{messageId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null;
-      allow update, delete: if false;
+      // Allow update only for message sender (for recall functionality)
+      allow update: if request.auth != null && 
+                       request.auth.uid == resource.data.senderId;
+      allow delete: if false;
     }
     
     // Friend requests collection
