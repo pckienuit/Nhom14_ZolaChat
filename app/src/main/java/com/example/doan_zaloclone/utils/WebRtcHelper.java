@@ -158,7 +158,7 @@ public class WebRtcHelper {
     
     /**
      * Create audio source constraints
-     * Controls audio capture settings
+     * Controls audio capture settings for optimal voice quality
      * 
      * @return MediaConstraints for audio source
      */
@@ -171,26 +171,34 @@ public class WebRtcHelper {
         constraints.mandatory.add(new MediaConstraints.KeyValuePair("googAutoGainControl", "true"));
         constraints.mandatory.add(new MediaConstraints.KeyValuePair("googHighpassFilter", "true"));
         
+        // Enhanced audio quality settings
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("googAudioMirroring", "false"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("googExperimentalEchoCancellation", "true"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("googExperimentalAutoGainControl", "true"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("googExperimentalNoiseSuppression", "true"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("googTypingNoiseDetection", "true"));
+        
         return constraints;
     }
     
     /**
      * Create video source constraints
-     * Controls video capture settings (resolution, fps)
+     * Controls video capture settings with adaptive resolution
+     * WebRTC automatically adjusts quality based on network bandwidth
      * 
      * @return MediaConstraints for video source
      */
     public static MediaConstraints createVideoSourceConstraints() {
         MediaConstraints constraints = new MediaConstraints();
         
-        // Set video resolution and frame rate
-        // Favor stability: lower the envelope to keep render/load balanced
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxWidth", "960"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxHeight", "960"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minWidth", "480"));
+        // Adaptive video quality (1080p to 360p)
+        // WebRTC automatically scales based on available bandwidth
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxWidth", "1920"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxHeight", "1080"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minWidth", "640"));
         constraints.mandatory.add(new MediaConstraints.KeyValuePair("minHeight", "360"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxFrameRate", "24"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minFrameRate", "15"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxFrameRate", "30"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minFrameRate", "10"));
         
         return constraints;
     }
