@@ -41,43 +41,25 @@ public class WebRtcHelper {
         iceServers.add(PeerConnection.IceServer.builder(STUN_SERVER_3).createIceServer());
         
         // ============================================================
-        // TURN SERVER - Metered.ca (reliable global relay)
+        // TURN SERVER - Self-hosted Coturn VPS (UDP supported)
         // ============================================================
-        String meteredUsername = "04c65f997e7fa31bf7a528b2";
-        String meteredCredential = "/ag6A13UAeb6YeT/";
-        
-        // STUN server
-        iceServers.add(PeerConnection.IceServer.builder("stun:stun.relay.metered.ca:80").createIceServer());
+        String coturnUsername = "pckien";
+        String coturnCredential = "18092005";
+        String coturnServer = "163.61.182.20";
         
         // TURN UDP (preferred for media)
         iceServers.add(
-            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:80")
-                .setUsername(meteredUsername)
-                .setPassword(meteredCredential)
+            PeerConnection.IceServer.builder("turn:" + coturnServer + ":3478")
+                .setUsername(coturnUsername)
+                .setPassword(coturnCredential)
                 .createIceServer()
         );
         
         // TURN TCP (fallback)
         iceServers.add(
-            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:80?transport=tcp")
-                .setUsername(meteredUsername)
-                .setPassword(meteredCredential)
-                .createIceServer()
-        );
-        
-        // TURN TLS (secure fallback)
-        iceServers.add(
-            PeerConnection.IceServer.builder("turn:standard.relay.metered.ca:443")
-                .setUsername(meteredUsername)
-                .setPassword(meteredCredential)
-                .createIceServer()
-        );
-        
-        // TURNS (TLS + TCP)
-        iceServers.add(
-            PeerConnection.IceServer.builder("turns:standard.relay.metered.ca:443?transport=tcp")
-                .setUsername(meteredUsername)
-                .setPassword(meteredCredential)
+            PeerConnection.IceServer.builder("turn:" + coturnServer + ":3478?transport=tcp")
+                .setUsername(coturnUsername)
+                .setPassword(coturnCredential)
                 .createIceServer()
         );
         
@@ -176,7 +158,7 @@ public class WebRtcHelper {
     
     /**
      * Create audio source constraints
-     * Controls audio capture settings
+     * Controls audio capture settings for optimal voice quality
      * 
      * @return MediaConstraints for audio source
      */
@@ -189,26 +171,34 @@ public class WebRtcHelper {
         constraints.mandatory.add(new MediaConstraints.KeyValuePair("googAutoGainControl", "true"));
         constraints.mandatory.add(new MediaConstraints.KeyValuePair("googHighpassFilter", "true"));
         
+        // Enhanced audio quality settings
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("googAudioMirroring", "false"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("googExperimentalEchoCancellation", "true"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("googExperimentalAutoGainControl", "true"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("googExperimentalNoiseSuppression", "true"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("googTypingNoiseDetection", "true"));
+        
         return constraints;
     }
     
     /**
      * Create video source constraints
-     * Controls video capture settings (resolution, fps)
+     * Controls video capture settings with adaptive resolution
+     * WebRTC automatically adjusts quality based on network bandwidth
      * 
      * @return MediaConstraints for video source
      */
     public static MediaConstraints createVideoSourceConstraints() {
         MediaConstraints constraints = new MediaConstraints();
         
-        // Set video resolution and frame rate
-        // Favor stability: lower the envelope to keep render/load balanced
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxWidth", "960"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxHeight", "960"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minWidth", "480"));
+        // Adaptive video quality (1080p to 360p)
+        // WebRTC automatically scales based on available bandwidth
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxWidth", "1920"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxHeight", "1080"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minWidth", "640"));
         constraints.mandatory.add(new MediaConstraints.KeyValuePair("minHeight", "360"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxFrameRate", "24"));
-        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minFrameRate", "15"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("maxFrameRate", "30"));
+        constraints.mandatory.add(new MediaConstraints.KeyValuePair("minFrameRate", "10"));
         
         return constraints;
     }
