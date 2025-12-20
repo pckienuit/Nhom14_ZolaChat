@@ -130,6 +130,11 @@ public class Message {
         return isForwarded;
     }
     
+    // Alias for Firestore deserialization (maps 'isForwarded' field to this getter)
+    public boolean getIsForwarded() {
+        return isForwarded;
+    }
+    
     public String getOriginalSenderId() {
         return originalSenderId;
     }
@@ -198,6 +203,11 @@ public class Message {
     
     public void setForwarded(boolean forwarded) {
         isForwarded = forwarded;
+    }
+    
+    // Alias for Firestore deserialization
+    public void setIsForwarded(boolean isForwarded) {
+        this.isForwarded = isForwarded;
     }
     
     public void setOriginalSenderId(String originalSenderId) {
