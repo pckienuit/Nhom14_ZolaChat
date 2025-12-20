@@ -18,6 +18,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
@@ -356,43 +357,85 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private static void bindReactionIndicator(View itemView, Message message, 
                                               String currentUserId, 
                                               OnMessageReactionListener reactionListener) {
-        View reactionIndicator = itemView.findViewById(R.id.reactionIndicator);
-        ImageView reactionIcon = itemView.findViewById(R.id.reactionIcon);
-        TextView reactionCount = itemView.findViewById(R.id.reactionCount);
+        // Find new layout views
+        View reactionContainer = itemView.findViewById(R.id.reactionContainer);
+        View existingReactionsLayout = itemView.findViewById(R.id.existingReactionsLayout);
+        ImageView addReactionButton = itemView.findViewById(R.id.addReactionButton);
         
-        if (reactionIndicator == null || reactionIcon == null) {
+        if (reactionContainer == null || addReactionButton == null) {
             return; // Layout doesn't have reaction views
         }
         
-        // Always show the reaction indicator to allow users to add reactions
-        reactionIndicator.setVisibility(View.VISIBLE);
+        // Always show reaction container and add button
+        reactionContainer.setVisibility(View.VISIBLE);
+        addReactionButton.setVisibility(View.VISIBLE);
         
-        // Get user's reaction or null if they haven't reacted
+        // Get reaction counts by type
+        Map<String, String> reactions = message.getReactions();
+        Map<String, Integer> reactionCounts = com.example.doan_zaloclone.models.MessageReaction.getReactionTypeCounts(reactions);
         String userReaction = message.getUserReaction(currentUserId);
         
-        // Set the appropriate icon
+        // Check if message has any reactions
+        boolean hasReactions = message.hasReactions();
+        
+        if (hasReactions && existingReactionsLayout != null) {
+            existingReactionsLayout.setVisibility(View.VISIBLE);
+            
+            // Bind each reaction type
+            bindSingleReaction(itemView, R.id.heartReactionLayout, R.id.heartReactionCount, 
+                    com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART, 
+                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART),
+                    message, reactionListener);
+            
+            bindSingleReaction(itemView, R.id.likeReactionLayout, R.id.likeReactionCount,
+                    com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE,
+                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE),
+                    message, reactionListener);
+            
+            bindSingleReaction(itemView, R.id.hahaReactionLayout, R.id.hahaReactionCount,
+                    com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA,
+                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA),
+                    message, reactionListener);
+            
+            bindSingleReaction(itemView, R.id.sadReactionLayout, R.id.sadReactionCount,
+                    com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD,
+                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD),
+                    message, reactionListener);
+            
+            bindSingleReaction(itemView, R.id.angryReactionLayout, R.id.angryReactionCount,
+                    com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY,
+                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY),
+                    message, reactionListener);
+            
+            bindSingleReaction(itemView, R.id.wowReactionLayout, R.id.wowReactionCount,
+                    com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW,
+                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW),
+                    message, reactionListener);
+                    
+            // Click on existing reactions container to show picker
+            existingReactionsLayout.setOnClickListener(v -> {
+                if (reactionListener != null) {
+                    reactionListener.onReactionLongPress(message, v);
+                }
+            });
+        } else if (existingReactionsLayout != null) {
+            existingReactionsLayout.setVisibility(View.GONE);
+        }
+        
+        // Update add reaction button icon based on user's reaction
         if (userReaction != null) {
-            // Show user's reaction icon
+            // User has reacted - show their reaction icon (filled)
             int iconRes = getReactionIconResource(userReaction);
-            reactionIcon.setImageResource(iconRes);
+            addReactionButton.setImageResource(iconRes);
         } else {
-            // Show default heart outline (allows user to click to add heart reaction)
-            reactionIcon.setImageResource(R.drawable.ic_reaction_heart_outline);
+            // No reaction - show heart outline
+            addReactionButton.setImageResource(R.drawable.ic_reaction_heart_outline);
         }
         
-        // Show reaction count if > 0
-        int count = message.getReactionCount();
-        if (count > 0 && reactionCount != null) {
-            reactionCount.setVisibility(View.VISIBLE);
-            reactionCount.setText(message.getFormattedReactionCount());
-        } else if (reactionCount != null) {
-            reactionCount.setVisibility(View.GONE);
-        }
-        
-        // Set click listener - toggle user's default reaction (heart if no reaction, or their current reaction)
-        reactionIndicator.setOnClickListener(v -> {
+        // Click on add reaction button
+        addReactionButton.setOnClickListener(v -> {
             if (reactionListener != null) {
-                // If user has a reaction, toggle it off; otherwise toggle heart on
+                // If user has a reaction, toggle it off; otherwise add heart
                 String reactionType = userReaction != null 
                         ? userReaction 
                         : com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART;
@@ -400,14 +443,42 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
         });
         
-        // Set long-press listener - show reaction picker
-        reactionIndicator.setOnLongClickListener(v -> {
+        // Long press on add reaction button to show picker
+        addReactionButton.setOnLongClickListener(v -> {
             if (reactionListener != null) {
                 reactionListener.onReactionLongPress(message, v);
                 return true;
             }
             return false;
         });
+    }
+    
+    /**
+     * Bind a single reaction type layout
+     */
+    private static void bindSingleReaction(View itemView, int layoutId, int countTextId,
+                                           String reactionType, int count,
+                                           Message message, OnMessageReactionListener listener) {
+        View layout = itemView.findViewById(layoutId);
+        TextView countText = itemView.findViewById(countTextId);
+        
+        if (layout == null) return;
+        
+        if (count > 0) {
+            layout.setVisibility(View.VISIBLE);
+            if (countText != null) {
+                countText.setText(String.valueOf(count));
+            }
+            
+            // Click on reaction to toggle it
+            layout.setOnClickListener(v -> {
+                if (listener != null) {
+                    listener.onReactionClick(message, reactionType);
+                }
+            });
+        } else {
+            layout.setVisibility(View.GONE);
+        }
     }
     
     /**
