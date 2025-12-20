@@ -804,6 +804,45 @@ public class ChatRepository {
     }
 
     /**
+     * Recall a message (mark as recalled and clear content)
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to recall
+     * @param callback Callback for success/error
+     */
+    public void recallMessage(String conversationId, String messageId, RecallMessageCallback callback) {
+        DocumentReference messageRef = firestore
+                .collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document(messageId);
+
+        // Update message to mark as recalled
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("isRecalled", true);
+        // Optionally clear sensitive content (keep metadata for audit)
+        updates.put("content", "");
+
+        messageRef.update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    callback.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Failed to recall message";
+                    callback.onError(errorMessage);
+                });
+    }
+
+    /**
+     * Callback interface for recall message operations
+     */
+    public interface RecallMessageCallback {
+        void onSuccess();
+        void onError(String error);
+    }
+
+    /**
      * Callback interface for send message operations
      */
     public interface SendMessageCallback {

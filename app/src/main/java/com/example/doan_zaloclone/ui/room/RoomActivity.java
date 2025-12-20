@@ -472,6 +472,14 @@ public class RoomActivity extends AppCompatActivity {
             }
         });
         
+        // Set recall listener - show confirmation dialog
+        messageAdapter.setOnMessageRecallListener(new MessageAdapter.OnMessageRecallListener() {
+            @Override
+            public void onRecallMessage(Message message) {
+                showRecallConfirmDialog(message);
+            }
+        });
+        
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         messagesRecyclerView.setLayoutManager(layoutManager);
@@ -1430,6 +1438,42 @@ public class RoomActivity extends AppCompatActivity {
             default:
                 return message.getContent() != null ? message.getContent() : "";
         }
+    }
+    
+    /**
+     * Show confirmation dialog before recalling a message
+     */
+    private void showRecallConfirmDialog(Message message) {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Thu hồi tin nhắn")
+                .setMessage("Bạn có chắc muốn thu hồi tin nhắn này?")
+                .setPositiveButton("Thu hồi", (dialog, which) -> {
+                    recallMessage(message);
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+    
+    /**
+     * Recall a message via ChatRepository
+     */
+    private void recallMessage(Message message) {
+        if (chatRepository == null || conversationId == null) {
+            Toast.makeText(this, "Lỗi: Không thể thu hồi tin nhắn", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        chatRepository.recallMessage(conversationId, message.getId(), new ChatRepository.RecallMessageCallback() {
+            @Override
+            public void onSuccess() {
+                Toast.makeText(RoomActivity.this, "Đã thu hồi tin nhắn", Toast.LENGTH_SHORT).show();
+            }
+            
+            @Override
+            public void onError(String error) {
+                Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
     
     @Override
