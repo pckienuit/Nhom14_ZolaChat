@@ -491,6 +491,21 @@ public class RoomActivity extends AppCompatActivity {
             }
         });
         
+        // Set reaction listener - show reaction picker on long press, toggle default reaction on click
+        messageAdapter.setOnMessageReactionListener(new MessageAdapter.OnMessageReactionListener() {
+            @Override
+            public void onReactionClick(Message message, String currentReactionType) {
+                // Toggle default reaction (heart)
+                handleReactionClick(message, currentReactionType);
+            }
+            
+            @Override
+            public void onReactionLongPress(Message message, View anchorView) {
+                // Show reaction picker popup
+                showReactionPicker(message, anchorView);
+            }
+        });
+        
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         messagesRecyclerView.setLayoutManager(layoutManager);
@@ -618,6 +633,21 @@ public class RoomActivity extends AppCompatActivity {
             } else if (resource.isError()) {
                 Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
                 roomViewModel.resetPinMessageState();
+            }
+        });
+        
+        // Observe reaction operations
+        roomViewModel.getReactionState().observe(this, resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                // Reaction updated successfully - messages will auto-update via Firestore listener
+                android.util.Log.d("RoomActivity", "Reaction updated successfully");
+                roomViewModel.resetReactionState();
+            } else if (resource.isError()) {
+                Toast.makeText(this, "Lỗi cập nhật reaction: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                android.util.Log.e("RoomActivity", "Error updating reaction: " + resource.getMessage());
+                roomViewModel.resetReactionState();
             }
         });
     }
@@ -1659,6 +1689,60 @@ public class RoomActivity extends AppCompatActivity {
                 Toast.makeText(this, "Đã chuyển tiếp: " + successCount + ", Lỗi: " + errorCount, Toast.LENGTH_SHORT).show();
             }
         }
+    }
+    
+    // =============== REACTION HANDLING ===============
+    
+    /**
+     * Handle reaction click - toggle default reaction (heart)
+     * If user already reacted with heart, remove it. Otherwise, add heart reaction.
+     */
+    private void handleReactionClick(Message message, String currentReactionType) {
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+                ? firebaseAuth.getCurrentUser().getUid() 
+                : "";
+        
+        if (currentUserId.isEmpty()) {
+            Toast.makeText(this, "Không thể thêm reaction", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Toggle heart reaction
+        String reactionType = com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART;
+        
+        android.util.Log.d("RoomActivity", "handleReactionClick - messageId: " + message.getId() 
+                + ", currentReaction: " + currentReactionType + ", toggling to: " + reactionType);
+        
+        // Use ViewModel to toggle reaction
+        roomViewModel.toggleReaction(conversationId, message.getId(), currentUserId, reactionType);
+    }
+    
+    /**
+     * Show reaction picker popup above the message
+     */
+    private void showReactionPicker(Message message, View anchorView) {
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+                ? firebaseAuth.getCurrentUser().getUid() 
+                : "";
+        
+        if (currentUserId.isEmpty()) {
+            Toast.makeText(this, "Không thể thêm reaction", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        android.util.Log.d("RoomActivity", "showReactionPicker - messageId: " + message.getId());
+        
+        // Create and show reaction picker popup
+        ReactionPickerPopup popup = new ReactionPickerPopup(this, reactionType -> {
+            // User selected a reaction
+            android.util.Log.d("RoomActivity", "Reaction selected: " + reactionType + " for message: " + message.getId());
+            
+            // Use ViewModel to toggle reaction
+            roomViewModel.toggleReaction(conversationId, message.getId(), currentUserId, reactionType);
+        });
+        
+        // Show popup above the message bubble
+        popup.showAboveAnchor(anchorView);
     }
     
     @Override
