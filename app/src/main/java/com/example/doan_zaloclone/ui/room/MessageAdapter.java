@@ -28,7 +28,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public static final int VIEW_TYPE_FILE_SENT = 5;
     public static final int VIEW_TYPE_FILE_RECEIVED = 6;
     public static final int VIEW_TYPE_CALL_HISTORY = 7;
-    public static final int VIEW_TYPE_RECALLED = 8;
+    public static final int VIEW_TYPE_RECALLED_SENT = 8;
+    public static final int VIEW_TYPE_RECALLED_RECEIVED = 9;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -131,12 +132,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ", messageId: " + message.getId() + 
             ", isRecalled: " + message.isRecalled());
         
+        boolean isSent = message.getSenderId().equals(currentUserId);
+        
         // Check if message is recalled first (takes precedence)
         if (message.isRecalled()) {
-            return VIEW_TYPE_RECALLED;
+            return isSent ? VIEW_TYPE_RECALLED_SENT : VIEW_TYPE_RECALLED_RECEIVED;
         }
-        
-        boolean isSent = message.getSenderId().equals(currentUserId);
         boolean isImage = Message.TYPE_IMAGE.equals(message.getType());
         boolean isFile = Message.TYPE_FILE.equals(message.getType());
         boolean isCall = Message.TYPE_CALL.equals(message.getType());
@@ -188,9 +189,13 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_call_history, parent, false);
                 return new CallHistoryViewHolder(view);
-            case VIEW_TYPE_RECALLED:
+            case VIEW_TYPE_RECALLED_SENT:
                 view = LayoutInflater.from(parent.getContext())
-                    .inflate(R.layout.item_message_recalled, parent, false);
+                    .inflate(R.layout.item_message_recalled_sent, parent, false);
+                return new RecalledMessageViewHolder(view);
+            case VIEW_TYPE_RECALLED_RECEIVED:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_recalled_received, parent, false);
                 return new RecalledMessageViewHolder(view);
             default:
                 view = LayoutInflater.from(parent.getContext())
