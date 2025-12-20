@@ -36,6 +36,10 @@ public class Message {
     
     // Reaction field - Map of userId to reaction type (heart, haha, sad, angry, wow, like)
     private Map<String, String> reactions;
+    
+    // Reaction counts - Map of reaction type to total count (allows multiple clicks per user)
+    // Format: {"heart": 5, "haha": 3} - tracks total clicks, not just unique users
+    private Map<String, Integer> reactionCounts;
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Message() {
@@ -229,6 +233,14 @@ public class Message {
     
     public void setReactions(Map<String, String> reactions) {
         this.reactions = reactions;
+    }
+    
+    public Map<String, Integer> getReactionCounts() {
+        return reactionCounts;
+    }
+    
+    public void setReactionCounts(Map<String, Integer> reactionCounts) {
+        this.reactionCounts = reactionCounts;
     }
 
     // Helper methods

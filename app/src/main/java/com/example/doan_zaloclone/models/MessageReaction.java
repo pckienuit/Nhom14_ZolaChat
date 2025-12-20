@@ -144,7 +144,8 @@ public class MessageReaction {
     }
     
     /**
-     * Toggle a user's reaction - if same type, remove it; otherwise update it
+     * Toggle a user's reaction - always add/update reaction (Zalo style)
+     * Does NOT remove reaction when clicking same type
      * @param existingReactions Existing reactions map
      * @param userId User ID
      * @param reactionType New reaction type
@@ -152,19 +153,118 @@ public class MessageReaction {
      */
     public static Map<String, String> toggleReaction(Map<String, String> existingReactions,
                                                       String userId, String reactionType) {
-        String currentReaction = getUserReaction(existingReactions, userId);
-        
-        // If user already has this reaction, remove it
-        if (reactionType.equals(currentReaction)) {
-            return removeReaction(existingReactions, userId);
-        }
-        
-        // Otherwise add/update the reaction
+        // Always add/update the reaction (Zalo style - clicking same reaction keeps it)
         return addReaction(existingReactions, userId, reactionType);
     }
     
     /**
+     * Get top N reactions sorted by count (descending)
+     * @param reactions Map of userId -> reactionType
+     * @param topN Number of top reactions to return
+     * @return List of reaction types sorted by count (highest first)
+     */
+    public static java.util.List<String> getTopReactions(Map<String, String> reactions, int topN) {
+        Map<String, Integer> counts = getReactionTypeCounts(reactions);
+        
+        // Filter out reactions with 0 count and sort by count descending
+        java.util.List<java.util.Map.Entry<String, Integer>> sortedEntries = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, Integer> entry : counts.entrySet()) {
+            if (entry.getValue() > 0) {
+                sortedEntries.add(entry);
+            }
+        }
+        
+        // Sort by count descending
+        java.util.Collections.sort(sortedEntries, (a, b) -> b.getValue().compareTo(a.getValue()));
+        
+        // Get top N reaction types
+        java.util.List<String> topReactions = new java.util.ArrayList<>();
+        for (int i = 0; i < Math.min(topN, sortedEntries.size()); i++) {
+            topReactions.add(sortedEntries.get(i).getKey());
+        }
+        
+        return topReactions;
+    }
+    
+    /**
+     * Increment reaction count for a specific type
+     * @param existingCounts Existing reaction counts map
+     * @param reactionType Reaction type to increment
+     * @return Updated reaction counts map
+     */
+    public static Map<String, Integer> incrementReactionCount(Map<String, Integer> existingCounts,
+                                                               String reactionType) {
+        Map<String, Integer> counts = existingCounts != null 
+            ? new HashMap<>(existingCounts) 
+            : new HashMap<>();
+        
+        if (isValidReactionType(reactionType)) {
+            int currentCount = counts.getOrDefault(reactionType, 0);
+            counts.put(reactionType, currentCount + 1);
+        }
+        
+        return counts;
+    }
+    
+    /**
+     * Get top N reactions sorted by count from reactionCounts (descending)
+     * @param reactionCounts Map of reactionType -> count
+     * @param topN Number of top reactions to return
+     * @return List of reaction types sorted by count (highest first)
+     */
+    public static java.util.List<String> getTopReactionsFromCounts(Map<String, Integer> reactionCounts, int topN) {
+        if (reactionCounts == null || reactionCounts.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+        
+        // Filter out reactions with 0 count and sort by count descending
+        java.util.List<java.util.Map.Entry<String, Integer>> sortedEntries = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, Integer> entry : reactionCounts.entrySet()) {
+            if (entry.getValue() > 0) {
+                sortedEntries.add(entry);
+            }
+        }
+        
+        // Sort by count descending
+        java.util.Collections.sort(sortedEntries, (a, b) -> b.getValue().compareTo(a.getValue()));
+        
+        // Get top N reaction types
+        java.util.List<String> topReactions = new java.util.ArrayList<>();
+        for (int i = 0; i < Math.min(topN, sortedEntries.size()); i++) {
+            topReactions.add(sortedEntries.get(i).getKey());
+        }
+        
+        return topReactions;
+    }
+    
+    /**
      * Get count of each reaction type
+     * Uses reactionCounts if available (tracks total clicks),
+     * otherwise falls back to counting unique users
+     * @param reactions Map of userId -> reactionType (for user tracking)
+     * @param reactionCounts Map of reactionType -> count (for total count)
+     * @return Map of reactionType -> count
+     */
+    public static Map<String, Integer> getReactionTypeCounts(Map<String, String> reactions,
+                                                              Map<String, Integer> reactionCounts) {
+        // If reactionCounts is available, use it (supports multiple clicks per user)
+        if (reactionCounts != null && !reactionCounts.isEmpty()) {
+            Map<String, Integer> counts = new HashMap<>();
+            counts.put(REACTION_HEART, reactionCounts.getOrDefault(REACTION_HEART, 0));
+            counts.put(REACTION_HAHA, reactionCounts.getOrDefault(REACTION_HAHA, 0));
+            counts.put(REACTION_SAD, reactionCounts.getOrDefault(REACTION_SAD, 0));
+            counts.put(REACTION_ANGRY, reactionCounts.getOrDefault(REACTION_ANGRY, 0));
+            counts.put(REACTION_WOW, reactionCounts.getOrDefault(REACTION_WOW, 0));
+            counts.put(REACTION_LIKE, reactionCounts.getOrDefault(REACTION_LIKE, 0));
+            return counts;
+        }
+        
+        // Fallback: count unique users (old behavior)
+        return getReactionTypeCounts(reactions);
+    }
+    
+    /**
+     * Get count of each reaction type (legacy - counts unique users only)
      * @param reactions Map of userId -> reactionType
      * @return Map of reactionType -> count
      */

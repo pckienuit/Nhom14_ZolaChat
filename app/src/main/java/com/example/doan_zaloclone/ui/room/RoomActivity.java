@@ -1694,10 +1694,10 @@ public class RoomActivity extends AppCompatActivity {
     // =============== REACTION HANDLING ===============
     
     /**
-     * Handle reaction click - toggle default reaction (heart)
-     * If user already reacted with heart, remove it. Otherwise, add heart reaction.
+     * Handle reaction click - add reaction (Zalo style, does not toggle off)
+     * When clicking the add button, adds heart. When clicking existing reaction, adds that type.
      */
-    private void handleReactionClick(Message message, String currentReactionType) {
+    private void handleReactionClick(Message message, String reactionType) {
         String currentUserId = firebaseAuth.getCurrentUser() != null 
                 ? firebaseAuth.getCurrentUser().getUid() 
                 : "";
@@ -1707,13 +1707,10 @@ public class RoomActivity extends AppCompatActivity {
             return;
         }
         
-        // Toggle heart reaction
-        String reactionType = com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART;
-        
         android.util.Log.d("RoomActivity", "handleReactionClick - messageId: " + message.getId() 
-                + ", currentReaction: " + currentReactionType + ", toggling to: " + reactionType);
+                + ", reactionType: " + reactionType);
         
-        // Use ViewModel to toggle reaction
+        // Use ViewModel to add reaction (uses the passed reaction type)
         roomViewModel.toggleReaction(conversationId, message.getId(), currentUserId, reactionType);
     }
     

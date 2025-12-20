@@ -844,8 +844,12 @@ public class ChatRepository {
                 .collection("messages")
                 .document(messageId);
         
-        // Use Firestore's Map field update to add/update the user's reaction
-        messageRef.update("reactions." + userId, reactionType)
+        // Update both reactions (userId -> reactionType) and reactionCounts (reactionType -> count)
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("reactions." + userId, reactionType);
+        updates.put("reactionCounts." + reactionType, com.google.firebase.firestore.FieldValue.increment(1));
+        
+        messageRef.update(updates)
                 .addOnSuccessListener(aVoid -> {
                     Log.d("ChatRepository", "Reaction added: " + reactionType + " by user: " + userId);
                     result.setValue(Resource.success(true));
@@ -935,17 +939,10 @@ public class ChatRepository {
                         return;
                     }
                     
-                    String currentReaction = message.getUserReaction(userId);
-                    
-                    // If user already has this exact reaction, remove it
-                    if (reactionType.equals(currentReaction)) {
-                        LiveData<Resource<Boolean>> removeResult = removeReaction(conversationId, messageId, userId);
-                        removeResult.observeForever(resource -> result.setValue(resource));
-                    } else {
-                        // Otherwise add/update the reaction
-                        LiveData<Resource<Boolean>> addResult = addReaction(conversationId, messageId, userId, reactionType);
-                        addResult.observeForever(resource -> result.setValue(resource));
-                    }
+                    // Zalo style: Always add/update reaction, never remove on same click
+                    // This ensures clicking on the same reaction type keeps it (doesn't toggle off)
+                    LiveData<Resource<Boolean>> addResult = addReaction(conversationId, messageId, userId, reactionType);
+                    addResult.observeForever(resource -> result.setValue(resource));
                 })
                 .addOnFailureListener(e -> {
                     Log.e("ChatRepository", "Error fetching message for toggle reaction", e);

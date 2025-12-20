@@ -41,7 +41,9 @@ service cloud.firestore {
     // Helper function to check if only reactions field changed
     function onlyReactionsChanged() {
       let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
-      return affectedKeys.hasOnly(['reactions']);
+      return affectedKeys.hasOnly(['reactions']) || 
+             affectedKeys.hasOnly(['reactionCounts']) ||
+             affectedKeys.hasOnly(['reactions', 'reactionCounts']);
     }
     
     // Friend requests collection

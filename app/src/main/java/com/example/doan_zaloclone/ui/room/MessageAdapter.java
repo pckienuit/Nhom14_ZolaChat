@@ -372,45 +372,38 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         
         // Get reaction counts by type
         Map<String, String> reactions = message.getReactions();
-        Map<String, Integer> reactionCounts = com.example.doan_zaloclone.models.MessageReaction.getReactionTypeCounts(reactions);
+        Map<String, Integer> reactionCounts = com.example.doan_zaloclone.models.MessageReaction.getReactionTypeCounts(
+                reactions, message.getReactionCounts());
         String userReaction = message.getUserReaction(currentUserId);
         
         // Check if message has any reactions
         boolean hasReactions = message.hasReactions();
         
+        // Get top 2 reactions to display (use reactionCounts if available)
+        java.util.List<String> topReactions;
+        if (message.getReactionCounts() != null && !message.getReactionCounts().isEmpty()) {
+            topReactions = com.example.doan_zaloclone.models.MessageReaction.getTopReactionsFromCounts(
+                    message.getReactionCounts(), 2);
+        } else {
+            topReactions = com.example.doan_zaloclone.models.MessageReaction.getTopReactions(reactions, 2);
+        }
+        
         if (hasReactions && existingReactionsLayout != null) {
             existingReactionsLayout.setVisibility(View.VISIBLE);
             
-            // Bind each reaction type
-            bindSingleReaction(itemView, R.id.heartReactionLayout, R.id.heartReactionCount, 
-                    com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART, 
-                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART),
-                    message, reactionListener);
+            // Hide all reaction layouts first
+            hideAllReactionLayouts(itemView);
             
-            bindSingleReaction(itemView, R.id.likeReactionLayout, R.id.likeReactionCount,
-                    com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE,
-                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE),
-                    message, reactionListener);
-            
-            bindSingleReaction(itemView, R.id.hahaReactionLayout, R.id.hahaReactionCount,
-                    com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA,
-                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA),
-                    message, reactionListener);
-            
-            bindSingleReaction(itemView, R.id.sadReactionLayout, R.id.sadReactionCount,
-                    com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD,
-                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD),
-                    message, reactionListener);
-            
-            bindSingleReaction(itemView, R.id.angryReactionLayout, R.id.angryReactionCount,
-                    com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY,
-                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY),
-                    message, reactionListener);
-            
-            bindSingleReaction(itemView, R.id.wowReactionLayout, R.id.wowReactionCount,
-                    com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW,
-                    reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW),
-                    message, reactionListener);
+            // Only show top 2 reactions
+            for (String reactionType : topReactions) {
+                int layoutId = getReactionLayoutId(reactionType);
+                int countTextId = getReactionCountTextId(reactionType);
+                if (layoutId != 0 && countTextId != 0) {
+                    bindSingleReaction(itemView, layoutId, countTextId,
+                            reactionType, reactionCounts.get(reactionType),
+                            message, reactionListener);
+                }
+            }
                     
             // Click on existing reactions container to show picker
             existingReactionsLayout.setOnClickListener(v -> {
@@ -432,14 +425,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             addReactionButton.setImageResource(R.drawable.ic_reaction_heart_outline);
         }
         
-        // Click on add reaction button
+        // Click on add reaction button - always add heart reaction
         addReactionButton.setOnClickListener(v -> {
             if (reactionListener != null) {
-                // If user has a reaction, toggle it off; otherwise add heart
-                String reactionType = userReaction != null 
-                        ? userReaction 
-                        : com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART;
-                reactionListener.onReactionClick(message, reactionType);
+                // Always add heart reaction when clicking the button
+                reactionListener.onReactionClick(message, 
+                        com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART);
             }
         });
         
@@ -504,6 +495,73 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 return R.drawable.ic_reaction_like;
             default:
                 return R.drawable.ic_reaction_heart_outline;
+        }
+    }
+
+    /**
+     * Get layout ID for a reaction type
+     */
+    private static int getReactionLayoutId(String reactionType) {
+        if (reactionType == null) return 0;
+        switch (reactionType) {
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART:
+                return R.id.heartReactionLayout;
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE:
+                return R.id.likeReactionLayout;
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA:
+                return R.id.hahaReactionLayout;
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD:
+                return R.id.sadReactionLayout;
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY:
+                return R.id.angryReactionLayout;
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW:
+                return R.id.wowReactionLayout;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Get count TextView ID for a reaction type
+     */
+    private static int getReactionCountTextId(String reactionType) {
+        if (reactionType == null) return 0;
+        switch (reactionType) {
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART:
+                return R.id.heartReactionCount;
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE:
+                return R.id.likeReactionCount;
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA:
+                return R.id.hahaReactionCount;
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD:
+                return R.id.sadReactionCount;
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY:
+                return R.id.angryReactionCount;
+            case com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW:
+                return R.id.wowReactionCount;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Hide all reaction layouts
+     */
+    private static void hideAllReactionLayouts(View itemView) {
+        int[] layoutIds = {
+            R.id.heartReactionLayout,
+            R.id.likeReactionLayout,
+            R.id.hahaReactionLayout,
+            R.id.sadReactionLayout,
+            R.id.angryReactionLayout,
+            R.id.wowReactionLayout
+        };
+        
+        for (int layoutId : layoutIds) {
+            View layout = itemView.findViewById(layoutId);
+            if (layout != null) {
+                layout.setVisibility(View.GONE);
+            }
         }
     }
 
@@ -1132,15 +1190,31 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             java.util.Map<String, String> oldReactions = oldMessage.getReactions();
             java.util.Map<String, String> newReactions = newMessage.getReactions();
             
+            boolean reactionsMatch;
             if (oldReactions == null && newReactions == null) {
-                return true;
+                reactionsMatch = true;
+            } else if (oldReactions == null || newReactions == null) {
+                reactionsMatch = false;
+            } else {
+                reactionsMatch = oldReactions.equals(newReactions);
             }
-            if (oldReactions == null || newReactions == null) {
+            
+            if (!reactionsMatch) {
                 return false;
             }
             
-            // Check if reaction maps are equal
-            return oldReactions.equals(newReactions);
+            // Compare reactionCounts (CRITICAL for realtime count updates)
+            java.util.Map<String, Integer> oldCounts = oldMessage.getReactionCounts();
+            java.util.Map<String, Integer> newCounts = newMessage.getReactionCounts();
+            
+            if (oldCounts == null && newCounts == null) {
+                return true;
+            }
+            if (oldCounts == null || newCounts == null) {
+                return false;
+            }
+            
+            return oldCounts.equals(newCounts);
         }
     }
 
