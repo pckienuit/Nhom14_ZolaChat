@@ -921,4 +921,61 @@ public class ChatRepository {
         void onMessagesChanged(List<Message> messages);
         void onError(String error);
     }
+    
+    /**
+     * Callback interface for conversation operations
+     */
+    public interface ConversationCallback {
+        void onSuccess(String conversationId);
+        void onError(String error);
+    }
+    
+    /**
+     * Get or create a conversation with a friend
+     */
+    public void getOrCreateConversationWithFriend(String currentUserId, String friendId, ConversationCallback callback) {
+        // Query for existing conversation between these two users
+        firestore.collection("conversations")
+            .whereArrayContains("memberIds", currentUserId)
+            .whereEqualTo("type", "FRIEND")
+            .get()
+            .addOnSuccessListener(querySnapshot -> {
+                String existingConvoId = null;
+                
+                // Find conversation that contains both users
+                for (com.google.firebase.firestore.DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                    java.util.List<String> memberIds = (java.util.List<String>) doc.get("memberIds");
+                    if (memberIds != null && memberIds.contains(friendId) && memberIds.size() == 2) {
+                        existingConvoId = doc.getId();
+                        break;
+                    }
+                }
+                
+                if (existingConvoId != null) {
+                    callback.onSuccess(existingConvoId);
+                } else {
+                    // Create new conversation
+                    createConversationWithFriend(currentUserId, friendId, callback);
+                }
+            })
+            .addOnFailureListener(e -> callback.onError(e.getMessage()));
+    }
+    
+    /**
+     * Create a new conversation with a friend
+     */
+    private void createConversationWithFriend(String currentUserId, String friendId, ConversationCallback callback) {
+        java.util.Map<String, Object> conversationData = new java.util.HashMap<>();
+        java.util.List<String> memberIds = java.util.Arrays.asList(currentUserId, friendId);
+        conversationData.put("memberIds", memberIds);
+        conversationData.put("type", "FRIEND");
+        conversationData.put("createdAt", com.google.firebase.Timestamp.now());
+        conversationData.put("lastMessage", "");
+        conversationData.put("lastMessageTimestamp", com.google.firebase.Timestamp.now());
+        
+        firestore.collection("conversations")
+            .add(conversationData)
+            .addOnSuccessListener(docRef -> callback.onSuccess(docRef.getId()))
+            .addOnFailureListener(e -> callback.onError(e.getMessage()));
+    }
 }
