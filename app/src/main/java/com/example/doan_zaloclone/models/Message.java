@@ -30,6 +30,7 @@ public class Message {
     // Forward fields
     private boolean isForwarded;        // Message is forwarded
     private String originalSenderId;    // Original sender ID if forwarded
+    private String originalSenderName;  // Original sender name if forwarded
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Message() {
@@ -132,6 +133,10 @@ public class Message {
     public String getOriginalSenderId() {
         return originalSenderId;
     }
+    
+    public String getOriginalSenderName() {
+        return originalSenderName;
+    }
 
     // Setters (cần cho Firestore)
     public void setId(String id) {
@@ -197,6 +202,10 @@ public class Message {
     
     public void setOriginalSenderId(String originalSenderId) {
         this.originalSenderId = originalSenderId;
+    }
+    
+    public void setOriginalSenderName(String originalSenderName) {
+        this.originalSenderName = originalSenderName;
     }
 
     // Helper methods

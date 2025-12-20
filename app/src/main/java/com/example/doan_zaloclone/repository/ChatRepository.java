@@ -118,6 +118,17 @@ public class ChatRepository {
                 messageData.put("replyToSenderName", message.getReplyToSenderName());
             }
         }
+        
+        // Add forward fields if this is a forwarded message
+        if (message.isForwarded()) {
+            messageData.put("isForwarded", true);
+            if (message.getOriginalSenderId() != null) {
+                messageData.put("originalSenderId", message.getOriginalSenderId());
+            }
+            if (message.getOriginalSenderName() != null) {
+                messageData.put("originalSenderName", message.getOriginalSenderName());
+            }
+        }
 
         // Save message to Firestore
         messageRef.set(messageData)
@@ -838,6 +849,59 @@ public class ChatRepository {
      * Callback interface for recall message operations
      */
     public interface RecallMessageCallback {
+        void onSuccess();
+        void onError(String error);
+    }
+
+    /**
+     * Forward a message to a target conversation
+     * @param targetConversationId ID of the conversation to forward to
+     * @param originalMessage Original message to forward
+     * @param newSenderId ID of the user forwarding the message
+     * @param originalSenderName Name of the original sender (for display)
+     * @param callback Callback for success/error
+     */
+    public void forwardMessage(String targetConversationId, Message originalMessage, 
+                               String newSenderId, String originalSenderName, 
+                               ForwardMessageCallback callback) {
+        // Clone the message with new sender
+        Message forwardedMessage = new Message();
+        forwardedMessage.setSenderId(newSenderId);
+        forwardedMessage.setContent(originalMessage.getContent());
+        forwardedMessage.setType(originalMessage.getType());
+        forwardedMessage.setTimestamp(System.currentTimeMillis());
+        
+        // Copy file metadata if applicable
+        if (Message.TYPE_FILE.equals(originalMessage.getType()) || 
+            Message.TYPE_IMAGE.equals(originalMessage.getType())) {
+            forwardedMessage.setFileName(originalMessage.getFileName());
+            forwardedMessage.setFileSize(originalMessage.getFileSize());
+            forwardedMessage.setFileMimeType(originalMessage.getFileMimeType());
+        }
+        
+        // Set forward metadata
+        forwardedMessage.setForwarded(true);
+        forwardedMessage.setOriginalSenderId(originalMessage.getSenderId());
+        forwardedMessage.setOriginalSenderName(originalSenderName);
+        
+        // Send the forwarded message
+        sendMessage(targetConversationId, forwardedMessage, new SendMessageCallback() {
+            @Override
+            public void onSuccess() {
+                callback.onSuccess();
+            }
+            
+            @Override
+            public void onError(String error) {
+                callback.onError(error);
+            }
+        });
+    }
+
+    /**
+     * Callback interface for forward message operations
+     */
+    public interface ForwardMessageCallback {
         void onSuccess();
         void onError(String error);
     }
