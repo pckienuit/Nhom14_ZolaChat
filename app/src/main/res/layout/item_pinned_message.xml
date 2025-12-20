@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="12dp"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Pin icon -->
+    <ImageView
+        android:id="@+id/pinIconItem"
+        android:layout_width="16dp"
+        android:layout_height="16dp"
+        android:layout_gravity="top"
+        android:layout_marginTop="2dp"
+        android:src="@drawable/ic_pin"
+        android:tint="#2196F3"
+        android:contentDescription="@string/pinned_message" />
+
+    <!-- Message content container -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="12dp"
+        android:orientation="vertical">
+
+        <!-- Sender name -->
+        <TextView
+            android:id="@+id/pinnedSenderName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Sender Name"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="#2196F3" />
+
+        <!-- Message preview -->
+        <TextView
+            android:id="@+id/pinnedMessageContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Message content preview..."
+            android:textSize="14sp"
+            android:textColor="#000000"
+            android:maxLines="2"
+            android:ellipsize="end" />
+
+    </LinearLayout>
+
+    <!-- Unpin button (optional, can also use long-press) -->
+    <ImageButton
+        android:id="@+id/unpinButton"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_marginStart="8dp"
+        android:src="@drawable/ic_close"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/unpin_message"
+        android:tint="#757575"
+        android:visibility="gone" />
+
+</LinearLayout>

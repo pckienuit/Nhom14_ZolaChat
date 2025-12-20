@@ -17,10 +17,14 @@ public class Conversation {
     private String type;
     private List<String> adminIds;
     private String avatarUrl;
+    
+    // Pinned messages - list of message IDs (unlimited)
+    private List<String> pinnedMessageIds;
 
     public Conversation() {
         this.memberIds = new ArrayList<>();
         this.type = TYPE_FRIEND;
+        this.pinnedMessageIds = new ArrayList<>();
     }
 
     public Conversation(String id, String name, String lastMessage, long timestamp) {
@@ -30,6 +34,7 @@ public class Conversation {
         this.timestamp = timestamp;
         this.memberIds = new ArrayList<>();
         this.type = TYPE_FRIEND;
+        this.pinnedMessageIds = new ArrayList<>();
     }
 
     public Conversation(String id, String name, String lastMessage, long timestamp, List<String> memberIds) {
@@ -39,6 +44,7 @@ public class Conversation {
         this.timestamp = timestamp;
         this.memberIds = memberIds != null ? memberIds : new ArrayList<>();
         this.type = TYPE_FRIEND;
+        this.pinnedMessageIds = new ArrayList<>();
     }
     
     public Conversation(String id, String name, String lastMessage, long timestamp, 
@@ -55,6 +61,7 @@ public class Conversation {
             this.adminIds.add(adminId);
         }
         this.avatarUrl = avatarUrl;
+        this.pinnedMessageIds = new ArrayList<>();
     }
 
     // Getters
@@ -137,6 +144,14 @@ public class Conversation {
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
     }
+    
+    public List<String> getPinnedMessageIds() {
+        return pinnedMessageIds != null ? pinnedMessageIds : new ArrayList<>();
+    }
+    
+    public void setPinnedMessageIds(List<String> pinnedMessageIds) {
+        this.pinnedMessageIds = pinnedMessageIds;
+    }
 
     public void addMember(String userId) {
         if (this.memberIds == null) {
@@ -218,6 +233,48 @@ public class Conversation {
         }
         android.util.Log.d("Conversation", "No other user found, returning empty");
         return "";
+    }
+    
+    // Pinned messages helper methods
+    
+    /**
+     * Add a message to pinned messages list
+     * @param messageId ID of message to pin
+     */
+    public void addPinnedMessage(String messageId) {
+        if (this.pinnedMessageIds == null) {
+            this.pinnedMessageIds = new ArrayList<>();
+        }
+        if (!this.pinnedMessageIds.contains(messageId)) {
+            this.pinnedMessageIds.add(messageId);
+        }
+    }
+    
+    /**
+     * Remove a message from pinned messages list
+     * @param messageId ID of message to unpin
+     */
+    public void removePinnedMessage(String messageId) {
+        if (this.pinnedMessageIds != null) {
+            this.pinnedMessageIds.remove(messageId);
+        }
+    }
+    
+    /**
+     * Check if a message is pinned
+     * @param messageId ID of message to check
+     * @return true if message is pinned
+     */
+    public boolean isPinned(String messageId) {
+        return this.pinnedMessageIds != null && this.pinnedMessageIds.contains(messageId);
+    }
+    
+    /**
+     * Get count of pinned messages
+     * @return number of pinned messages
+     */
+    public int getPinnedMessageCount() {
+        return this.pinnedMessageIds != null ? this.pinnedMessageIds.size() : 0;
     }
     
     @Override

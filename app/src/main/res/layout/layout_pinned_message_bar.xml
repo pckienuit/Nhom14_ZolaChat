@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/pinnedMessageBar"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@android:color/white"
+    android:elevation="2dp">
+
+    <!-- Collapsed bar showing latest pinned message -->
+    <LinearLayout
+        android:id="@+id/pinnedBarCollapsed"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:gravity="center_vertical"
+        android:background="?attr/selectableItemBackground"
+        android:clickable="true"
+        android:focusable="true">
+
+        <!-- Pin icon -->
+        <ImageView
+            android:id="@+id/pinIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_pin"
+            android:tint="#2196F3"
+            android:contentDescription="@string/pinned_message" />
+
+        <!-- Vertical divider -->
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:background="#E0E0E0" />
+
+        <!-- Message preview -->
+        <TextView
+            android:id="@+id/pinnedMessagePreview"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Tin nhắn đã ghim"
+            android:textSize="14sp"
+            android:textColor="#000000"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <!-- Expand/collapse button -->
+        <ImageButton
+            android:id="@+id/expandCollapseButton"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_arrow_down"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/expand_pinned_messages"
+            android:tint="#757575" />
+    </LinearLayout>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#E0E0E0" />
+
+    <!-- Expanded list container (initially hidden) -->
+    <FrameLayout
+        android:id="@+id/pinnedListContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:visibility="gone">
+
+        <include layout="@layout/layout_pinned_messages_expanded" />
+    </FrameLayout>
+
+</LinearLayout>

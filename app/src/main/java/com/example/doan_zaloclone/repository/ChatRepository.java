@@ -104,6 +104,20 @@ public class ChatRepository {
                 messageData.put("fileMimeType", message.getFileMimeType());
             }
         }
+        
+        // Add reply fields if this is a reply message
+        if (message.getReplyToId() != null && !message.getReplyToId().isEmpty()) {
+            messageData.put("replyToId", message.getReplyToId());
+            if (message.getReplyToContent() != null) {
+                messageData.put("replyToContent", message.getReplyToContent());
+            }
+            if (message.getReplyToSenderId() != null) {
+                messageData.put("replyToSenderId", message.getReplyToSenderId());
+            }
+            if (message.getReplyToSenderName() != null) {
+                messageData.put("replyToSenderName", message.getReplyToSenderName());
+            }
+        }
 
         // Save message to Firestore
         messageRef.set(messageData)
@@ -696,6 +710,96 @@ public class ChatRepository {
                 }
             });
 
+        return result;
+    }
+
+    // ===================== PINNED MESSAGES METHODS =====================
+    
+    /**
+     * Pin a message in a conversation
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to pin
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> pinMessage(@NonNull String conversationId,
+                                                   @NonNull String messageId) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        firestoreManager.pinMessage(conversationId, messageId,
+            new FirestoreManager.OnPinMessageListener() {
+                @Override
+                public void onSuccess() {
+                    result.setValue(Resource.success(true));
+                }
+                
+                @Override
+                public void onFailure(Exception e) {
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Không thể ghim tin nhắn";
+                    result.setValue(Resource.error(errorMessage));
+                }
+            });
+        
+        return result;
+    }
+    
+    /**
+     * Unpin a message from a conversation
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to unpin
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> unpinMessage(@NonNull String conversationId,
+                                                     @NonNull String messageId) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        firestoreManager.unpinMessage(conversationId, messageId,
+            new FirestoreManager.OnPinMessageListener() {
+                @Override
+                public void onSuccess() {
+                    result.setValue(Resource.success(true));
+                }
+                
+                @Override
+                public void onFailure(Exception e) {
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Không thể gỡ ghim tin nhắn";
+                    result.setValue(Resource.error(errorMessage));
+                }
+            });
+        
+        return result;
+    }
+    
+    /**
+     * Get all pinned messages for a conversation
+     * @param conversationId ID of the conversation
+     * @return LiveData containing Resource with list of pinned messages
+     */
+    public LiveData<Resource<List<Message>>> getPinnedMessages(@NonNull String conversationId) {
+        MutableLiveData<Resource<List<Message>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        firestoreManager.getPinnedMessages(conversationId,
+            new FirestoreManager.OnPinnedMessagesListener() {
+                @Override
+                public void onSuccess(List<Message> messages) {
+                    result.setValue(Resource.success(messages));
+                }
+                
+                @Override
+                public void onFailure(Exception e) {
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Không thể tải tin nhắn đã ghim";
+                    result.setValue(Resource.error(errorMessage));
+                }
+            });
+        
         return result;
     }
 

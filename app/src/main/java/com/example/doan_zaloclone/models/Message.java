@@ -17,6 +17,19 @@ public class Message {
     private String fileName;
     private long fileSize; // in bytes
     private String fileMimeType;
+    
+    // Reply fields
+    private String replyToId;           // ID of the message being replied to
+    private String replyToContent;      // Content preview of the replied message
+    private String replyToSenderId;     // Sender ID of the replied message
+    private String replyToSenderName;   // Sender name of the replied message
+    
+    // Recall field
+    private boolean isRecalled;         // Message has been recalled
+    
+    // Forward fields
+    private boolean isForwarded;        // Message is forwarded
+    private String originalSenderId;    // Original sender ID if forwarded
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Message() {
@@ -86,6 +99,34 @@ public class Message {
     public String getFileMimeType() {
         return fileMimeType;
     }
+    
+    public String getReplyToId() {
+        return replyToId;
+    }
+    
+    public String getReplyToContent() {
+        return replyToContent;
+    }
+    
+    public String getReplyToSenderId() {
+        return replyToSenderId;
+    }
+    
+    public String getReplyToSenderName() {
+        return replyToSenderName;
+    }
+    
+    public boolean isRecalled() {
+        return isRecalled;
+    }
+    
+    public boolean isForwarded() {
+        return isForwarded;
+    }
+    
+    public String getOriginalSenderId() {
+        return originalSenderId;
+    }
 
     // Setters (cần cho Firestore)
     public void setId(String id) {
@@ -119,6 +160,34 @@ public class Message {
     public void setFileMimeType(String fileMimeType) {
         this.fileMimeType = fileMimeType;
     }
+    
+    public void setReplyToId(String replyToId) {
+        this.replyToId = replyToId;
+    }
+    
+    public void setReplyToContent(String replyToContent) {
+        this.replyToContent = replyToContent;
+    }
+    
+    public void setReplyToSenderId(String replyToSenderId) {
+        this.replyToSenderId = replyToSenderId;
+    }
+    
+    public void setReplyToSenderName(String replyToSenderName) {
+        this.replyToSenderName = replyToSenderName;
+    }
+    
+    public void setRecalled(boolean recalled) {
+        isRecalled = recalled;
+    }
+    
+    public void setForwarded(boolean forwarded) {
+        isForwarded = forwarded;
+    }
+    
+    public void setOriginalSenderId(String originalSenderId) {
+        this.originalSenderId = originalSenderId;
+    }
 
     // Helper methods
     public boolean isTextMessage() {
@@ -135,6 +204,37 @@ public class Message {
     
     public boolean isCallMessage() {
         return TYPE_CALL.equals(this.type);
+    }
+    
+    /**
+     * Check if this message is a reply to another message
+     * @return true if this is a reply message
+     */
+    public boolean isReplyMessage() {
+        return replyToId != null && !replyToId.isEmpty();
+    }
+    
+    /**
+     * Check if this message was forwarded from another user
+     * @param currentUserId Current user's ID to compare
+     * @return true if forwarded from someone else
+     */
+    public boolean isForwardedFromOther(String currentUserId) {
+        return isForwarded && originalSenderId != null 
+                && !originalSenderId.equals(currentUserId);
+    }
+    
+    /**
+     * Check if this message can be recalled
+     * @param senderId ID of the user checking
+     * @return true if message can be recalled (sent by user and within 1 hour)
+     */
+    public boolean canBeRecalled(String senderId) {
+        if (!this.senderId.equals(senderId) || isRecalled) {
+            return false;
+        }
+        long oneHourInMillis = 60 * 60 * 1000; // 1 hour
+        return (System.currentTimeMillis() - timestamp) < oneHourInMillis;
     }
     
     /**

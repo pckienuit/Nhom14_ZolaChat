@@ -108,6 +108,96 @@ public class RoomViewModel extends BaseViewModel {
         return userRepository.getUserName(userId);
     }
     
+    // ===================== PINNED MESSAGES METHODS =====================
+    
+    private MutableLiveData<String> currentConversationId = new MutableLiveData<>();
+    private MutableLiveData<Long> pinnedMessagesRefreshTrigger = new MutableLiveData<>(0L);
+    private LiveData<Resource<List<Message>>> pinnedMessages;
+    private final MutableLiveData<Resource<Boolean>> pinMessageState = new MutableLiveData<>();
+    
+    /**
+     * Load pinned messages for a conversation
+     * @param conversationId ID of the conversation
+     * @return LiveData containing list of pinned messages
+     */
+    public LiveData<Resource<List<Message>>> getPinnedMessages(@NonNull String conversationId) {
+        // Store conversation ID
+        currentConversationId.setValue(conversationId);
+        
+        // Use switchMap to automatically reload when trigger changes
+        if (pinnedMessages == null) {
+            pinnedMessages = Transformations.switchMap(pinnedMessagesRefreshTrigger, trigger -> {
+                String convId = currentConversationId.getValue();
+                if (convId != null) {
+                    return chatRepository.getPinnedMessages(convId);
+                }
+                return new MutableLiveData<>();
+            });
+        }
+        return pinnedMessages;
+    }
+    
+    /**
+     * Reload pinned messages (useful after pin/unpin operations)
+     */
+    public void reloadPinnedMessages() {
+        // Trigger switchMap by changing the value
+        Long current = pinnedMessagesRefreshTrigger.getValue();
+        pinnedMessagesRefreshTrigger.setValue(current != null ? current + 1 : 1L);
+    }
+    
+    /**
+     * Pin a message
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to pin
+     */
+    public void pinMessage(@NonNull String conversationId, @NonNull String messageId) {
+        LiveData<Resource<Boolean>> result = chatRepository.pinMessage(conversationId, messageId);
+        pinMessageState.setValue(result.getValue());
+        
+        // Observe and forward the result
+        result.observeForever(resource -> {
+            pinMessageState.setValue(resource);
+            // Reload pinned messages after successful pin
+            if (resource != null && resource.isSuccess()) {
+                reloadPinnedMessages();
+            }
+        });
+    }
+    
+    /**
+     * Unpin a message
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to unpin
+     */
+    public void unpinMessage(@NonNull String conversationId, @NonNull String messageId) {
+        LiveData<Resource<Boolean>> result = chatRepository.unpinMessage(conversationId, messageId);
+        pinMessageState.setValue(result.getValue());
+        
+        // Observe and forward the result
+        result.observeForever(resource -> {
+            pinMessageState.setValue(resource);
+            // Reload pinned messages after successful unpin
+            if (resource != null && resource.isSuccess()) {
+                reloadPinnedMessages();
+            }
+        });
+    }
+    
+    /**
+     * Get pin/unpin operation state
+     */
+    public LiveData<Resource<Boolean>> getPinMessageState() {
+        return pinMessageState;
+    }
+    
+    /**
+     * Reset pin message state (call after handling the result)
+     */
+    public void resetPinMessageState() {
+        pinMessageState.setValue(null);
+    }
+    
     /**
      * Reset send message state (call after handling the result)
      */
