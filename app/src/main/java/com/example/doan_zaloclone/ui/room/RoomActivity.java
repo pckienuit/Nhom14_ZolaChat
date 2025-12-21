@@ -518,6 +518,13 @@ public class RoomActivity extends AppCompatActivity {
         // Note: Not using setHasFixedSize(true) because messages have variable heights (text vs images)
         messagesRecyclerView.setAdapter(messageAdapter);
         
+        // Disable change animation to prevent flicker when reactions update
+        // Keep add/remove animations for smooth list updates
+        androidx.recyclerview.widget.RecyclerView.ItemAnimator animator = messagesRecyclerView.getItemAnimator();
+        if (animator instanceof androidx.recyclerview.widget.SimpleItemAnimator) {
+            ((androidx.recyclerview.widget.SimpleItemAnimator) animator).setSupportsChangeAnimations(false);
+        }
+        
         // Setup swipe-to-reply gesture
         SwipeToReplyCallback swipeCallback = new SwipeToReplyCallback(this, messageAdapter, new SwipeToReplyCallback.SwipeToReplyListener() {
             @Override
@@ -594,10 +601,23 @@ public class RoomActivity extends AppCompatActivity {
             if (resource == null) return;
             
             if (resource.isSuccess()) {
-                messages = resource.getData(); // Store for counting
-                if (messages != null) {
-                    messageAdapter.updateMessages(messages);
-                    if (messageAdapter.getItemCount() > 0) {
+                List<Message> newMessages = resource.getData();
+                
+                if (newMessages != null) {
+                    // Check if this is a new message addition (not just an update)
+                    int oldSize = messages != null ? messages.size() : 0;
+                    int newSize = newMessages.size();
+                    boolean isNewMessage = newSize > oldSize;
+                    
+                    // Store for counting
+                    messages = newMessages;
+                    
+                    // Update adapter
+                    messageAdapter.updateMessages(newMessages);
+                    
+                    // Only auto-scroll if there's a NEW message added
+                    // Don't scroll for reaction updates or other changes
+                    if (isNewMessage && messageAdapter.getItemCount() > 0) {
                         messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
                     }
                 }
