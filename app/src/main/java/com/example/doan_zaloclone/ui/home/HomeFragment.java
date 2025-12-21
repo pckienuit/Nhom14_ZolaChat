@@ -91,9 +91,15 @@ public class HomeFragment extends Fragment {
         // Create options
         String[] options;
         if (isPinned) {
-            options = new String[]{getString(R.string.unpin_conversation)};
+            options = new String[]{
+                getString(R.string.unpin_conversation),
+                getString(R.string.manage_tags)
+            };
         } else {
-            options = new String[]{getString(R.string.pin_conversation)};
+            options = new String[]{
+                getString(R.string.pin_conversation),
+                getString(R.string.manage_tags)
+            };
         }
         
         // Show dialog
@@ -106,9 +112,65 @@ public class HomeFragment extends Fragment {
                     } else {
                         pinConversation(conversation.getId(), currentUserId);
                     }
+                } else if (which == 1) {
+                    // Manage tags
+                    showTagManagementDialog(conversation);
                 }
             })
             .show();
+    }
+    
+    private void showTagManagementDialog(Conversation conversation) {
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+            ? firebaseAuth.getCurrentUser().getUid() 
+            : "";
+        
+        // Get current tags
+        java.util.List<String> currentTags = conversation.getUserTagsForUser(currentUserId);
+        java.util.List<String> selectedTags = new java.util.ArrayList<>(currentTags);
+        
+        // Available tags (default tags)
+        String[] availableTags = new String[]{
+            getString(R.string.tag_work),
+            getString(R.string.tag_family),
+            getString(R.string.tag_friends)
+        };
+        
+        boolean[] checkedItems = new boolean[availableTags.length];
+        for (int i = 0; i < availableTags.length; i++) {
+            checkedItems[i] = currentTags.contains(availableTags[i]);
+        }
+        
+        new androidx.appcompat.app.AlertDialog.Builder(getContext())
+            .setTitle(R.string.manage_tags)
+            .setMultiChoiceItems(availableTags, checkedItems, (dialog, which, isChecked) -> {
+                String tag = availableTags[which];
+                if (isChecked) {
+                    if (!selectedTags.contains(tag)) {
+                        selectedTags.add(tag);
+                    }
+                } else {
+                    selectedTags.remove(tag);
+                }
+            })
+            .setPositiveButton(R.string.apply, (dialog, which) -> {
+                // Update tags
+                updateConversationTags(conversation.getId(), currentUserId, selectedTags);
+            })
+            .setNegativeButton(R.string.cancel, null)
+            .show();
+    }
+    
+    private void updateConversationTags(String conversationId, String userId, java.util.List<String> tags) {
+        homeViewModel.updateTags(conversationId, userId, tags).observe(getViewLifecycleOwner(), resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                Toast.makeText(getContext(), R.string.tag_updated, Toast.LENGTH_SHORT).show();
+            } else if (resource.isError()) {
+                Toast.makeText(getContext(), R.string.tag_update_failed, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
     
     private void pinConversation(String conversationId, String userId) {

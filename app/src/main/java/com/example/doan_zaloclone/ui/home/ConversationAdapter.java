@@ -3,7 +3,10 @@ package com.example.doan_zaloclone.ui.home;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
@@ -11,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Conversation;
+import com.example.doan_zaloclone.models.ConversationTag;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -78,6 +82,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
         private TextView memberCountTextView;
         private android.widget.ImageView groupIconImageView;
         private android.widget.ImageView pinIndicator;
+        private LinearLayout tagsContainer;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -86,6 +91,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             memberCountTextView = itemView.findViewById(R.id.memberCountTextView);
             groupIconImageView = itemView.findViewById(R.id.groupIconImageView);
             pinIndicator = itemView.findViewById(R.id.pinIndicator);
+            tagsContainer = itemView.findViewById(R.id.tagsContainer);
         }
 
         public void bind(Conversation conversation, OnConversationClickListener listener, 
@@ -187,6 +193,9 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
                 boolean isPinned = conversation.isPinnedByUser(currentUserId);
                 pinIndicator.setVisibility(isPinned ? View.VISIBLE : View.GONE);
             }
+            
+            // Render tags
+            renderTags(conversation, currentUserId);
 
             itemView.setOnClickListener(v -> {
                 if (listener != null) {
@@ -201,6 +210,58 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
                 }
                 return false;
             });
+        }
+        
+        /**
+         * Render tags as chips in the tags container
+         */
+        private void renderTags(Conversation conversation, String currentUserId) {
+            if (tagsContainer == null) return;
+            
+            // Clear existing tags
+            tagsContainer.removeAllViews();
+            
+            // Get user's tags
+            java.util.List<String> tags = conversation.getUserTagsForUser(currentUserId);
+            if (tags == null || tags.isEmpty()) {
+                tagsContainer.setVisibility(View.GONE);
+                return;
+            }
+            
+            tagsContainer.setVisibility(View.VISIBLE);
+            
+            // Create chip for each tag
+            for (String tag : tags) {
+                TextView chipView = createTagChip(tag);
+                tagsContainer.addView(chipView);
+            }
+        }
+        
+        /**
+         * Create a tag chip view
+         */
+        private TextView createTagChip(String tag) {
+            TextView chip = new TextView(itemView.getContext());
+            chip.setText(tag);
+            chip.setTextSize(10);
+            chip.setTextColor(Color.WHITE);
+            chip.setPadding(16, 8, 16, 8);
+            
+            // Create rounded background with tag color
+            GradientDrawable background = new GradientDrawable();
+            background.setCornerRadius(20);
+            background.setColor(itemView.getContext().getResources().getColor(
+                ConversationTag.getTagColor(tag), null));
+            chip.setBackground(background);
+            
+            // Add margin
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+            params.setMarginEnd(8);
+            chip.setLayoutParams(params);
+            
+            return chip;
         }
     }
     
@@ -249,9 +310,18 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
                 pinnedEquals = oldConv.getPinnedByUsers().equals(newConv.getPinnedByUsers());
             }
             
+            // Compare userTags maps for real-time tag updates
+            boolean tagsEquals = false;
+            if (oldConv.getUserTags() == null && newConv.getUserTags() == null) {
+                tagsEquals = true;
+            } else if (oldConv.getUserTags() != null && newConv.getUserTags() != null) {
+                tagsEquals = oldConv.getUserTags().equals(newConv.getUserTags());
+            }
+            
             return nameEquals && lastMessageEquals &&
                    oldConv.getTimestamp() == newConv.getTimestamp() &&
-                   pinnedEquals;
+                   pinnedEquals &&
+                   tagsEquals;
         }
 
     }
