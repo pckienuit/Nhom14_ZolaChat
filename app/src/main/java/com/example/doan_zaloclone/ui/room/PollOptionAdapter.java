@@ -65,13 +65,6 @@ public class PollOptionAdapter extends RecyclerView.Adapter<PollOptionAdapter.Op
         notifyDataSetChanged();
     }
     
-    /**
-     * Callback for voter names fetch
-     */
-    interface VoterNamesCallback {
-        void onNamesFetched(List<String> names);
-    }
-    
     class OptionViewHolder extends RecyclerView.ViewHolder {
         private View selectionIndicator;
         private TextView optionText;
@@ -230,82 +223,26 @@ public class PollOptionAdapter extends RecyclerView.Adapter<PollOptionAdapter.Op
         }
         
         /**
-         * Show dialog with full voter list
+         * Show dialog with full voter list (using stored names)
          */
         private void showVoterListDialog(PollOption option) {
             List<String> voterIds = option.getVoterIds();
             if (voterIds == null || voterIds.isEmpty()) return;
             
-            // Show loading dialog first
-            android.app.ProgressDialog progressDialog = new android.app.ProgressDialog(itemView.getContext());
-            progressDialog.setMessage("Đang tải danh sách...");
-            progressDialog.setCancelable(false);
-            progressDialog.show();
+            // Build voter list using stored names (no Firestore fetch needed)
+            StringBuilder voterList = new StringBuilder();
+            voterList.append("Đã chọn \"").append(option.getText()).append("\":\n\n");
             
-            // Fetch user names from Firestore
-            fetchVoterNames(voterIds, voterNames -> {
-                progressDialog.dismiss();
-                
-                // Build voter list with names
-                StringBuilder voterList = new StringBuilder();
-                voterList.append("Đã chọn \"").append(option.getText()).append("\":\n\n");
-                
-                for (int i = 0; i < voterIds.size(); i++) {
-                    String name = voterNames.get(i);
-                    voterList.append("• ").append(name).append("\n");
-                }
-                
-                new android.app.AlertDialog.Builder(itemView.getContext())
-                        .setTitle(option.getVoteCount() + " người đã bình chọn")
-                        .setMessage(voterList.toString())
-                        .setPositiveButton("Đóng", null)
-                        .show();
-            });
-        }
-        
-        /**
-         * Fetch user names from Firestore
-         */
-        private void fetchVoterNames(List<String> voterIds, VoterNamesCallback callback) {
-            List<String> names = new ArrayList<>();
-            java.util.concurrent.atomic.AtomicInteger fetchCount = new java.util.concurrent.atomic.AtomicInteger(0);
-            
-            com.google.firebase.firestore.FirebaseFirestore firestore = 
-                    com.google.firebase.firestore.FirebaseFirestore.getInstance();
-            
-            for (int i = 0; i < voterIds.size(); i++) {
-                final int index = i;
-                String userId = voterIds.get(i);
-                
-                // Ensure names list has enough slots
-                while (names.size() <= index) {
-                    names.add("User " + userId.substring(0, Math.min(8, userId.length())));
-                }
-                
-                firestore.collection("users")
-                        .document(userId)
-                        .get()
-                        .addOnSuccessListener(doc -> {
-                            if (doc.exists()) {
-                                com.example.doan_zaloclone.models.User user = 
-                                        doc.toObject(com.example.doan_zaloclone.models.User.class);
-                                if (user != null && user.getName() != null) {
-                                    names.set(index, user.getName());
-                                }
-                            }
-                            
-                            // Check if all fetches complete
-                            if (fetchCount.incrementAndGet() == voterIds.size()) {
-                                callback.onNamesFetched(names);
-                            }
-                        })
-                        .addOnFailureListener(e -> {
-                            // Still increment count to prevent hanging
-                            if (fetchCount.incrementAndGet() == voterIds.size()) {
-                                callback.onNamesFetched(names);
-                            }
-                        });
+            for (String voterId : voterIds) {
+                String name = option.getVoterName(voterId);
+                voterList.append("• ").append(name).append("\n");
             }
+            
+            new android.app.AlertDialog.Builder(itemView.getContext())
+                    .setTitle(option.getVoteCount() + " người đã bình chọn")
+                    .setMessage(voterList.toString())
+                    .setPositiveButton("Đóng", null)
+                    .show();
         }
     }
 }

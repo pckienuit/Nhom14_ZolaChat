@@ -1302,6 +1302,32 @@ public class ChatRepository {
             return;
         }
         
+        // Fetch user name first, then execute vote
+        firestore.collection("users")
+                .document(userId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    String userName = "User";
+                    if (doc.exists()) {
+                        com.example.doan_zaloclone.models.User user = 
+                                doc.toObject(com.example.doan_zaloclone.models.User.class);
+                        if (user != null && user.getName() != null) {
+                            userName = user.getName();
+                        }
+                    }
+                    executeVotePoll(conversationId, messageId, optionId, userId, userName, callback);
+                })
+                .addOnFailureListener(e -> {
+                    executeVotePoll(conversationId, messageId, optionId, userId, "User", callback);
+                });
+    }
+    
+    /**
+     * Execute the actual vote transaction
+     */
+    private void executeVotePoll(String conversationId, String messageId, 
+                                 String optionId, String userId, String userName,
+                                 VotePollCallback callback) {
         DocumentReference messageRef = firestore
                 .collection("conversations")
                 .document(conversationId)
@@ -1342,8 +1368,8 @@ public class ChatRepository {
                     }
                 }
                 
-                // Add vote to selected option
-                option.addVote(userId);
+                // Add vote to selected option WITH USER NAME
+                option.addVote(userId, userName);
             }
             
             // Update message

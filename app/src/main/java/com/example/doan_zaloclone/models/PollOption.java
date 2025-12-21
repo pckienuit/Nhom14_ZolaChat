@@ -2,7 +2,9 @@ package com.example.doan_zaloclone.models;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Model representing a single option in a poll
@@ -12,17 +14,20 @@ public class PollOption implements Serializable {
     private String id;
     private String text;                        // Nội dung phương án
     private List<String> voterIds;              // Danh sách user đã vote
+    private Map<String, String> voterNames;     // Map userId -> userName cho hiển thị nhanh
     private String addedByUserId;               // User thêm option (nếu allowAddOptions)
     
     // Empty constructor for Firestore
     public PollOption() {
         this.voterIds = new ArrayList<>();
+        this.voterNames = new HashMap<>();
     }
     
     public PollOption(String id, String text) {
         this.id = id;
         this.text = text;
         this.voterIds = new ArrayList<>();
+        this.voterNames = new HashMap<>();
         this.addedByUserId = null;
     }
     
@@ -30,6 +35,7 @@ public class PollOption implements Serializable {
         this.id = id;
         this.text = text;
         this.voterIds = new ArrayList<>();
+        this.voterNames = new HashMap<>();
         this.addedByUserId = addedByUserId;
     }
     
@@ -44,6 +50,10 @@ public class PollOption implements Serializable {
     
     public List<String> getVoterIds() {
         return voterIds != null ? voterIds : new ArrayList<>();
+    }
+    
+    public Map<String, String> getVoterNames() {
+        return voterNames != null ? voterNames : new HashMap<>();
     }
     
     public String getAddedByUserId() {
@@ -61,6 +71,10 @@ public class PollOption implements Serializable {
     
     public void setVoterIds(List<String> voterIds) {
         this.voterIds = voterIds;
+    }
+    
+    public void setVoterNames(Map<String, String> voterNames) {
+        this.voterNames = voterNames;
     }
     
     public void setAddedByUserId(String addedByUserId) {
@@ -84,15 +98,26 @@ public class PollOption implements Serializable {
     }
     
     /**
-     * Add a vote from a user
+     * Add a vote from a user with their name
      */
-    public void addVote(String userId) {
+    public void addVote(String userId, String userName) {
         if (voterIds == null) {
             voterIds = new ArrayList<>();
         }
+        if (voterNames == null) {
+            voterNames = new HashMap<>();
+        }
         if (!voterIds.contains(userId)) {
             voterIds.add(userId);
+            voterNames.put(userId, userName != null ? userName : "User");
         }
+    }
+    
+    /**
+     * Add a vote from a user (legacy - without name)
+     */
+    public void addVote(String userId) {
+        addVote(userId, "User");
     }
     
     /**
@@ -102,6 +127,32 @@ public class PollOption implements Serializable {
         if (voterIds != null) {
             voterIds.remove(userId);
         }
+        if (voterNames != null) {
+            voterNames.remove(userId);
+        }
+    }
+    
+    /**
+     * Get voter name by userId (returns stored name or fallback)
+     */
+    public String getVoterName(String userId) {
+        if (voterNames != null && voterNames.containsKey(userId)) {
+            return voterNames.get(userId);
+        }
+        return "User " + (userId != null ? userId.substring(0, Math.min(8, userId.length())) : "");
+    }
+    
+    /**
+     * Get all voter names as a list
+     */
+    public List<String> getVoterNamesList() {
+        List<String> names = new ArrayList<>();
+        if (voterIds != null) {
+            for (String voterId : voterIds) {
+                names.add(getVoterName(voterId));
+            }
+        }
+        return names;
     }
     
     /**
