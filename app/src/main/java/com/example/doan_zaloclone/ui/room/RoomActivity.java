@@ -589,19 +589,27 @@ public class RoomActivity extends AppCompatActivity {
                     replyingToName.setText("You");
                 }
             } else {
-                // Fetch name from Firestore
-                com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                    .collection("users")
-                    .document(senderId)
-                    .get()
-                    .addOnSuccessListener(doc -> {
-                        if (doc.exists()) {
-                            String senderName = doc.getString("name");
-                            if (replyingToName != null) {
-                                replyingToName.setText(senderName != null ? senderName : "User");
+                // Try to use cached sender name first
+                String cachedName = message.getSenderName();
+                if (cachedName != null && !cachedName.isEmpty()) {
+                    if (replyingToName != null) {
+                        replyingToName.setText(cachedName);
+                    }
+                } else {
+                    // Fallback: Fetch name from Firestore for old messages
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .document(senderId)
+                        .get()
+                        .addOnSuccessListener(doc -> {
+                            if (doc.exists()) {
+                                String senderName = doc.getString("name");
+                                if (replyingToName != null) {
+                                    replyingToName.setText(senderName != null ? senderName : "User");
+                                }
                             }
-                        }
-                    });
+                        });
+                }
             }
             
             // Set content preview
@@ -1714,27 +1722,34 @@ public class RoomActivity extends AppCompatActivity {
      * Fetch sender name and forward message
      */
     private void fetchSenderNameAndForward(Message message, java.util.List<String> friendIds, String currentUserId, AlertDialog dialog) {
-        String senderId = message.getSenderId();
-        
-        // Fetch sender name
-        com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                .collection("users")
-                .document(senderId)
-                .get()
-                .addOnSuccessListener(doc -> {
-                    String senderName = "User";
-                    if (doc.exists()) {
-                        senderName = doc.getString("name");
-                        if (senderName == null) senderName = "User";
-                    }
-                    
-                    // Forward to each selected friend
-                    forwardMessageToFriends(message, friendIds, currentUserId, senderName, dialog);
-                })
-                .addOnFailureListener(e -> {
-                    // Use default name on error
-                    forwardMessageToFriends(message, friendIds, currentUserId, "User", dialog);
-                });
+        // Try to use cached sender name first
+        String cachedName = message.getSenderName();
+        if (cachedName != null && !cachedName.isEmpty()) {
+            // Use cached name directly
+            forwardMessageToFriends(message, friendIds, currentUserId, cachedName, dialog);
+        } else {
+            // Fallback: Fetch sender name from Firestore for old messages
+            String senderId = message.getSenderId();
+            
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(senderId)
+                    .get()
+                    .addOnSuccessListener(doc -> {
+                        String senderName = "User";
+                        if (doc.exists()) {
+                            senderName = doc.getString("name");
+                            if (senderName == null) senderName = "User";
+                        }
+                        
+                        // Forward to each selected friend
+                        forwardMessageToFriends(message, friendIds, currentUserId, senderName, dialog);
+                    })
+                    .addOnFailureListener(e -> {
+                        // Use default name on error
+                        forwardMessageToFriends(message, friendIds, currentUserId, "User", dialog);
+                    });
+        }
     }
     
     /**

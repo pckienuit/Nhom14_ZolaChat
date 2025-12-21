@@ -344,8 +344,24 @@ public class ChatRepository {
                                     mimeType
                             );
                             
-                            // Send message to Firestore
-                            sendMessage(conversationId, imageMessage, callback);
+                            // Fetch sender name before sending
+                            firestore.collection("users")
+                                    .document(senderId)
+                                    .get()
+                                    .addOnSuccessListener(doc -> {
+                                        if (doc.exists()) {
+                                            String name = doc.getString("name");
+                                            if (name != null && !name.isEmpty()) {
+                                                imageMessage.setSenderName(name);
+                                            }
+                                        }
+                                        // Send message to Firestore
+                                        sendMessage(conversationId, imageMessage, callback);
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        // Send anyway without name
+                                        sendMessage(conversationId, imageMessage, callback);
+                                    });
                         }
 
                         @Override
@@ -457,8 +473,24 @@ public class ChatRepository {
                                     fileMimeType
                             );
                             
-                            // Send message to Firestore
-                            sendMessage(conversationId, fileMessage, callback);
+                            // Fetch sender name before sending
+                            firestore.collection("users")
+                                    .document(senderId)
+                                    .get()
+                                    .addOnSuccessListener(doc -> {
+                                        if (doc.exists()) {
+                                            String name = doc.getString("name");
+                                            if (name != null && !name.isEmpty()) {
+                                                fileMessage.setSenderName(name);
+                                            }
+                                        }
+                                        // Send message to Firestore
+                                        sendMessage(conversationId, fileMessage, callback);
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        // Send anyway without name
+                                        sendMessage(conversationId, fileMessage, callback);
+                                    });
                         }
 
                         @Override
@@ -1031,18 +1063,44 @@ public class ChatRepository {
         forwardedMessage.setOriginalSenderId(originalMessage.getSenderId());
         forwardedMessage.setOriginalSenderName(originalSenderName);
         
-        // Send the forwarded message
-        sendMessage(targetConversationId, forwardedMessage, new SendMessageCallback() {
-            @Override
-            public void onSuccess() {
-                callback.onSuccess();
-            }
-            
-            @Override
-            public void onError(String error) {
-                callback.onError(error);
-            }
-        });
+        // Fetch sender name (the user who is forwarding) before sending
+        firestore.collection("users")
+                .document(newSenderId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
+                        String name = doc.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            forwardedMessage.setSenderName(name);
+                        }
+                    }
+                    // Send the forwarded message
+                    sendMessage(targetConversationId, forwardedMessage, new SendMessageCallback() {
+                        @Override
+                        public void onSuccess() {
+                            callback.onSuccess();
+                        }
+                        
+                        @Override
+                        public void onError(String error) {
+                            callback.onError(error);
+                        }
+                    });
+                })
+                .addOnFailureListener(e -> {
+                    // Send anyway without sender name
+                    sendMessage(targetConversationId, forwardedMessage, new SendMessageCallback() {
+                        @Override
+                        public void onSuccess() {
+                            callback.onSuccess();
+                        }
+                        
+                        @Override
+                        public void onError(String error) {
+                            callback.onError(error);
+                        }
+                    });
+                });
     }
 
     /**
@@ -1273,7 +1331,31 @@ public class ChatRepository {
         message.setTimestamp(System.currentTimeMillis());
         message.setPollData(poll);
         
-        // Save to Firestore
+        // Fetch sender name before saving
+        firestore.collection("users")
+                .document(senderId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
+                        String name = doc.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            message.setSenderName(name);
+                        }
+                    }
+                    // Save to Firestore
+                    savePollMessage(messageRef, message, conversationId, poll, callback);
+                })
+                .addOnFailureListener(e -> {
+                    // Save anyway without sender name
+                    savePollMessage(messageRef, message, conversationId, poll, callback);
+                });
+    }
+    
+    private void savePollMessage(DocumentReference messageRef, 
+                                 com.example.doan_zaloclone.models.Message message,
+                                 String conversationId,
+                                 com.example.doan_zaloclone.models.Poll poll,
+                                 SendMessageCallback callback) {
         messageRef.set(message)
                 .addOnSuccessListener(aVoid -> {
                     // Update conversation's lastMessage
