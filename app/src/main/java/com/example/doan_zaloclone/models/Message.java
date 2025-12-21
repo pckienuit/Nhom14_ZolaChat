@@ -12,6 +12,7 @@ public class Message {
 
     private String id;
     private String senderId;
+    private String senderName;      // Sender's display name (cached for performance)
     private String content;
     private String type; // TEXT, IMAGE, hoặc FILE
     private long timestamp;
@@ -88,6 +89,10 @@ public class Message {
 
     public String getSenderId() {
         return senderId;
+    }
+
+    public String getSenderName() {
+        return senderName;
     }
 
     public String getContent() {
@@ -167,6 +172,10 @@ public class Message {
 
     public void setSenderId(String senderId) {
         this.senderId = senderId;
+    }
+
+    public void setSenderName(String senderName) {
+        this.senderName = senderName;
     }
 
     public void setContent(String content) {

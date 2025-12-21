@@ -88,6 +88,9 @@ public class ChatRepository {
         Map<String, Object> messageData = new HashMap<>();
         messageData.put("id", message.getId());
         messageData.put("senderId", message.getSenderId());
+        if (message.getSenderName() != null) {
+            messageData.put("senderName", message.getSenderName());
+        }
         messageData.put("content", message.getContent());
         messageData.put("type", message.getType());
         messageData.put("timestamp", message.getTimestamp());

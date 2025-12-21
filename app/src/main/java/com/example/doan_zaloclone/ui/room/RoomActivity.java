@@ -1103,6 +1103,36 @@ public class RoomActivity extends AppCompatActivity {
                 System.currentTimeMillis()
         );
         
+        // Set sender name from Firebase Auth or fetch from Firestore if needed
+        String displayName = firebaseAuth.getCurrentUser().getDisplayName();
+        if (displayName != null && !displayName.isEmpty()) {
+            newMessage.setSenderName(displayName);
+            // Continue with send
+            sendMessageNow(newMessage);
+        } else {
+            // Fetch from Firestore
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(currentUserId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
+                        String name = doc.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            newMessage.setSenderName(name);
+                        }
+                    }
+                    sendMessageNow(newMessage);
+                })
+                .addOnFailureListener(e -> {
+                    // Send anyway without name
+                    sendMessageNow(newMessage);
+                });
+            return; // Exit early, will send after fetch
+        }
+    }
+    
+    private void sendMessageNow(Message newMessage) {
         // Debug: Check replyingToMessage state
         android.util.Log.d("RoomActivity", "handleSendMessage - replyingToMessage: " + 
             (replyingToMessage != null ? "SET (id=" + replyingToMessage.getId() + ")" : "NULL"));
