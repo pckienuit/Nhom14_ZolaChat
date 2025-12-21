@@ -66,4 +66,23 @@
     <string name="expand_pinned_messages">Mở rộng tin nhắn đã ghim</string>
     <string name="unpin_message">Gỡ ghim tin nhắn</string>
     <string name="pin_message">Ghim tin nhắn</string>
+    
+    <!-- Pinned Conversations Strings -->
+    <string name="pin_conversation">Ghim cuộc hội thoại</string>
+    <string name="unpin_conversation">Bỏ ghim</string>
+    
+    <!-- Conversation Tags Strings -->
+    <string name="tag_stranger">Người lạ</string>
+    <string name="tag_work">Công việc</string>
+    <string name="tag_family">Gia đình</string>
+    <string name="tag_friends">Bạn bè</string>
+    <string name="manage_tags">Quản lý thẻ</string>
+    <string name="add_tag">Thêm thẻ</string>
+    <string name="add_custom_tag">Thêm thẻ tùy chỉnh</string>
+    <string name="enter_tag_name">Nhập tên thẻ</string>
+    <string name="filter_all">Tất cả</string>
+    <string name="no_tag_selected">Chưa có thẻ nào</string>
+    <string name="tag_updated">Đã cập nhật thẻ</string>
+    <string name="tag_update_failed">Không thể cập nhật thẻ</string>
+    <string name="choose_display_tag">Chọn thẻ hiển thị</string>
 </resources>

@@ -3,7 +3,10 @@ package com.example.doan_zaloclone.ui.home;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
@@ -11,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Conversation;
+import com.example.doan_zaloclone.models.ConversationTag;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -22,19 +26,31 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
             new SimpleDateFormat("HH:mm", Locale.getDefault());
+    
+    // Cache for custom tag colors from Firestore
+    private static java.util.Map<String, Integer> customTagColorsCache = new java.util.HashMap<>();
 
     private List<Conversation> conversations;
     private OnConversationClickListener listener;
+    private OnConversationLongClickListener longClickListener;
     private String currentUserId;
 
     public interface OnConversationClickListener {
         void onConversationClick(Conversation conversation);
+    }
+    
+    public interface OnConversationLongClickListener {
+        void onConversationLongClick(Conversation conversation);
     }
 
     public ConversationAdapter(List<Conversation> conversations, OnConversationClickListener listener, String currentUserId) {
         this.conversations = conversations;
         this.listener = listener;
         this.currentUserId = currentUserId;
+    }
+    
+    public void setOnConversationLongClickListener(OnConversationLongClickListener listener) {
+        this.longClickListener = listener;
     }
 
     @NonNull
@@ -48,7 +64,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Conversation conversation = conversations.get(position);
-        holder.bind(conversation, listener, currentUserId);
+        holder.bind(conversation, listener, longClickListener, currentUserId);
     }
 
     @Override
@@ -66,20 +82,23 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
     static class ViewHolder extends RecyclerView.ViewHolder {
         private TextView nameTextView;
         private TextView lastMessageTextView;
-        private TextView timestampTextView;
         private TextView memberCountTextView;
         private android.widget.ImageView groupIconImageView;
+        private android.widget.ImageView pinIndicator;
+        private LinearLayout tagsContainer;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             nameTextView = itemView.findViewById(R.id.nameTextView);
             lastMessageTextView = itemView.findViewById(R.id.lastMessageTextView);
-            timestampTextView = itemView.findViewById(R.id.timestampTextView);
             memberCountTextView = itemView.findViewById(R.id.memberCountTextView);
             groupIconImageView = itemView.findViewById(R.id.groupIconImageView);
+            pinIndicator = itemView.findViewById(R.id.pinIndicator);
+            tagsContainer = itemView.findViewById(R.id.tagsContainer);
         }
 
-        public void bind(Conversation conversation, OnConversationClickListener listener, String currentUserId) {
+        public void bind(Conversation conversation, OnConversationClickListener listener, 
+                        OnConversationLongClickListener longClickListener, String currentUserId) {
             // Check if this is a group chat
             boolean isGroupChat = conversation.isGroupChat();
             
@@ -172,14 +191,117 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             nameTextView.setText(displayName);
             lastMessageTextView.setText(conversation.getLastMessage());
             
-            timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(conversation.getTimestamp())));
+            // Show/hide pin indicator
+            if (pinIndicator != null) {
+                boolean isPinned = conversation.isPinnedByUser(currentUserId);
+                pinIndicator.setVisibility(isPinned ? View.VISIBLE : View.GONE);
+            }
+            
+            // Render tags
+            renderTags(conversation, currentUserId);
 
             itemView.setOnClickListener(v -> {
                 if (listener != null) {
                     listener.onConversationClick(conversation);
                 }
             });
+            
+            itemView.setOnLongClickListener(v -> {
+                if (longClickListener != null) {
+                    longClickListener.onConversationLongClick(conversation);
+                    return true;
+                }
+                return false;
+            });
         }
+        
+        /**
+         * Render tags as icons in the tags container
+         */
+        private void renderTags(Conversation conversation, String currentUserId) {
+            if (tagsContainer == null) return;
+            
+            // Clear existing tags
+            tagsContainer.removeAllViews();
+            
+            // Get displayed tags (based on user preference: latest, specific, or all)
+            java.util.List<String> tags = conversation.getDisplayedTagsForUser(currentUserId);
+            if (tags == null || tags.isEmpty()) {
+                tagsContainer.setVisibility(View.GONE);
+                return;
+            }
+            
+            tagsContainer.setVisibility(View.VISIBLE);
+            
+            // Create icon for each displayed tag
+            for (String tag : tags) {
+                android.widget.ImageView iconView = createTagIcon(tag);
+                tagsContainer.addView(iconView);
+            }
+        }
+        
+        /**
+         * Create a tag icon view
+         */
+        private android.widget.ImageView createTagIcon(String tag) {
+            android.widget.ImageView icon = new android.widget.ImageView(itemView.getContext());
+            
+            // Set icon drawable
+            icon.setImageResource(R.drawable.ic_tag);
+            
+            // Set color tint (with Firestore cache)
+            int tagColor = getTagColorWithCache(tag);
+            icon.setColorFilter(tagColor);
+            
+            // Set size
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                (int) (16 * itemView.getContext().getResources().getDisplayMetrics().density),
+                (int) (16 * itemView.getContext().getResources().getDisplayMetrics().density)
+            );
+            params.setMarginEnd((int) (2 * itemView.getContext().getResources().getDisplayMetrics().density));
+            icon.setLayoutParams(params);
+            
+            return icon;
+        }
+        
+        /**
+         * Get tag color with Firestore cache fallback
+         */
+        private int getTagColorWithCache(String tag) {
+            // Check if it's a custom tag in cache
+            if (customTagColorsCache.containsKey(tag)) {
+                return customTagColorsCache.get(tag);
+            }
+            
+            // Otherwise use ConversationTag's logic
+            return ConversationTag.getTagColor(itemView.getContext(), tag);
+        }
+    }
+    
+    /**
+     * Load custom tag colors from Firestore for current user
+     */
+    public static void loadCustomTagColors(String userId) {
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(userId)
+            .get()
+            .addOnSuccessListener(documentSnapshot -> {
+                if (documentSnapshot.exists() && documentSnapshot.contains("customTagColors")) {
+                    java.util.Map<String, Object> colorsMap = 
+                        (java.util.Map<String, Object>) documentSnapshot.get("customTagColors");
+                    if (colorsMap != null) {
+                        customTagColorsCache.clear();
+                        for (java.util.Map.Entry<String, Object> entry : colorsMap.entrySet()) {
+                            if (entry.getValue() instanceof Long) {
+                                customTagColorsCache.put(entry.getKey(), ((Long) entry.getValue()).intValue());
+                            } else if (entry.getValue() instanceof Integer) {
+                                customTagColorsCache.put(entry.getKey(), (Integer) entry.getValue());
+                            }
+                        }
+                    }
+                }
+            });
     }
     
     // DiffUtil Callback for efficient list updates
@@ -219,8 +341,36 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             boolean lastMessageEquals = (oldConv.getLastMessage() == null && newConv.getLastMessage() == null) ||
                                        (oldConv.getLastMessage() != null && oldConv.getLastMessage().equals(newConv.getLastMessage()));
             
+            // Compare pinnedByUsers maps for real-time pin indicator updates
+            boolean pinnedEquals = false;
+            if (oldConv.getPinnedByUsers() == null && newConv.getPinnedByUsers() == null) {
+                pinnedEquals = true;
+            } else if (oldConv.getPinnedByUsers() != null && newConv.getPinnedByUsers() != null) {
+                pinnedEquals = oldConv.getPinnedByUsers().equals(newConv.getPinnedByUsers());
+            }
+            
+            // Compare userTags maps for real-time tag updates
+            boolean tagsEquals = false;
+            if (oldConv.getUserTags() == null && newConv.getUserTags() == null) {
+                tagsEquals = true;
+            } else if (oldConv.getUserTags() != null && newConv.getUserTags() != null) {
+                tagsEquals = oldConv.getUserTags().equals(newConv.getUserTags());
+            }
+            
+            // Compare displayedTags maps for real-time display preference updates
+            boolean displayedTagsEquals = false;
+            if (oldConv.getDisplayedTags() == null && newConv.getDisplayedTags() == null) {
+                displayedTagsEquals = true;
+            } else if (oldConv.getDisplayedTags() != null && newConv.getDisplayedTags() != null) {
+                displayedTagsEquals = oldConv.getDisplayedTags().equals(newConv.getDisplayedTags());
+            }
+            
             return nameEquals && lastMessageEquals &&
-                   oldConv.getTimestamp() == newConv.getTimestamp();
+                   oldConv.getTimestamp() == newConv.getTimestamp() &&
+                   pinnedEquals &&
+                   tagsEquals &&
+                   displayedTagsEquals;
         }
+
     }
 }
