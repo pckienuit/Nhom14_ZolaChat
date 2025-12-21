@@ -491,11 +491,39 @@ public class RoomActivity extends AppCompatActivity {
             }
         });
         
+        // Set reaction listener - show reaction picker on long press, toggle default reaction on click
+        messageAdapter.setOnMessageReactionListener(new MessageAdapter.OnMessageReactionListener() {
+            @Override
+            public void onReactionClick(Message message, String currentReactionType) {
+                // Add reaction
+                handleReactionClick(message, currentReactionType);
+            }
+            
+            @Override
+            public void onReactionLongPress(Message message, View anchorView) {
+                // Show reaction picker popup
+                showReactionPicker(message, anchorView);
+            }
+            
+            @Override
+            public void onReactionStatsClick(Message message) {
+                // Show reaction statistics dialog
+                showReactionStatsDialog(message);
+            }
+        });
+        
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         messagesRecyclerView.setLayoutManager(layoutManager);
         // Note: Not using setHasFixedSize(true) because messages have variable heights (text vs images)
         messagesRecyclerView.setAdapter(messageAdapter);
+        
+        // Disable change animation to prevent flicker when reactions update
+        // Keep add/remove animations for smooth list updates
+        androidx.recyclerview.widget.RecyclerView.ItemAnimator animator = messagesRecyclerView.getItemAnimator();
+        if (animator instanceof androidx.recyclerview.widget.SimpleItemAnimator) {
+            ((androidx.recyclerview.widget.SimpleItemAnimator) animator).setSupportsChangeAnimations(false);
+        }
         
         // Setup swipe-to-reply gesture
         SwipeToReplyCallback swipeCallback = new SwipeToReplyCallback(this, messageAdapter, new SwipeToReplyCallback.SwipeToReplyListener() {
@@ -573,10 +601,23 @@ public class RoomActivity extends AppCompatActivity {
             if (resource == null) return;
             
             if (resource.isSuccess()) {
-                messages = resource.getData(); // Store for counting
-                if (messages != null) {
-                    messageAdapter.updateMessages(messages);
-                    if (messageAdapter.getItemCount() > 0) {
+                List<Message> newMessages = resource.getData();
+                
+                if (newMessages != null) {
+                    // Check if this is a new message addition (not just an update)
+                    int oldSize = messages != null ? messages.size() : 0;
+                    int newSize = newMessages.size();
+                    boolean isNewMessage = newSize > oldSize;
+                    
+                    // Store for counting
+                    messages = newMessages;
+                    
+                    // Update adapter
+                    messageAdapter.updateMessages(newMessages);
+                    
+                    // Only auto-scroll if there's a NEW message added
+                    // Don't scroll for reaction updates or other changes
+                    if (isNewMessage && messageAdapter.getItemCount() > 0) {
                         messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
                     }
                 }
@@ -618,6 +659,21 @@ public class RoomActivity extends AppCompatActivity {
             } else if (resource.isError()) {
                 Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
                 roomViewModel.resetPinMessageState();
+            }
+        });
+        
+        // Observe reaction operations
+        roomViewModel.getReactionState().observe(this, resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                // Reaction updated successfully - messages will auto-update via Firestore listener
+                android.util.Log.d("RoomActivity", "Reaction updated successfully");
+                roomViewModel.resetReactionState();
+            } else if (resource.isError()) {
+                Toast.makeText(this, "Lỗi cập nhật reaction: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                android.util.Log.e("RoomActivity", "Error updating reaction: " + resource.getMessage());
+                roomViewModel.resetReactionState();
             }
         });
     }
@@ -1659,6 +1715,130 @@ public class RoomActivity extends AppCompatActivity {
                 Toast.makeText(this, "Đã chuyển tiếp: " + successCount + ", Lỗi: " + errorCount, Toast.LENGTH_SHORT).show();
             }
         }
+    }
+    
+    // =============== REACTION HANDLING ===============
+    
+    /**
+     * Handle reaction click - add reaction (Zalo style, does not toggle off)
+     * When clicking the add button, adds heart. When clicking existing reaction, adds that type.
+     */
+    private void handleReactionClick(Message message, String reactionType) {
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+                ? firebaseAuth.getCurrentUser().getUid() 
+                : "";
+        
+        if (currentUserId.isEmpty()) {
+            Toast.makeText(this, "Không thể thêm reaction", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        android.util.Log.d("RoomActivity", "handleReactionClick - messageId: " + message.getId() 
+                + ", reactionType: " + reactionType);
+        
+        // Use ViewModel to add reaction (uses the passed reaction type)
+        roomViewModel.toggleReaction(conversationId, message.getId(), currentUserId, reactionType);
+    }
+    
+    /**
+     * Show reaction picker popup above the message
+     */
+    private void showReactionPicker(Message message, View anchorView) {
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+                ? firebaseAuth.getCurrentUser().getUid() 
+                : "";
+        
+        if (currentUserId.isEmpty()) {
+            Toast.makeText(this, "Không thể thêm reaction", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        android.util.Log.d("RoomActivity", "showReactionPicker - messageId: " + message.getId());
+        
+        // Create and show reaction picker popup
+        ReactionPickerPopup popup = new ReactionPickerPopup(this, reactionType -> {
+            // User selected a reaction or remove (null)
+            android.util.Log.d("RoomActivity", "Reaction selected: " + reactionType + " for message: " + message.getId());
+            
+            if (reactionType == null) {
+                // Remove user's reaction
+                roomViewModel.removeReaction(conversationId, message.getId(), currentUserId);
+            } else {
+                // Add/update reaction
+                roomViewModel.toggleReaction(conversationId, message.getId(), currentUserId, reactionType);
+            }
+        });
+        
+        // Show popup above the message bubble
+        popup.showAboveAnchor(anchorView);
+    }
+    
+    /**
+     * Show reaction statistics dialog
+     */
+    private void showReactionStatsDialog(Message message) {
+        if (message == null || !message.hasReactions()) {
+            return;
+        }
+        
+        // Get reaction counts
+        java.util.Map<String, Integer> reactionCounts = 
+                com.example.doan_zaloclone.models.MessageReaction.getReactionTypeCounts(
+                        message.getReactions(), message.getReactionCounts());
+        
+        // Build dialog content
+        StringBuilder statsText = new StringBuilder();
+        statsText.append("Thống kê cảm xúc:\n\n");
+        
+        int totalReactions = 0;
+        if (message.getReactionCounts() != null) {
+            for (Integer count : message.getReactionCounts().values()) {
+                totalReactions += count;
+            }
+        } else {
+            totalReactions = message.getReactions() != null ? message.getReactions().size() : 0;
+        }
+        
+        // Add each reaction type with count
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART) > 0) {
+            statsText.append("❤️ Thích: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA) > 0) {
+            statsText.append("😂 Haha: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW) > 0) {
+            statsText.append("😮 Wow: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD) > 0) {
+            statsText.append("😢 Buồn: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY) > 0) {
+            statsText.append("😠 Phẫn nộ: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE) > 0) {
+            statsText.append("👍 Like: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE))
+                    .append("\n");
+        }
+        
+        statsText.append("\nTổng số lượt: ").append(totalReactions);
+        
+        // Show dialog
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Cảm xúc của tin nhắn")
+                .setMessage(statsText.toString())
+                .setPositiveButton("Đóng", null)
+                .show();
     }
     
     @Override
