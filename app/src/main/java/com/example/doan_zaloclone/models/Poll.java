@@ -1,5 +1,6 @@
 package com.example.doan_zaloclone.models;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -8,7 +9,8 @@ import java.util.Set;
 /**
  * Model representing a poll in a conversation
  */
-public class Poll {
+public class Poll implements Serializable {
+    private static final long serialVersionUID = 1L;
     private String id;
     private String question;                    // Câu hỏi bình chọn
     private List<PollOption> options;           // Danh sách phương án

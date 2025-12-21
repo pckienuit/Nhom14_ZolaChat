@@ -1,12 +1,14 @@
 package com.example.doan_zaloclone.models;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Model representing a single option in a poll
  */
-public class PollOption {
+public class PollOption implements Serializable {
+    private static final long serialVersionUID = 1L;
     private String id;
     private String text;                        // Nội dung phương án
     private List<String> voterIds;              // Danh sách user đã vote

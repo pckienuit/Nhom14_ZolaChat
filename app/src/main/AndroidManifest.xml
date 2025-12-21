@@ -93,6 +93,13 @@
             android:exported="false"
             android:parentActivityName=".ui.room.RoomActivity" />
             
+        <!-- Create Poll Activity -->
+        <activity
+            android:name=".ui.room.CreatePollActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.room.RoomActivity"
+            android:windowSoftInputMode="adjustResize" />
+            
         <!-- Call Activity -->
         <activity
             android:name=".ui.call.CallActivity"

@@ -1,6 +1,7 @@
 package com.example.doan_zaloclone.ui.room;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -97,6 +98,9 @@ public class RoomActivity extends AppCompatActivity {
     private FrameLayout filePickerBottomSheet;
     private FilePreviewAdapter filePreviewAdapter;
     private List<FilePreviewAdapter.FileItem> selectedFilesForPreview = new ArrayList<>();
+    
+    // Poll creation
+    private ActivityResultLauncher<Intent> createPollLauncher;
 
     // Pinned messages UI
     private FrameLayout pinnedMessagesContainer;
@@ -161,6 +165,21 @@ public class RoomActivity extends AppCompatActivity {
                 uris -> {
                     if (uris != null && !uris.isEmpty()) {
                         handleMultipleFilesSelected(uris);
+                    }
+                }
+        );
+        
+        // Register poll creation launcher
+        createPollLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                        com.example.doan_zaloclone.models.Poll poll = 
+                                (com.example.doan_zaloclone.models.Poll) result.getData()
+                                .getSerializableExtra(CreatePollActivity.EXTRA_POLL_DATA);
+                        if (poll != null) {
+                            sendPollMessage(poll);
+                        }
                     }
                 }
         );
@@ -1150,9 +1169,8 @@ public class RoomActivity extends AppCompatActivity {
             public void onShowUI() {
                 // Check which action triggered this
                 if (action instanceof com.example.doan_zaloclone.ui.room.actions.SendPollAction) {
-                    // Launch poll creation activity (to be implemented in Phase 3)
-                    // showCreatePollActivity();
-                    Toast.makeText(RoomActivity.this, "Tính năng tạo poll đang được phát triển", Toast.LENGTH_SHORT).show();
+                    // Launch poll creation activity
+                    showCreatePollActivity();
                 } else {
                     // Launch file picker for other actions
                     launchFilePicker();
@@ -1853,6 +1871,34 @@ public class RoomActivity extends AppCompatActivity {
                 .setMessage(statsText.toString())
                 .setPositiveButton("Đóng", null)
                 .show();
+    }
+    
+    // ============== POLL METHODS ==============
+    
+    /**
+     * Show poll creation activity
+     */
+    private void showCreatePollActivity() {
+        Intent intent = new Intent(this, CreatePollActivity.class);
+        intent.putExtra(CreatePollActivity.EXTRA_CONVERSATION_NAME, conversationName);
+        createPollLauncher.launch(intent);
+    }
+    
+    /**
+     * Send poll message to conversation
+     */
+    private void sendPollMessage(com.example.doan_zaloclone.models.Poll poll) {
+        if (poll == null || firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Lỗi: Không thể gửi poll", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Poll sending logic will be implemented in Phase 5 (Repository)
+        // For now, just show a message
+        Toast.makeText(this, "Poll tạo xong: " + poll.getQuestion() + 
+                " (" + poll.getOptions().size() + " phương án)", Toast.LENGTH_LONG).show();
+        
+        // This will be: roomViewModel.sendPollMessage(conversationId, poll);
     }
     
     @Override
