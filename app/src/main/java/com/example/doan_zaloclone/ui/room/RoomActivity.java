@@ -1148,8 +1148,15 @@ public class RoomActivity extends AppCompatActivity {
         action.execute(this, new com.example.doan_zaloclone.ui.room.actions.QuickActionCallback() {
             @Override
             public void onShowUI() {
-                // Launch file picker
-                launchFilePicker();
+                // Check which action triggered this
+                if (action instanceof com.example.doan_zaloclone.ui.room.actions.SendPollAction) {
+                    // Launch poll creation activity (to be implemented in Phase 3)
+                    // showCreatePollActivity();
+                    Toast.makeText(RoomActivity.this, "Tính năng tạo poll đang được phát triển", Toast.LENGTH_SHORT).show();
+                } else {
+                    // Launch file picker for other actions
+                    launchFilePicker();
+                }
             }
             
             @Override
@@ -1160,6 +1167,13 @@ public class RoomActivity extends AppCompatActivity {
             @Override
             public void onFilesSelected(List<Uri> fileUris) {
                 // Handle multiple files (future enhancement)
+            }
+            
+            @Override
+            public void onPollCreated(com.example.doan_zaloclone.models.Poll poll) {
+                // Send poll message (to be implemented in Phase 5)
+                // sendPollMessage(poll);
+                Toast.makeText(RoomActivity.this, "Poll created: " + poll.getQuestion(), Toast.LENGTH_SHORT).show();
             }
             
             @Override
