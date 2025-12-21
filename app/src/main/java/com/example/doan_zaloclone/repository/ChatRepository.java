@@ -88,6 +88,9 @@ public class ChatRepository {
         Map<String, Object> messageData = new HashMap<>();
         messageData.put("id", message.getId());
         messageData.put("senderId", message.getSenderId());
+        if (message.getSenderName() != null) {
+            messageData.put("senderName", message.getSenderName());
+        }
         messageData.put("content", message.getContent());
         messageData.put("type", message.getType());
         messageData.put("timestamp", message.getTimestamp());
@@ -341,8 +344,24 @@ public class ChatRepository {
                                     mimeType
                             );
                             
-                            // Send message to Firestore
-                            sendMessage(conversationId, imageMessage, callback);
+                            // Fetch sender name before sending
+                            firestore.collection("users")
+                                    .document(senderId)
+                                    .get()
+                                    .addOnSuccessListener(doc -> {
+                                        if (doc.exists()) {
+                                            String name = doc.getString("name");
+                                            if (name != null && !name.isEmpty()) {
+                                                imageMessage.setSenderName(name);
+                                            }
+                                        }
+                                        // Send message to Firestore
+                                        sendMessage(conversationId, imageMessage, callback);
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        // Send anyway without name
+                                        sendMessage(conversationId, imageMessage, callback);
+                                    });
                         }
 
                         @Override
@@ -454,8 +473,24 @@ public class ChatRepository {
                                     fileMimeType
                             );
                             
-                            // Send message to Firestore
-                            sendMessage(conversationId, fileMessage, callback);
+                            // Fetch sender name before sending
+                            firestore.collection("users")
+                                    .document(senderId)
+                                    .get()
+                                    .addOnSuccessListener(doc -> {
+                                        if (doc.exists()) {
+                                            String name = doc.getString("name");
+                                            if (name != null && !name.isEmpty()) {
+                                                fileMessage.setSenderName(name);
+                                            }
+                                        }
+                                        // Send message to Firestore
+                                        sendMessage(conversationId, fileMessage, callback);
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        // Send anyway without name
+                                        sendMessage(conversationId, fileMessage, callback);
+                                    });
                         }
 
                         @Override
@@ -1028,18 +1063,44 @@ public class ChatRepository {
         forwardedMessage.setOriginalSenderId(originalMessage.getSenderId());
         forwardedMessage.setOriginalSenderName(originalSenderName);
         
-        // Send the forwarded message
-        sendMessage(targetConversationId, forwardedMessage, new SendMessageCallback() {
-            @Override
-            public void onSuccess() {
-                callback.onSuccess();
-            }
-            
-            @Override
-            public void onError(String error) {
-                callback.onError(error);
-            }
-        });
+        // Fetch sender name (the user who is forwarding) before sending
+        firestore.collection("users")
+                .document(newSenderId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
+                        String name = doc.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            forwardedMessage.setSenderName(name);
+                        }
+                    }
+                    // Send the forwarded message
+                    sendMessage(targetConversationId, forwardedMessage, new SendMessageCallback() {
+                        @Override
+                        public void onSuccess() {
+                            callback.onSuccess();
+                        }
+                        
+                        @Override
+                        public void onError(String error) {
+                            callback.onError(error);
+                        }
+                    });
+                })
+                .addOnFailureListener(e -> {
+                    // Send anyway without sender name
+                    sendMessage(targetConversationId, forwardedMessage, new SendMessageCallback() {
+                        @Override
+                        public void onSuccess() {
+                            callback.onSuccess();
+                        }
+                        
+                        @Override
+                        public void onError(String error) {
+                            callback.onError(error);
+                        }
+                    });
+                });
     }
 
     /**
@@ -1237,5 +1298,237 @@ public class ChatRepository {
                     .addOnFailureListener(e -> callback.onError(e.getMessage()));
             })
             .addOnFailureListener(e -> callback.onError("Failed to fetch user names: " + e.getMessage()));
+    }
+    
+    // ===================== POLL METHODS =====================
+    
+    /**
+     * Send a poll message to conversation
+     */
+    public void sendPollMessage(String conversationId, String senderId, 
+                                com.example.doan_zaloclone.models.Poll poll,
+                                SendMessageCallback callback) {
+        if (conversationId == null || senderId == null || poll == null) {
+            if (callback != null) {
+                callback.onError("Invalid parameters");
+            }
+            return;
+        }
+        
+        // Create message document reference
+        DocumentReference messageRef = firestore
+                .collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document();
+        
+        // Create message object
+        com.example.doan_zaloclone.models.Message message = 
+                new com.example.doan_zaloclone.models.Message();
+        message.setId(messageRef.getId());
+        message.setSenderId(senderId);
+        message.setType(com.example.doan_zaloclone.models.Message.TYPE_POLL);
+        message.setTimestamp(System.currentTimeMillis());
+        message.setPollData(poll);
+        
+        // Fetch sender name before saving
+        firestore.collection("users")
+                .document(senderId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
+                        String name = doc.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            message.setSenderName(name);
+                        }
+                    }
+                    // Save to Firestore
+                    savePollMessage(messageRef, message, conversationId, poll, callback);
+                })
+                .addOnFailureListener(e -> {
+                    // Save anyway without sender name
+                    savePollMessage(messageRef, message, conversationId, poll, callback);
+                });
+    }
+    
+    private void savePollMessage(DocumentReference messageRef, 
+                                 com.example.doan_zaloclone.models.Message message,
+                                 String conversationId,
+                                 com.example.doan_zaloclone.models.Poll poll,
+                                 SendMessageCallback callback) {
+        messageRef.set(message)
+                .addOnSuccessListener(aVoid -> {
+                    // Update conversation's lastMessage
+                    updateConversationLastMessage(conversationId, 
+                            "📊 Bình chọn: " + poll.getQuestion(), 
+                            message.getTimestamp());
+                    
+                    if (callback != null) {
+                        callback.onSuccess();
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    if (callback != null) {
+                        callback.onError(e.getMessage());
+                    }
+                });
+    }
+    
+    /**
+     * Vote for a poll option
+     */
+    public void votePoll(String conversationId, String messageId, 
+                        String optionId, String userId,
+                        VotePollCallback callback) {
+        if (conversationId == null || messageId == null || optionId == null || userId == null) {
+            if (callback != null) {
+                callback.onError("Invalid parameters");
+            }
+            return;
+        }
+        
+        // Fetch user name first, then execute vote
+        firestore.collection("users")
+                .document(userId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    String userName = "User";
+                    if (doc.exists()) {
+                        com.example.doan_zaloclone.models.User user = 
+                                doc.toObject(com.example.doan_zaloclone.models.User.class);
+                        if (user != null && user.getName() != null) {
+                            userName = user.getName();
+                        }
+                    }
+                    executeVotePoll(conversationId, messageId, optionId, userId, userName, callback);
+                })
+                .addOnFailureListener(e -> {
+                    executeVotePoll(conversationId, messageId, optionId, userId, "User", callback);
+                });
+    }
+    
+    /**
+     * Execute the actual vote transaction
+     */
+    private void executeVotePoll(String conversationId, String messageId, 
+                                 String optionId, String userId, String userName,
+                                 VotePollCallback callback) {
+        DocumentReference messageRef = firestore
+                .collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document(messageId);
+        
+        firestore.runTransaction(transaction -> {
+            DocumentSnapshot snapshot = transaction.get(messageRef);
+            com.example.doan_zaloclone.models.Message message = 
+                    snapshot.toObject(com.example.doan_zaloclone.models.Message.class);
+            
+            if (message == null || message.getPollData() == null) {
+                throw new RuntimeException("Poll not found");
+            }
+            
+            com.example.doan_zaloclone.models.Poll poll = message.getPollData();
+            
+            // Check if poll is still open
+            if (!poll.canVote()) {
+                throw new RuntimeException("Poll is closed or expired");
+            }
+            
+            // Find the option
+            com.example.doan_zaloclone.models.PollOption option = poll.getOptionById(optionId);
+            if (option == null) {
+                throw new RuntimeException("Option not found");
+            }
+            
+            // Check if user already voted for this option
+            if (option.hasUserVoted(userId)) {
+                // User already voted for this option - unvote it
+                option.removeVote(userId);
+            } else {
+                // If single choice, remove user's other votes first
+                if (!poll.isAllowMultipleChoice()) {
+                    for (com.example.doan_zaloclone.models.PollOption opt : poll.getOptions()) {
+                        opt.removeVote(userId);
+                    }
+                }
+                
+                // Add vote to selected option WITH USER NAME
+                option.addVote(userId, userName);
+            }
+            
+            // Update message
+            message.setPollData(poll);
+            transaction.set(messageRef, message);
+            
+            return null;
+        }).addOnSuccessListener(aVoid -> {
+            if (callback != null) {
+                callback.onSuccess();
+            }
+        }).addOnFailureListener(e -> {
+            if (callback != null) {
+                callback.onError(e.getMessage());
+            }
+        });
+    }
+    
+    /**
+     * Close a poll (only creator or group admin can close)
+     */
+    public void closePoll(String conversationId, String messageId, 
+                         String userId, boolean isGroupAdmin,
+                         VotePollCallback callback) {
+        if (conversationId == null || messageId == null || userId == null) {
+            if (callback != null) {
+                callback.onError("Invalid parameters");
+            }
+            return;
+        }
+        
+        DocumentReference messageRef = firestore
+                .collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document(messageId);
+        
+        firestore.runTransaction(transaction -> {
+            DocumentSnapshot snapshot = transaction.get(messageRef);
+            com.example.doan_zaloclone.models.Message message = 
+                    snapshot.toObject(com.example.doan_zaloclone.models.Message.class);
+            
+            if (message == null || message.getPollData() == null) {
+                throw new RuntimeException("Poll not found");
+            }
+            
+            com.example.doan_zaloclone.models.Poll poll = message.getPollData();
+            
+            // Check permission
+            if (!poll.canClosePoll(userId, isGroupAdmin)) {
+                throw new RuntimeException("You don't have permission to close this poll");
+            }
+            
+            poll.setClosed(true);
+            message.setPollData(poll);
+            transaction.set(messageRef, message);
+            
+            return null;
+        }).addOnSuccessListener(aVoid -> {
+            if (callback != null) {
+                callback.onSuccess();
+            }
+        }).addOnFailureListener(e -> {
+            if (callback != null) {
+                callback.onError(e.getMessage());
+            }
+        });
+    }
+    
+    /**
+     * Callback for poll vote operations
+     */
+    public interface VotePollCallback {
+        void onSuccess();
+        void onError(String error);
     }
 }

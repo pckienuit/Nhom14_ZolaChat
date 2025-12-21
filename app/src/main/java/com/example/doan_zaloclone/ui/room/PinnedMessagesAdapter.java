@@ -69,29 +69,37 @@ public class PinnedMessagesAdapter extends RecyclerView.Adapter<PinnedMessagesAd
         }
 
         public void bind(Message message, OnPinnedMessageClickListener listener) {
-            // Fetch sender name from Firestore
+            // Try to get sender name from message first (optimized)
             String senderId = message.getSenderId();
-            senderName.setText("Loading..."); // Placeholder while loading
+            String cachedName = message.getSenderName();
             
-            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                .collection("users")
-                .document(senderId)
-                .get()
-                .addOnSuccessListener(documentSnapshot -> {
-                    if (documentSnapshot.exists()) {
-                        String name = documentSnapshot.getString("name");
-                        if (name != null && !name.isEmpty()) {
-                            senderName.setText(name);
+            if (cachedName != null && !cachedName.isEmpty()) {
+                // Use cached name from message
+                senderName.setText(cachedName);
+            } else {
+                // Fallback: Fetch from Firestore for old messages without senderName
+                senderName.setText("Loading...");
+                
+                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(senderId)
+                    .get()
+                    .addOnSuccessListener(documentSnapshot -> {
+                        if (documentSnapshot.exists()) {
+                            String name = documentSnapshot.getString("name");
+                            if (name != null && !name.isEmpty()) {
+                                senderName.setText(name);
+                            } else {
+                                senderName.setText("User");
+                            }
                         } else {
                             senderName.setText("User");
                         }
-                    } else {
+                    })
+                    .addOnFailureListener(e -> {
                         senderName.setText("User");
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    senderName.setText("User");
-                });
+                    });
+            }
 
             // Set message content based on type
             String content = getMessagePreview(message);

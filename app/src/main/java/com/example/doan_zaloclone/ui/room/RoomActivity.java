@@ -1,6 +1,7 @@
 package com.example.doan_zaloclone.ui.room;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -97,6 +98,9 @@ public class RoomActivity extends AppCompatActivity {
     private FrameLayout filePickerBottomSheet;
     private FilePreviewAdapter filePreviewAdapter;
     private List<FilePreviewAdapter.FileItem> selectedFilesForPreview = new ArrayList<>();
+    
+    // Poll creation
+    private ActivityResultLauncher<Intent> createPollLauncher;
 
     // Pinned messages UI
     private FrameLayout pinnedMessagesContainer;
@@ -161,6 +165,21 @@ public class RoomActivity extends AppCompatActivity {
                 uris -> {
                     if (uris != null && !uris.isEmpty()) {
                         handleMultipleFilesSelected(uris);
+                    }
+                }
+        );
+        
+        // Register poll creation launcher
+        createPollLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                        com.example.doan_zaloclone.models.Poll poll = 
+                                (com.example.doan_zaloclone.models.Poll) result.getData()
+                                .getSerializableExtra(CreatePollActivity.EXTRA_POLL_DATA);
+                        if (poll != null) {
+                            sendPollMessage(poll);
+                        }
                     }
                 }
         );
@@ -512,6 +531,19 @@ public class RoomActivity extends AppCompatActivity {
             }
         });
         
+        // Set poll interaction listener
+        messageAdapter.setOnPollInteractionListener(new MessageAdapter.OnPollInteractionListener() {
+            @Override
+            public void onVotePoll(Message message, String optionId) {
+                handlePollVote(message, optionId);
+            }
+            
+            @Override
+            public void onClosePoll(Message message) {
+                handleClosePoll(message);
+            }
+        });
+        
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         messagesRecyclerView.setLayoutManager(layoutManager);
@@ -557,19 +589,27 @@ public class RoomActivity extends AppCompatActivity {
                     replyingToName.setText("You");
                 }
             } else {
-                // Fetch name from Firestore
-                com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                    .collection("users")
-                    .document(senderId)
-                    .get()
-                    .addOnSuccessListener(doc -> {
-                        if (doc.exists()) {
-                            String senderName = doc.getString("name");
-                            if (replyingToName != null) {
-                                replyingToName.setText(senderName != null ? senderName : "User");
+                // Try to use cached sender name first
+                String cachedName = message.getSenderName();
+                if (cachedName != null && !cachedName.isEmpty()) {
+                    if (replyingToName != null) {
+                        replyingToName.setText(cachedName);
+                    }
+                } else {
+                    // Fallback: Fetch name from Firestore for old messages
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .document(senderId)
+                        .get()
+                        .addOnSuccessListener(doc -> {
+                            if (doc.exists()) {
+                                String senderName = doc.getString("name");
+                                if (replyingToName != null) {
+                                    replyingToName.setText(senderName != null ? senderName : "User");
+                                }
                             }
-                        }
-                    });
+                        });
+                }
             }
             
             // Set content preview
@@ -1071,6 +1111,36 @@ public class RoomActivity extends AppCompatActivity {
                 System.currentTimeMillis()
         );
         
+        // Set sender name from Firebase Auth or fetch from Firestore if needed
+        String displayName = firebaseAuth.getCurrentUser().getDisplayName();
+        if (displayName != null && !displayName.isEmpty()) {
+            newMessage.setSenderName(displayName);
+            // Continue with send
+            sendMessageNow(newMessage);
+        } else {
+            // Fetch from Firestore
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(currentUserId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
+                        String name = doc.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            newMessage.setSenderName(name);
+                        }
+                    }
+                    sendMessageNow(newMessage);
+                })
+                .addOnFailureListener(e -> {
+                    // Send anyway without name
+                    sendMessageNow(newMessage);
+                });
+            return; // Exit early, will send after fetch
+        }
+    }
+    
+    private void sendMessageNow(Message newMessage) {
         // Debug: Check replyingToMessage state
         android.util.Log.d("RoomActivity", "handleSendMessage - replyingToMessage: " + 
             (replyingToMessage != null ? "SET (id=" + replyingToMessage.getId() + ")" : "NULL"));
@@ -1148,8 +1218,14 @@ public class RoomActivity extends AppCompatActivity {
         action.execute(this, new com.example.doan_zaloclone.ui.room.actions.QuickActionCallback() {
             @Override
             public void onShowUI() {
-                // Launch file picker
-                launchFilePicker();
+                // Check which action triggered this
+                if (action instanceof com.example.doan_zaloclone.ui.room.actions.SendPollAction) {
+                    // Launch poll creation activity
+                    showCreatePollActivity();
+                } else {
+                    // Launch file picker for other actions
+                    launchFilePicker();
+                }
             }
             
             @Override
@@ -1160,6 +1236,13 @@ public class RoomActivity extends AppCompatActivity {
             @Override
             public void onFilesSelected(List<Uri> fileUris) {
                 // Handle multiple files (future enhancement)
+            }
+            
+            @Override
+            public void onPollCreated(com.example.doan_zaloclone.models.Poll poll) {
+                // Send poll message (to be implemented in Phase 5)
+                // sendPollMessage(poll);
+                Toast.makeText(RoomActivity.this, "Poll created: " + poll.getQuestion(), Toast.LENGTH_SHORT).show();
             }
             
             @Override
@@ -1639,27 +1722,34 @@ public class RoomActivity extends AppCompatActivity {
      * Fetch sender name and forward message
      */
     private void fetchSenderNameAndForward(Message message, java.util.List<String> friendIds, String currentUserId, AlertDialog dialog) {
-        String senderId = message.getSenderId();
-        
-        // Fetch sender name
-        com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                .collection("users")
-                .document(senderId)
-                .get()
-                .addOnSuccessListener(doc -> {
-                    String senderName = "User";
-                    if (doc.exists()) {
-                        senderName = doc.getString("name");
-                        if (senderName == null) senderName = "User";
-                    }
-                    
-                    // Forward to each selected friend
-                    forwardMessageToFriends(message, friendIds, currentUserId, senderName, dialog);
-                })
-                .addOnFailureListener(e -> {
-                    // Use default name on error
-                    forwardMessageToFriends(message, friendIds, currentUserId, "User", dialog);
-                });
+        // Try to use cached sender name first
+        String cachedName = message.getSenderName();
+        if (cachedName != null && !cachedName.isEmpty()) {
+            // Use cached name directly
+            forwardMessageToFriends(message, friendIds, currentUserId, cachedName, dialog);
+        } else {
+            // Fallback: Fetch sender name from Firestore for old messages
+            String senderId = message.getSenderId();
+            
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(senderId)
+                    .get()
+                    .addOnSuccessListener(doc -> {
+                        String senderName = "User";
+                        if (doc.exists()) {
+                            senderName = doc.getString("name");
+                            if (senderName == null) senderName = "User";
+                        }
+                        
+                        // Forward to each selected friend
+                        forwardMessageToFriends(message, friendIds, currentUserId, senderName, dialog);
+                    })
+                    .addOnFailureListener(e -> {
+                        // Use default name on error
+                        forwardMessageToFriends(message, friendIds, currentUserId, "User", dialog);
+                    });
+        }
     }
     
     /**
@@ -1839,6 +1929,103 @@ public class RoomActivity extends AppCompatActivity {
                 .setMessage(statsText.toString())
                 .setPositiveButton("Đóng", null)
                 .show();
+    }
+    
+    // ============== POLL METHODS ==============
+    
+    /**
+     * Show poll creation activity
+     */
+    private void showCreatePollActivity() {
+        Intent intent = new Intent(this, CreatePollActivity.class);
+        intent.putExtra(CreatePollActivity.EXTRA_CONVERSATION_NAME, conversationName);
+        createPollLauncher.launch(intent);
+    }
+    
+    /**
+     * Send poll message to conversation
+     */
+    private void sendPollMessage(com.example.doan_zaloclone.models.Poll poll) {
+        if (poll == null || firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Lỗi: Không thể gửi poll", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        chatRepository.sendPollMessage(conversationId, currentUserId, poll,
+                new ChatRepository.SendMessageCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Đã tạo poll", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
+    }
+    
+    // ===================== POLL INTERACTION HANDLERS =====================
+    
+    /**
+     * Handle voting for a poll option
+     */
+    private void handlePollVote(Message message, String optionId) {
+        if (message == null || optionId == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        chatRepository.votePoll(conversationId, message.getId(), optionId, currentUserId,
+                new ChatRepository.VotePollCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            // Poll will auto-update via Firestore listener
+                            android.util.Log.d("RoomActivity", "Vote successful");
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
+    }
+    
+    /**
+     * Handle closing a poll
+     */
+    private void handleClosePoll(Message message) {
+        if (message == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        // TODO: Check if user is group admin (for now, pass false)
+        boolean isGroupAdmin = false;
+        
+        chatRepository.closePoll(conversationId, message.getId(), currentUserId, isGroupAdmin,
+                new ChatRepository.VotePollCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Đã đóng bình chọn", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
     }
     
     @Override

@@ -35,6 +35,9 @@ public class QuickActionManager {
         // Register send file action
         registerAction(new SendFileAction());
         
+        // Register send poll action
+        registerAction(new SendPollAction());
+        
         // Future actions can be added here
         // registerAction(new SendLocationAction());
         // registerAction(new SendContactAction());
