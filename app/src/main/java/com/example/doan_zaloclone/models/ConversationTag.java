@@ -1,13 +1,22 @@
 package com.example.doan_zaloclone.models;
 
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.graphics.Color;
+
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * ConversationTag - Model representing tags that can be applied to conversations
  * Includes both system tags (auto-assigned) and user-defined tags
  */
 public class ConversationTag {
+    
+    private static final String PREFS_NAME = "ConversationTagPrefs";
+    private static final String KEY_CUSTOM_COLORS = "custom_tag_colors";
     
     // System tags (auto-assigned, cannot be removed manually)
     public static final String TAG_STRANGER = "Người lạ";
@@ -16,6 +25,22 @@ public class ConversationTag {
     public static final String TAG_WORK = "Công việc";
     public static final String TAG_FAMILY = "Gia đình";
     public static final String TAG_FRIENDS = "Bạn bè";
+    
+    // Default color palette for custom tags
+    public static final int[] COLOR_PALETTE = {
+        Color.parseColor("#FF6200EE"),  // Purple
+        Color.parseColor("#FF3700B3"),  // Deep Purple
+        Color.parseColor("#FF03DAC5"),  // Teal
+        Color.parseColor("#FF018786"),  // Dark Teal
+        Color.parseColor("#FFB00020"),  // Red
+        Color.parseColor("#FFFF5722"),  // Deep Orange
+        Color.parseColor("#FFFF9800"),  // Orange
+        Color.parseColor("#FFFFC107"),  // Amber
+        Color.parseColor("#FF4CAF50"),  // Green
+        Color.parseColor("#FF2196F3"),  // Blue
+        Color.parseColor("#FF9C27B0"),  // Pink
+        Color.parseColor("#FF795548"),  // Brown
+    };
     
     // List of default tags available for selection
     public static final List<String> DEFAULT_TAGS = Arrays.asList(
@@ -29,26 +54,83 @@ public class ConversationTag {
         TAG_STRANGER
     );
     
+    // In-memory cache for custom colors
+    private static Map<String, Integer> customColorCache = new HashMap<>();
+    
     /**
      * Get color for a specific tag
+     * @param context Context for accessing SharedPreferences
      * @param tag Tag name
-     * @return Color resource ID
+     * @return Color integer
      */
-    public static int getTagColor(String tag) {
-        if (tag == null) return android.R.color.darker_gray;
+    public static int getTagColor(Context context, String tag) {
+        if (tag == null) return Color.GRAY;
         
+        // Check default tag colors first
         switch (tag) {
             case TAG_STRANGER:
-                return android.R.color.darker_gray;  // Gray for strangers
+                return Color.parseColor("#FF757575");  // Gray
             case TAG_WORK:
-                return android.R.color.holo_blue_dark;  // Blue for work
+                return Color.parseColor("#FF2196F3");  // Blue
             case TAG_FAMILY:
-                return android.R.color.holo_red_light;  // Red for family
+                return Color.parseColor("#FFFF5722");  // Deep Orange
             case TAG_FRIENDS:
-                return android.R.color.holo_green_light;  // Green for friends
-            default:
-                return android.R.color.holo_purple;  // Purple for custom tags
+                return Color.parseColor("#FF4CAF50");  // Green
         }
+        
+        // Check custom colors
+        if (context != null) {
+            Integer customColor = getCustomTagColor(context, tag);
+            if (customColor != null) {
+                return customColor;
+            }
+        }
+        
+        // Default color for unknown tags
+        return Color.parseColor("#FF9C27B0");  // Purple
+    }
+    
+    /**
+     * Set custom color for a tag
+     * @param context Context for accessing SharedPreferences
+     * @param tag Tag name
+     * @param color Color integer
+     */
+    public static void setCustomTagColor(Context context, String tag, int color) {
+        if (context == null || tag == null) return;
+        
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putInt(KEY_CUSTOM_COLORS + "_" + tag, color);
+        editor.apply();
+        
+        // Update cache
+        customColorCache.put(tag, color);
+    }
+    
+    /**
+     * Get custom color for a tag
+     * @param context Context for accessing SharedPreferences
+     * @param tag Tag name
+     * @return Color integer or null if not set
+     */
+    public static Integer getCustomTagColor(Context context, String tag) {
+        if (context == null || tag == null) return null;
+        
+        // Check cache first
+        if (customColorCache.containsKey(tag)) {
+            return customColorCache.get(tag);
+        }
+        
+        // Load from SharedPreferences
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        if (prefs.contains(KEY_CUSTOM_COLORS + "_" + tag)) {
+            int color = prefs.getInt(KEY_CUSTOM_COLORS + "_" + tag, Color.GRAY);
+            customColorCache.put(tag, color);
+            return color;
+        }
+        
+        return null;
     }
     
     /**
@@ -67,5 +149,14 @@ public class ConversationTag {
      */
     public static boolean isDefaultTag(String tag) {
         return DEFAULT_TAGS.contains(tag);
+    }
+    
+    /**
+     * Check if a tag is a custom tag (user-defined)
+     * @param tag Tag name
+     * @return true if custom tag
+     */
+    public static boolean isCustomTag(String tag) {
+        return !isSystemTag(tag) && !isDefaultTag(tag);
     }
 }

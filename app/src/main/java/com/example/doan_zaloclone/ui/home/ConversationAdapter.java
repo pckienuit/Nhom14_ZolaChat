@@ -250,8 +250,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             // Create rounded background with tag color
             GradientDrawable background = new GradientDrawable();
             background.setCornerRadius(20);
-            background.setColor(itemView.getContext().getResources().getColor(
-                ConversationTag.getTagColor(tag), null));
+            background.setColor(ConversationTag.getTagColor(itemView.getContext(), tag));
             chip.setBackground(background);
             
             // Add margin

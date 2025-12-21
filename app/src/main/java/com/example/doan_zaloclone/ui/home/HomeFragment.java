@@ -158,6 +158,95 @@ public class HomeFragment extends Fragment {
                 updateConversationTags(conversation.getId(), currentUserId, selectedTags);
             })
             .setNegativeButton(R.string.cancel, null)
+            .setNeutralButton(R.string.add_custom_tag, (dialog, which) -> {
+                // Show custom tag dialog
+                showAddCustomTagDialog(conversation, selectedTags);
+            })
+            .show();
+    }
+    
+    private void showAddCustomTagDialog(Conversation conversation, java.util.List<String> currentTags) {
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+            ? firebaseAuth.getCurrentUser().getUid() 
+            : "";
+        
+        // Create EditText for tag name
+        android.widget.EditText input = new android.widget.EditText(getContext());
+        input.setHint(R.string.enter_tag_name);
+        input.setSingleLine();
+        
+        new androidx.appcompat.app.AlertDialog.Builder(getContext())
+            .setTitle(R.string.add_custom_tag)
+            .setView(input)
+            .setPositiveButton(R.string.apply, (dialog, which) -> {
+                String tagName = input.getText().toString().trim();
+                if (!tagName.isEmpty()) {
+                    // Show color picker
+                    showColorPickerDialog(conversation, currentUserId, tagName, currentTags);
+                }
+            })
+            .setNegativeButton(R.string.cancel, null)
+            .show();
+    }
+    
+    private void showColorPickerDialog(Conversation conversation, String userId, 
+                                       String tagName, java.util.List<String> currentTags) {
+        // Color palette
+        final int[] colors = com.example.doan_zaloclone.models.ConversationTag.COLOR_PALETTE;
+        final int[] selectedColor = {colors[0]}; // Default to first color
+        
+        // Create color grid
+        android.widget.GridLayout colorGrid = new android.widget.GridLayout(getContext());
+        colorGrid.setColumnCount(4);
+        colorGrid.setPadding(32, 32, 32, 32);
+        
+        for (int color : colors) {
+            android.widget.ImageView colorView = new android.widget.ImageView(getContext());
+            android.graphics.drawable.GradientDrawable drawable = new android.graphics.drawable.GradientDrawable();
+            drawable.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            drawable.setColor(color);
+            drawable.setStroke(4, android.graphics.Color.TRANSPARENT);
+            colorView.setBackground(drawable);
+            
+            android.widget.GridLayout.LayoutParams params = new android.widget.GridLayout.LayoutParams();
+            params.width = 100;
+            params.height = 100;
+            params.setMargins(16, 16, 16, 16);
+            colorView.setLayoutParams(params);
+            
+            colorView.setOnClickListener(v -> {
+                selectedColor[0] = color;
+                // Update all drawables to remove selection
+                for (int i = 0; i < colorGrid.getChildCount(); i++) {
+                    android.view.View child = colorGrid.getChildAt(i);
+                    if (child instanceof android.widget.ImageView) {
+                        android.graphics.drawable.GradientDrawable bg = 
+                            (android.graphics.drawable.GradientDrawable) child.getBackground();
+                        bg.setStroke(4, android.graphics.Color.TRANSPARENT);
+                    }
+                }
+                // Highlight selected
+                drawable.setStroke(8, android.graphics.Color.WHITE);
+            });
+            
+            colorGrid.addView(colorView);
+        }
+        
+        new androidx.appcompat.app.AlertDialog.Builder(getContext())
+            .setTitle("Chọn màu cho \"" + tagName + "\"")
+            .setView(colorGrid)
+            .setPositiveButton(R.string.apply, (dialog, which) -> {
+                // Save custom color
+                com.example.doan_zaloclone.models.ConversationTag.setCustomTagColor(
+                    getContext(), tagName, selectedColor[0]);
+                
+                // Add tag to current tags
+                currentTags.add(tagName);
+                
+                // Update conversation tags
+                updateConversationTags(conversation.getId(), userId, currentTags);
+            })
+            .setNegativeButton(R.string.cancel, null)
             .show();
     }
     
