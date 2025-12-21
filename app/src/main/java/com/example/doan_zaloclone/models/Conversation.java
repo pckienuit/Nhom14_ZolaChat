@@ -23,12 +23,16 @@ public class Conversation {
     
     // Pinned conversations - map of userId to pinnedAt timestamp
     private java.util.Map<String, Long> pinnedByUsers;
+    
+    // Tags - map of userId to list of tags
+    private java.util.Map<String, java.util.List<String>> userTags;
 
     public Conversation() {
         this.memberIds = new ArrayList<>();
         this.type = TYPE_FRIEND;
         this.pinnedMessageIds = new ArrayList<>();
         this.pinnedByUsers = new java.util.HashMap<>();
+        this.userTags = new java.util.HashMap<>();
     }
 
     public Conversation(String id, String name, String lastMessage, long timestamp) {
@@ -40,6 +44,7 @@ public class Conversation {
         this.type = TYPE_FRIEND;
         this.pinnedMessageIds = new ArrayList<>();
         this.pinnedByUsers = new java.util.HashMap<>();
+        this.userTags = new java.util.HashMap<>();
     }
 
     public Conversation(String id, String name, String lastMessage, long timestamp, List<String> memberIds) {
@@ -51,6 +56,7 @@ public class Conversation {
         this.type = TYPE_FRIEND;
         this.pinnedMessageIds = new ArrayList<>();
         this.pinnedByUsers = new java.util.HashMap<>();
+        this.userTags = new java.util.HashMap<>();
     }
     
     public Conversation(String id, String name, String lastMessage, long timestamp, 
@@ -69,6 +75,7 @@ public class Conversation {
         this.avatarUrl = avatarUrl;
         this.pinnedMessageIds = new ArrayList<>();
         this.pinnedByUsers = new java.util.HashMap<>();
+        this.userTags = new java.util.HashMap<>();
     }
 
     // Getters
@@ -361,8 +368,82 @@ public class Conversation {
     }
     
     @Override
-    public int hashCode() {
+     public int hashCode() {
         return java.util.Objects.hash(id, name, lastMessage, timestamp, memberIds, memberNames, 
                                       type, adminIds, avatarUrl);
+    }
+    
+    // Tag management helper methods
+    
+    /**
+     * Get user tags map
+     * @return map of userId to list of tags
+     */
+    public java.util.Map<String, java.util.List<String>> getUserTags() {
+        return userTags != null ? userTags : new java.util.HashMap<>();
+    }
+    
+    /**
+     * Set user tags map
+     * @param userTags map of userId to list of tags
+     */
+    public void setUserTags(java.util.Map<String, java.util.List<String>> userTags) {
+        this.userTags = userTags;
+    }
+    
+    /**
+     * Get tags for a specific user
+     * @param userId ID of user
+     * @return list of tags for this user (empty if none)
+     */
+    public java.util.List<String> getUserTagsForUser(String userId) {
+        if (this.userTags == null || !this.userTags.containsKey(userId)) {
+            return new java.util.ArrayList<>();
+        }
+        return new java.util.ArrayList<>(this.userTags.get(userId));
+    }
+    
+    /**
+     * Add a tag for a user
+     * @param userId ID of user
+     * @param tag Tag to add
+     */
+    public void addTag(String userId, String tag) {
+        if (this.userTags == null) {
+            this.userTags = new java.util.HashMap<>();
+        }
+        if (!this.userTags.containsKey(userId)) {
+            this.userTags.put(userId, new java.util.ArrayList<>());
+        }
+        if (!this.userTags.get(userId).contains(tag)) {
+            this.userTags.get(userId).add(tag);
+        }
+    }
+    
+    /**
+     * Remove a tag for a user
+     * @param userId ID of user
+     * @param tag Tag to remove
+     */
+    public void removeTag(String userId, String tag) {
+        if (this.userTags != null && this.userTags.containsKey(userId)) {
+            this.userTags.get(userId).remove(tag);
+            // Clean up empty lists
+            if (this.userTags.get(userId).isEmpty()) {
+                this.userTags.remove(userId);
+            }
+        }
+    }
+    
+    /**
+     * Check if user has a specific tag
+     * @param userId ID of user
+     * @param tag Tag to check
+     * @return true if user has this tag
+     */
+    public boolean hasTag(String userId, String tag) {
+        return this.userTags != null && 
+               this.userTags.containsKey(userId) && 
+               this.userTags.get(userId).contains(tag);
     }
 }
