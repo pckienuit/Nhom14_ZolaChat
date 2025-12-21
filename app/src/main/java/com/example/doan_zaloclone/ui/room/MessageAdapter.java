@@ -735,25 +735,31 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             if (senderNameTextView != null) {
                 if (isGroupChat) {
                     senderNameTextView.setVisibility(View.VISIBLE);
-                    // Fetch sender name from Firestore
-                    String senderId = message.getSenderId();
-                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                        .collection("users")
-                        .document(senderId)
-                        .get()
-                        .addOnSuccessListener(doc -> {
-                            if (doc.exists()) {
-                                String senderName = doc.getString("name");
-                                if (senderName != null) {
-                                    senderNameTextView.setText(senderName);
-                                } else {
-                                    senderNameTextView.setText("User");
+                    // Try to use cached sender name first
+                    String cachedName = message.getSenderName();
+                    if (cachedName != null && !cachedName.isEmpty()) {
+                        senderNameTextView.setText(cachedName);
+                    } else {
+                        // Fallback: Fetch sender name from Firestore for old messages
+                        String senderId = message.getSenderId();
+                        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("users")
+                            .document(senderId)
+                            .get()
+                            .addOnSuccessListener(doc -> {
+                                if (doc.exists()) {
+                                    String senderName = doc.getString("name");
+                                    if (senderName != null) {
+                                        senderNameTextView.setText(senderName);
+                                    } else {
+                                        senderNameTextView.setText("User");
+                                    }
                                 }
-                            }
-                        })
-                        .addOnFailureListener(e -> {
-                            senderNameTextView.setText("User");
-                        });
+                            })
+                            .addOnFailureListener(e -> {
+                                senderNameTextView.setText("User");
+                            });
+                    }
                 } else {
                     senderNameTextView.setVisibility(View.GONE);
                 }
@@ -851,25 +857,31 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             if (senderNameTextView != null) {
                 if (isGroupChat) {
                     senderNameTextView.setVisibility(View.VISIBLE);
-                    // Fetch sender name from Firestore
-                    String senderId = message.getSenderId();
-                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                        .collection("users")
-                        .document(senderId)
-                        .get()
-                        .addOnSuccessListener(doc -> {
-                            if (doc.exists()) {
-                                String senderName = doc.getString("name");
-                                if (senderName != null) {
-                                    senderNameTextView.setText(senderName);
-                                } else {
-                                    senderNameTextView.setText("User");
+                    // Try to use cached sender name first
+                    String cachedName = message.getSenderName();
+                    if (cachedName != null && !cachedName.isEmpty()) {
+                        senderNameTextView.setText(cachedName);
+                    } else {
+                        // Fallback: Fetch sender name from Firestore for old messages
+                        String senderId = message.getSenderId();
+                        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("users")
+                            .document(senderId)
+                            .get()
+                            .addOnSuccessListener(doc -> {
+                                if (doc.exists()) {
+                                    String senderName = doc.getString("name");
+                                    if (senderName != null) {
+                                        senderNameTextView.setText(senderName);
+                                    } else {
+                                        senderNameTextView.setText("User");
+                                    }
                                 }
-                            }
-                        })
-                        .addOnFailureListener(e -> {
-                            senderNameTextView.setText("User");
-                        });
+                            })
+                            .addOnFailureListener(e -> {
+                                senderNameTextView.setText("User");
+                            });
+                    }
                 } else {
                     senderNameTextView.setVisibility(View.GONE);
                 }
