@@ -58,5 +58,15 @@
                 android:minWidth="40dp"
                 android:gravity="end" />
         </LinearLayout>
+
+        <!-- Voter avatars (bottom right) -->
+        <LinearLayout
+            android:id="@+id/voterAvatarsContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            android:visibility="gone" />
     </LinearLayout>
 </LinearLayout>
