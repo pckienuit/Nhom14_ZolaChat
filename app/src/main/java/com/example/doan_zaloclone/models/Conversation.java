@@ -20,11 +20,15 @@ public class Conversation {
     
     // Pinned messages - list of message IDs (unlimited)
     private List<String> pinnedMessageIds;
+    
+    // Pinned conversations - map of userId to pinnedAt timestamp
+    private java.util.Map<String, Long> pinnedByUsers;
 
     public Conversation() {
         this.memberIds = new ArrayList<>();
         this.type = TYPE_FRIEND;
         this.pinnedMessageIds = new ArrayList<>();
+        this.pinnedByUsers = new java.util.HashMap<>();
     }
 
     public Conversation(String id, String name, String lastMessage, long timestamp) {
@@ -35,6 +39,7 @@ public class Conversation {
         this.memberIds = new ArrayList<>();
         this.type = TYPE_FRIEND;
         this.pinnedMessageIds = new ArrayList<>();
+        this.pinnedByUsers = new java.util.HashMap<>();
     }
 
     public Conversation(String id, String name, String lastMessage, long timestamp, List<String> memberIds) {
@@ -45,6 +50,7 @@ public class Conversation {
         this.memberIds = memberIds != null ? memberIds : new ArrayList<>();
         this.type = TYPE_FRIEND;
         this.pinnedMessageIds = new ArrayList<>();
+        this.pinnedByUsers = new java.util.HashMap<>();
     }
     
     public Conversation(String id, String name, String lastMessage, long timestamp, 
@@ -62,6 +68,7 @@ public class Conversation {
         }
         this.avatarUrl = avatarUrl;
         this.pinnedMessageIds = new ArrayList<>();
+        this.pinnedByUsers = new java.util.HashMap<>();
     }
 
     // Getters
@@ -275,6 +282,66 @@ public class Conversation {
      */
     public int getPinnedMessageCount() {
         return this.pinnedMessageIds != null ? this.pinnedMessageIds.size() : 0;
+    }
+    
+    // Pinned conversation helper methods
+    
+    /**
+     * Get pinned by users map
+     * @return map of userId to pinnedAt timestamp
+     */
+    public java.util.Map<String, Long> getPinnedByUsers() {
+        return pinnedByUsers != null ? pinnedByUsers : new java.util.HashMap<>();
+    }
+    
+    /**
+     * Set pinned by users map
+     * @param pinnedByUsers map of userId to pinnedAt timestamp
+     */
+    public void setPinnedByUsers(java.util.Map<String, Long> pinnedByUsers) {
+        this.pinnedByUsers = pinnedByUsers;
+    }
+    
+    /**
+     * Check if conversation is pinned by a user
+     * @param userId ID of user to check
+     * @return true if pinned by this user
+     */
+    public boolean isPinnedByUser(String userId) {
+        return this.pinnedByUsers != null && this.pinnedByUsers.containsKey(userId);
+    }
+    
+    /**
+     * Get pinned timestamp for a user
+     * @param userId ID of user
+     * @return timestamp when pinned, or 0 if not pinned
+     */
+    public long getPinnedAtTimestamp(String userId) {
+        if (this.pinnedByUsers != null && this.pinnedByUsers.containsKey(userId)) {
+            return this.pinnedByUsers.get(userId);
+        }
+        return 0;
+    }
+    
+    /**
+     * Pin conversation for a user
+     * @param userId ID of user pinning the conversation
+     */
+    public void pinForUser(String userId) {
+        if (this.pinnedByUsers == null) {
+            this.pinnedByUsers = new java.util.HashMap<>();
+        }
+        this.pinnedByUsers.put(userId, System.currentTimeMillis());
+    }
+    
+    /**
+     * Unpin conversation for a user
+     * @param userId ID of user unpinning the conversation
+     */
+    public void unpinForUser(String userId) {
+        if (this.pinnedByUsers != null) {
+            this.pinnedByUsers.remove(userId);
+        }
     }
     
     @Override

@@ -10,6 +10,7 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QuerySnapshot;
 
@@ -657,6 +658,51 @@ public class FirestoreManager {
                     listener.onFailure(e);
                 });
     }
+
+    /**
+     * Pin conversation for a user
+     */
+    public void pinConversation(@NonNull String conversationId,
+                               @NonNull String userId,
+                               @NonNull OnGroupUpdatedListener listener) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("pinnedByUsers." + userId, System.currentTimeMillis());
+        
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Conversation pinned: " + conversationId + " by user: " + userId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error pinning conversation", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Unpin conversation for a user
+     */
+    public void unpinConversation(@NonNull String conversationId,
+                                 @NonNull String userId,
+                                 @NonNull OnGroupUpdatedListener listener) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("pinnedByUsers." + userId, FieldValue.delete());
+        
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Conversation unpinned: " + conversationId + " by user: " + userId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error unpinning conversation", e);
+                    listener.onFailure(e);
+                });
+    }
+
 
     // Callback Interfaces
 

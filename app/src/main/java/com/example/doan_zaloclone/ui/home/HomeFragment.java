@@ -71,10 +71,76 @@ public class HomeFragment extends Fragment {
             startActivity(intent);
         }, currentUserId);
         
+        // Set long-click listener for context menu
+        conversationAdapter.setOnConversationLongClickListener(conversation -> {
+            showConversationContextMenu(conversation);
+        });
+        
         conversationsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         conversationsRecyclerView.setHasFixedSize(true); // Optimize RecyclerView performance
         conversationsRecyclerView.setAdapter(conversationAdapter);
     }
+    
+    private void showConversationContextMenu(Conversation conversation) {
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+            ? firebaseAuth.getCurrentUser().getUid() 
+            : "";
+        
+        boolean isPinned = conversation.isPinnedByUser(currentUserId);
+        
+        // Create options
+        String[] options;
+        if (isPinned) {
+            options = new String[]{getString(R.string.unpin_conversation)};
+        } else {
+            options = new String[]{getString(R.string.pin_conversation)};
+        }
+        
+        // Show dialog
+        new androidx.appcompat.app.AlertDialog.Builder(getContext())
+            .setItems(options, (dialog, which) -> {
+                if (which == 0) {
+                    // Pin or Unpin
+                    if (isPinned) {
+                        unpinConversation(conversation.getId(), currentUserId);
+                    } else {
+                        pinConversation(conversation.getId(), currentUserId);
+                    }
+                }
+            })
+            .show();
+    }
+    
+    private void pinConversation(String conversationId, String userId) {
+        homeViewModel.pinConversation(conversationId, userId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                Toast.makeText(getContext(), "Đã ghim cuộc hội thoại", Toast.LENGTH_SHORT).show();
+            } else if (resource.isError()) {
+                String errorMessage = resource.getMessage() != null 
+                    ? resource.getMessage() 
+                    : "Không thể ghim cuộc hội thoại";
+                Toast.makeText(getContext(), errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    
+    private void unpinConversation(String conversationId, String userId) {
+        homeViewModel.unpinConversation(conversationId, userId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                Toast.makeText(getContext(), "Đã bỏ ghim", Toast.LENGTH_SHORT).show();
+            } else if (resource.isError()) {
+                String errorMessage = resource.getMessage() != null 
+                    ? resource.getMessage() 
+                    : "Không thể bỏ ghim";
+                Toast.makeText(getContext(), errorMessage, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
     
     private void observeViewModel() {
         // Observe conversations LiveData

@@ -25,16 +25,25 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
 
     private List<Conversation> conversations;
     private OnConversationClickListener listener;
+    private OnConversationLongClickListener longClickListener;
     private String currentUserId;
 
     public interface OnConversationClickListener {
         void onConversationClick(Conversation conversation);
+    }
+    
+    public interface OnConversationLongClickListener {
+        void onConversationLongClick(Conversation conversation);
     }
 
     public ConversationAdapter(List<Conversation> conversations, OnConversationClickListener listener, String currentUserId) {
         this.conversations = conversations;
         this.listener = listener;
         this.currentUserId = currentUserId;
+    }
+    
+    public void setOnConversationLongClickListener(OnConversationLongClickListener listener) {
+        this.longClickListener = listener;
     }
 
     @NonNull
@@ -48,7 +57,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         Conversation conversation = conversations.get(position);
-        holder.bind(conversation, listener, currentUserId);
+        holder.bind(conversation, listener, longClickListener, currentUserId);
     }
 
     @Override
@@ -69,6 +78,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
         private TextView timestampTextView;
         private TextView memberCountTextView;
         private android.widget.ImageView groupIconImageView;
+        private android.widget.ImageView pinIndicator;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -77,9 +87,11 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
             memberCountTextView = itemView.findViewById(R.id.memberCountTextView);
             groupIconImageView = itemView.findViewById(R.id.groupIconImageView);
+            pinIndicator = itemView.findViewById(R.id.pinIndicator);
         }
 
-        public void bind(Conversation conversation, OnConversationClickListener listener, String currentUserId) {
+        public void bind(Conversation conversation, OnConversationClickListener listener, 
+                        OnConversationLongClickListener longClickListener, String currentUserId) {
             // Check if this is a group chat
             boolean isGroupChat = conversation.isGroupChat();
             
@@ -173,11 +185,25 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             lastMessageTextView.setText(conversation.getLastMessage());
             
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(conversation.getTimestamp())));
+            
+            // Show/hide pin indicator
+            if (pinIndicator != null) {
+                boolean isPinned = conversation.isPinnedByUser(currentUserId);
+                pinIndicator.setVisibility(isPinned ? View.VISIBLE : View.GONE);
+            }
 
             itemView.setOnClickListener(v -> {
                 if (listener != null) {
                     listener.onConversationClick(conversation);
                 }
+            });
+            
+            itemView.setOnLongClickListener(v -> {
+                if (longClickListener != null) {
+                    longClickListener.onConversationLongClick(conversation);
+                    return true;
+                }
+                return false;
             });
         }
     }

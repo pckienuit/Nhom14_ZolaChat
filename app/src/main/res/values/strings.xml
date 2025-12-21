@@ -66,4 +66,8 @@
     <string name="expand_pinned_messages">Mở rộng tin nhắn đã ghim</string>
     <string name="unpin_message">Gỡ ghim tin nhắn</string>
     <string name="pin_message">Ghim tin nhắn</string>
+    
+    <!-- Pinned Conversations Strings -->
+    <string name="pin_conversation">Ghim cuộc hội thoại</string>
+    <string name="unpin_conversation">Bỏ ghim</string>
 </resources>
