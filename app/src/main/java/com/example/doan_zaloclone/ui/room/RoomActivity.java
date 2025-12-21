@@ -531,6 +531,19 @@ public class RoomActivity extends AppCompatActivity {
             }
         });
         
+        // Set poll interaction listener
+        messageAdapter.setOnPollInteractionListener(new MessageAdapter.OnPollInteractionListener() {
+            @Override
+            public void onVotePoll(Message message, String optionId) {
+                handlePollVote(message, optionId);
+            }
+            
+            @Override
+            public void onClosePoll(Message message) {
+                handleClosePoll(message);
+            }
+        });
+        
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         messagesRecyclerView.setLayoutManager(layoutManager);
@@ -1901,6 +1914,63 @@ public class RoomActivity extends AppCompatActivity {
                     public void onSuccess() {
                         runOnUiThread(() -> {
                             Toast.makeText(RoomActivity.this, "Đã tạo poll", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
+    }
+    
+    // ===================== POLL INTERACTION HANDLERS =====================
+    
+    /**
+     * Handle voting for a poll option
+     */
+    private void handlePollVote(Message message, String optionId) {
+        if (message == null || optionId == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        chatRepository.votePoll(conversationId, message.getId(), optionId, currentUserId,
+                new ChatRepository.VotePollCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            // Poll will auto-update via Firestore listener
+                            android.util.Log.d("RoomActivity", "Vote successful");
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
+    }
+    
+    /**
+     * Handle closing a poll
+     */
+    private void handleClosePoll(Message message) {
+        if (message == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        // TODO: Check if user is group admin (for now, pass false)
+        boolean isGroupAdmin = false;
+        
+        chatRepository.closePoll(conversationId, message.getId(), currentUserId, isGroupAdmin,
+                new ChatRepository.VotePollCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Đã đóng bình chọn", Toast.LENGTH_SHORT).show();
                         });
                     }
                     

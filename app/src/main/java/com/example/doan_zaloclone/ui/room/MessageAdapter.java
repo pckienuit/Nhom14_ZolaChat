@@ -73,12 +73,18 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         void onReactionStatsClick(Message message);
     }
     
+    public interface OnPollInteractionListener {
+        void onVotePoll(Message message, String optionId);
+        void onClosePoll(Message message);
+    }
+    
     private OnMessageLongClickListener longClickListener;
     private OnMessageReplyListener replyListener;
     private OnReplyPreviewClickListener replyPreviewClickListener;
     private OnMessageRecallListener recallListener;
     private OnMessageForwardListener forwardListener;
     private OnMessageReactionListener reactionListener;
+    private OnPollInteractionListener pollInteractionListener;
 
     public MessageAdapter(List<Message> messages, String currentUserId) {
         this.messages = messages;
@@ -119,6 +125,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     
     public void setOnMessageReactionListener(OnMessageReactionListener listener) {
         this.reactionListener = listener;
+    }
+    
+    public void setOnPollInteractionListener(OnPollInteractionListener listener) {
+        this.pollInteractionListener = listener;
     }
     
     public void setPinnedMessageIds(java.util.List<String> pinnedIds) {
@@ -262,7 +272,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         } else if (holder instanceof CallHistoryViewHolder) {
             ((CallHistoryViewHolder) holder).bind(message);
         } else if (holder instanceof PollMessageViewHolder) {
-            ((PollMessageViewHolder) holder).bind(message, currentUserId, isPinned, isHighlighted);
+            ((PollMessageViewHolder) holder).bind(message, currentUserId, isPinned, isHighlighted, pollInteractionListener);
         } else if (holder instanceof RecalledMessageViewHolder) {
             // Recalled messages just display static text, no binding needed
         }
@@ -1203,11 +1213,23 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             Message oldMessage = oldList.get(oldItemPosition);
             Message newMessage = newList.get(newItemPosition);
             
+            // Safe null comparison for content (poll messages may have null content)
+            String oldContent = oldMessage.getContent();
+            String newContent = newMessage.getContent();
+            boolean contentMatch = (oldContent == null && newContent == null) ||
+                    (oldContent != null && oldContent.equals(newContent));
+            
+            // Safe null comparison for type
+            String oldType = oldMessage.getType();
+            String newType = newMessage.getType();
+            boolean typeMatch = (oldType == null && newType == null) ||
+                    (oldType != null && oldType.equals(newType));
+            
             // Compare all relevant fields including reactions
-            boolean basicFieldsMatch = oldMessage.getContent().equals(newMessage.getContent()) &&
+            boolean basicFieldsMatch = contentMatch &&
                    oldMessage.getSenderId().equals(newMessage.getSenderId()) &&
                    oldMessage.getTimestamp() == newMessage.getTimestamp() &&
-                   oldMessage.getType().equals(newMessage.getType());
+                   typeMatch;
             
             if (!basicFieldsMatch) {
                 return false;
@@ -1235,13 +1257,58 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             java.util.Map<String, Integer> newCounts = newMessage.getReactionCounts();
             
             if (oldCounts == null && newCounts == null) {
-                return true;
-            }
-            if (oldCounts == null || newCounts == null) {
+                // Both null, continue to poll comparison
+            } else if (oldCounts == null || newCounts == null) {
+                return false;
+            } else if (!oldCounts.equals(newCounts)) {
                 return false;
             }
             
-            return oldCounts.equals(newCounts);
+            // Compare pollData (CRITICAL for realtime vote updates)
+            com.example.doan_zaloclone.models.Poll oldPoll = oldMessage.getPollData();
+            com.example.doan_zaloclone.models.Poll newPoll = newMessage.getPollData();
+            
+            if (oldPoll == null && newPoll == null) {
+                return true; // No poll data in both
+            }
+            if (oldPoll == null || newPoll == null) {
+                return false; // One has poll, other doesn't
+            }
+            
+            // Compare poll options (votes)
+            java.util.List<com.example.doan_zaloclone.models.PollOption> oldOptions = oldPoll.getOptions();
+            java.util.List<com.example.doan_zaloclone.models.PollOption> newOptions = newPoll.getOptions();
+            
+            if (oldOptions == null && newOptions == null) {
+                return true;
+            }
+            if (oldOptions == null || newOptions == null) {
+                return false;
+            }
+            if (oldOptions.size() != newOptions.size()) {
+                return false;
+            }
+            
+            // Compare each option's votes
+            for (int i = 0; i < oldOptions.size(); i++) {
+                com.example.doan_zaloclone.models.PollOption oldOpt = oldOptions.get(i);
+                com.example.doan_zaloclone.models.PollOption newOpt = newOptions.get(i);
+                
+                java.util.List<String> oldVoters = oldOpt.getVoterIds();
+                java.util.List<String> newVoters = newOpt.getVoterIds();
+                
+                if (oldVoters == null && newVoters == null) continue;
+                if (oldVoters == null || newVoters == null) return false;
+                if (oldVoters.size() != newVoters.size()) return false;
+                if (!oldVoters.containsAll(newVoters)) return false;
+            }
+            
+            // Also check if poll is closed
+            if (oldPoll.isClosed() != newPoll.isClosed()) {
+                return false;
+            }
+            
+            return true;
         }
     }
 
@@ -1283,11 +1350,13 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private TextView deadlineText;
         private TextView closePollButton;
         private TextView addOptionButton;
+        private TextView seeMoreButton;
         private TextView timestampTextView;
         private ImageView pinIndicator;
         private boolean isSent;
         
         private PollOptionAdapter pollOptionAdapter;
+        private boolean showingAllOptions = false;
         
         public PollMessageViewHolder(@NonNull View itemView, boolean isSent) {
             super(itemView);
@@ -1299,6 +1368,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             deadlineText = itemView.findViewById(R.id.deadlineText);
             closePollButton = itemView.findViewById(R.id.closePollButton);
             addOptionButton = itemView.findViewById(R.id.addOptionButton);
+            seeMoreButton = itemView.findViewById(R.id.seeMoreButton);
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
             pinIndicator = itemView.findViewById(R.id.pinIndicator);
             
@@ -1306,21 +1376,80 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             optionsRecyclerView.setLayoutManager(new androidx.recyclerview.widget.LinearLayoutManager(itemView.getContext()));
         }
         
-        public void bind(Message message, String currentUserId, boolean isPinned, boolean isHighlighted) {
+        public void bind(Message message, String currentUserId, boolean isPinned, boolean isHighlighted, OnPollInteractionListener pollListener) {
             com.example.doan_zaloclone.models.Poll poll = message.getPollData();
             if (poll == null) return;
             
             // Set question
             questionTextView.setText(poll.getQuestion());
             
-            // Setup options adapter
-            pollOptionAdapter = new PollOptionAdapter(poll, currentUserId, (optionIndex, option) -> {
-                // Handle vote - for now just toast, will implement properly later
-                android.widget.Toast.makeText(itemView.getContext(), 
-                        "Voted for: " + option.getText(), 
-                        android.widget.Toast.LENGTH_SHORT).show();
+            // Determine how many options to show
+            java.util.List<com.example.doan_zaloclone.models.PollOption> allOptions = poll.getOptions();
+            int totalOptions = allOptions.size();
+            int maxDisplay = 5;
+            
+            // Create limited poll for display
+            java.util.List<com.example.doan_zaloclone.models.PollOption> displayOptions;
+            if (!showingAllOptions && totalOptions > maxDisplay) {
+                // Show only first 4 options when collapsed
+                displayOptions = allOptions.subList(0, maxDisplay - 1);
+            } else {
+                displayOptions = allOptions;
+            }
+            
+            // Create temporary poll with limited options for adapter
+            com.example.doan_zaloclone.models.Poll displayPoll = poll;
+            if (displayOptions.size() != allOptions.size()) {
+                // Clone poll with limited options
+                displayPoll = new com.example.doan_zaloclone.models.Poll(poll.getId(), poll.getQuestion(), poll.getCreatorId());
+                displayPoll.setOptions(new java.util.ArrayList<>(displayOptions));
+                displayPoll.setPinned(poll.isPinned());
+                displayPoll.setAnonymous(poll.isAnonymous());
+                displayPoll.setHideResultsUntilVoted(poll.isHideResultsUntilVoted());
+                displayPoll.setAllowMultipleChoice(poll.isAllowMultipleChoice());
+                displayPoll.setAllowAddOptions(poll.isAllowAddOptions());
+                displayPoll.setClosed(poll.isClosed());
+                displayPoll.setExpiresAt(poll.getExpiresAt());
+                displayPoll.setCreatedAt(poll.getCreatedAt());
+            }
+            
+            // Setup options adapter with real voting
+            final com.example.doan_zaloclone.models.Poll finalPoll = poll; // Original poll for voting
+            pollOptionAdapter = new PollOptionAdapter(displayPoll, currentUserId, (optionIndex, option) -> {
+                // Handle vote - call listener with original poll
+                if (pollListener != null) {
+                    pollListener.onVotePoll(message, option.getId());
+                }
             });
             optionsRecyclerView.setAdapter(pollOptionAdapter);
+            
+            // See more button logic
+            if (seeMoreButton != null) {
+                if (!showingAllOptions && totalOptions > maxDisplay) {
+                    seeMoreButton.setVisibility(View.VISIBLE);
+                    seeMoreButton.setText("Xem thêm (" + (totalOptions - (maxDisplay - 1)) + " lựa chọn)");
+                    seeMoreButton.setOnClickListener(v -> {
+                        showingAllOptions = true;
+                        bind(message, currentUserId, isPinned, isHighlighted, pollListener);
+                    });
+                } else {
+                    seeMoreButton.setVisibility(View.GONE);
+                }
+            }
+            
+            // Add option button - show only if < 5 options and allowed
+            if (addOptionButton != null) {
+                if (totalOptions < maxDisplay && poll.isAllowAddOptions() && poll.canVote()) {
+                    addOptionButton.setVisibility(View.VISIBLE);
+                    addOptionButton.setOnClickListener(v -> {
+                        android.widget.Toast.makeText(itemView.getContext(), 
+                                "Add option (to be implemented)", 
+                                android.widget.Toast.LENGTH_SHORT).show();
+                    });
+                } else {
+                    addOptionButton.setVisibility(View.GONE);
+                }
+            }
             
             // Voter count
             int totalVotes = poll.getTotalVotes();
@@ -1342,31 +1471,29 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
             
             // Close poll button (only show for creator in open polls)
-            if (poll.canClosePoll(currentUserId, false) && !poll.isClosed()) {
+            if (closePollButton != null && poll.canClosePoll(currentUserId, false) && !poll.isClosed()) {
                 closePollButton.setVisibility(View.VISIBLE);
                 closePollButton.setOnClickListener(v -> {
-                    android.widget.Toast.makeText(itemView.getContext(), 
-                            "Close poll (to be implemented)", 
-                            android.widget.Toast.LENGTH_SHORT).show();
+                    if (pollListener != null) {
+                        // Show confirmation dialog
+                        new android.app.AlertDialog.Builder(itemView.getContext())
+                                .setTitle("Đóng bình chọn")
+                                .setMessage("Bạn có chắc muốn đóng bình chọn này? Sau khi đóng sẽ không thể bình chọn thêm.")
+                                .setPositiveButton("Đóng", (dialog, which) -> {
+                                    pollListener.onClosePoll(message);
+                                })
+                                .setNegativeButton("Hủy", null)
+                                .show();
+                    }
                 });
-            } else {
+            } else if (closePollButton != null) {
                 closePollButton.setVisibility(View.GONE);
             }
             
-            // Add option button
-            if (poll.isAllowAddOptions() && poll.canVote()) {
-                addOptionButton.setVisibility(View.VISIBLE);
-                addOptionButton.setOnClickListener(v -> {
-                    android.widget.Toast.makeText(itemView.getContext(), 
-                            "Add option (to be implemented)", 
-                            android.widget.Toast.LENGTH_SHORT).show();
-                });
-            } else {
-                addOptionButton.setVisibility(View.GONE);
-            }
-            
             // Timestamp
-            timestampTextView.setText(TIMESTAMP_FORMAT.format(new java.util.Date(message.getTimestamp())));
+            if (timestampTextView != null) {
+                timestampTextView.setText(TIMESTAMP_FORMAT.format(new java.util.Date(message.getTimestamp())));
+            }
             
             // Pin indicator
             if (pinIndicator != null) {

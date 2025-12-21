@@ -1290,6 +1290,130 @@ public class ChatRepository {
     }
     
     /**
+     * Vote for a poll option
+     */
+    public void votePoll(String conversationId, String messageId, 
+                        String optionId, String userId,
+                        VotePollCallback callback) {
+        if (conversationId == null || messageId == null || optionId == null || userId == null) {
+            if (callback != null) {
+                callback.onError("Invalid parameters");
+            }
+            return;
+        }
+        
+        DocumentReference messageRef = firestore
+                .collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document(messageId);
+        
+        firestore.runTransaction(transaction -> {
+            DocumentSnapshot snapshot = transaction.get(messageRef);
+            com.example.doan_zaloclone.models.Message message = 
+                    snapshot.toObject(com.example.doan_zaloclone.models.Message.class);
+            
+            if (message == null || message.getPollData() == null) {
+                throw new RuntimeException("Poll not found");
+            }
+            
+            com.example.doan_zaloclone.models.Poll poll = message.getPollData();
+            
+            // Check if poll is still open
+            if (!poll.canVote()) {
+                throw new RuntimeException("Poll is closed or expired");
+            }
+            
+            // Find the option
+            com.example.doan_zaloclone.models.PollOption option = poll.getOptionById(optionId);
+            if (option == null) {
+                throw new RuntimeException("Option not found");
+            }
+            
+            // Check if user already voted for this option
+            if (option.hasUserVoted(userId)) {
+                // User already voted for this option - unvote it
+                option.removeVote(userId);
+            } else {
+                // If single choice, remove user's other votes first
+                if (!poll.isAllowMultipleChoice()) {
+                    for (com.example.doan_zaloclone.models.PollOption opt : poll.getOptions()) {
+                        opt.removeVote(userId);
+                    }
+                }
+                
+                // Add vote to selected option
+                option.addVote(userId);
+            }
+            
+            // Update message
+            message.setPollData(poll);
+            transaction.set(messageRef, message);
+            
+            return null;
+        }).addOnSuccessListener(aVoid -> {
+            if (callback != null) {
+                callback.onSuccess();
+            }
+        }).addOnFailureListener(e -> {
+            if (callback != null) {
+                callback.onError(e.getMessage());
+            }
+        });
+    }
+    
+    /**
+     * Close a poll (only creator or group admin can close)
+     */
+    public void closePoll(String conversationId, String messageId, 
+                         String userId, boolean isGroupAdmin,
+                         VotePollCallback callback) {
+        if (conversationId == null || messageId == null || userId == null) {
+            if (callback != null) {
+                callback.onError("Invalid parameters");
+            }
+            return;
+        }
+        
+        DocumentReference messageRef = firestore
+                .collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document(messageId);
+        
+        firestore.runTransaction(transaction -> {
+            DocumentSnapshot snapshot = transaction.get(messageRef);
+            com.example.doan_zaloclone.models.Message message = 
+                    snapshot.toObject(com.example.doan_zaloclone.models.Message.class);
+            
+            if (message == null || message.getPollData() == null) {
+                throw new RuntimeException("Poll not found");
+            }
+            
+            com.example.doan_zaloclone.models.Poll poll = message.getPollData();
+            
+            // Check permission
+            if (!poll.canClosePoll(userId, isGroupAdmin)) {
+                throw new RuntimeException("You don't have permission to close this poll");
+            }
+            
+            poll.setClosed(true);
+            message.setPollData(poll);
+            transaction.set(messageRef, message);
+            
+            return null;
+        }).addOnSuccessListener(aVoid -> {
+            if (callback != null) {
+                callback.onSuccess();
+            }
+        }).addOnFailureListener(e -> {
+            if (callback != null) {
+                callback.onError(e.getMessage());
+            }
+        });
+    }
+    
+    /**
      * Callback for poll vote operations
      */
     public interface VotePollCallback {

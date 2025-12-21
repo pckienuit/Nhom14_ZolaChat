@@ -93,31 +93,6 @@ public class Poll implements Serializable {
         return isClosed;
     }
     
-    // Firestore compatibility getters (boolean fields)
-    public boolean getIsPinned() {
-        return isPinned;
-    }
-    
-    public boolean getIsAnonymous() {
-        return isAnonymous;
-    }
-    
-    public boolean getHideResultsUntilVoted() {
-        return hideResultsUntilVoted;
-    }
-    
-    public boolean getAllowMultipleChoice() {
-        return allowMultipleChoice;
-    }
-    
-    public boolean getAllowAddOptions() {
-        return allowAddOptions;
-    }
-    
-    public boolean getIsClosed() {
-        return isClosed;
-    }
-    
     // Setters (for Firestore)
     public void setId(String id) {
         this.id = id;
