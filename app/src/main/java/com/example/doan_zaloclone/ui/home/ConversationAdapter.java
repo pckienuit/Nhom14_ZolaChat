@@ -26,6 +26,9 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
             new SimpleDateFormat("HH:mm", Locale.getDefault());
+    
+    // Cache for custom tag colors from Firestore
+    private static java.util.Map<String, Integer> customTagColorsCache = new java.util.HashMap<>();
 
     private List<Conversation> conversations;
     private OnConversationClickListener listener;
@@ -213,7 +216,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
         }
         
         /**
-         * Render tags as chips in the tags container
+         * Render tags as icons in the tags container
          */
         private void renderTags(Conversation conversation, String currentUserId) {
             if (tagsContainer == null) return;
@@ -221,8 +224,8 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             // Clear existing tags
             tagsContainer.removeAllViews();
             
-            // Get user's tags
-            java.util.List<String> tags = conversation.getUserTagsForUser(currentUserId);
+            // Get displayed tags (based on user preference: latest, specific, or all)
+            java.util.List<String> tags = conversation.getDisplayedTagsForUser(currentUserId);
             if (tags == null || tags.isEmpty()) {
                 tagsContainer.setVisibility(View.GONE);
                 return;
@@ -230,38 +233,75 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             
             tagsContainer.setVisibility(View.VISIBLE);
             
-            // Create chip for each tag
+            // Create icon for each displayed tag
             for (String tag : tags) {
-                TextView chipView = createTagChip(tag);
-                tagsContainer.addView(chipView);
+                android.widget.ImageView iconView = createTagIcon(tag);
+                tagsContainer.addView(iconView);
             }
         }
         
         /**
-         * Create a tag chip view
+         * Create a tag icon view
          */
-        private TextView createTagChip(String tag) {
-            TextView chip = new TextView(itemView.getContext());
-            chip.setText(tag);
-            chip.setTextSize(10);
-            chip.setTextColor(Color.WHITE);
-            chip.setPadding(16, 8, 16, 8);
+        private android.widget.ImageView createTagIcon(String tag) {
+            android.widget.ImageView icon = new android.widget.ImageView(itemView.getContext());
             
-            // Create rounded background with tag color
-            GradientDrawable background = new GradientDrawable();
-            background.setCornerRadius(20);
-            background.setColor(ConversationTag.getTagColor(itemView.getContext(), tag));
-            chip.setBackground(background);
+            // Set icon drawable
+            icon.setImageResource(R.drawable.ic_tag);
             
-            // Add margin
+            // Set color tint (with Firestore cache)
+            int tagColor = getTagColorWithCache(tag);
+            icon.setColorFilter(tagColor);
+            
+            // Set size
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-            params.setMarginEnd(8);
-            chip.setLayoutParams(params);
+                (int) (16 * itemView.getContext().getResources().getDisplayMetrics().density),
+                (int) (16 * itemView.getContext().getResources().getDisplayMetrics().density)
+            );
+            params.setMarginEnd((int) (2 * itemView.getContext().getResources().getDisplayMetrics().density));
+            icon.setLayoutParams(params);
             
-            return chip;
+            return icon;
         }
+        
+        /**
+         * Get tag color with Firestore cache fallback
+         */
+        private int getTagColorWithCache(String tag) {
+            // Check if it's a custom tag in cache
+            if (customTagColorsCache.containsKey(tag)) {
+                return customTagColorsCache.get(tag);
+            }
+            
+            // Otherwise use ConversationTag's logic
+            return ConversationTag.getTagColor(itemView.getContext(), tag);
+        }
+    }
+    
+    /**
+     * Load custom tag colors from Firestore for current user
+     */
+    public static void loadCustomTagColors(String userId) {
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(userId)
+            .get()
+            .addOnSuccessListener(documentSnapshot -> {
+                if (documentSnapshot.exists() && documentSnapshot.contains("customTagColors")) {
+                    java.util.Map<String, Object> colorsMap = 
+                        (java.util.Map<String, Object>) documentSnapshot.get("customTagColors");
+                    if (colorsMap != null) {
+                        customTagColorsCache.clear();
+                        for (java.util.Map.Entry<String, Object> entry : colorsMap.entrySet()) {
+                            if (entry.getValue() instanceof Long) {
+                                customTagColorsCache.put(entry.getKey(), ((Long) entry.getValue()).intValue());
+                            } else if (entry.getValue() instanceof Integer) {
+                                customTagColorsCache.put(entry.getKey(), (Integer) entry.getValue());
+                            }
+                        }
+                    }
+                }
+            });
     }
     
     // DiffUtil Callback for efficient list updates
@@ -317,10 +357,19 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
                 tagsEquals = oldConv.getUserTags().equals(newConv.getUserTags());
             }
             
+            // Compare displayedTags maps for real-time display preference updates
+            boolean displayedTagsEquals = false;
+            if (oldConv.getDisplayedTags() == null && newConv.getDisplayedTags() == null) {
+                displayedTagsEquals = true;
+            } else if (oldConv.getDisplayedTags() != null && newConv.getDisplayedTags() != null) {
+                displayedTagsEquals = oldConv.getDisplayedTags().equals(newConv.getDisplayedTags());
+            }
+            
             return nameEquals && lastMessageEquals &&
                    oldConv.getTimestamp() == newConv.getTimestamp() &&
                    pinnedEquals &&
-                   tagsEquals;
+                   tagsEquals &&
+                   displayedTagsEquals;
         }
 
     }

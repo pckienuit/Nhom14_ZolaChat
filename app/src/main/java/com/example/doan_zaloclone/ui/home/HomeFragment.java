@@ -46,6 +46,11 @@ public class HomeFragment extends Fragment {
         homeViewModel = new ViewModelProvider(this).get(HomeViewModel.class);
         firebaseAuth = FirebaseAuth.getInstance();
         
+        // Load custom tag colors from Firestore
+        if (firebaseAuth.getCurrentUser() != null) {
+            ConversationAdapter.loadCustomTagColors(firebaseAuth.getCurrentUser().getUid());
+        }
+        
         initViews(view);
         setupRecyclerView();
         observeViewModel();
@@ -192,12 +197,14 @@ public class HomeFragment extends Fragment {
         if (isPinned) {
             options = new String[]{
                 getString(R.string.unpin_conversation),
-                getString(R.string.manage_tags)
+                getString(R.string.manage_tags),
+                getString(R.string.choose_display_tag)
             };
         } else {
             options = new String[]{
                 getString(R.string.pin_conversation),
-                getString(R.string.manage_tags)
+                getString(R.string.manage_tags),
+                getString(R.string.choose_display_tag)
             };
         }
         
@@ -214,6 +221,14 @@ public class HomeFragment extends Fragment {
                 } else if (which == 1) {
                     // Manage tags
                     showTagManagementDialog(conversation);
+                } else if (which == 2) {
+                    // Choose display tag
+                    java.util.List<String> userTags = conversation.getUserTagsForUser(currentUserId);
+                    if (userTags != null && !userTags.isEmpty()) {
+                        showDisplayTagDialog(conversation, currentUserId, userTags);
+                    } else {
+                        Toast.makeText(getContext(), "Chưa có thẻ nào", Toast.LENGTH_SHORT).show();
+                    }
                 }
             })
             .show();
@@ -224,16 +239,53 @@ public class HomeFragment extends Fragment {
             ? firebaseAuth.getCurrentUser().getUid() 
             : "";
         
+        // Load user's custom tags from Firestore first
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(currentUserId)
+            .get()
+            .addOnSuccessListener(documentSnapshot -> {
+                java.util.List<String> globalCustomTags = new java.util.ArrayList<>();
+                
+                if (documentSnapshot.exists() && documentSnapshot.contains("customTags")) {
+                    // customTags is stored as a map for easier checking
+                    java.util.Map<String, Object> customTagsMap = 
+                        (java.util.Map<String, Object>) documentSnapshot.get("customTags");
+                    if (customTagsMap != null) {
+                        globalCustomTags.addAll(customTagsMap.keySet());
+                    }
+                }
+                
+                showTagManagementDialogWithCustomTags(conversation, currentUserId, globalCustomTags);
+            })
+            .addOnFailureListener(e -> {
+                // Show dialog without custom tags if failed to load
+                showTagManagementDialogWithCustomTags(conversation, currentUserId, new java.util.ArrayList<>());
+            });
+    }
+    
+    private void showTagManagementDialogWithCustomTags(Conversation conversation, String currentUserId, 
+                                                       java.util.List<String> globalCustomTags) {
         // Get current tags
         java.util.List<String> currentTags = conversation.getUserTagsForUser(currentUserId);
         java.util.List<String> selectedTags = new java.util.ArrayList<>(currentTags);
         
-        // Available tags (default tags)
-        String[] availableTags = new String[]{
-            getString(R.string.tag_work),
-            getString(R.string.tag_family),
-            getString(R.string.tag_friends)
-        };
+        // Build available tags list: default tags + global custom tags
+        java.util.List<String> availableTagsList = new java.util.ArrayList<>();
+        
+        // Add default tags
+        availableTagsList.add(getString(R.string.tag_work));
+        availableTagsList.add(getString(R.string.tag_family));
+        availableTagsList.add(getString(R.string.tag_friends));
+        
+        // Add global custom tags
+        for (String customTag : globalCustomTags) {
+            if (!availableTagsList.contains(customTag)) {
+                availableTagsList.add(customTag);
+            }
+        }
+        
+        String[] availableTags = availableTagsList.toArray(new String[0]);
         
         boolean[] checkedItems = new boolean[availableTags.length];
         for (int i = 0; i < availableTags.length; i++) {
@@ -262,6 +314,83 @@ public class HomeFragment extends Fragment {
                 showAddCustomTagDialog(conversation, selectedTags);
             })
             .show();
+    }
+    
+    private void showDisplayTagDialog(Conversation conversation, String userId, java.util.List<String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            Toast.makeText(getContext(), "Chưa có thẻ nào", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Get current displayed preference
+        String currentDisplay = conversation.getDisplayedTags().get(userId);
+        
+        // Build options: Latest, (All if multiple tags), and each tag
+        java.util.List<String> options = new java.util.ArrayList<>();
+        options.add("Mới nhất (mặc định)");
+        
+        boolean hasMultipleTags = tags.size() >= 2;
+        if (hasMultipleTags) {
+            options.add("Hiển thị tất cả");
+        }
+        
+        options.addAll(tags);
+        
+        // Find selected index
+        int selectedIndex = 0; // Default to "Latest"
+        if ("ALL".equals(currentDisplay) && hasMultipleTags) {
+            selectedIndex = 1;
+        } else if (currentDisplay != null) {
+            int tagIndex = tags.indexOf(currentDisplay);
+            if (tagIndex >= 0) {
+                selectedIndex = tagIndex + (hasMultipleTags ? 2 : 1);
+            }
+        }
+        
+        new androidx.appcompat.app.AlertDialog.Builder(getContext())
+            .setTitle("Chọn thẻ hiển thị")
+            .setSingleChoiceItems(options.toArray(new String[0]), selectedIndex, (dialog, which) -> {
+                String displayTag;
+                if (which == 0) {
+                    displayTag = null; // Latest
+                } else if (hasMultipleTags && which == 1) {
+                    displayTag = "ALL"; // All tags
+                } else {
+                    int tagIndex = hasMultipleTags ? which - 2 : which - 1;
+                    displayTag = tags.get(tagIndex); // Specific tag
+                }
+                
+                // Update displayed tag
+                conversation.setDisplayedTag(userId, displayTag);
+                updateDisplayedTag(conversation.getId(), userId, displayTag);
+                
+                dialog.dismiss();
+            })
+            .setNegativeButton(R.string.cancel, null)
+            .show();
+    }
+    
+    private void updateDisplayedTag(String conversationId, String userId, String displayTag) {
+        // Update in Firestore
+        java.util.Map<String, Object> updates = new java.util.HashMap<>();
+        if (displayTag == null) {
+            updates.put("displayedTags." + userId, com.google.firebase.firestore.FieldValue.delete());
+        } else {
+            updates.put("displayedTags." + userId, displayTag);
+        }
+        
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("conversations")
+            .document(conversationId)
+            .update(updates)
+            .addOnSuccessListener(aVoid -> {
+                // Success - adapter will update automatically via listener
+            })
+            .addOnFailureListener(e -> {
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Không thể cập nhật hiển thị thẻ", Toast.LENGTH_SHORT).show();
+                }
+            });
     }
     
     private void showAddCustomTagDialog(Conversation conversation, java.util.List<String> currentTags) {
@@ -335,9 +464,8 @@ public class HomeFragment extends Fragment {
             .setTitle("Chọn màu cho \"" + tagName + "\"")
             .setView(colorGrid)
             .setPositiveButton(R.string.apply, (dialog, which) -> {
-                // Save custom color
-                com.example.doan_zaloclone.models.ConversationTag.setCustomTagColor(
-                    getContext(), tagName, selectedColor[0]);
+                // Save custom tag globally to user's Firestore document
+                saveCustomTagToFirestore(userId, tagName, selectedColor[0]);
                 
                 // Add tag to current tags
                 currentTags.add(tagName);
@@ -347,6 +475,24 @@ public class HomeFragment extends Fragment {
             })
             .setNegativeButton(R.string.cancel, null)
             .show();
+    }
+    
+    private void saveCustomTagToFirestore(String userId, String tagName, int color) {
+        java.util.Map<String, Object> updates = new java.util.HashMap<>();
+        updates.put("customTags." + tagName, true); // Use map for easier checking
+        updates.put("customTagColors." + tagName, color);
+        
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(userId)
+            .update(updates)
+            .addOnFailureListener(e -> {
+                // If update fails (document might not have these fields), set them
+                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(userId)
+                    .set(updates, com.google.firebase.firestore.SetOptions.merge());
+            });
     }
     
     private void updateConversationTags(String conversationId, String userId, java.util.List<String> tags) {

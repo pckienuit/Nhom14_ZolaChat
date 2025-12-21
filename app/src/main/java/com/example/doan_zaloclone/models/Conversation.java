@@ -26,6 +26,9 @@ public class Conversation {
     
     // Tags - map of userId to list of tags
     private java.util.Map<String, java.util.List<String>> userTags;
+    
+    // Displayed tag - map of userId to displayed tag (null means show latest, "ALL" means show all)
+    private java.util.Map<String, String> displayedTags;
 
     public Conversation() {
         this.memberIds = new ArrayList<>();
@@ -445,5 +448,71 @@ public class Conversation {
         return this.userTags != null && 
                this.userTags.containsKey(userId) && 
                this.userTags.get(userId).contains(tag);
+    }
+    
+    // Displayed tag management
+    
+    /**
+     * Get displayedTags map
+     * @return map of userId to displayed tag
+     */
+    public java.util.Map<String, String> getDisplayedTags() {
+        return displayedTags != null ? displayedTags : new java.util.HashMap<>();
+    }
+    
+    /**
+     * Set displayedTags map
+     * @param displayedTags map of userId to displayed tag
+     */
+    public void setDisplayedTags(java.util.Map<String, String> displayedTags) {
+        this.displayedTags = displayedTags;
+    }
+    
+    /**
+     * Get which tags should be displayed for a user
+     * @param userId ID of user
+     * @return List of tags to display (latest tag, specific tag, or all tags)
+     */
+    public java.util.List<String> getDisplayedTagsForUser(String userId) {
+        java.util.List<String> allTags = getUserTagsForUser(userId);
+        if (allTags == null || allTags.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+        
+        // Get display preference
+        String displayPref = (displayedTags != null && displayedTags.containsKey(userId)) 
+            ? displayedTags.get(userId) 
+            : null;
+        
+        if ("ALL".equals(displayPref)) {
+            // Show all tags
+            return allTags;
+        } else if (displayPref != null && allTags.contains(displayPref)) {
+            // Show specific tag
+            java.util.List<String> result = new java.util.ArrayList<>();
+            result.add(displayPref);
+            return result;
+        } else {
+            // Default: show latest tag only
+            java.util.List<String> result = new java.util.ArrayList<>();
+            result.add(allTags.get(allTags.size() - 1));
+            return result;
+        }
+    }
+    
+    /**
+     * Set which tag should be displayed for a user
+     * @param userId ID of user
+     * @param tag Tag to display (null for latest, "ALL" for all tags, or specific tag name)
+     */
+    public void setDisplayedTag(String userId, String tag) {
+        if (this.displayedTags == null) {
+            this.displayedTags = new java.util.HashMap<>();
+        }
+        if (tag == null) {
+            this.displayedTags.remove(userId);
+        } else {
+            this.displayedTags.put(userId, tag);
+        }
     }
 }
