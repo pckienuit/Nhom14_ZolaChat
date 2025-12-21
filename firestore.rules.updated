@@ -15,6 +15,12 @@ service cloud.firestore {
       let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
       return affectedKeys.hasOnly(['pinnedByUsers']);
     }
+    
+    // Helper function to check if only userTags field changed
+    function onlyTagsFieldChanged() {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return affectedKeys.hasOnly(['userTags']);
+    }
 
     // Users collection
     match /users/{userId} {
@@ -30,7 +36,8 @@ service cloud.firestore {
                        request.auth.uid in request.resource.data.memberIds;
       allow update: if request.auth != null &&
                        (request.auth.uid in resource.data.memberIds ||
-                        onlyPinFieldChanged());
+                        onlyPinFieldChanged() ||
+                        onlyTagsFieldChanged());
       allow delete: if false;
     }
 

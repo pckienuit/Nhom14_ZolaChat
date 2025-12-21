@@ -7,9 +7,11 @@ import androidx.lifecycle.Transformations;
 
 import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.repository.ConversationRepository;
+import com.example.doan_zaloclone.repository.FriendRepository;
 import com.example.doan_zaloclone.utils.Resource;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * ViewModel for HomeFragment
@@ -18,10 +20,13 @@ import java.util.List;
 public class HomeViewModel extends BaseViewModel {
     
     private final ConversationRepository conversationRepository;
+    private final FriendRepository friendRepository;
     private LiveData<Resource<List<Conversation>>> conversations;
+    private MutableLiveData<String> selectedTagFilter = new MutableLiveData<>(null);
     
     public HomeViewModel() {
         this.conversationRepository = new ConversationRepository();
+        this.friendRepository = new FriendRepository();
     }
     
     /**
@@ -99,6 +104,60 @@ public class HomeViewModel extends BaseViewModel {
     public LiveData<Resource<Void>> unpinConversation(@NonNull String conversationId,
                                                        @NonNull String userId) {
         return conversationRepository.unpinConversation(conversationId, userId);
+    }
+    
+    /**
+     * Update tags for a conversation
+     * @param conversationId ID of the conversation
+     * @param userId ID of the user
+     * @param tags List of tags to set
+     * @return LiveData with success/error status
+     */
+    public LiveData<Resource<Void>> updateTags(@NonNull String conversationId,
+                                                @NonNull String userId,
+                                                @NonNull List<String> tags) {
+        return conversationRepository.updateTags(conversationId, userId, tags);
+    }
+    
+    /**
+     * Set tag filter
+     * @param tag Tag to filter by (null for all)
+     */
+    public void setTagFilter(String tag) {
+        selectedTagFilter.setValue(tag);
+    }
+    
+    /**
+     * Get current tag filter
+     * @return LiveData of selected tag filter
+     */
+    public LiveData<String> getSelectedTagFilter() {
+        return selectedTagFilter;
+    }
+    
+    /**
+     * Get filtered conversations based on selected tag
+     * @param userId Current user ID
+     * @return LiveData of filtered conversations
+     */
+    public LiveData<Resource<List<Conversation>>> getFilteredConversations(@NonNull String userId) {
+        return Transformations.switchMap(selectedTagFilter, tag -> {
+            if (tag == null) {
+                // No filter, return all conversations
+                return getConversations(userId);
+            } else {
+                // Filter by tag
+                return Transformations.map(getConversations(userId), resource -> {
+                    if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                        List<Conversation> filtered = resource.getData().stream()
+                            .filter(conv -> conv.hasTag(userId, tag))
+                            .collect(Collectors.toList());
+                        return Resource.success(filtered);
+                    }
+                    return resource;
+                });
+            }
+        });
     }
 
     
