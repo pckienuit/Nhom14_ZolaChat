@@ -31,6 +31,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public static final int VIEW_TYPE_CALL_HISTORY = 7;
     public static final int VIEW_TYPE_RECALLED_SENT = 8;
     public static final int VIEW_TYPE_RECALLED_RECEIVED = 9;
+    public static final int VIEW_TYPE_POLL_SENT = 10;
+    public static final int VIEW_TYPE_POLL_RECEIVED = 11;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -162,10 +164,16 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         boolean isImage = Message.TYPE_IMAGE.equals(message.getType());
         boolean isFile = Message.TYPE_FILE.equals(message.getType());
         boolean isCall = Message.TYPE_CALL.equals(message.getType());
+        boolean isPoll = Message.TYPE_POLL.equals(message.getType());
         
         // Call history messages are always centered
         if (isCall) {
             return VIEW_TYPE_CALL_HISTORY;
+        }
+        
+        // Poll messages
+        if (isPoll) {
+            return isSent ? VIEW_TYPE_POLL_SENT : VIEW_TYPE_POLL_RECEIVED;
         }
         
         if (isSent) {
@@ -218,6 +226,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_recalled_received, parent, false);
                 return new RecalledMessageViewHolder(view);
+            case VIEW_TYPE_POLL_SENT:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_poll_sent, parent, false);
+                return new PollMessageViewHolder(view, true);
+            case VIEW_TYPE_POLL_RECEIVED:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_poll_received, parent, false);
+                return new PollMessageViewHolder(view, false);
             default:
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_sent, parent, false);
@@ -245,6 +261,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((FileMessageReceivedViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof CallHistoryViewHolder) {
             ((CallHistoryViewHolder) holder).bind(message);
+        } else if (holder instanceof PollMessageViewHolder) {
+            ((PollMessageViewHolder) holder).bind(message, currentUserId, isPinned, isHighlighted);
         } else if (holder instanceof RecalledMessageViewHolder) {
             // Recalled messages just display static text, no binding needed
         }
@@ -1254,5 +1272,113 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             return null;
         }
         return messages.get(position);
+    }
+    
+    // ============== POLL MESSAGE VIEW HOLDER ==============
+    
+    static class PollMessageViewHolder extends RecyclerView.ViewHolder {
+        private TextView questionTextView;
+        private RecyclerView optionsRecyclerView;
+        private TextView voterCountText;
+        private TextView deadlineText;
+        private TextView closePollButton;
+        private TextView addOptionButton;
+        private TextView timestampTextView;
+        private ImageView pinIndicator;
+        private boolean isSent;
+        
+        private PollOptionAdapter pollOptionAdapter;
+        
+        public PollMessageViewHolder(@NonNull View itemView, boolean isSent) {
+            super(itemView);
+            this.isSent = isSent;
+            
+            questionTextView = itemView.findViewById(R.id.questionTextView);
+            optionsRecyclerView = itemView.findViewById(R.id.optionsRecyclerView);
+            voterCountText = itemView.findViewById(R.id.voterCountText);
+            deadlineText = itemView.findViewById(R.id.deadlineText);
+            closePollButton = itemView.findViewById(R.id.closePollButton);
+            addOptionButton = itemView.findViewById(R.id.addOptionButton);
+            timestampTextView = itemView.findViewById(R.id.timestampTextView);
+            pinIndicator = itemView.findViewById(R.id.pinIndicator);
+            
+            // Setup RecyclerView for options
+            optionsRecyclerView.setLayoutManager(new androidx.recyclerview.widget.LinearLayoutManager(itemView.getContext()));
+        }
+        
+        public void bind(Message message, String currentUserId, boolean isPinned, boolean isHighlighted) {
+            com.example.doan_zaloclone.models.Poll poll = message.getPollData();
+            if (poll == null) return;
+            
+            // Set question
+            questionTextView.setText(poll.getQuestion());
+            
+            // Setup options adapter
+            pollOptionAdapter = new PollOptionAdapter(poll, currentUserId, (optionIndex, option) -> {
+                // Handle vote - for now just toast, will implement properly later
+                android.widget.Toast.makeText(itemView.getContext(), 
+                        "Voted for: " + option.getText(), 
+                        android.widget.Toast.LENGTH_SHORT).show();
+            });
+            optionsRecyclerView.setAdapter(pollOptionAdapter);
+            
+            // Voter count
+            int totalVotes = poll.getTotalVotes();
+            int totalVoters = poll.getTotalVoters();
+            if (poll.isAnonymous()) {
+                voterCountText.setText(totalVotes + " lượt bình chọn");
+            } else {
+                voterCountText.setText(totalVoters + " người đã bình chọn");
+            }
+            
+            // Deadline
+            if (poll.getExpiresAt() > 0) {
+                java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault());
+                String deadlineStr = "Hết hạn: " + dateFormat.format(new java.util.Date(poll.getExpiresAt()));
+                deadlineText.setText(deadlineStr);
+                deadlineText.setVisibility(View.VISIBLE);
+            } else {
+                deadlineText.setVisibility(View.GONE);
+            }
+            
+            // Close poll button (only show for creator in open polls)
+            if (poll.canClosePoll(currentUserId, false) && !poll.isClosed()) {
+                closePollButton.setVisibility(View.VISIBLE);
+                closePollButton.setOnClickListener(v -> {
+                    android.widget.Toast.makeText(itemView.getContext(), 
+                            "Close poll (to be implemented)", 
+                            android.widget.Toast.LENGTH_SHORT).show();
+                });
+            } else {
+                closePollButton.setVisibility(View.GONE);
+            }
+            
+            // Add option button
+            if (poll.isAllowAddOptions() && poll.canVote()) {
+                addOptionButton.setVisibility(View.VISIBLE);
+                addOptionButton.setOnClickListener(v -> {
+                    android.widget.Toast.makeText(itemView.getContext(), 
+                            "Add option (to be implemented)", 
+                            android.widget.Toast.LENGTH_SHORT).show();
+                });
+            } else {
+                addOptionButton.setVisibility(View.GONE);
+            }
+            
+            // Timestamp
+            timestampTextView.setText(TIMESTAMP_FORMAT.format(new java.util.Date(message.getTimestamp())));
+            
+            // Pin indicator
+            if (pinIndicator != null) {
+                pinIndicator.setVisibility(isPinned ? View.VISIBLE : View.GONE);
+            }
+            
+            // Highlight effect
+            if (isHighlighted) {
+                itemView.setBackgroundColor(0x40FFEB3B);
+            } else {
+                itemView.setBackground(null);
+            }
+        }
     }
 }
