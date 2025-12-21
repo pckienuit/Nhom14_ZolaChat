@@ -5,7 +5,10 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
+import android.graphics.Color;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -30,6 +33,8 @@ public class HomeFragment extends Fragment {
     
     private HomeViewModel homeViewModel;
     private FirebaseAuth firebaseAuth;
+    private LinearLayout filterChipsContainer;
+    private String currentFilterTag = null;
 
     @Nullable
     @Override
@@ -51,6 +56,8 @@ public class HomeFragment extends Fragment {
 
     private void initViews(View view) {
         conversationsRecyclerView = view.findViewById(R.id.conversationsRecyclerView);
+        filterChipsContainer = view.findViewById(R.id.filterChipsContainer);
+        setupFilterChips();
     }
 
     private void setupRecyclerView() {
@@ -79,6 +86,98 @@ public class HomeFragment extends Fragment {
         conversationsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         conversationsRecyclerView.setHasFixedSize(true); // Optimize RecyclerView performance
         conversationsRecyclerView.setAdapter(conversationAdapter);
+    }
+    
+    private void setupFilterChips() {
+        if (filterChipsContainer == null) return;
+        
+        // Add "All" chip
+        addFilterChip(getString(R.string.filter_all), null, true);
+        
+        // Observe conversations to get all tags
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+            ? firebaseAuth.getCurrentUser().getUid() 
+            : "";
+        
+        homeViewModel.getConversations(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                refreshFilterChips(resource.getData(), currentUserId);
+            }
+        });
+    }
+    
+    private void refreshFilterChips(java.util.List<Conversation> conversations, String userId) {
+        if (filterChipsContainer == null) return;
+        
+        // Collect all unique tags
+        java.util.Set<String> allTags = new java.util.HashSet<>();
+        for (Conversation conv : conversations) {
+            java.util.List<String> tags = conv.getUserTagsForUser(userId);
+            if (tags != null) {
+                allTags.addAll(tags);
+            }
+        }
+        
+        // Clear existing chips except "All"
+        int childCount = filterChipsContainer.getChildCount();
+        if (childCount > 1) {
+            filterChipsContainer.removeViews(1, childCount - 1);
+        }
+        
+        // Add chips for each tag
+        for (String tag : allTags) {
+            addFilterChip(tag, tag, false);
+        }
+    }
+    
+    private void addFilterChip(String label, String tagValue, boolean selected) {
+        TextView chip = new TextView(getContext());
+        chip.setText(label);
+        chip.setTextSize(12);
+        chip.setPadding(24, 12, 24, 12);
+        
+        // Set style based on selection
+        updateChipStyle(chip, selected);
+        
+        // Click listener
+        chip.setOnClickListener(v -> {
+            // Update filter
+            currentFilterTag = tagValue;
+            homeViewModel.setTagFilter(tagValue);
+            
+            // Update all chips appearance
+            for (int i = 0; i < filterChipsContainer.getChildCount(); i++) {
+                View child = filterChipsContainer.getChildAt(i);
+                if (child instanceof TextView) {
+                    updateChipStyle((TextView) child, child == chip);
+                }
+            }
+        });
+        
+        // Layout params
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMarginEnd(12);
+        chip.setLayoutParams(params);
+        
+        filterChipsContainer.addView(chip);
+    }
+    
+    private void updateChipStyle(TextView chip, boolean selected) {
+        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
+        background.setCornerRadius(50);
+        
+        if (selected) {
+            background.setColor(getResources().getColor(R.color.colorPrimary, null));
+            chip.setTextColor(Color.WHITE);
+        } else {
+            background.setColor(Color.WHITE);
+            background.setStroke(2, getResources().getColor(R.color.colorPrimary, null));
+            chip.setTextColor(getResources().getColor(R.color.colorPrimary, null));
+        }
+        
+        chip.setBackground(background);
     }
     
     private void showConversationContextMenu(Conversation conversation) {
@@ -294,12 +393,12 @@ public class HomeFragment extends Fragment {
 
     
     private void observeViewModel() {
-        // Observe conversations LiveData
+        // Observe filtered conversations LiveData
         String currentUserId = firebaseAuth.getCurrentUser() != null 
             ? firebaseAuth.getCurrentUser().getUid() 
             : "";
             
-        homeViewModel.getConversations(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+        homeViewModel.getFilteredConversations(currentUserId).observe(getViewLifecycleOwner(), resource -> {
             if (resource == null) return;
             
             if (resource.isLoading()) {

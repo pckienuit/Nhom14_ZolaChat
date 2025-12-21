@@ -16,6 +16,24 @@
         android:background="@color/colorPrimary"
         android:textColor="@color/white" />
 
+    <!-- Filter chips container -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:scrollbars="none"
+        android:background="#F5F5F5">
+        
+        <LinearLayout
+            android:id="@+id/filterChipsContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/conversationsRecyclerView"
         android:layout_width="match_parent"
