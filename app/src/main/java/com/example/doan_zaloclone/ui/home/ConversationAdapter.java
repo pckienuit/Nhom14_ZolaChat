@@ -75,7 +75,6 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
     static class ViewHolder extends RecyclerView.ViewHolder {
         private TextView nameTextView;
         private TextView lastMessageTextView;
-        private TextView timestampTextView;
         private TextView memberCountTextView;
         private android.widget.ImageView groupIconImageView;
         private android.widget.ImageView pinIndicator;
@@ -84,7 +83,6 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             super(itemView);
             nameTextView = itemView.findViewById(R.id.nameTextView);
             lastMessageTextView = itemView.findViewById(R.id.lastMessageTextView);
-            timestampTextView = itemView.findViewById(R.id.timestampTextView);
             memberCountTextView = itemView.findViewById(R.id.memberCountTextView);
             groupIconImageView = itemView.findViewById(R.id.groupIconImageView);
             pinIndicator = itemView.findViewById(R.id.pinIndicator);
@@ -184,8 +182,6 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             nameTextView.setText(displayName);
             lastMessageTextView.setText(conversation.getLastMessage());
             
-            timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(conversation.getTimestamp())));
-            
             // Show/hide pin indicator
             if (pinIndicator != null) {
                 boolean isPinned = conversation.isPinnedByUser(currentUserId);
@@ -245,8 +241,18 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             boolean lastMessageEquals = (oldConv.getLastMessage() == null && newConv.getLastMessage() == null) ||
                                        (oldConv.getLastMessage() != null && oldConv.getLastMessage().equals(newConv.getLastMessage()));
             
+            // Compare pinnedByUsers maps for real-time pin indicator updates
+            boolean pinnedEquals = false;
+            if (oldConv.getPinnedByUsers() == null && newConv.getPinnedByUsers() == null) {
+                pinnedEquals = true;
+            } else if (oldConv.getPinnedByUsers() != null && newConv.getPinnedByUsers() != null) {
+                pinnedEquals = oldConv.getPinnedByUsers().equals(newConv.getPinnedByUsers());
+            }
+            
             return nameEquals && lastMessageEquals &&
-                   oldConv.getTimestamp() == newConv.getTimestamp();
+                   oldConv.getTimestamp() == newConv.getTimestamp() &&
+                   pinnedEquals;
         }
+
     }
 }
