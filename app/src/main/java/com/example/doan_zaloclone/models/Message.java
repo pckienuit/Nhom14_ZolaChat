@@ -8,6 +8,7 @@ public class Message {
     public static final String TYPE_IMAGE = "IMAGE";
     public static final String TYPE_FILE = "FILE";
     public static final String TYPE_CALL = "CALL";
+    public static final String TYPE_POLL = "POLL";
 
     private String id;
     private String senderId;
@@ -40,6 +41,9 @@ public class Message {
     // Reaction counts - Map of reaction type to total count (allows multiple clicks per user)
     // Format: {"heart": 5, "haha": 3} - tracks total clicks, not just unique users
     private Map<String, Integer> reactionCounts;
+    
+    // Poll data (only used for TYPE_POLL messages)
+    private Poll pollData;
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Message() {
@@ -242,6 +246,14 @@ public class Message {
     public void setReactionCounts(Map<String, Integer> reactionCounts) {
         this.reactionCounts = reactionCounts;
     }
+    
+    public Poll getPollData() {
+        return pollData;
+    }
+    
+    public void setPollData(Poll pollData) {
+        this.pollData = pollData;
+    }
 
     // Helper methods
     public boolean isTextMessage() {
@@ -258,6 +270,10 @@ public class Message {
     
     public boolean isCallMessage() {
         return TYPE_CALL.equals(this.type);
+    }
+    
+    public boolean isPollMessage() {
+        return TYPE_POLL.equals(this.type);
     }
     
     /**
