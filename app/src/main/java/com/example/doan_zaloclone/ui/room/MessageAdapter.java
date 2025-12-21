@@ -68,6 +68,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public interface OnMessageReactionListener {
         void onReactionClick(Message message, String reactionType);
         void onReactionLongPress(Message message, View anchorView);
+        void onReactionStatsClick(Message message);
     }
     
     private OnMessageLongClickListener longClickListener;
@@ -388,27 +389,38 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             topReactions = com.example.doan_zaloclone.models.MessageReaction.getTopReactions(reactions, 2);
         }
         
-        if (hasReactions && existingReactionsLayout != null) {
+        // Check if there are any reactions with count > 0
+        boolean hasValidReactions = false;
+        for (String reactionType : topReactions) {
+            Integer count = reactionCounts.get(reactionType);
+            if (count != null && count > 0) {
+                hasValidReactions = true;
+                break;
+            }
+        }
+        
+        if (hasReactions && hasValidReactions && existingReactionsLayout != null) {
             existingReactionsLayout.setVisibility(View.VISIBLE);
             
             // Hide all reaction layouts first
             hideAllReactionLayouts(itemView);
             
-            // Only show top 2 reactions
+            // Only show top 2 reactions with count > 0
             for (String reactionType : topReactions) {
                 int layoutId = getReactionLayoutId(reactionType);
                 int countTextId = getReactionCountTextId(reactionType);
-                if (layoutId != 0 && countTextId != 0) {
+                Integer count = reactionCounts.get(reactionType);
+                if (layoutId != 0 && countTextId != 0 && count != null && count > 0) {
                     bindSingleReaction(itemView, layoutId, countTextId,
-                            reactionType, reactionCounts.get(reactionType),
+                            reactionType, count,
                             message, reactionListener);
                 }
             }
                     
-            // Click on existing reactions container to show picker
+            // Click on existing reactions container to show reaction stats
             existingReactionsLayout.setOnClickListener(v -> {
                 if (reactionListener != null) {
-                    reactionListener.onReactionLongPress(message, v);
+                    reactionListener.onReactionStatsClick(message);
                 }
             });
         } else if (existingReactionsLayout != null) {
@@ -425,12 +437,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             addReactionButton.setImageResource(R.drawable.ic_reaction_heart_outline);
         }
         
-        // Click on add reaction button - always add heart reaction
+        // Click on add reaction button - add current user's reaction (or heart if none)
         addReactionButton.setOnClickListener(v -> {
             if (reactionListener != null) {
-                // Always add heart reaction when clicking the button
-                reactionListener.onReactionClick(message, 
-                        com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART);
+                // Use user's current reaction if they have one, otherwise default to heart
+                String reactionToAdd = userReaction != null 
+                        ? userReaction 
+                        : com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART;
+                reactionListener.onReactionClick(message, reactionToAdd);
             }
         });
         
@@ -446,6 +460,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     
     /**
      * Bind a single reaction type layout
+     * No click listener - whole counter area shows stats, only add button increments count
      */
     private static void bindSingleReaction(View itemView, int layoutId, int countTextId,
                                            String reactionType, int count,
@@ -460,13 +475,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             if (countText != null) {
                 countText.setText(String.valueOf(count));
             }
-            
-            // Click on reaction to toggle it
-            layout.setOnClickListener(v -> {
-                if (listener != null) {
-                    listener.onReactionClick(message, reactionType);
-                }
-            });
+            // No onClick - let parent handle it for stats
         } else {
             layout.setVisibility(View.GONE);
         }

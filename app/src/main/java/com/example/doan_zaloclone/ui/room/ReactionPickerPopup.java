@@ -103,6 +103,15 @@ public class ReactionPickerPopup extends PopupWindow {
             }
             dismiss();
         });
+        
+        // Remove reaction (X button)
+        View removeLayout = contentView.findViewById(R.id.reactionRemove);
+        removeLayout.setOnClickListener(v -> {
+            if (listener != null) {
+                listener.onReactionSelected(null); // null = remove reaction
+            }
+            dismiss();
+        });
     }
     
     /**

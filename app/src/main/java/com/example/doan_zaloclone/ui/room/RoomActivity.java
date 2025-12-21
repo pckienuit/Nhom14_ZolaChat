@@ -495,7 +495,7 @@ public class RoomActivity extends AppCompatActivity {
         messageAdapter.setOnMessageReactionListener(new MessageAdapter.OnMessageReactionListener() {
             @Override
             public void onReactionClick(Message message, String currentReactionType) {
-                // Toggle default reaction (heart)
+                // Add reaction
                 handleReactionClick(message, currentReactionType);
             }
             
@@ -503,6 +503,12 @@ public class RoomActivity extends AppCompatActivity {
             public void onReactionLongPress(Message message, View anchorView) {
                 // Show reaction picker popup
                 showReactionPicker(message, anchorView);
+            }
+            
+            @Override
+            public void onReactionStatsClick(Message message) {
+                // Show reaction statistics dialog
+                showReactionStatsDialog(message);
             }
         });
         
@@ -1731,15 +1737,88 @@ public class RoomActivity extends AppCompatActivity {
         
         // Create and show reaction picker popup
         ReactionPickerPopup popup = new ReactionPickerPopup(this, reactionType -> {
-            // User selected a reaction
+            // User selected a reaction or remove (null)
             android.util.Log.d("RoomActivity", "Reaction selected: " + reactionType + " for message: " + message.getId());
             
-            // Use ViewModel to toggle reaction
-            roomViewModel.toggleReaction(conversationId, message.getId(), currentUserId, reactionType);
+            if (reactionType == null) {
+                // Remove user's reaction
+                roomViewModel.removeReaction(conversationId, message.getId(), currentUserId);
+            } else {
+                // Add/update reaction
+                roomViewModel.toggleReaction(conversationId, message.getId(), currentUserId, reactionType);
+            }
         });
         
         // Show popup above the message bubble
         popup.showAboveAnchor(anchorView);
+    }
+    
+    /**
+     * Show reaction statistics dialog
+     */
+    private void showReactionStatsDialog(Message message) {
+        if (message == null || !message.hasReactions()) {
+            return;
+        }
+        
+        // Get reaction counts
+        java.util.Map<String, Integer> reactionCounts = 
+                com.example.doan_zaloclone.models.MessageReaction.getReactionTypeCounts(
+                        message.getReactions(), message.getReactionCounts());
+        
+        // Build dialog content
+        StringBuilder statsText = new StringBuilder();
+        statsText.append("Thống kê cảm xúc:\n\n");
+        
+        int totalReactions = 0;
+        if (message.getReactionCounts() != null) {
+            for (Integer count : message.getReactionCounts().values()) {
+                totalReactions += count;
+            }
+        } else {
+            totalReactions = message.getReactions() != null ? message.getReactions().size() : 0;
+        }
+        
+        // Add each reaction type with count
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART) > 0) {
+            statsText.append("❤️ Thích: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA) > 0) {
+            statsText.append("😂 Haha: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW) > 0) {
+            statsText.append("😮 Wow: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD) > 0) {
+            statsText.append("😢 Buồn: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY) > 0) {
+            statsText.append("😠 Phẫn nộ: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE) > 0) {
+            statsText.append("👍 Like: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE))
+                    .append("\n");
+        }
+        
+        statsText.append("\nTổng số lượt: ").append(totalReactions);
+        
+        // Show dialog
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Cảm xúc của tin nhắn")
+                .setMessage(statsText.toString())
+                .setPositiveButton("Đóng", null)
+                .show();
     }
     
     @Override

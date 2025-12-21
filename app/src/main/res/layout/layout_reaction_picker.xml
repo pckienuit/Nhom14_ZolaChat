@@ -5,8 +5,6 @@
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:background="@drawable/bg_reaction_picker"
-    android:elevation="8dp"
     android:padding="4dp">
 
     <!-- Heart Reaction -->
@@ -115,6 +113,26 @@
             android:src="@drawable/ic_reaction_like"
             android:contentDescription="Like reaction"
             android:scaleType="fitCenter" />
+    </FrameLayout>
+
+    <!-- Remove Reaction (X button) -->
+    <FrameLayout
+        android:id="@+id/reactionRemove"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:layout_marginStart="4dp"
+        android:foreground="?attr/selectableItemBackgroundBorderless">
+        
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_close"
+            android:contentDescription="Remove reaction"
+            android:scaleType="fitCenter"
+            android:tint="#757575" />
     </FrameLayout>
 
 </LinearLayout>

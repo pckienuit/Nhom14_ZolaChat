@@ -5,6 +5,7 @@ import com.example.doan_zaloclone.models.Message;
 import com.example.doan_zaloclone.services.FirestoreManager;
 import com.example.doan_zaloclone.utils.Resource;
 import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
@@ -866,10 +867,11 @@ public class ChatRepository {
     }
     
     /**
-     * Remove a user's reaction from a message
+     * Remove ALL reactions from a message (clear all reactions and counts)
+     * This is used when user clicks the X button to reset all reactions
      * @param conversationId ID of the conversation
      * @param messageId ID of the message
-     * @param userId ID of the user removing their reaction
+     * @param userId ID of the user removing reactions (not used but kept for consistency)
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId,
@@ -884,17 +886,18 @@ public class ChatRepository {
                 .collection("messages")
                 .document(messageId);
         
-        // Use Firestore's FieldValue.delete() to remove the user's reaction from the map
+        // Clear ALL reactions and counts (reset to empty maps)
         Map<String, Object> updates = new HashMap<>();
-        updates.put("reactions." + userId, com.google.firebase.firestore.FieldValue.delete());
+        updates.put("reactions", new HashMap<String, String>());
+        updates.put("reactionCounts", new HashMap<String, Integer>());
         
         messageRef.update(updates)
                 .addOnSuccessListener(aVoid -> {
-                    Log.d("ChatRepository", "Reaction removed by user: " + userId);
+                    Log.d("ChatRepository", "All reactions cleared for message: " + messageId);
                     result.setValue(Resource.success(true));
                 })
                 .addOnFailureListener(e -> {
-                    Log.e("ChatRepository", "Error removing reaction", e);
+                    Log.e("ChatRepository", "Error clearing reactions", e);
                     String errorMessage = e.getMessage() != null 
                             ? e.getMessage() 
                             : "Không thể xóa cảm xúc";
