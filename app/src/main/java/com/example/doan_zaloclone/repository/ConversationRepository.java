@@ -188,6 +188,38 @@ public class ConversationRepository {
     }
     
     /**
+     * Update tags for a conversation
+     * @param conversationId ID of the conversation
+     * @param userId ID of the user
+     * @param tags List of tags to set
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Void>> updateTags(@NonNull String conversationId,
+                                                @NonNull String userId,
+                                                @NonNull List<String> tags) {
+        MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        firestoreManager.updateConversationTags(conversationId, userId, tags,
+            new FirestoreManager.OnGroupUpdatedListener() {
+                @Override
+                public void onSuccess() {
+                    result.setValue(Resource.success(null));
+                }
+                
+                @Override
+                public void onFailure(Exception e) {
+                    String errorMessage = e.getMessage() != null 
+                            ? e.getMessage() 
+                            : "Failed to update tags";
+                    result.setValue(Resource.error(errorMessage));
+                }
+            });
+        
+        return result;
+    }
+    
+    /**
      * Clean up listeners when repository is no longer needed
      */
     public void cleanup() {

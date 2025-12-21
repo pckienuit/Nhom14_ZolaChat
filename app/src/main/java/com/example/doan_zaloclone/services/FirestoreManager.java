@@ -703,6 +703,33 @@ public class FirestoreManager {
                 });
     }
 
+    /**
+     * Update conversation tags for a user
+     * @param conversationId ID of the conversation
+     * @param userId ID of the user
+     * @param tags List of tags to set for this user
+     * @param listener Callback listener
+     */
+    public void updateConversationTags(@NonNull String conversationId,
+                                      @NonNull String userId,
+                                      @NonNull List<String> tags,
+                                      @NonNull OnGroupUpdatedListener listener) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("userTags." + userId, tags);
+        
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Conversation tags updated: " + conversationId + " for user: " + userId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error updating conversation tags", e);
+                    listener.onFailure(e);
+                });
+    }
+
 
     // Callback Interfaces
 
