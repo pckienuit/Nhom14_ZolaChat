@@ -1893,12 +1893,24 @@ public class RoomActivity extends AppCompatActivity {
             return;
         }
         
-        // Poll sending logic will be implemented in Phase 5 (Repository)
-        // For now, just show a message
-        Toast.makeText(this, "Poll tạo xong: " + poll.getQuestion() + 
-                " (" + poll.getOptions().size() + " phương án)", Toast.LENGTH_LONG).show();
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
         
-        // This will be: roomViewModel.sendPollMessage(conversationId, poll);
+        chatRepository.sendPollMessage(conversationId, currentUserId, poll,
+                new ChatRepository.SendMessageCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Đã tạo poll", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
     }
     
     @Override

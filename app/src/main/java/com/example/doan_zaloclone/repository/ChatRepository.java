@@ -1238,4 +1238,62 @@ public class ChatRepository {
             })
             .addOnFailureListener(e -> callback.onError("Failed to fetch user names: " + e.getMessage()));
     }
+    
+    // ===================== POLL METHODS =====================
+    
+    /**
+     * Send a poll message to conversation
+     */
+    public void sendPollMessage(String conversationId, String senderId, 
+                                com.example.doan_zaloclone.models.Poll poll,
+                                SendMessageCallback callback) {
+        if (conversationId == null || senderId == null || poll == null) {
+            if (callback != null) {
+                callback.onError("Invalid parameters");
+            }
+            return;
+        }
+        
+        // Create message document reference
+        DocumentReference messageRef = firestore
+                .collection("conversations")
+                .document(conversationId)
+                .collection("messages")
+                .document();
+        
+        // Create message object
+        com.example.doan_zaloclone.models.Message message = 
+                new com.example.doan_zaloclone.models.Message();
+        message.setId(messageRef.getId());
+        message.setSenderId(senderId);
+        message.setType(com.example.doan_zaloclone.models.Message.TYPE_POLL);
+        message.setTimestamp(System.currentTimeMillis());
+        message.setPollData(poll);
+        
+        // Save to Firestore
+        messageRef.set(message)
+                .addOnSuccessListener(aVoid -> {
+                    // Update conversation's lastMessage
+                    updateConversationLastMessage(conversationId, 
+                            "📊 Bình chọn: " + poll.getQuestion(), 
+                            message.getTimestamp());
+                    
+                    if (callback != null) {
+                        callback.onSuccess();
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    if (callback != null) {
+                        callback.onError(e.getMessage());
+                    }
+                });
+    }
+    
+    /**
+     * Callback for poll vote operations
+     */
+    public interface VotePollCallback {
+        void onSuccess();
+        void onError(String error);
+    }
 }
