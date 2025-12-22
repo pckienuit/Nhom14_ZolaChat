@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F5F5F5">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- Toolbar -->
+        <androidx.appcompat.widget.Toolbar
+            android:id="@+id/toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            android:background="@color/colorPrimary"
+            android:elevation="4dp"
+            app:navigationIcon="@drawable/ic_arrow_back"
+            app:titleTextColor="#FFFFFF" />
+
+        <!-- User Profile Card -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FFFFFF">
+
+            <!-- Cover Image -->
+            <ImageView
+                android:id="@+id/coverImage"
+                android:layout_width="0dp"
+                android:layout_height="160dp"
+                android:scaleType="centerCrop"
+                android:background="#4CAF50"
+                android:contentDescription="Cover image"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+            <!-- Edit Cover Button -->
+            <ImageButton
+                android:id="@+id/btnEditCover"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_margin="12dp"
+                android:background="@drawable/ic_camera"
+                android:backgroundTint="#80000000"
+                android:contentDescription="Edit cover"
+                app:layout_constraintTop_toTopOf="@id/coverImage"
+                app:layout_constraintEnd_toEndOf="@id/coverImage" />
+
+            <!-- Avatar -->
+            <FrameLayout
+                android:layout_width="84dp"
+                android:layout_height="84dp"
+                android:layout_marginStart="16dp"
+                android:layout_marginTop="120dp"
+                android:background="@drawable/bg_avatar_circle"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent">
+
+                <ImageView
+                    android:id="@+id/avatarImage"
+                    android:layout_width="80dp"
+                    android:layout_height="80dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_avatar"
+                    android:scaleType="centerCrop"
+                    android:background="@drawable/bg_avatar_circle"
+                    android:clipToOutline="true"
+                    android:contentDescription="Avatar" />
+            </FrameLayout>
+
+            <!-- Edit Avatar Button -->
+            <ImageButton
+                android:id="@+id/btnEditAvatar"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="68dp"
+                android:layout_marginTop="172dp"
+                android:background="@drawable/ic_camera"
+                android:backgroundTint="#80000000"
+                android:contentDescription="Edit avatar"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
+
+            <!-- User Info Container -->
+            <LinearLayout
+                android:id="@+id/userInfoContainer"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp"
+                android:paddingTop="48dp"
+                app:layout_constraintTop_toBottomOf="@id/coverImage"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent">
+
+                <!-- Display Name -->
+                <LinearLayout
+                    android:id="@+id/nameContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:padding="8dp">
+
+                    <TextView
+                        android:id="@+id/txtDisplayName"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Loading..."
+                        android:textSize="20sp"
+                        android:textColor="#000000"
+                        android:textStyle="bold" />
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_edit"
+                        android:contentDescription="Edit name"
+                        android:tint="#666666" />
+                </LinearLayout>
+
+                <!-- Bio -->
+                <LinearLayout
+                    android:id="@+id/bioContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:padding="8dp"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:id="@+id/txtBio"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Thêm giới thiệu bản thân"
+                        android:textSize="14sp"
+                        android:textColor="#999999" />
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:src="@drawable/ic_edit"
+                        android:contentDescription="Edit bio"
+                        android:tint="#666666" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </LinearLayout>
+
+</ScrollView>

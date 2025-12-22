@@ -1,27 +1,17 @@
 package com.example.doan_zaloclone.ui.personal;
 
-import android.Manifest;
-import android.app.AlertDialog;
-import android.app.ProgressDialog;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
@@ -29,28 +19,19 @@ import com.bumptech.glide.Glide;
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.User;
 import com.example.doan_zaloclone.viewmodel.PersonalViewModel;
-import com.google.android.material.textfield.TextInputEditText;
 
 /**
  * PersonalFragment - Main fragment for Personal tab
- * Displays user profile card and menu items
+ * Displays compact user card and menu items
  */
 public class PersonalFragment extends Fragment {
     
-    private static final int PERMISSION_REQUEST_CODE = 123;
-    
     private PersonalViewModel viewModel;
-    private ProgressDialog progressDialog;
     
     // Views
-    private ImageView coverImage;
+    private LinearLayout compactUserCard;
     private ImageView avatarImage;
-    private ImageButton btnEditCover;
-    private ImageButton btnEditAvatar;
     private TextView txtDisplayName;
-    private TextView txtBio;
-    private LinearLayout nameContainer;
-    private LinearLayout bioContainer;
     
     // Menu items
     private View menuQrWallet;
@@ -58,57 +39,10 @@ public class PersonalFragment extends Fragment {
     private View menuPrivacy;
     private View menuCloud;
     
-    // Image pickers
-    private ActivityResultLauncher<String> avatarPicker;
-    private ActivityResultLauncher<String> coverPicker;
-    private ActivityResultLauncher<String> permissionLauncher;
-    
-    private boolean isWaitingForAvatarPick = false;
-    private boolean isWaitingForCoverPick = false;
-    
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         viewModel = new ViewModelProvider(this).get(PersonalViewModel.class);
-        
-        // Setup image pickers
-        avatarPicker = registerForActivityResult(
-            new ActivityResultContracts.GetContent(),
-            uri -> {
-                if (uri != null) {
-                    uploadAvatar(uri);
-                }
-            }
-        );
-        
-        coverPicker = registerForActivityResult(
-            new ActivityResultContracts.GetContent(),
-            uri -> {
-                if (uri != null) {
-                    uploadCover(uri);
-                }
-            }
-        );
-        
-        // Setup permission launcher
-        permissionLauncher = registerForActivityResult(
-            new ActivityResultContracts.RequestPermission(),
-            isGranted -> {
-                if (isGranted) {
-                    if (isWaitingForAvatarPick) {
-                        isWaitingForAvatarPick = false;
-                        avatarPicker.launch("image/*");
-                    } else if (isWaitingForCoverPick) {
-                        isWaitingForCoverPick = false;
-                        coverPicker.launch("image/*");
-                    }
-                } else {
-                    Toast.makeText(requireContext(), 
-                        "Cần cấp quyền truy cập ảnh", 
-                        Toast.LENGTH_SHORT).show();
-                }
-            }
-        );
     }
     
     @Nullable
@@ -131,15 +65,10 @@ public class PersonalFragment extends Fragment {
     }
     
     private void initializeViews(View view) {
-        // User card views
-        coverImage = view.findViewById(R.id.coverImage);
+        // Compact user card views
+        compactUserCard = view.findViewById(R.id.compactUserCard);
         avatarImage = view.findViewById(R.id.avatarImage);
-        btnEditCover = view.findViewById(R.id.btnEditCover);
-        btnEditAvatar = view.findViewById(R.id.btnEditAvatar);
         txtDisplayName = view.findViewById(R.id.txtDisplayName);
-        txtBio = view.findViewById(R.id.txtBio);
-        nameContainer = view.findViewById(R.id.nameContainer);
-        bioContainer = view.findViewById(R.id.bioContainer);
         
         // Menu views
         menuQrWallet = view.findViewById(R.id.menuQrWallet);
@@ -149,17 +78,8 @@ public class PersonalFragment extends Fragment {
     }
     
     private void setupClickListeners() {
-        // Edit name
-        nameContainer.setOnClickListener(v -> showEditNameDialog());
-        
-        // Edit bio
-        bioContainer.setOnClickListener(v -> showEditBioDialog());
-        
-        // Edit avatar
-        btnEditAvatar.setOnClickListener(v -> pickAvatarImage());
-        
-        // Edit cover
-        btnEditCover.setOnClickListener(v -> pickCoverImage());
+        // Click compact user card to open full profile
+        compactUserCard.setOnClickListener(v -> openProfileCard());
     }
     
     private void setupMenuItems() {
@@ -219,161 +139,13 @@ public class PersonalFragment extends Fragment {
                     Toast.LENGTH_SHORT).show();
             }
         });
-        
-        // Observe update profile state
-        viewModel.getUpdateProfileState().observe(getViewLifecycleOwner(), resource -> {
-            if (resource == null) return;
-            
-            if (resource.isLoading()) {
-                showProgress("Đang cập nhật...");
-            } else {
-                hideProgress();
-                if (resource.isSuccess()) {
-                    Toast.makeText(requireContext(), 
-                        "Cập nhật thành công", 
-                        Toast.LENGTH_SHORT).show();
-                } else if (resource.isError()) {
-                    Toast.makeText(requireContext(), 
-                        "Lỗi: " + resource.getMessage(), 
-                        Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
-        
-        // Observe upload image state
-        viewModel.getUploadImageState().observe(getViewLifecycleOwner(), resource -> {
-            if (resource == null) return;
-            
-            if (resource.isLoading()) {
-                showProgress("Đang upload ảnh...");
-            } else {
-                hideProgress();
-                if (resource.isSuccess()) {
-                    Toast.makeText(requireContext(), 
-                        "Upload thành công", 
-                        Toast.LENGTH_SHORT).show();
-                } else if (resource.isError()) {
-                    Toast.makeText(requireContext(), 
-                        "Lỗi upload: " + resource.getMessage(), 
-                        Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
     }
     
-    private void showEditNameDialog() {
-        View dialogView = LayoutInflater.from(requireContext())
-            .inflate(R.layout.dialog_edit_profile_name, null);
-        
-        TextInputEditText editName = dialogView.findViewById(R.id.editName);
-        Button btnCancel = dialogView.findViewById(R.id.btnCancel);
-        Button btnSave = dialogView.findViewById(R.id.btnSave);
-        
-        // Set current name
-        editName.setText(txtDisplayName.getText());
-        editName.setSelection(editName.getText().length());
-        
-        AlertDialog dialog = new AlertDialog.Builder(requireContext())
-            .setView(dialogView)
-            .create();
-        
-        btnCancel.setOnClickListener(v -> dialog.dismiss());
-        
-        btnSave.setOnClickListener(v -> {
-            String newName = editName.getText().toString().trim();
-            if (!newName.isEmpty()) {
-                viewModel.updateName(newName);
-                dialog.dismiss();
-            } else {
-                Toast.makeText(requireContext(), 
-                    "Tên không được để trống", 
-                    Toast.LENGTH_SHORT).show();
-            }
-        });
-        
-        dialog.show();
-    }
-    
-    private void showEditBioDialog() {
-        View dialogView = LayoutInflater.from(requireContext())
-            .inflate(R.layout.dialog_edit_bio, null);
-        
-        TextInputEditText editBio = dialogView.findViewById(R.id.editBio);
-        Button btnCancel = dialogView.findViewById(R.id.btnCancel);
-        Button btnSave = dialogView.findViewById(R.id.btnSave);
-        
-        // Set current bio (if not placeholder)
-        String currentBio = txtBio.getText().toString();
-        if (!currentBio.equals("Thêm giới thiệu bản thân")) {
-            editBio.setText(currentBio);
-            editBio.setSelection(editBio.getText().length());
-        }
-        
-        AlertDialog dialog = new AlertDialog.Builder(requireContext())
-            .setView(dialogView)
-            .create();
-        
-        btnCancel.setOnClickListener(v -> dialog.dismiss());
-        
-        btnSave.setOnClickListener(v -> {
-            String newBio = editBio.getText().toString().trim();
-            viewModel.updateBio(newBio);
-            dialog.dismiss();
-        });
-        
-        dialog.show();
-    }
-    
-    private void pickAvatarImage() {
-        if (checkStoragePermission()) {
-            avatarPicker.launch("image/*");
-        } else {
-            isWaitingForAvatarPick = true;
-            requestStoragePermission();
-        }
-    }
-    
-    private void pickCoverImage() {
-        if (checkStoragePermission()) {
-            coverPicker.launch("image/*");
-        } else {
-            isWaitingForCoverPick = true;
-            requestStoragePermission();
-        }
-    }
-    
-    private boolean checkStoragePermission() {
-        return ContextCompat.checkSelfPermission(
-            requireContext(),
-            Manifest.permission.READ_EXTERNAL_STORAGE
-        ) == PackageManager.PERMISSION_GRANTED;
-    }
-    
-    private void requestStoragePermission() {
-        permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE);
-    }
-    
-    private void uploadAvatar(Uri imageUri) {
-        viewModel.uploadAvatar(imageUri);
-    }
-    
-    private void uploadCover(Uri imageUri) {
-        viewModel.uploadCover(imageUri);
-    }
-    
-    private void showProgress(String message) {
-        if (progressDialog == null) {
-            progressDialog = new ProgressDialog(requireContext());
-            progressDialog.setCancelable(false);
-        }
-        progressDialog.setMessage(message);
-        progressDialog.show();
-    }
-    
-    private void hideProgress() {
-        if (progressDialog != null && progressDialog.isShowing()) {
-            progressDialog.dismiss();
-        }
+    private void openProfileCard() {
+        Intent intent = new Intent(requireContext(), ProfileCardActivity.class);
+        // Don't need to pass userId, ProfileCardActivity will use current user
+        intent.putExtra(ProfileCardActivity.EXTRA_IS_EDITABLE, true);
+        startActivity(intent);
     }
     
     private void updateUI(User user) {
@@ -384,28 +156,12 @@ public class PersonalFragment extends Fragment {
             txtDisplayName.setText("Người dùng");
         }
         
-        // Update bio
-        if (user.getBio() != null && !user.getBio().isEmpty()) {
-            txtBio.setText(user.getBio());
-            txtBio.setTextColor(getResources().getColor(android.R.color.black));
-        } else {
-            txtBio.setText("Thêm giới thiệu bản thân");
-            txtBio.setTextColor(getResources().getColor(android.R.color.darker_gray));
-        }
-        
         // Update avatar
         if (user.getAvatarUrl() != null && !user.getAvatarUrl().isEmpty()) {
             Glide.with(this)
                 .load(user.getAvatarUrl())
                 .placeholder(R.drawable.ic_avatar)
                 .into(avatarImage);
-        }
-        
-        // Update cover
-        if (user.getCoverUrl() != null && !user.getCoverUrl().isEmpty()) {
-            Glide.with(this)
-                .load(user.getCoverUrl())
-                .into(coverImage);
         }
     }
 }
