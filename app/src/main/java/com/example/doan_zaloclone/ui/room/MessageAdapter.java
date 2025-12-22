@@ -1701,13 +1701,44 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 });
             }
             
+            
             // Setup "Nhắn tin" button - always enabled
             btnMessageFromCard.setOnClickListener(v -> {
-                // This contact message is already in a conversation
-                // Just show a toast or do nothing since user is already in chat
-                android.widget.Toast.makeText(itemView.getContext(), 
-                    "Bạn đang trong cuộc trò chuyện này", 
-                    android.widget.Toast.LENGTH_SHORT).show();
+                // Open conversation with contact user
+                com.google.firebase.auth.FirebaseAuth auth = com.google.firebase.auth.FirebaseAuth.getInstance();
+                if (auth.getCurrentUser() == null) {
+                    android.widget.Toast.makeText(itemView.getContext(), 
+                        "Không thể mở cuộc trò chuyện", 
+                        android.widget.Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                
+                String loggedInUserId = auth.getCurrentUser().getUid();
+                
+                // Create or open conversation with contact user
+                com.example.doan_zaloclone.repository.ChatRepository chatRepo = 
+                    new com.example.doan_zaloclone.repository.ChatRepository();
+                
+                chatRepo.getOrCreateConversationWithFriend(loggedInUserId, contactUserId, 
+                    new com.example.doan_zaloclone.repository.ChatRepository.ConversationCallback() {
+                        @Override
+                        public void onSuccess(String conversationId) {
+                            // Navigate to conversation
+                            android.content.Intent intent = new android.content.Intent(
+                            itemView.getContext(),
+                                com.example.doan_zaloclone.ui.room.RoomActivity.class
+                            );
+                            intent.putExtra("conversationId", conversationId);
+                            itemView.getContext().startActivity(intent);
+                        }
+                        
+                        @Override
+                        public void onError(String error) {
+                            android.widget.Toast.makeText(itemView.getContext(), 
+                                "Không thể mở cuộc trò chuyện: " + error, 
+                                android.widget.Toast.LENGTH_SHORT).show();
+                        }
+                    });
             });
             
             // Check friendship status for friend request button
