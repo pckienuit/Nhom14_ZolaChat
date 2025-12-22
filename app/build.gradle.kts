@@ -80,6 +80,9 @@ dependencies {
     // Location services (FREE)
     implementation("com.google.android.gms:play-services-location:21.0.1")
     
+    // OkHttp for HTTP requests (background removal API)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
