@@ -41,6 +41,8 @@ public class LocationPickerActivity extends AppCompatActivity {
     public static final String EXTRA_LONGITUDE = "longitude";
     public static final String EXTRA_LOCATION_NAME = "location_name";
     public static final String EXTRA_LOCATION_ADDRESS = "location_address";
+    public static final String EXTRA_IS_LIVE_LOCATION = "is_live_location";
+    public static final String EXTRA_LIVE_DURATION = "live_duration";
     
     private static final int LOCATION_PERMISSION_REQUEST = 100;
     
@@ -52,6 +54,17 @@ public class LocationPickerActivity extends AppCompatActivity {
     private TextView locationInfo;
     private Button btnSendLocation;
     private FloatingActionButton fabMyLocation;
+    private android.widget.RadioGroup locationTypeGroup;
+    private android.widget.LinearLayout durationPickerLayout;
+    private android.widget.Spinner durationSpinner;
+    
+    private boolean isLiveLocation = false;
+    private long selectedDuration = 15 * 60 * 1000; // Default: 15 minutes
+    
+    // Duration options in milliseconds
+    private static final long DURATION_15_MIN = 15 * 60 * 1000;
+    private static final long DURATION_1_HOUR = 60 * 60 * 1000;
+    private static final long DURATION_8_HOURS = 8 * 60 * 60 * 1000;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,12 +97,19 @@ public class LocationPickerActivity extends AppCompatActivity {
         locationInfo = findViewById(R.id.locationInfo);
         btnSendLocation = findViewById(R.id.btnSendLocation);
         fabMyLocation = findViewById(R.id.fabMyLocation);
+        locationTypeGroup = findViewById(R.id.locationTypeGroup);
+        durationPickerLayout = findViewById(R.id.durationPickerLayout);
+        durationSpinner = findViewById(R.id.durationSpinner);
         
         // Initialize location client
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
         
         // Setup map
         setupMap();
+        
+        // Setup UI logic
+        setupDurationSpinner();
+        setupLocationTypeListeners();
         
         // Setup buttons
         btnSendLocation.setOnClickListener(v -> sendSelectedLocation());
@@ -146,6 +166,43 @@ public class LocationPickerActivity extends AppCompatActivity {
         
         MapEventsOverlay mapEventsOverlay = new MapEventsOverlay(mapEventsReceiver);
         mapView.getOverlays().add(0, mapEventsOverlay);
+    }
+    
+    private void setupDurationSpinner() {
+        String[] durations = {"15 phút", "1 giờ", "8 giờ"};
+        android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, durations);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        durationSpinner.setAdapter(adapter);
+        
+        durationSpinner.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) {
+                switch (position) {
+                    case 0: selectedDuration = DURATION_15_MIN; break;
+                    case 1: selectedDuration = DURATION_1_HOUR; break;
+                    case 2: selectedDuration = DURATION_8_HOURS; break;
+                }
+            }
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {
+                selectedDuration = DURATION_15_MIN;
+            }
+        });
+    }
+    
+    private void setupLocationTypeListeners() {
+        locationTypeGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            if (checkedId == R.id.radioLiveLocation) {
+                isLiveLocation = true;
+                durationPickerLayout.setVisibility(android.view.View.VISIBLE);
+                btnSendLocation.setText("Chia sẻ trực tiếp");
+            } else {
+                isLiveLocation = false;
+                durationPickerLayout.setVisibility(android.view.View.GONE);
+                btnSendLocation.setText("Gửi vị trí");
+            }
+        });
     }
     
     private void checkLocationPermission() {
@@ -260,6 +317,8 @@ public class LocationPickerActivity extends AppCompatActivity {
         resultIntent.putExtra(EXTRA_LONGITUDE, selectedLocation.getLongitude());
         resultIntent.putExtra(EXTRA_LOCATION_NAME, locationName);
         resultIntent.putExtra(EXTRA_LOCATION_ADDRESS, locationAddress);
+        resultIntent.putExtra(EXTRA_IS_LIVE_LOCATION, isLiveLocation);
+        resultIntent.putExtra(EXTRA_LIVE_DURATION, selectedDuration);
         
         setResult(RESULT_OK, resultIntent);
         finish();
