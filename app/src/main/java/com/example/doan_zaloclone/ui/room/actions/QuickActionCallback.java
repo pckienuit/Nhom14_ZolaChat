@@ -32,6 +32,15 @@ public interface QuickActionCallback {
     void onPollCreated(Poll poll);
     
     /**
+     * Called when location is selected
+     * @param latitude Latitude coordinate
+     * @param longitude Longitude coordinate
+     * @param locationName Name of the location (optional, can be null)
+     * @param locationAddress Full address of the location (optional, can be null)
+     */
+    void onLocationSelected(double latitude, double longitude, String locationName, String locationAddress);
+    
+    /**
      * Called when action fails
      * @param error Error message
      */

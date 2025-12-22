@@ -1280,6 +1280,12 @@ public class RoomActivity extends AppCompatActivity {
             }
             
             @Override
+            public void onLocationSelected(double latitude, double longitude, String locationName, String locationAddress) {
+                // Handle location selected (Phase 3 - not yet implemented)
+                Toast.makeText(RoomActivity.this, "Location selected: " + latitude + ", " + longitude, Toast.LENGTH_SHORT).show();
+            }
+            
+            @Override
             public void onError(String error) {
                 Toast.makeText(RoomActivity.this, error, Toast.LENGTH_SHORT).show();
             }
