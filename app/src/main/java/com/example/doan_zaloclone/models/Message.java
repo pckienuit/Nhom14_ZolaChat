@@ -11,6 +11,7 @@ public class Message {
     public static final String TYPE_POLL = "POLL";
     public static final String TYPE_CONTACT = "CONTACT"; // Business card message
     public static final String TYPE_LOCATION = "LOCATION"; // Location message
+    public static final String TYPE_LIVE_LOCATION = "LIVE_LOCATION"; // Live location message
 
     private String id;
     private String senderId;
@@ -56,6 +57,9 @@ public class Message {
     private double longitude;          // GPS longitude
     private String locationName;       // Name of the location (optional)
     private String locationAddress;    // Full address of the location (optional)
+    
+    // Live Location data (only used for TYPE_LIVE_LOCATION messages)
+    private String liveLocationSessionId; // Session ID for live location tracking
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Message() {
@@ -433,5 +437,13 @@ public class Message {
      */
     public boolean hasUserReacted(String userId) {
         return MessageReaction.hasUserReacted(reactions, userId);
+    }
+    
+    public String getLiveLocationSessionId() {
+        return liveLocationSessionId;
+    }
+    
+    public void setLiveLocationSessionId(String liveLocationSessionId) {
+        this.liveLocationSessionId = liveLocationSessionId;
     }
 }

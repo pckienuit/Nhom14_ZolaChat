@@ -56,6 +56,71 @@
             android:orientation="vertical"
             android:padding="16dp">
 
+            <!-- Location Type Selection -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Loại vị trí"
+                android:textSize="12sp"
+                android:textColor="#999999"
+                android:paddingBottom="8dp" />
+
+            <RadioGroup
+                android:id="@+id/locationTypeGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/radioStaticLocation"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="📍 Gửi vị trí hiện tại"
+                    android:textSize="14sp"
+                    android:checked="true" />
+
+                <RadioButton
+                    android:id="@+id/radioLiveLocation"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🔴 Chia sẻ vị trí trực tiếp"
+                    android:textSize="14sp" />
+
+            </RadioGroup>
+
+            <!-- Duration Picker (only visible for live location) -->
+            <LinearLayout
+                android:id="@+id/durationPickerLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:paddingTop="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Thời gian chia sẻ"
+                    android:textSize="12sp"
+                    android:textColor="#999999"
+                    android:paddingBottom="8dp" />
+
+                <Spinner
+                    android:id="@+id/durationSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@android:drawable/btn_dropdown"
+                    android:spinnerMode="dropdown" />
+
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#EEEEEE"
+                android:layout_marginVertical="12dp" />
+
             <!-- Location info -->
             <TextView
                 android:id="@+id/locationInfo"
