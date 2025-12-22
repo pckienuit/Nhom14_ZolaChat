@@ -25,7 +25,9 @@ import androidx.lifecycle.ViewModelProvider;
 import com.bumptech.glide.Glide;
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.User;
+import com.example.doan_zaloclone.repository.FriendRepository;
 import com.example.doan_zaloclone.viewmodel.PersonalViewModel;
+import com.google.android.material.button.MaterialButton;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.firebase.auth.FirebaseAuth;
 
@@ -39,9 +41,12 @@ public class ProfileCardActivity extends AppCompatActivity {
     public static final String EXTRA_IS_EDITABLE = "is_editable";
     
     private PersonalViewModel viewModel;
+    private FriendRepository friendRepository;
     private ProgressDialog progressDialog;
     private String userId;
+    private String currentUserId;
     private boolean isEditable;
+    private boolean areFriends = false;
     
     // Views
     private Toolbar toolbar;
@@ -53,6 +58,7 @@ public class ProfileCardActivity extends AppCompatActivity {
     private TextView txtBio;
     private LinearLayout nameContainer;
     private LinearLayout bioContainer;
+    private MaterialButton btnAddFriend;
     
     // Image pickers
     private ActivityResultLauncher<String> avatarPicker;
@@ -71,20 +77,29 @@ public class ProfileCardActivity extends AppCompatActivity {
         userId = getIntent().getStringExtra(EXTRA_USER_ID);
         isEditable = getIntent().getBooleanExtra(EXTRA_IS_EDITABLE, false);
         
-        // Default to current user if no userId provided
-        if (userId == null) {
-            FirebaseAuth auth = FirebaseAuth.getInstance();
-            if (auth.getCurrentUser() != null) {
-                userId = auth.getCurrentUser().getUid();
+        // Get current user ID
+        FirebaseAuth auth = FirebaseAuth.getInstance();
+        if (auth.getCurrentUser() != null) {
+            currentUserId = auth.getCurrentUser().getUid();
+            
+            // Default to current user if no userId provided
+            if (userId == null) {
+                userId = currentUserId;
                 isEditable = true; // Can edit own profile
             }
         }
         
         viewModel = new ViewModelProvider(this).get(PersonalViewModel.class);
+        friendRepository = new FriendRepository();
         
         // Load the specific user (not just current user)
         if (userId != null) {
             viewModel.loadUser(userId);
+            
+            // Check friendship status if viewing another user's profile
+            if (!userId.equals(currentUserId)) {
+                checkFriendshipStatus();
+            }
         }
         
         setupImagePickers();
@@ -141,6 +156,7 @@ public class ProfileCardActivity extends AppCompatActivity {
         txtBio = findViewById(R.id.txtBio);
         nameContainer = findViewById(R.id.nameContainer);
         bioContainer = findViewById(R.id.bioContainer);
+        btnAddFriend = findViewById(R.id.btnAddFriend);
         
         // Hide edit buttons if not editable
         if (!isEditable) {
@@ -167,6 +183,9 @@ public class ProfileCardActivity extends AppCompatActivity {
             btnEditAvatar.setOnClickListener(v -> pickAvatarImage());
             btnEditCover.setOnClickListener(v -> pickCoverImage());
         }
+        
+        // Add friend button click listener
+        btnAddFriend.setOnClickListener(v -> sendFriendRequest());
     }
     
     private void observeViewModel() {
@@ -381,5 +400,70 @@ public class ProfileCardActivity extends AppCompatActivity {
                 .load(user.getCoverUrl())
                 .into(coverImage);
         }
+    }
+    
+    /**
+     * Check friendship status between current user and viewed user
+     */
+    private void checkFriendshipStatus() {
+        if (currentUserId == null || userId == null) return;
+        
+        friendRepository.checkFriendship(currentUserId, userId).observe(this, resource -> {
+            if (resource != null && resource.isSuccess()) {
+                areFriends = resource.getData() != null && resource.getData();
+                updateAddFriendButtonVisibility();
+            }
+        });
+    }
+    
+    /**
+     * Update add friend button visibility based on friendship status
+     */
+    private void updateAddFriendButtonVisibility() {
+        // Show button only if viewing another user's profile and not already friends
+        if (userId != null && !userId.equals(currentUserId) && !areFriends) {
+            btnAddFriend.setVisibility(View.VISIBLE);
+        } else {
+            btnAddFriend.setVisibility(View.GONE);
+        }
+    }
+    
+    /**
+     * Send friend request to the viewed user
+     */
+    private void sendFriendRequest() {
+        if (currentUserId == null || userId == null) return;
+        
+        // Get current user's name for the friend request
+        viewModel.getCurrentUser().observe(this, resource -> {
+            if (resource != null && resource.isSuccess()) {
+                User currentUser = resource.getData();
+                if (currentUser != null) {
+                    String currentUserName = currentUser.getName() != null ? 
+                        currentUser.getName() : "Người dùng";
+                    
+                    // Disable button and show loading state
+                    btnAddFriend.setEnabled(false);
+                    btnAddFriend.setText("Đang gửi...");
+                    
+                    friendRepository.sendFriendRequest(currentUserId, userId, currentUserName)
+                        .observe(this, friendResource -> {
+                            if (friendResource != null) {
+                                if (friendResource.isSuccess()) {
+                                    Toast.makeText(this, "Đã gửi lời mời kết bạn", 
+                                        Toast.LENGTH_SHORT).show();
+                                    btnAddFriend.setText("Đã gửi lời mời");
+                                    btnAddFriend.setEnabled(false);
+                                } else if (friendResource.isError()) {
+                                    Toast.makeText(this, "Lỗi: " + friendResource.getMessage(), 
+                                        Toast.LENGTH_SHORT).show();
+                                    btnAddFriend.setText("Kết bạn");
+                                    btnAddFriend.setEnabled(true);
+                                }
+                            }
+                        });
+                }
+            }
+        });
     }
 }

@@ -10,6 +10,7 @@ public class User {
     private String avatarUrl;
     private String bio; // User bio (max 200 characters)
     private String coverUrl; // Cover image URL
+    private String phoneNumber; // Phone number (optional, for business card and future phone login)
     private Map<String, Boolean> devices; // Map<deviceToken, true> để hỗ trợ đa thiết bị
     
     // Custom tags - map of tag name to boolean (for Firestore compatibility)
@@ -66,6 +67,10 @@ public class User {
         return coverUrl;
     }
 
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
     public Map<String, Boolean> getDevices() {
         return devices;
     }
@@ -93,6 +98,10 @@ public class User {
 
     public void setCoverUrl(String coverUrl) {
         this.coverUrl = coverUrl;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
     }
 
     public void setDevices(Map<String, Boolean> devices) {

@@ -4,6 +4,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -33,6 +34,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public static final int VIEW_TYPE_RECALLED_RECEIVED = 9;
     public static final int VIEW_TYPE_POLL_SENT = 10;
     public static final int VIEW_TYPE_POLL_RECEIVED = 11;
+    public static final int VIEW_TYPE_CONTACT_SENT = 12;
+    public static final int VIEW_TYPE_CONTACT_RECEIVED = 13;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -175,6 +178,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         boolean isFile = Message.TYPE_FILE.equals(message.getType());
         boolean isCall = Message.TYPE_CALL.equals(message.getType());
         boolean isPoll = Message.TYPE_POLL.equals(message.getType());
+        boolean isContact = Message.TYPE_CONTACT.equals(message.getType());
         
         // Call history messages are always centered
         if (isCall) {
@@ -184,6 +188,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         // Poll messages
         if (isPoll) {
             return isSent ? VIEW_TYPE_POLL_SENT : VIEW_TYPE_POLL_RECEIVED;
+        }
+        
+        // Contact messages (business cards)
+        if (isContact) {
+            return isSent ? VIEW_TYPE_CONTACT_SENT : VIEW_TYPE_CONTACT_RECEIVED;
         }
         
         if (isSent) {
@@ -244,6 +253,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_poll_received, parent, false);
                 return new PollMessageViewHolder(view, false);
+            case VIEW_TYPE_CONTACT_SENT:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_contact_sent, parent, false);
+                return new ContactMessageViewHolder(view, true);
+            case VIEW_TYPE_CONTACT_RECEIVED:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_contact_received, parent, false);
+                return new ContactMessageViewHolder(view, false);
             default:
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_sent, parent, false);
@@ -273,6 +290,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((CallHistoryViewHolder) holder).bind(message);
         } else if (holder instanceof PollMessageViewHolder) {
             ((PollMessageViewHolder) holder).bind(message, currentUserId, isPinned, isHighlighted, pollInteractionListener);
+        } else if (holder instanceof ContactMessageViewHolder) {
+            ((ContactMessageViewHolder) holder).bind(message, currentUserId);
         } else if (holder instanceof RecalledMessageViewHolder) {
             // Recalled messages just display static text, no binding needed
         }
@@ -1518,6 +1537,629 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             } else {
                 itemView.setBackground(null);
             }
+        }
+    }
+    
+    /**
+     * ViewHolder for contact/business card messages
+     */
+    static class ContactMessageViewHolder extends RecyclerView.ViewHolder {
+        private ImageView contactAvatar;
+        private TextView contactName;
+        private TextView contactPhone;
+        private LinearLayout phoneContainer;
+        private LinearLayout btnAddFriendFromCard; // Changed to LinearLayout
+        private TextView btnAddFriendText; // Text inside button
+        private View friendRequestDivider; // Divider above button
+        private LinearLayout btnCallFromCard;
+        private LinearLayout btnMessageFromCard;
+        private boolean isSent;
+        
+        // Track current contact to validate async callbacks
+        private String currentContactUserId;
+        // Store listeners for cleanup on rebind
+        private com.google.firebase.firestore.ListenerRegistration friendRequestListener;
+        private com.google.firebase.firestore.ListenerRegistration friendsListener;
+        
+        // Friendship status cache (memory cache to reduce Firestore reads)
+        private static final java.util.Map<String, FriendshipStatus> friendshipCache = 
+            new java.util.concurrent.ConcurrentHashMap<>();
+        private static final long CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
+        
+        // Retry mechanism
+        private int listenerRetryCount = 0;
+        private static final int MAX_RETRY_ATTEMPTS = 3;
+        private android.os.Handler retryHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        
+        // Loading state
+        private boolean isLoadingFriendshipStatus = false;
+        
+        /**
+         * Cached friendship status with timestamp
+         */
+        private static class FriendshipStatus {
+            String statusFromMe;
+            String statusToMe;
+            long timestamp;
+            
+            FriendshipStatus(String statusFromMe, String statusToMe) {
+                this.statusFromMe = statusFromMe;
+                this.statusToMe = statusToMe;
+                this.timestamp = System.currentTimeMillis();
+            }
+            
+            boolean isExpired() {
+                return System.currentTimeMillis() - timestamp > CACHE_DURATION_MS;
+            }
+            
+            boolean areFriends() {
+                return "ACCEPTED".equals(statusFromMe) || "ACCEPTED".equals(statusToMe);
+            }
+        }
+        
+        public ContactMessageViewHolder(@NonNull View itemView, boolean isSent) {
+            super(itemView);
+            this.isSent = isSent;
+            contactAvatar = itemView.findViewById(R.id.contactAvatar);
+            contactName = itemView.findViewById(R.id.contactName);
+            contactPhone = itemView.findViewById(R.id.contactPhone);
+            phoneContainer = itemView.findViewById(R.id.phoneContainer);
+            btnAddFriendFromCard = itemView.findViewById(R.id.btnAddFriendFromCard);
+            btnAddFriendText = itemView.findViewById(R.id.btnAddFriendText);
+            friendRequestDivider = itemView.findViewById(R.id.friendRequestDivider);
+            btnCallFromCard = itemView.findViewById(R.id.btnCallFromCard);
+            btnMessageFromCard = itemView.findViewById(R.id.btnMessageFromCard);
+        }
+        
+        public void bind(Message message, String currentUserId) {
+            // CRITICAL: Reset UI state immediately to prevent ViewHolder recycling issues
+            btnAddFriendFromCard.setVisibility(View.GONE);
+            friendRequestDivider.setVisibility(View.GONE);
+            
+            // Remove old listeners if exists to prevent memory leaks
+            if (friendRequestListener != null) {
+                friendRequestListener.remove();
+                friendRequestListener = null;
+            }
+            if (friendsListener != null) {
+                friendsListener.remove();
+                friendsListener = null;
+            }
+            
+            // Debug logs
+            android.util.Log.d("ContactMessageViewHolder", "Binding contact message");
+            android.util.Log.d("ContactMessageViewHolder", "Message ID: " + message.getId());
+            android.util.Log.d("ContactMessageViewHolder", "Message Type: " + message.getType());
+            android.util.Log.d("ContactMessageViewHolder", "Contact User ID: " + message.getContactUserId());
+            
+            // Get contact user ID from message
+            String contactUserId = message.getContactUserId();
+            if (contactUserId == null || contactUserId.isEmpty()) {
+                android.util.Log.e("ContactMessageViewHolder", "ERROR: contactUserId is null or empty!");
+                contactName.setText("Không thể tải thông tin");
+                return;
+            }
+            
+            // Store current contact ID for callback validation
+            this.currentContactUserId = contactUserId;
+            
+            android.util.Log.d("ContactMessageViewHolder", "Fetching user info for: " + contactUserId);
+            
+            // Fetch contact user info from Firestore
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(contactUserId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
+                        String name = doc.getString("name");
+                        String avatarUrl = doc.getString("avatarUrl");
+                        String phoneNumber = doc.getString("phoneNumber");
+                        
+                        // Set contact name
+                        if (name != null && !name.isEmpty()) {
+                            contactName.setText(name);
+                        } else {
+                            contactName.setText("Người dùng");
+                        }
+                        
+                        // Set avatar
+                        if (avatarUrl != null && !avatarUrl.isEmpty()) {
+                            Glide.with(itemView.getContext())
+                                .load(avatarUrl)
+                                .placeholder(R.drawable.ic_avatar)
+                                .into(contactAvatar);
+                        } else {
+                            contactAvatar.setImageResource(R.drawable.ic_avatar);
+                        }
+                        
+                        // Set phone number in header (if available)
+                        if (phoneNumber != null && !phoneNumber.isEmpty()) {
+                            contactPhone.setText(phoneNumber);
+                            contactPhone.setVisibility(View.VISIBLE);
+                        } else {
+                            contactPhone.setVisibility(View.GONE);
+                        }
+                        
+                        // Setup action buttons
+                        setupActionButtons(contactUserId, currentUserId, phoneNumber);
+                        
+                        // Set click listener on avatar/name to view profile
+                        View.OnClickListener profileClickListener = v -> {
+                            android.content.Intent intent = new android.content.Intent(
+                                itemView.getContext(),
+                                com.example.doan_zaloclone.ui.personal.ProfileCardActivity.class
+                            );
+                            intent.putExtra(com.example.doan_zaloclone.ui.personal.ProfileCardActivity.EXTRA_USER_ID, 
+                                contactUserId);
+                            intent.putExtra(com.example.doan_zaloclone.ui.personal.ProfileCardActivity.EXTRA_IS_EDITABLE, 
+                                false);
+                            itemView.getContext().startActivity(intent);
+                        };
+                        
+                        contactAvatar.setOnClickListener(profileClickListener);
+                        contactName.setOnClickListener(profileClickListener);
+                    } else {
+                        contactName.setText("Người dùng không tồn tại");
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    android.util.Log.e("ContactMessageViewHolder", "ERROR fetching contact user: " + e.getMessage(), e);
+                    contactName.setText("Lỗi tải thông tin");
+                });
+        }
+        
+        /**
+         * Setup Call and Message buttons
+         */
+        private void setupActionButtons(String contactUserId, String currentUserId, String phoneNumber) {
+            // Setup "Gọi điện" button - always enabled, shows options dialog
+            btnCallFromCard.setAlpha(1.0f);
+            btnCallFromCard.setOnClickListener(v -> {
+                showCallOptionsDialog(contactUserId, phoneNumber);
+            });
+            
+            
+            // Setup "Nhắn tin" button - always enabled
+            btnMessageFromCard.setOnClickListener(v -> {
+                // Open conversation with contact user
+                com.google.firebase.auth.FirebaseAuth auth = com.google.firebase.auth.FirebaseAuth.getInstance();
+                if (auth.getCurrentUser() == null) {
+                    android.widget.Toast.makeText(itemView.getContext(), 
+                        "Không thể mở cuộc trò chuyện", 
+                        android.widget.Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                
+                String loggedInUserId = auth.getCurrentUser().getUid();
+                
+                // Create or open conversation with contact user
+                com.example.doan_zaloclone.repository.ChatRepository chatRepo = 
+                    new com.example.doan_zaloclone.repository.ChatRepository();
+                
+                chatRepo.getOrCreateConversationWithFriend(loggedInUserId, contactUserId, 
+                    new com.example.doan_zaloclone.repository.ChatRepository.ConversationCallback() {
+                        @Override
+                        public void onSuccess(String conversationId) {
+                            // Navigate to conversation
+                            android.content.Intent intent = new android.content.Intent(
+                            itemView.getContext(),
+                                com.example.doan_zaloclone.ui.room.RoomActivity.class
+                            );
+                            intent.putExtra("conversationId", conversationId);
+                            itemView.getContext().startActivity(intent);
+                        }
+                        
+                        @Override
+                        public void onError(String error) {
+                            android.widget.Toast.makeText(itemView.getContext(), 
+                                "Không thể mở cuộc trò chuyện: " + error, 
+                                android.widget.Toast.LENGTH_SHORT).show();
+                        }
+                    });
+            });
+            
+            // Check friendship status for friend request button
+            setupFriendshipListener(contactUserId, currentUserId);
+        }
+        
+        /**
+         * Setup real-time listeners for friendship and friend request status
+         * With caching, loading state, and retry mechanism
+         */
+        private void setupFriendshipListener(String contactUserId, String currentUserId) {
+            String cacheKey = currentUserId + "_" + contactUserId;
+            
+            // Check cache first
+            FriendshipStatus cachedStatus = friendshipCache.get(cacheKey);
+            if (cachedStatus != null && !cachedStatus.isExpired()) {
+                android.util.Log.d("ContactMessageViewHolder", "Using cached status for: " + cacheKey);
+                updateUIFromCache(cachedStatus);
+                // Still setup listeners for real-time updates, but don't show loading
+                setupListenersWithRetry(contactUserId, currentUserId, cacheKey, false);
+                return;
+            }
+            
+            // Show loading state
+            isLoadingFriendshipStatus = true;
+            showLoadingState();
+            
+            // Setup listeners with retry mechanism
+            setupListenersWithRetry(contactUserId, currentUserId, cacheKey, true);
+        }
+        
+        /**
+         * Setup listeners with automatic retry on failure
+         */
+        private void setupListenersWithRetry(String contactUserId, String currentUserId, 
+                                             String cacheKey, boolean isInitialLoad) {
+            com.google.firebase.firestore.FirebaseFirestore db = 
+                com.google.firebase.firestore.FirebaseFirestore.getInstance();
+            
+            final String[] requestStatusFromMe = {null};
+            final String[] requestStatusToMe = {null};
+            
+            // Helper to update UI and cache
+            Runnable updateUIAndCache = () -> {
+                if (!contactUserId.equals(this.currentContactUserId)) return;
+                
+                // Update cache
+                FriendshipStatus newStatus = new FriendshipStatus(
+                    requestStatusFromMe[0], requestStatusToMe[0]
+                );
+                friendshipCache.put(cacheKey, newStatus);
+                
+                // Hide loading if this was initial load
+                if (isInitialLoad && isLoadingFriendshipStatus) {
+                    isLoadingFriendshipStatus = false;
+                    hideLoadingState();
+                }
+                
+                // Reset retry count on successful update
+                listenerRetryCount = 0;
+                
+                // Update UI
+                boolean areFriends = "ACCEPTED".equals(requestStatusFromMe[0]) || 
+                                    "ACCEPTED".equals(requestStatusToMe[0]);
+                boolean hasPendingRequest = "PENDING".equals(requestStatusFromMe[0]);
+                boolean hasIncomingRequest = "PENDING".equals(requestStatusToMe[0]);
+                
+                if (areFriends) {
+                    btnAddFriendFromCard.setVisibility(View.GONE);
+                    friendRequestDivider.setVisibility(View.GONE);
+                    android.util.Log.d("ContactMessageViewHolder", "Already friends - hiding button");
+                } else if (hasPendingRequest) {
+                    btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                    friendRequestDivider.setVisibility(View.VISIBLE);
+                    btnAddFriendText.setText("ĐÃ GỬI LỜI MỜI");
+                    btnAddFriendFromCard.setEnabled(false);
+                    btnAddFriendFromCard.setAlpha(0.6f);
+                    btnAddFriendFromCard.setOnClickListener(null);
+                    android.util.Log.d("ContactMessageViewHolder", "Pending request - showing disabled button");
+                } else if (hasIncomingRequest) {
+                    btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                    friendRequestDivider.setVisibility(View.VISIBLE);
+                    btnAddFriendText.setText("ĐANG CHỜ PHẢN HỒI");
+                    btnAddFriendFromCard.setEnabled(false);
+                    btnAddFriendFromCard.setAlpha(0.6f);
+                    btnAddFriendFromCard.setOnClickListener(null);
+                    android.util.Log.d("ContactMessageViewHolder", "Incoming request - showing waiting button");
+                } else {
+                    btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                    friendRequestDivider.setVisibility(View.VISIBLE);
+                    btnAddFriendText.setText("GỬI LỜI MỜI KẾT BẠN");
+                    btnAddFriendFromCard.setEnabled(true);
+                    btnAddFriendFromCard.setAlpha(1.0f);
+                    btnAddFriendFromCard.setOnClickListener(v -> sendFriendRequest(contactUserId, currentUserId));
+                    android.util.Log.d("ContactMessageViewHolder", "No relationship - showing send button");
+                }
+            };
+            
+            // Error handler with retry logic
+            java.util.function.Consumer<Exception> handleError = (error) -> {
+                android.util.Log.e("ContactMessageViewHolder", "Listener error, attempt: " + (listenerRetryCount + 1), error);
+                
+                if (listenerRetryCount < MAX_RETRY_ATTEMPTS) {
+                    listenerRetryCount++;
+                    long retryDelay = (long) Math.pow(2, listenerRetryCount) * 1000; // Exponential backoff
+                    
+                    android.util.Log.d("ContactMessageViewHolder", "Retrying in " + retryDelay + "ms");
+                    retryHandler.postDelayed(() -> {
+                        if (contactUserId.equals(this.currentContactUserId)) {
+                            setupListenersWithRetry(contactUserId, currentUserId, cacheKey, isInitialLoad);
+                        }
+                    }, retryDelay);
+                } else {
+                    android.util.Log.e("ContactMessageViewHolder", "Max retry attempts reached");
+                    if (isLoadingFriendshipStatus) {
+                        isLoadingFriendshipStatus = false;
+                        hideLoadingState();
+                        showErrorState();
+                    }
+                }
+            };
+            
+            // Listen to outgoing requests
+            try {
+                friendRequestListener = db.collection("friendRequests")
+                    .whereEqualTo("fromUserId", currentUserId)
+                    .whereEqualTo("toUserId", contactUserId)
+                    .addSnapshotListener((snapshots, error) -> {
+                        if (!contactUserId.equals(this.currentContactUserId)) return;
+                        
+                        if (error != null) {
+                            handleError.accept(error);
+                            return;
+                        }
+                        
+                        if (snapshots != null && !snapshots.isEmpty()) {
+                            String bestStatus = findBestStatus(snapshots.getDocuments());
+                            requestStatusFromMe[0] = bestStatus;
+                            android.util.Log.d("ContactMessageViewHolder", "Outgoing status: " + bestStatus);
+                        } else {
+                            requestStatusFromMe[0] = null;
+                        }
+                        updateUIAndCache.run();
+                    });
+            } catch (Exception e) {
+                handleError.accept(e);
+                return;
+            }
+            
+            // Listen to incoming requests
+            try {
+                friendsListener = db.collection("friendRequests")
+                    .whereEqualTo("fromUserId", contactUserId)
+                    .whereEqualTo("toUserId", currentUserId)
+                    .addSnapshotListener((snapshots, error) -> {
+                        if (!contactUserId.equals(this.currentContactUserId)) return;
+                        
+                        if (error != null) {
+                            handleError.accept(error);
+                            return;
+                        }
+                        
+                        if (snapshots != null && !snapshots.isEmpty()) {
+                            String bestStatus = findBestStatus(snapshots.getDocuments());
+                            requestStatusToMe[0] = bestStatus;
+                            android.util.Log.d("ContactMessageViewHolder", "Incoming status: " + bestStatus);
+                        } else {
+                            requestStatusToMe[0] = null;
+                        }
+                        updateUIAndCache.run();
+                    });
+            } catch (Exception e) {
+                handleError.accept(e);
+            }
+        }
+        
+        /**
+         * Find best status from documents: ACCEPTED > PENDING > others
+         */
+        private String findBestStatus(java.util.List<com.google.firebase.firestore.DocumentSnapshot> docs) {
+            String bestStatus = null;
+            for (com.google.firebase.firestore.DocumentSnapshot doc : docs) {
+                String status = doc.getString("status");
+                if ("ACCEPTED".equals(status)) {
+                    return "ACCEPTED"; // Can't get better
+                } else if ("PENDING".equals(status)) {
+                    bestStatus = "PENDING";
+                } else if (bestStatus == null) {
+                    bestStatus = status;
+                }
+            }
+            return bestStatus;
+        }
+        
+        /**
+         * Update UI from cached status
+         */
+        private void updateUIFromCache(FriendshipStatus status) {
+            if (status.areFriends()) {
+                btnAddFriendFromCard.setVisibility(View.GONE);
+                friendRequestDivider.setVisibility(View.GONE);
+            } else if ("PENDING".equals(status.statusFromMe)) {
+                btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                friendRequestDivider.setVisibility(View.VISIBLE);
+                btnAddFriendText.setText("ĐÃ GỬI LỜI MỜI");
+                btnAddFriendFromCard.setEnabled(false);
+                btnAddFriendFromCard.setAlpha(0.6f);
+            } else if ("PENDING".equals(status.statusToMe)) {
+                btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                friendRequestDivider.setVisibility(View.VISIBLE);
+                btnAddFriendText.setText("ĐANG CHỜ PHẢN HỒI");
+                btnAddFriendFromCard.setEnabled(false);
+                btnAddFriendFromCard.setAlpha(0.6f);
+            } else {
+                btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                friendRequestDivider.setVisibility(View.VISIBLE);
+                btnAddFriendText.setText("GỬI LỜI MỜI KẾT BẠN");
+                btnAddFriendFromCard.setEnabled(true);
+                btnAddFriendFromCard.setAlpha(1.0f);
+            }
+        }
+        
+        /**
+         * Show loading state (simplified - just dim the button)  
+         */
+        private void showLoadingState() {
+            btnAddFriendFromCard.setVisibility(View.VISIBLE);
+            friendRequestDivider.setVisibility(View.VISIBLE);
+            btnAddFriendText.setText("ĐANG TẢI...");
+            btnAddFriendFromCard.setEnabled(false);
+            btnAddFriendFromCard.setAlpha(0.5f);
+        }
+        
+        /**
+         * Hide loading state
+         */
+        private void hideLoadingState() {
+            // UI will be updated by updateUIAndCache
+        }
+        
+        /**
+         * Show error state
+         */
+        private void showErrorState() {
+            btnAddFriendFromCard.setVisibility(View.VISIBLE);
+            friendRequestDivider.setVisibility(View.VISIBLE);
+            btnAddFriendText.setText("LỖI KẾT NỐI");
+            btnAddFriendFromCard.setEnabled(false);
+            btnAddFriendFromCard.setAlpha(0.5f);
+        }
+        
+        /**
+         * Show call options bottom sheet dialog
+         */
+        private void showCallOptionsDialog(String contactUserId, String phoneNumber) {
+            android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(itemView.getContext());
+            builder.setTitle("Chọn cách gọi");
+            
+            // Prepare options
+            java.util.List<String> options = new java.util.ArrayList<>();
+            java.util.List<Runnable> actions = new java.util.ArrayList<>();
+            
+            // Option 1: Phone call (if phone number available)
+            if (phoneNumber != null && !phoneNumber.isEmpty()) {
+                options.add("📞 Gọi qua số điện thoại");
+                actions.add(() -> makePhoneCall(phoneNumber));
+            }
+            
+            // Option 2: Video call via app (always available)
+            options.add("📹 Gọi video qua ứng dụng");
+            actions.add(() -> makeAppCall(contactUserId, true));
+            
+            // Option 3: Voice call via app (always available)
+            options.add("📞 Gọi thoại qua ứng dụng");
+            actions.add(() -> makeAppCall(contactUserId, false));
+            
+            // Convert to array
+            String[] optionsArray = options.toArray(new String[0]);
+            
+            builder.setItems(optionsArray, (dialog, which) -> {
+                if (which >= 0 && which < actions.size()) {
+                    actions.get(which).run();
+                }
+            });
+            
+            builder.setNegativeButton("Hủy", null);
+            builder.show();
+        }
+        
+        /**
+         * Make phone call using system dialer
+         */
+        private void makePhoneCall(String phoneNumber) {
+            try {
+                android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_DIAL);
+                intent.setData(android.net.Uri.parse("tel:" + phoneNumber));
+                itemView.getContext().startActivity(intent);
+            } catch (Exception e) {
+                android.widget.Toast.makeText(itemView.getContext(),
+                    "Không thể thực hiện cuộc gọi",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            }
+        }
+        
+        /**
+         * Make in-app call (video or voice)
+         * Navigates to conversation and auto-triggers call
+         */
+        private void makeAppCall(String contactUserId, boolean isVideo) {
+            com.google.firebase.auth.FirebaseAuth auth = com.google.firebase.auth.FirebaseAuth.getInstance();
+            if (auth.getCurrentUser() == null) {
+                android.widget.Toast.makeText(itemView.getContext(),
+                    "Không thể thực hiện cuộc gọi",
+                    android.widget.Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            String currentUserId = auth.getCurrentUser().getUid();
+            
+            // Show loading
+            android.widget.Toast.makeText(itemView.getContext(),
+                "Đang kết nối...",
+                android.widget.Toast.LENGTH_SHORT).show();
+            
+            // Get or create conversation first
+            com.example.doan_zaloclone.repository.ChatRepository chatRepo = 
+                new com.example.doan_zaloclone.repository.ChatRepository();
+            
+            chatRepo.getOrCreateConversationWithFriend(currentUserId, contactUserId, 
+                new com.example.doan_zaloclone.repository.ChatRepository.ConversationCallback() {
+                    @Override
+                    public void onSuccess(String conversationId) {
+                        // Navigate to RoomActivity with auto-start call flag
+                        android.content.Intent intent = new android.content.Intent(
+                            itemView.getContext(),
+                            com.example.doan_zaloclone.ui.room.RoomActivity.class
+                        );
+                        intent.putExtra("conversationId", conversationId);
+                        intent.putExtra(com.example.doan_zaloclone.ui.room.RoomActivity.EXTRA_AUTO_START_CALL, true);
+                        intent.putExtra(com.example.doan_zaloclone.ui.room.RoomActivity.EXTRA_IS_VIDEO_CALL, isVideo);
+                        itemView.getContext().startActivity(intent);
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        android.widget.Toast.makeText(itemView.getContext(),
+                            "Không thể kết nối: " + error,
+                            android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                });
+        }
+        
+        /**
+         * Send friend request to contact user
+         */
+        private void sendFriendRequest(String contactUserId, String currentUserId) {
+            // Fetch current user's name
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(currentUserId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    String currentUserName = "Người dùng";
+                    if (doc.exists()) {
+                        String name = doc.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            currentUserName = name;
+                        }
+                    }
+                    
+                    // Send friend request
+                    com.example.doan_zaloclone.repository.FriendRepository friendRepo = 
+                        new com.example.doan_zaloclone.repository.FriendRepository();
+                    
+                    String finalCurrentUserName = currentUserName;
+                        friendRepo.sendFriendRequest(currentUserId, contactUserId, finalCurrentUserName)
+                        .observeForever(resource -> {
+                            if (resource != null) {
+                                if (resource.isSuccess()) {
+                                    // Invalidate cache to ensure fresh data
+                                    String cacheKey = currentUserId + "_" + contactUserId;
+                                    friendshipCache.remove(cacheKey);
+                                    
+                                    android.widget.Toast.makeText(itemView.getContext(), 
+                                        "Đã gửi lời mời kết bạn", 
+                                        android.widget.Toast.LENGTH_SHORT).show();
+                                    // Update UI to show request sent
+                                    btnAddFriendText.setText("ĐÃ GỬI LỜI MỜI");
+                                    btnAddFriendFromCard.setEnabled(false);
+                                    btnAddFriendFromCard.setAlpha(0.6f);
+                                } else if (resource.isError()) {
+                                    android.widget.Toast.makeText(itemView.getContext(), 
+                                        "Lỗi: " + resource.getMessage(), 
+                                        android.widget.Toast.LENGTH_SHORT).show();
+                                }
+                            }
+                        });
+                })
+                .addOnFailureListener(e -> {
+                    android.widget.Toast.makeText(itemView.getContext(), 
+                        "Không thể gửi lời mời kết bạn", 
+                        android.widget.Toast.LENGTH_SHORT).show();
+                });
         }
     }
 }

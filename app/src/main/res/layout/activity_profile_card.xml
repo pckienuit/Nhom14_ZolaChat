@@ -164,6 +164,20 @@
                         android:tint="#666666" />
                 </LinearLayout>
 
+                <!-- Add Friend Button (shown only for non-friends) -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAddFriend"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="@string/button_add_friend"
+                    android:textColor="#FFFFFF"
+                    android:backgroundTint="@color/colorPrimary"
+                    app:icon="@drawable/ic_person_add"
+                    app:iconGravity="textStart"
+                    android:visibility="gone"
+                    android:paddingVertical="12dp" />
+
             </LinearLayout>
 
         </androidx.constraintlayout.widget.ConstraintLayout>

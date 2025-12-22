@@ -38,9 +38,11 @@ public class QuickActionManager {
         // Register send poll action
         registerAction(new SendPollAction());
         
+        // Register send contact action (business card)
+        registerAction(new SendContactAction());
+        
         // Future actions can be added here
         // registerAction(new SendLocationAction());
-        // registerAction(new SendContactAction());
     }
     
     /**
