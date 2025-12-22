@@ -116,6 +116,7 @@
         <activity
             android:name=".ui.location.LocationPickerActivity"
             android:exported="false"
+            android:hardwareAccelerated="true"
             android:parentActivityName=".ui.room.RoomActivity" />
             
         <!-- Call Activity -->

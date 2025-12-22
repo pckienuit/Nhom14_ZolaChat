@@ -57,9 +57,14 @@ public class LocationPickerActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Configure osmdroid
+        // Configure osmdroid with performance optimizations
         Configuration.getInstance().load(this, PreferenceManager.getDefaultSharedPreferences(this));
         Configuration.getInstance().setUserAgentValue(getPackageName());
+        
+        // Enable tile cache for better performance
+        Configuration.getInstance().setTileFileSystemCacheMaxBytes(50L * 1024 * 1024); // 50MB cache
+        Configuration.getInstance().setTileFileSystemCacheTrimBytes(40L * 1024 * 1024); // Trim to 40MB
+        Configuration.getInstance().setExpirationExtendedDuration(1000L * 60 * 60 * 24 * 7); // 7 days
         
         setContentView(R.layout.activity_location_picker);
         
@@ -101,9 +106,19 @@ public class LocationPickerActivity extends AppCompatActivity {
     }
     
     private void setupMap() {
+        // Set tile source
         mapView.setTileSource(TileSourceFactory.MAPNIK);
+        
+        // Enable multitouch
         mapView.setMultiTouchControls(true);
         mapView.setBuiltInZoomControls(false);
+        
+        // Performance optimizations
+        mapView.setVerticalMapRepetitionEnabled(false);
+        mapView.setHorizontalMapRepetitionEnabled(false);
+        
+        // Reduce loading indicator for smoother experience
+        mapView.setTilesScaledToDpi(true);
         
         IMapController mapController = mapView.getController();
         mapController.setZoom(15.0);
