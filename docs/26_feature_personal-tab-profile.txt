@@ -1,0 +1,499 @@
+================================================================================
+PERSONAL TAB - PROFILE MANAGEMENT
+================================================================================
+
+CHUC NANG
+
+Tab "Ca nhan" de quan ly thong tin nguoi dung:
+- Hien thi compact view (avatar + ten) trong tab chinh
+- Mo profile card day du khi click vao compact view
+- Chinh sua ten hien thi, bio, avatar, cover image
+- Menu cac chuc nang: QR Wallet, Tai khoan & Bao mat, Quyen rieng tu, Cloud
+- Upload anh len Cloudinary
+- Profile card co the tai su dung cho xem profile nguoi khac
+
+
+FILES CHINH
+
+UI Components:
+- PersonalFragment.java - Tab chinh, compact user view
+- ProfileCardActivity.java - Full profile card (reusable)
+- fragment_personal.xml - Layout compact view
+- activity_profile_card.xml - Layout full profile card
+
+Menu Items:
+- QrWalletFragment.java - Placeholder cho QR Wallet
+- SecurityFragment.java - Placeholder cho Tai khoan & Bao mat
+- PrivacyFragment.java - Placeholder cho Quyen rieng tu
+- MyCloudFragment.java - Placeholder cho Cloud cua toi
+- fragment_placeholder.xml - Layout chung cho placeholders
+- item_personal_menu.xml - Layout item menu
+
+Dialogs:
+- dialog_edit_profile_name.xml - Dialog sua ten
+- dialog_edit_bio.xml - Dialog sua bio (max 200 ky tu)
+
+Drawables:
+- bg_camera_button.xml - Background tron trang cho nut camera
+- bg_avatar_circle.xml - Clip avatar thanh hinh tron
+- ic_camera.xml, ic_edit.xml - Icons
+
+ViewModel & Repository:
+- PersonalViewModel.java - Logic business, state management
+- UserRepository.java - CRUD operations voi Firestore
+
+
+THONG TIN USER MODEL
+
+User.java fields:
+- id: String - Firebase Auth UID
+- name: String - Ten hien thi
+- email: String - Email
+- avatarUrl: String - URL avatar tu Cloudinary
+- bio: String - Gioi thieu ban than (max 200 chars)
+- coverUrl: String - URL anh bia tu Cloudinary
+- devices: List<String> - FCM tokens
+
+
+LUONG HOAT DONG
+
+1. Hien thi Compact View (PersonalFragment):
+   - Load user data tu PersonalViewModel
+   - Hien thi avatar + name trong compactUserCard
+   - Click vao compactUserCard -> mo ProfileCardActivity
+
+2. Xem Profile Day Du (ProfileCardActivity):
+   - Hien thi cover image, avatar, name, bio
+   - Nut camera tron trang (bg_camera_button) cho cover/avatar
+   - Click nut edit de sua name/bio
+   - Click nut camera de chon anh moi
+
+3. Chinh Sua Ten:
+   - Click vao nameContainer
+   - Hien dialog_edit_profile_name
+   - Nhap ten moi -> Save
+   - PersonalViewModel.updateName() -> UserRepository.updateUser()
+   - Cap nhat Firestore: users/[userId]/name
+
+4. Chinh Sua Bio:
+   - Click vao bioContainer  
+   - Hien dialog_edit_bio (counter: xxx/200)
+   - Nhap bio moi -> Save
+   - PersonalViewModel.updateBio() -> UserRepository.updateUser()
+   - Cap nhat Firestore: users/[userId]/bio
+
+5. Upload Avatar/Cover:
+   - Click nut camera
+   - Kiem tra permission:
+     * Android 13+: READ_MEDIA_IMAGES
+     * Android 12-: READ_EXTERNAL_STORAGE
+   - Neu chua co permission: hien dialog giai thich -> request
+   - Neu da co: mo photo picker ngay
+   - Chon anh -> upload len Cloudinary
+   - PersonalViewModel.uploadAvatar/uploadCover()
+   - Cap nhat Firestore: users/[userId]/avatarUrl hoac coverUrl
+
+
+PERMISSION HANDLING
+
+Android Version Support:
+- Android 13+ (API 33+): READ_MEDIA_IMAGES
+- Android 12- (API 32-): READ_EXTERNAL_STORAGE
+
+Flow:
+1. User click nut camera
+2. Check permission theo phien ban Android
+3. Neu chua co: hien dialog "Can quyen truy cap anh"
+4. User click "Cho phep" -> request system permission
+5. Permission granted -> mo photo picker
+6. Permission denied -> hien toast thong bao
+
+Code:
+private boolean checkStoragePermission() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        return ContextCompat.checkSelfPermission(this, 
+            Manifest.permission.READ_MEDIA_IMAGES) == PERMISSION_GRANTED;
+    } else {
+        return ContextCompat.checkSelfPermission(this, 
+            Manifest.permission.READ_EXTERNAL_STORAGE) == PERMISSION_GRANTED;
+    }
+}
+
+
+IMAGE UPLOAD VOI CLOUDINARY
+
+Setup:
+- Cloudinary SDK da duoc integrate trong ZaloApplication
+- MediaManager.init() trong Application.onCreate()
+
+Upload Process:
+1. User chon anh tu gallery
+2. ViewModel nhan URI
+3. Upload len Cloudinary voi preset "zalo_avatar" hoac "zalo_cover"
+4. Nhan public URL
+5. Luu URL vao Firestore
+6. Glide load anh tu URL
+
+Code:
+MediaManager.get()
+    .upload(imageUri)
+    .unsigned("zalo_avatar")
+    .callback(new UploadCallback() {
+        @Override
+        public void onSuccess(String requestId, Map resultData) {
+            String url = (String) resultData.get("secure_url");
+            // Save to Firestore
+        }
+    })
+    .dispatch();
+
+
+NAVIGATION
+
+Bottom Navigation (MainActivity):
+- nav_personal -> PersonalFragment
+
+Fragment Transactions (PersonalFragment):
+- Click menu item -> Replace fragment + addToBackStack
+- QR Wallet -> QrWalletFragment
+- Security -> SecurityFragment  
+- Privacy -> PrivacyFragment
+- Cloud -> MyCloudFragment
+
+Activity Intent (PersonalFragment -> ProfileCardActivity):
+- Click compactUserCard
+- Intent extras:
+  * EXTRA_USER_ID (optional, default = current user)
+  * EXTRA_IS_EDITABLE (default = true for own profile)
+
+
+LAYOUT STRUCTURE
+
+fragment_personal.xml (Compact View):
+┌─────────────────────────────────┐
+│ ○ Avatar   Kien          →      │ <- Clickable, opens ProfileCardActivity
+├─────────────────────────────────┤
+│ [QR]  Vi QR                  →  │
+│ [🛡️]  Tai khoan & Bao mat    →  │
+│ [🔒]  Quyen rieng tu         →  │
+│ [☁️]  Cloud cua toi          →  │
+└─────────────────────────────────┘
+
+activity_profile_card.xml (Full Profile):
+┌─────────────────────────────────┐
+│ [← Toolbar]                     │
+├─────────────────────────────────┤
+│      Cover Image           [📷] │ <- 160dp height
+│                                 │
+│  ○ Avatar [📷]                  │ <- 84dp, overlaps cover
+│                                 │
+├─────────────────────────────────┤
+│  Kien                        ✎  │ <- Editable name
+│  Them gioi thieu ban than   ✎  │ <- Editable bio
+└─────────────────────────────────┘
+
+
+UI DESIGN ELEMENTS
+
+Camera Button (bg_camera_button.xml):
+- Shape: Oval (circular)
+- Background: White (#FFFFFF)
+- Border: 2dp, Light Gray (#DDDDDD)
+- Icon color: Dark Gray (#666666)
+- Size: 40dp (cover), 32dp (avatar)
+
+Avatar Circle (bg_avatar_circle.xml):
+- Shape: Oval
+- Applied to ImageView with clipToOutline="true"
+
+Colors:
+- Background: #F5F5F5
+- Card background: #FFFFFF
+- Primary text: #000000
+- Secondary text: #999999
+- Border/divider: #EEEEEE
+
+
+STATE MANAGEMENT (PersonalViewModel)
+
+LiveData:
+- currentUser: LiveData<Resource<User>>
+  * Loading: Hien loading state
+  * Success: Cap nhat UI
+  * Error: Hien toast loi
+
+- updateProfileState: LiveData<Resource<Boolean>>
+  * Loading: Hien ProgressDialog "Dang cap nhat..."
+  * Success: Toast "Cap nhat thanh cong"
+  * Error: Toast loi
+
+- uploadImageState: LiveData<Resource<String>>
+  * Loading: Hien ProgressDialog "Dang upload anh..."
+  * Success: Toast "Upload thanh cong"
+  * Error: Toast loi upload
+
+Methods:
+- getCurrentUser() - Load user data
+- updateName(String name) - Cap nhat ten
+- updateBio(String bio) - Cap nhat bio
+- uploadAvatar(Uri uri) - Upload avatar
+- uploadCover(Uri uri) - Upload cover
+
+
+FIRESTORE STRUCTURE
+
+Collection: users
+Document: [userId]
+Fields:
+{
+    "id": "user123",
+    "name": "Kien",
+    "email": "kien@example.com",
+    "avatarUrl": "https://res.cloudinary.com/.../avatar.jpg",
+    "coverUrl": "https://res.cloudinary.com/.../cover.jpg",
+    "bio": "Hello world!",
+    "devices": ["fcm_token_1", "fcm_token_2"]
+}
+
+
+REUSABILITY
+
+ProfileCardActivity co the tai su dung cho:
+
+1. Xem profile chinh minh:
+   Intent intent = new Intent(context, ProfileCardActivity.class);
+   intent.putExtra(ProfileCardActivity.EXTRA_IS_EDITABLE, true);
+   startActivity(intent);
+
+2. Xem profile nguoi khac:
+   Intent intent = new Intent(context, ProfileCardActivity.class);
+   intent.putExtra(ProfileCardActivity.EXTRA_USER_ID, otherUserId);
+   intent.putExtra(ProfileCardActivity.EXTRA_IS_EDITABLE, false);
+   startActivity(intent);
+
+
+PLACEHOLDER FRAGMENTS
+
+Cac placeholder da duoc tao de mo rong trong tuong lai:
+
+1. QrWalletFragment
+   - Icon: ic_qr_code
+   - Title: "Vi QR"
+   - Description: "Luu tru va xuat trinh cac ma QR quan trong"
+
+2. SecurityFragment
+   - Icon: ic_security (shield)
+   - Title: "Tai khoan va bao mat"
+   - Description: "Quan ly thong tin tai khoan"
+
+3. PrivacyFragment
+   - Icon: ic_privacy (lock)
+   - Title: "Quyen rieng tu"
+   - Description: "Cai dat quyen rieng tu"
+
+4. MyCloudFragment
+   - Icon: ic_cloud
+   - Title: "Cloud cua toi"
+   - Description: "Luu tru cac tin nhan quan trong"
+
+Moi placeholder co:
+- Toolbar voi nut back
+- Icon lon o giua
+- Title va description
+- Back navigation ve PersonalFragment
+
+
+TESTING
+
+Test Cases:
+
+1. Hien thi compact view:
+   - Avatar hien thi dung
+   - Ten hien thi dung
+   - Click mo ProfileCardActivity
+
+2. Chinh sua ten:
+   - Click nameContainer
+   - Nhap ten moi
+   - Save -> cap nhat thanh cong
+   - Ten moi hien thi ngay
+
+3. Chinh sua bio:
+   - Click bioContainer
+   - Nhap bio (test counter: 200 chars max)
+   - Save -> cap nhat thanh cong
+   - Bio moi hien thi
+
+4. Upload avatar:
+   - Click nut camera tren avatar
+   - Lan dau: hien dialog xin permission
+   - Cho phep -> mo photo picker
+   - Chon anh -> upload -> cap nhat
+   - Lan sau: mo picker ngay (da co permission)
+
+5. Upload cover:
+   - Tuong tu upload avatar
+   - Anh cover 160dp height
+
+6. Navigation:
+   - Click moi menu item
+   - Mo dung placeholder fragment
+   - Back button ve PersonalFragment
+
+
+ERROR HANDLING
+
+1. Network errors:
+   - Loi load user: Toast "Loi tai thong tin: [message]"
+   - Loi update: Toast "Loi: [message]"
+   - Loi upload: Toast "Loi upload: [message]"
+
+2. Permission denied:
+   - Toast "Can cap quyen de chon anh"
+   - User co the thu lai
+
+3. Empty input:
+   - Ten trong: Toast "Ten khong duoc de trong"
+   - Bio co the de trong (hien placeholder)
+
+4. Cloudinary upload fails:
+   - Hien toast loi
+   - Khong luu URL (giu nguyen URL cu)
+
+
+FUTURE IMPROVEMENTS
+
+1. Them cache cho anh (Glide da co built-in cache)
+2. Compress anh truoc khi upload (tiet kiem bandwidth)
+3. Crop anh truoc khi upload (user chon khung)
+4. Them animation khi chuyen fragment
+5. Pull-to-refresh de reload user data
+6. Xem profile history (bio history, avatar history)
+7. Implement cac placeholder feature (QR, Security, Privacy, Cloud)
+8. Share profile (share link den profile)
+9. QR code cho profile
+10. Privacy settings (ai co the xem profile)
+
+
+LUU Y
+
+- Bio max 200 characters (counter in dialog)
+- Avatar: 84dp circle, nằm đè lên cover
+- Cover: 160dp height
+- Camera button: white circle với gray icon
+- Permission khác nhau theo Android version (13+ vs 12-)
+- ProfileCardActivity reusable cho own/other profiles
+- Glide cache anh tu dong
+- ProgressDialog hien khi update/upload
+- Toast feedback cho moi action
+- Toolbar voi back button trong ProfileCardActivity
+- Fragment transactions dùng addToBackStack() de back navigation
+
+
+MANIFEST PERMISSIONS
+
+<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+    android:maxSdkVersion="32" />
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+Activity Declaration:
+<activity
+    android:name=".ui.personal.ProfileCardActivity"
+    android:exported="false"
+    android:parentActivityName=".MainActivity" />
+
+
+CODE EXAMPLES
+
+Load user data (PersonalFragment):
+@Override
+public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
+    super.onViewCreated(view, savedInstanceState);
+    viewModel.getCurrentUser().observe(getViewLifecycleOwner(), resource -> {
+        if (resource.isSuccess()) {
+            updateUI(resource.getData());
+        }
+    });
+}
+
+Open ProfileCardActivity:
+private void openProfileCard() {
+    Intent intent = new Intent(requireContext(), ProfileCardActivity.class);
+    intent.putExtra(ProfileCardActivity.EXTRA_IS_EDITABLE, true);
+    startActivity(intent);
+}
+
+Update name:
+viewModel.updateName(newName);
+
+Upload avatar:
+viewModel.uploadAvatar(imageUri);
+
+Check permission:
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    return checkSelfPermission(READ_MEDIA_IMAGES) == PERMISSION_GRANTED;
+} else {
+    return checkSelfPermission(READ_EXTERNAL_STORAGE) == PERMISSION_GRANTED;
+}
+
+
+DEPENDENCIES
+
+build.gradle (app):
+- Firebase Auth
+- Firebase Firestore
+- Cloudinary Android SDK
+- Glide (image loading)
+- AndroidX Lifecycle (ViewModel, LiveData)
+- Material Design Components
+
+Cloudinary Config (ZaloApplication.java):
+Map config = new HashMap();
+config.put("cloud_name", "YOUR_CLOUD_NAME");
+config.put("api_key", "YOUR_API_KEY");
+config.put("api_secret", "YOUR_API_SECRET");
+MediaManager.init(this, config);
+
+
+ARCHITECTURE
+
+Pattern: MVVM (Model-View-ViewModel)
+
+View Layer:
+- PersonalFragment.java
+- ProfileCardActivity.java
+- Dialog layouts
+
+ViewModel Layer:
+- PersonalViewModel.java
+  * Manages UI state
+  * Coordinates with Repository
+  * Exposes LiveData
+
+Repository Layer:
+- UserRepository.java
+  * Firestore operations
+  * Cloudinary uploads
+  * Data caching
+
+Model Layer:
+- User.java
+  * Data class
+  * Firestore mapping
+
+
+SUMMARY
+
+Personal Tab implementation bao gom:
+✅ Compact view trong tab chinh (avatar + name)
+✅ Full profile card trong separate activity (reusable)
+✅ Edit name, bio, avatar, cover
+✅ Permission handling cho Android 13+
+✅ Image upload voi Cloudinary
+✅ Placeholder fragments cho tuong lai
+✅ MVVM architecture
+✅ Error handling va user feedback
+✅ Responsive UI voi ProgressDialog va Toast
+✅ Clean separation of concerns
+
+================================================================================
