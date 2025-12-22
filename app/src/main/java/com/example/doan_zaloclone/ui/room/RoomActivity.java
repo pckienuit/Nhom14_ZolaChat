@@ -198,16 +198,43 @@ public class RoomActivity extends AppCompatActivity {
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-                        double latitude = result.getData().getDoubleExtra(
-                                com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LATITUDE, 0);
-                        double longitude = result.getData().getDoubleExtra(
-                                com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LONGITUDE, 0);
-                        String locationName = result.getData().getStringExtra(
-                                com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LOCATION_NAME);
-                        String locationAddress = result.getData().getStringExtra(
-                                com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LOCATION_ADDRESS);
+                        boolean isLiveLocation = result.getData().getBooleanExtra(
+                                com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_IS_LIVE_LOCATION, false);
                         
-                        sendLocationMessage(latitude, longitude, locationName, locationAddress);
+                        if (isLiveLocation) {
+                            // Handle Live Location
+                            long duration = result.getData().getLongExtra(
+                                    com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LIVE_DURATION, 15 * 60 * 1000);
+                            String sessionId = java.util.UUID.randomUUID().toString();
+                            
+                            // Start Service
+                            Intent serviceIntent = new Intent(this, com.example.doan_zaloclone.services.LocationSharingService.class);
+                            serviceIntent.setAction(com.example.doan_zaloclone.services.LocationSharingService.ACTION_START_SHARING);
+                            serviceIntent.putExtra(com.example.doan_zaloclone.services.LocationSharingService.EXTRA_SESSION_ID, sessionId);
+                            serviceIntent.putExtra(com.example.doan_zaloclone.services.LocationSharingService.EXTRA_DURATION, duration);
+                            
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                startForegroundService(serviceIntent);
+                            } else {
+                                startService(serviceIntent);
+                            }
+                            
+                            // Send Live Location Message
+                            sendLiveLocationMessage(sessionId);
+                            
+                        } else {
+                            // Handle Static Location
+                            double latitude = result.getData().getDoubleExtra(
+                                    com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LATITUDE, 0);
+                            double longitude = result.getData().getDoubleExtra(
+                                    com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LONGITUDE, 0);
+                            String locationName = result.getData().getStringExtra(
+                                    com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LOCATION_NAME);
+                            String locationAddress = result.getData().getStringExtra(
+                                    com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LOCATION_ADDRESS);
+                            
+                            sendLocationMessage(latitude, longitude, locationName, locationAddress);
+                        }
                     }
                 }
         );
@@ -2152,6 +2179,31 @@ public class RoomActivity extends AppCompatActivity {
         roomViewModel.sendMessage(conversationId, locationMessage);
         
         Toast.makeText(this, "Đã gửi vị trí", Toast.LENGTH_SHORT).show();
+    }
+    
+    /**
+     * Send live location message
+     */
+    private void sendLiveLocationMessage(String sessionId) {
+        if (firebaseAuth.getCurrentUser() == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        Message liveLocationMessage = new Message();
+        liveLocationMessage.setSenderId(currentUserId);
+        liveLocationMessage.setType(Message.TYPE_LIVE_LOCATION);
+        liveLocationMessage.setLiveLocationSessionId(sessionId);
+        liveLocationMessage.setContent("Đang chia sẻ vị trí trực tiếp");
+        liveLocationMessage.setTimestamp(System.currentTimeMillis());
+        
+        // Set sender name
+        String displayName = firebaseAuth.getCurrentUser().getDisplayName();
+        if (displayName != null && !displayName.isEmpty()) {
+            liveLocationMessage.setSenderName(displayName);
+        }
+        
+        roomViewModel.sendMessage(conversationId, liveLocationMessage);
+        Toast.makeText(this, "Đang chia sẻ vị trí trực tiếp...", Toast.LENGTH_SHORT).show();
     }
     
     // ===================== POLL INTERACTION HANDLERS =====================
