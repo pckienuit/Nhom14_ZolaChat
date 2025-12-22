@@ -4,6 +4,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -252,6 +253,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_poll_received, parent, false);
                 return new PollMessageViewHolder(view, false);
+            case VIEW_TYPE_CONTACT_SENT:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_contact_sent, parent, false);
+                return new ContactMessageViewHolder(view, true);
+            case VIEW_TYPE_CONTACT_RECEIVED:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_contact_received, parent, false);
+                return new ContactMessageViewHolder(view, false);
             default:
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_sent, parent, false);
@@ -281,6 +290,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((CallHistoryViewHolder) holder).bind(message);
         } else if (holder instanceof PollMessageViewHolder) {
             ((PollMessageViewHolder) holder).bind(message, currentUserId, isPinned, isHighlighted, pollInteractionListener);
+        } else if (holder instanceof ContactMessageViewHolder) {
+            ((ContactMessageViewHolder) holder).bind(message, currentUserId);
         } else if (holder instanceof RecalledMessageViewHolder) {
             // Recalled messages just display static text, no binding needed
         }
@@ -1526,6 +1537,222 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             } else {
                 itemView.setBackground(null);
             }
+        }
+    }
+    
+    /**
+     * ViewHolder for contact/business card messages
+     */
+    static class ContactMessageViewHolder extends RecyclerView.ViewHolder {
+        private ImageView contactAvatar;
+        private TextView contactName;
+        private TextView contactPhone;
+        private LinearLayout phoneContainer;
+        private com.google.android.material.button.MaterialButton btnAddFriendFromCard;
+        private com.google.android.material.button.MaterialButton btnCallFromCard;
+        private TextView messageTimestamp;
+        private boolean isSent;
+        
+        public ContactMessageViewHolder(@NonNull View itemView, boolean isSent) {
+            super(itemView);
+            this.isSent = isSent;
+            contactAvatar = itemView.findViewById(R.id.contactAvatar);
+            contactName = itemView.findViewById(R.id.contactName);
+            contactPhone = itemView.findViewById(R.id.contactPhone);
+            phoneContainer = itemView.findViewById(R.id.phoneContainer);
+            btnAddFriendFromCard = itemView.findViewById(R.id.btnAddFriendFromCard);
+            btnCallFromCard = itemView.findViewById(R.id.btnCallFromCard);
+            messageTimestamp = itemView.findViewById(R.id.messageTimestamp);
+        }
+        
+        public void bind(Message message, String currentUserId) {
+            // Debug logs
+            android.util.Log.d("ContactMessageViewHolder", "Binding contact message");
+            android.util.Log.d("ContactMessageViewHolder", "Message ID: " + message.getId());
+            android.util.Log.d("ContactMessageViewHolder", "Message Type: " + message.getType());
+            android.util.Log.d("ContactMessageViewHolder", "Contact User ID: " + message.getContactUserId());
+            
+            // Set timestamp
+            if (messageTimestamp != null) {
+                messageTimestamp.setText(TIMESTAMP_FORMAT.format(new java.util.Date(message.getTimestamp())));
+            }
+            
+            // Get contact user ID from message
+            String contactUserId = message.getContactUserId();
+            if (contactUserId == null || contactUserId.isEmpty()) {
+                android.util.Log.e("ContactMessageViewHolder", "ERROR: contactUserId is null or empty!");
+                contactName.setText("Không thể tải thông tin");
+                return;
+            }
+            
+            android.util.Log.d("ContactMessageViewHolder", "Fetching user info for: " + contactUserId);
+            
+            // Fetch contact user info from Firestore
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(contactUserId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
+                        String name = doc.getString("name");
+                        String avatarUrl = doc.getString("avatarUrl");
+                        String phoneNumber = doc.getString("phoneNumber");
+                        
+                        // Set contact name
+                        if (name != null && !name.isEmpty()) {
+                            contactName.setText(name);
+                        } else {
+                            contactName.setText("Người dùng");
+                        }
+                        
+                        // Set avatar
+                        if (avatarUrl != null && !avatarUrl.isEmpty()) {
+                            Glide.with(itemView.getContext())
+                                .load(avatarUrl)
+                                .placeholder(R.drawable.ic_avatar)
+                                .into(contactAvatar);
+                        } else {
+                            contactAvatar.setImageResource(R.drawable.ic_avatar);
+                        }
+                        
+                        // Set phone number (if available)
+                        if (phoneNumber != null && !phoneNumber.isEmpty()) {
+                            contactPhone.setText(phoneNumber);
+                            phoneContainer.setVisibility(View.VISIBLE);
+                        } else {
+                            phoneContainer.setVisibility(View.GONE);
+                        }
+                        
+                        // Check friendship status and show appropriate buttons
+                        checkFriendshipAndShowButtons(contactUserId, currentUserId, phoneNumber);
+                        
+                        // Set click listener on avatar/name to view profile
+                        View.OnClickListener profileClickListener = v -> {
+                            android.content.Intent intent = new android.content.Intent(
+                                itemView.getContext(),
+                                com.example.doan_zaloclone.ui.personal.ProfileCardActivity.class
+                            );
+                            intent.putExtra(com.example.doan_zaloclone.ui.personal.ProfileCardActivity.EXTRA_USER_ID, 
+                                contactUserId);
+                            intent.putExtra(com.example.doan_zaloclone.ui.personal.ProfileCardActivity.EXTRA_IS_EDITABLE, 
+                                false);
+                            itemView.getContext().startActivity(intent);
+                        };
+                        
+                        contactAvatar.setOnClickListener(profileClickListener);
+                        contactName.setOnClickListener(profileClickListener);
+                    } else {
+                        contactName.setText("Người dùng không tồn tại");
+                        btnAddFriendFromCard.setVisibility(View.GONE);
+                        btnCallFromCard.setVisibility(View.GONE);
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    android.util.Log.e("ContactMessageViewHolder", "ERROR fetching contact user: " + e.getMessage(), e);
+                    contactName.setText("Lỗi tải thông tin");
+                    btnAddFriendFromCard.setVisibility(View.GONE);
+                    btnCallFromCard.setVisibility(View.GONE);
+                });
+        }
+        
+        /**
+         * Check friendship status and show appropriate action buttons
+         */
+        private void checkFriendshipAndShowButtons(String contactUserId, String currentUserId, String phoneNumber) {
+            // Use FriendRepository to check friendship
+            com.example.doan_zaloclone.repository.FriendRepository friendRepo = 
+                new com.example.doan_zaloclone.repository.FriendRepository();
+                
+            friendRepo.checkFriendship(currentUserId, contactUserId).observeForever(resource -> {
+                if (resource != null && resource.isSuccess()) {
+                    boolean areFriends = resource.getData() != null && resource.getData();
+                    
+                    if (areFriends) {
+                        // Already friends - hide add friend button, show call button if has phone
+                        btnAddFriendFromCard.setVisibility(View.GONE);
+                        
+                        if (phoneNumber != null && !phoneNumber.isEmpty()) {
+                            btnCallFromCard.setVisibility(View.VISIBLE);
+                            btnCallFromCard.setOnClickListener(v -> {
+                                // Launch call activity
+                                android.content.Intent intent = new android.content.Intent(
+                                    itemView.getContext(),
+                                    com.example.doan_zaloclone.ui.call.CallActivity.class
+                                );
+                                intent.putExtra("EXTRA_RECEIVER_ID", contactUserId);
+                                intent.putExtra("EXTRA_IS_VIDEO", false);
+                                intent.putExtra("EXTRA_IS_INCOMING", false);
+                                itemView.getContext().startActivity(intent);
+                            });
+                        } else {
+                            btnCallFromCard.setVisibility(View.GONE);
+                        }
+                    } else {
+                        // Not friends - show add friend button, hide call button
+                        btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                        btnCallFromCard.setVisibility(View.GONE);
+                        
+                        btnAddFriendFromCard.setOnClickListener(v -> {
+                            sendFriendRequest(contactUserId, currentUserId);
+                        });
+                    }
+                } else {
+                    // Error or not friends - show add friend button by default
+                    btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                    btnCallFromCard.setVisibility(View.GONE);
+                    
+                    btnAddFriendFromCard.setOnClickListener(v -> {
+                        sendFriendRequest(contactUserId, currentUserId);
+                    });
+                }
+            });
+        }
+        
+        /**
+         * Send friend request to contact user
+         */
+        private void sendFriendRequest(String contactUserId, String currentUserId) {
+            // Fetch current user's name
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(currentUserId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    String currentUserName = "Người dùng";
+                    if (doc.exists()) {
+                        String name = doc.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            currentUserName = name;
+                        }
+                    }
+                    
+                    // Send friend request
+                    com.example.doan_zaloclone.repository.FriendRepository friendRepo = 
+                        new com.example.doan_zaloclone.repository.FriendRepository();
+                    
+                    String finalCurrentUserName = currentUserName;
+                    friendRepo.sendFriendRequest(currentUserId, contactUserId, finalCurrentUserName)
+                        .observeForever(resource -> {
+                            if (resource != null) {
+                                if (resource.isSuccess()) {
+                                    android.widget.Toast.makeText(itemView.getContext(), 
+                                        "Đã gửi lời mời kết bạn", 
+                                        android.widget.Toast.LENGTH_SHORT).show();
+                                    btnAddFriendFromCard.setText("Đã gửi lời mời");
+                                    btnAddFriendFromCard.setEnabled(false);
+                                } else if (resource.isError()) {
+                                    android.widget.Toast.makeText(itemView.getContext(), 
+                                        "Lỗi: " + resource.getMessage(), 
+                                        android.widget.Toast.LENGTH_SHORT).show();
+                                }
+                            }
+                        });
+                })
+                .addOnFailureListener(e -> {
+                    android.widget.Toast.makeText(itemView.getContext(), 
+                        "Không thể gửi lời mời kết bạn", 
+                        android.widget.Toast.LENGTH_SHORT).show();
+                });
         }
     }
 }

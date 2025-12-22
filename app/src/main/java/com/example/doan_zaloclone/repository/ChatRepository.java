@@ -133,6 +133,11 @@ public class ChatRepository {
                 messageData.put("originalSenderName", message.getOriginalSenderName());
             }
         }
+        
+        // Add contact user ID if this is a contact message (business card)
+        if (Message.TYPE_CONTACT.equals(message.getType()) && message.getContactUserId() != null) {
+            messageData.put("contactUserId", message.getContactUserId());
+        }
 
         // Save message to Firestore
         messageRef.set(messageData)
