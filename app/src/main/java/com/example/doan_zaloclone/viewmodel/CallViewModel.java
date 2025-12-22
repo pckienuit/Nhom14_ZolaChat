@@ -560,14 +560,23 @@ public class CallViewModel extends AndroidViewModel {
         Log.d(TAG, "===== HANDLING SIGNAL =====");
         Log.d(TAG, "Signal type: " + signal.getType());
         Log.d(TAG, "Signal senderId: " + signal.getSenderId());
+        Log.d(TAG, "Current isInitiator: " + isInitiator);
         
         if (signal.isOfferSignal()) {
-            Log.d(TAG, "Processing OFFER signal");
-            // Receiver gets OFFER, create answer
+            // Only receiver should handle OFFER, skip if we're the initiator (caller)
+            if (isInitiator) {
+                Log.d(TAG, "Skipping OFFER signal - we are the initiator (caller)");
+                return;
+            }
+            Log.d(TAG, "Processing OFFER signal (we are receiver)");
             handleOffer(signal.getSdp());
         } else if (signal.isAnswerSignal()) {
-            Log.d(TAG, "Processing ANSWER signal");
-            // Caller gets ANSWER, set remote description
+            // Only caller should handle ANSWER, skip if we're the receiver
+            if (!isInitiator) {
+                Log.d(TAG, "Skipping ANSWER signal - we are the receiver");
+                return;
+            }
+            Log.d(TAG, "Processing ANSWER signal (we are caller)");
             handleAnswer(signal.getSdp());
         } else if (signal.isIceCandidateSignal()) {
             Log.d(TAG, "Processing ICE_CANDIDATE signal");

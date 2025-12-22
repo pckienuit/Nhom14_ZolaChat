@@ -1713,29 +1713,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
          * Setup Call and Message buttons
          */
         private void setupActionButtons(String contactUserId, String currentUserId, String phoneNumber) {
-            // Setup "Gọi điện" button
-            if (phoneNumber != null && !phoneNumber.isEmpty()) {
-                btnCallFromCard.setAlpha(1.0f); // Enabled
-                btnCallFromCard.setOnClickListener(v -> {
-                    // Launch call activity
-                    android.content.Intent intent = new android.content.Intent(
-                        itemView.getContext(),
-                        com.example.doan_zaloclone.ui.call.CallActivity.class
-                    );
-                    intent.putExtra("EXTRA_RECEIVER_ID", contactUserId);
-                    intent.putExtra("EXTRA_IS_VIDEO", false);
-                    intent.putExtra("EXTRA_IS_INCOMING", false);
-                    itemView.getContext().startActivity(intent);
-                });
-            } else {
-                // No phone number - disable button
-                btnCallFromCard.setAlpha(0.5f);
-                btnCallFromCard.setOnClickListener(v -> {
-                    android.widget.Toast.makeText(itemView.getContext(), 
-                        "Người dùng này chưa có số điện thoại", 
-                        android.widget.Toast.LENGTH_SHORT).show();
-                });
-            }
+            // Setup "Gọi điện" button - always enabled, shows options dialog
+            btnCallFromCard.setAlpha(1.0f);
+            btnCallFromCard.setOnClickListener(v -> {
+                showCallOptionsDialog(contactUserId, phoneNumber);
+            });
             
             
             // Setup "Nhắn tin" button - always enabled
@@ -2024,6 +2006,107 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             btnAddFriendText.setText("LỖI KẾT NỐI");
             btnAddFriendFromCard.setEnabled(false);
             btnAddFriendFromCard.setAlpha(0.5f);
+        }
+        
+        /**
+         * Show call options bottom sheet dialog
+         */
+        private void showCallOptionsDialog(String contactUserId, String phoneNumber) {
+            android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(itemView.getContext());
+            builder.setTitle("Chọn cách gọi");
+            
+            // Prepare options
+            java.util.List<String> options = new java.util.ArrayList<>();
+            java.util.List<Runnable> actions = new java.util.ArrayList<>();
+            
+            // Option 1: Phone call (if phone number available)
+            if (phoneNumber != null && !phoneNumber.isEmpty()) {
+                options.add("📞 Gọi qua số điện thoại");
+                actions.add(() -> makePhoneCall(phoneNumber));
+            }
+            
+            // Option 2: Video call via app (always available)
+            options.add("📹 Gọi video qua ứng dụng");
+            actions.add(() -> makeAppCall(contactUserId, true));
+            
+            // Option 3: Voice call via app (always available)
+            options.add("📞 Gọi thoại qua ứng dụng");
+            actions.add(() -> makeAppCall(contactUserId, false));
+            
+            // Convert to array
+            String[] optionsArray = options.toArray(new String[0]);
+            
+            builder.setItems(optionsArray, (dialog, which) -> {
+                if (which >= 0 && which < actions.size()) {
+                    actions.get(which).run();
+                }
+            });
+            
+            builder.setNegativeButton("Hủy", null);
+            builder.show();
+        }
+        
+        /**
+         * Make phone call using system dialer
+         */
+        private void makePhoneCall(String phoneNumber) {
+            try {
+                android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_DIAL);
+                intent.setData(android.net.Uri.parse("tel:" + phoneNumber));
+                itemView.getContext().startActivity(intent);
+            } catch (Exception e) {
+                android.widget.Toast.makeText(itemView.getContext(),
+                    "Không thể thực hiện cuộc gọi",
+                    android.widget.Toast.LENGTH_SHORT).show();
+            }
+        }
+        
+        /**
+         * Make in-app call (video or voice)
+         * Navigates to conversation and auto-triggers call
+         */
+        private void makeAppCall(String contactUserId, boolean isVideo) {
+            com.google.firebase.auth.FirebaseAuth auth = com.google.firebase.auth.FirebaseAuth.getInstance();
+            if (auth.getCurrentUser() == null) {
+                android.widget.Toast.makeText(itemView.getContext(),
+                    "Không thể thực hiện cuộc gọi",
+                    android.widget.Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            String currentUserId = auth.getCurrentUser().getUid();
+            
+            // Show loading
+            android.widget.Toast.makeText(itemView.getContext(),
+                "Đang kết nối...",
+                android.widget.Toast.LENGTH_SHORT).show();
+            
+            // Get or create conversation first
+            com.example.doan_zaloclone.repository.ChatRepository chatRepo = 
+                new com.example.doan_zaloclone.repository.ChatRepository();
+            
+            chatRepo.getOrCreateConversationWithFriend(currentUserId, contactUserId, 
+                new com.example.doan_zaloclone.repository.ChatRepository.ConversationCallback() {
+                    @Override
+                    public void onSuccess(String conversationId) {
+                        // Navigate to RoomActivity with auto-start call flag
+                        android.content.Intent intent = new android.content.Intent(
+                            itemView.getContext(),
+                            com.example.doan_zaloclone.ui.room.RoomActivity.class
+                        );
+                        intent.putExtra("conversationId", conversationId);
+                        intent.putExtra(com.example.doan_zaloclone.ui.room.RoomActivity.EXTRA_AUTO_START_CALL, true);
+                        intent.putExtra(com.example.doan_zaloclone.ui.room.RoomActivity.EXTRA_IS_VIDEO_CALL, isVideo);
+                        itemView.getContext().startActivity(intent);
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        android.widget.Toast.makeText(itemView.getContext(),
+                            "Không thể kết nối: " + error,
+                            android.widget.Toast.LENGTH_SHORT).show();
+                    }
+                });
         }
         
         /**
