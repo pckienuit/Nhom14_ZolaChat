@@ -7,11 +7,13 @@ import android.view.ViewGroup;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.example.doan_zaloclone.R;
+import com.example.doan_zaloclone.viewmodel.NewsfeedViewModel;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
 
@@ -21,7 +23,7 @@ import java.util.List;
 public class NewsfeedFragment extends Fragment {
     private TabLayout tabLayout;
     private ViewPager2 viewPager;
-
+    private NewsfeedViewModel newsfeedViewModel;
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
@@ -38,6 +40,9 @@ public class NewsfeedFragment extends Fragment {
             if (position == 0) tab.setText("BẢNG TIN");
             else tab.setText("VIDEO");
         }).attach();
+
+        // Khởi tạo ViewModel
+        newsfeedViewModel = new ViewModelProvider(this).get(NewsfeedViewModel.class);
 
         return view;
     }
