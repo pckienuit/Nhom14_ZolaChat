@@ -110,4 +110,81 @@ public class UserRepository {
         
         return result;
     }
+    
+    // Callback interfaces
+    public interface OnUserLoadedListener {
+        void onUserLoaded(User user);
+        void onError(String error);
+    }
+    
+    public interface OnUpdateListener {
+        void onSuccess();
+        void onError(String error);
+    }
+    
+    /**
+     * Get user by ID with callback
+     */
+    public void getUserById(@NonNull String userId, @NonNull OnUserLoadedListener listener) {
+        firestore.collection("users")
+                .document(userId)
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        User user = documentSnapshot.toObject(User.class);
+                        listener.onUserLoaded(user);
+                    } else {
+                        listener.onError("User not found");
+                    }
+                })
+                .addOnFailureListener(e -> listener.onError(e.getMessage()));
+    }
+    
+    /**
+     * Update user name
+     */
+    public void updateUserName(@NonNull String userId, @NonNull String newName, 
+                               @NonNull OnUpdateListener listener) {
+        firestore.collection("users")
+                .document(userId)
+                .update("name", newName)
+                .addOnSuccessListener(aVoid -> listener.onSuccess())
+                .addOnFailureListener(e -> listener.onError(e.getMessage()));
+    }
+    
+    /**
+     * Update user bio
+     */
+    public void updateUserBio(@NonNull String userId, @NonNull String newBio, 
+                              @NonNull OnUpdateListener listener) {
+        firestore.collection("users")
+                .document(userId)
+                .update("bio", newBio)
+                .addOnSuccessListener(aVoid -> listener.onSuccess())
+                .addOnFailureListener(e -> listener.onError(e.getMessage()));
+    }
+    
+    /**
+     * Update user avatar URL
+     */
+    public void updateUserAvatar(@NonNull String userId, @NonNull String avatarUrl, 
+                                 @NonNull OnUpdateListener listener) {
+        firestore.collection("users")
+                .document(userId)
+                .update("avatarUrl", avatarUrl)
+                .addOnSuccessListener(aVoid -> listener.onSuccess())
+                .addOnFailureListener(e -> listener.onError(e.getMessage()));
+    }
+    
+    /**
+     * Update user cover URL
+     */
+    public void updateUserCover(@NonNull String userId, @NonNull String coverUrl, 
+                                @NonNull OnUpdateListener listener) {
+        firestore.collection("users")
+                .document(userId)
+                .update("coverUrl", coverUrl)
+                .addOnSuccessListener(aVoid -> listener.onSuccess())
+                .addOnFailureListener(e -> listener.onError(e.getMessage()));
+    }
 }

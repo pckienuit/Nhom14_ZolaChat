@@ -18,6 +18,7 @@ import com.example.doan_zaloclone.ui.call.CallActivity;
 import com.example.doan_zaloclone.ui.contact.ContactFragment;
 import com.example.doan_zaloclone.ui.home.HomeFragment;
 import com.example.doan_zaloclone.ui.login.LoginActivity;
+import com.example.doan_zaloclone.ui.personal.PersonalFragment;
 import com.example.doan_zaloclone.viewmodel.MainViewModel;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
@@ -33,6 +34,7 @@ public class MainActivity extends AppCompatActivity {
     // Cache fragments to preserve state
     private HomeFragment homeFragment;
     private ContactFragment contactFragment;
+    private PersonalFragment personalFragment;
     
     // Incoming call listener
     private CallRepository callRepository;
@@ -228,6 +230,9 @@ public class MainActivity extends AppCompatActivity {
             } else if (itemId == R.id.nav_contact) {
                 showFragment(1);
                 return true;
+            } else if (itemId == R.id.nav_personal) {
+                showFragment(2);
+                return true;
             }
             return false;
         });
@@ -246,6 +251,9 @@ public class MainActivity extends AppCompatActivity {
         if (contactFragment != null) {
             transaction.hide(contactFragment);
         }
+        if (personalFragment != null) {
+            transaction.hide(personalFragment);
+        }
         
         // Show or create the selected fragment
         switch (position) {
@@ -263,6 +271,14 @@ public class MainActivity extends AppCompatActivity {
                     transaction.add(R.id.fragmentContainer, contactFragment, "CONTACT");
                 } else {
                     transaction.show(contactFragment);
+                }
+                break;
+            case 2: // Personal
+                if (personalFragment == null) {
+                    personalFragment = new PersonalFragment();
+                    transaction.add(R.id.fragmentContainer, personalFragment, "PERSONAL");
+                } else {
+                    transaction.show(personalFragment);
                 }
                 break;
         }
