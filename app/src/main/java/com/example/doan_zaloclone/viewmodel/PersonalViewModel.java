@@ -26,7 +26,7 @@ public class PersonalViewModel extends ViewModel {
     
     public PersonalViewModel() {
         this.userRepository = new UserRepository();
-        loadCurrentUser();
+        // Don't auto-load - let caller decide which user to load
     }
     
     public LiveData<Resource<User>> getCurrentUser() {
@@ -41,6 +41,7 @@ public class PersonalViewModel extends ViewModel {
         return uploadImageState;
     }
     
+    
     /**
      * Load current logged-in user profile
      */
@@ -51,9 +52,21 @@ public class PersonalViewModel extends ViewModel {
             return;
         }
         
+        loadUser(firebaseUser.getUid());
+    }
+    
+    /**
+     * Load any user's profile by userId
+     */
+    public void loadUser(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            currentUser.setValue(Resource.error("Invalid user ID"));
+            return;
+        }
+        
         currentUser.setValue(Resource.loading());
         
-        userRepository.getUserById(firebaseUser.getUid(), new UserRepository.OnUserLoadedListener() {
+        userRepository.getUserById(userId, new UserRepository.OnUserLoadedListener() {
             @Override
             public void onUserLoaded(User user) {
                 currentUser.setValue(Resource.success(user));

@@ -82,6 +82,11 @@ public class ProfileCardActivity extends AppCompatActivity {
         
         viewModel = new ViewModelProvider(this).get(PersonalViewModel.class);
         
+        // Load the specific user (not just current user)
+        if (userId != null) {
+            viewModel.loadUser(userId);
+        }
+        
         setupImagePickers();
         initializeViews();
         setupToolbar();

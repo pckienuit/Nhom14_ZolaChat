@@ -382,10 +382,13 @@ public class RoomActivity extends AppCompatActivity {
         // Set initial name
         titleTextView.setText(conversationName != null ? conversationName : "Conversation");
         
-        // Add click listener to open group info
+        // Add click listener to open group info or user profile
         titleTextView.setOnClickListener(v -> {
             if ("GROUP".equals(conversationType)) {
                 openGroupInfo();
+            } else if (!otherUserId.isEmpty()) {
+                // Open user profile for 1-1 chat
+                com.example.doan_zaloclone.utils.ProfileNavigator.openUserProfile(this, otherUserId);
             }
         });
         

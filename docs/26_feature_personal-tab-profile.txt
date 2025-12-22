@@ -455,6 +455,105 @@ config.put("api_secret", "YOUR_API_SECRET");
 MediaManager.init(this, config);
 
 
+PROFILE NAVIGATION - PROFILENAVIGATOR
+
+ProfileNavigator.java - Utility class de mo profile tu bat ky dau
+
+Methods:
+1. openOwnProfile(Context context)
+   - Mo profile cua chinh minh (editable)
+   - Tu dong set EXTRA_IS_EDITABLE = true
+
+2. openUserProfile(Context context, String userId)
+   - Mo profile cua nguoi khac (read-only)
+   - Tu dong check: neu userId = current user thi openOwnProfile()
+   - Neu khac thi mo read-only profile
+
+Usage Examples:
+
+// Trong RoomActivity - Click vao toolbar avatar/name:
+toolbar.setOnClickListener(v -> {
+    if (otherUserId != null) {
+        ProfileNavigator.openUserProfile(this, otherUserId);
+    }
+});
+
+// Trong MessageAdapter - Click vao avatar cua message:
+holder.avatarImage.setOnClickListener(v -> {
+    ProfileNavigator.openUserProfile(context, message.getSenderId());
+});
+
+// Trong ConversationAdapter - Click vao avatar:
+holder.avatarImage.setOnClickListener(v -> {
+    // Get other user ID from conversation
+    String otherUserId = getOtherUserId(conversation);
+    ProfileNavigator.openUserProfile(context, otherUserId);
+});
+
+// Trong ContactFragment/UserAdapter:
+holder.itemView.setOnClickListener(v -> {
+    ProfileNavigator.openUserProfile(context, user.getId());
+});
+
+// Trong GroupInfoActivity - Click vao member:
+memberAdapter.setOnMemberClickListener(userId -> {
+    ProfileNavigator.openUserProfile(this, userId);
+});
+
+
+NAVIGATION FLOWS
+
+1. Tu Personal Tab:
+   PersonalFragment -> Click compactUserCard -> ProfileCardActivity (own, editable)
+
+2. Tu Room/Chat:
+   RoomActivity -> Click toolbar (avatar/name) -> ProfileCardActivity (other user, read-only)
+
+3. Tu Messages:
+   MessageAdapter -> Click avatar -> ProfileCardActivity (sender, read-only)
+
+4. Tu Conversation List:
+   ConversationAdapter -> Click avatar -> ProfileCardActivity (other user, read-only)
+
+5. Tu Contact List:
+   UserAdapter -> Click item -> ProfileCardActivity (user, read-only)
+
+6. Tu Group Members:
+   GroupInfoActivity -> Click member -> ProfileCardActivity (member, read-only)
+
+7. Tu Call:
+   CallActivity -> Click caller info -> ProfileCardActivity (caller, read-only)
+
+
+FILES CAN UPDATE
+
+Cac file nen them navigation:
+
+1. RoomActivity.java:
+   - Add click listener cho toolbar/titleTextView
+   - ProfileNavigator.openUserProfile(this, otherUserId)
+
+2. MessageAdapter.java:
+   - Add click listener cho holder.avatarImage
+   - ProfileNavigator.openUserProfile(context, message.getSenderId())
+
+3. ConversationAdapter.java:
+   - Add click listener cho avatar
+   - ProfileNavigator.openUserProfile(context, otherUserId)
+
+4. UserAdapter.java (ContactFragment):
+   - Add click listener cho itemView
+   - ProfileNavigator.openUserProfile(context, user.getId())
+
+5. GroupInfoActivity.java:
+   - Add onMemberClickListener
+   - ProfileNavigator.openUserProfile(this, memberId)
+
+6. CallActivity.java:
+   - Add click listener cho caller info
+   - ProfileNavigator.openUserProfile(this, callerId)
+
+
 ARCHITECTURE
 
 Pattern: MVVM (Model-View-ViewModel)
@@ -481,6 +580,11 @@ Model Layer:
   * Data class
   * Firestore mapping
 
+Utility Layer:
+- ProfileNavigator.java
+  * Navigation helper
+  * Simplifies profile opening
+
 
 SUMMARY
 
@@ -495,5 +599,7 @@ Personal Tab implementation bao gom:
 ✅ Error handling va user feedback
 ✅ Responsive UI voi ProgressDialog va Toast
 ✅ Clean separation of concerns
+✅ ProfileNavigator utility cho easy navigation
+✅ Click-to-profile tu nhieu noi: toolbar, messages, contacts, groups
 
 ================================================================================

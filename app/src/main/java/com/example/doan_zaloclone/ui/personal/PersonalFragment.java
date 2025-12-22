@@ -62,6 +62,9 @@ public class PersonalFragment extends Fragment {
         setupClickListeners();
         setupMenuItems();
         observeViewModel();
+        
+        // Load current user's profile
+        viewModel.loadCurrentUser();
     }
     
     private void initializeViews(View view) {
