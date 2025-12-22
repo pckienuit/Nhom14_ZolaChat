@@ -274,8 +274,10 @@ public class ProfileCardActivity extends AppCompatActivity {
     
     private void pickAvatarImage() {
         if (checkStoragePermission()) {
+            // Already have permission, launch picker directly
             avatarPicker.launch("image/*");
         } else {
+            // Need permission, show dialog then request
             isWaitingForAvatarPick = true;
             requestStoragePermission();
         }
@@ -283,20 +285,45 @@ public class ProfileCardActivity extends AppCompatActivity {
     
     private void pickCoverImage() {
         if (checkStoragePermission()) {
+            // Already have permission, launch picker directly
             coverPicker.launch("image/*");
         } else {
+            // Need permission, show dialog then request
             isWaitingForCoverPick = true;
             requestStoragePermission();
         }
     }
     
     private boolean checkStoragePermission() {
-        return ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_EXTERNAL_STORAGE)
-            == PackageManager.PERMISSION_GRANTED;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            // Android 13+ - use READ_MEDIA_IMAGES
+            return ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_MEDIA_IMAGES)
+                == PackageManager.PERMISSION_GRANTED;
+        } else {
+            // Android 12 and below - use READ_EXTERNAL_STORAGE
+            return ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED;
+        }
     }
     
     private void requestStoragePermission() {
-        permissionLauncher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE);
+        // Determine which permission to request based on Android version
+        String permission = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+            ? android.Manifest.permission.READ_MEDIA_IMAGES
+            : android.Manifest.permission.READ_EXTERNAL_STORAGE;
+        
+        // Show explanation dialog before requesting permission
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Cần quyền truy cập ảnh")
+            .setMessage("Ứng dụng cần quyền truy cập thư viện ảnh để bạn có thể chọn ảnh làm avatar hoặc ảnh bìa.")
+            .setPositiveButton("Cho phép", (dialog, which) -> {
+                permissionLauncher.launch(permission);
+            })
+            .setNegativeButton("Huỷ", (dialog, which) -> {
+                Toast.makeText(this, "Bạn cần cấp quyền để chọn ảnh", Toast.LENGTH_SHORT).show();
+            })
+            .setCancelable(false)
+            .show();
     }
     
     private void uploadAvatar(Uri imageUri) {
