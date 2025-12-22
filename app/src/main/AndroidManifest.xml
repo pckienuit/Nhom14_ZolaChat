@@ -6,6 +6,12 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     
+    <!-- Location permissions for location sharing -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" tools:ignore="ScopedStorage" />
+    
     <!-- Permissions for reading images -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
@@ -100,11 +106,18 @@
             android:parentActivityName=".ui.room.RoomActivity"
             android:windowSoftInputMode="adjustResize" />
             
-        <!-- Profile Card Activity -->
+                <!-- Profile Card Activity -->
         <activity
             android:name=".ui.personal.ProfileCardActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity" />
+            
+        <!-- Location Picker Activity -->
+        <activity
+            android:name=".ui.location.LocationPickerActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.room.RoomActivity"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
             
         <!-- Call Activity -->
         <activity

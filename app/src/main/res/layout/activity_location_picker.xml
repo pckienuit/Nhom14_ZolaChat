@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- OSM Map View -->
+    <org.osmdroid.views.MapView
+        android:id="@+id/mapView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:focusable="true" />
+
+    <!-- FAB for current location -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabMyLocation"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|top"
+        android:layout_margin="16dp"
+        android:layout_marginTop="72dp"
+        android:src="@android:drawable/ic_menu_mylocation"
+        android:contentDescription="Vị trí của tôi"
+        app:backgroundTint="@android:color/white"
+        app:tint="@color/colorPrimary" />
+
+    <!-- Bottom card with location info and send button -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_margin="16dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- Location info -->
+            <TextView
+                android:id="@+id/locationInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Chọn vị trí trên bản đồ"
+                android:textSize="14sp"
+                android:textColor="#666666"
+                android:paddingBottom="12dp" />
+
+            <!-- Send button -->
+            <Button
+                android:id="@+id/btnSendLocation"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Gửi vị trí"
+                android:textColor="@android:color/white"
+                android:backgroundTint="@color/colorPrimary"
+                android:enabled="false" />
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+</FrameLayout>
