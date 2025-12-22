@@ -8,6 +8,8 @@ public class User {
     private String name;
     private String email;
     private String avatarUrl;
+    private String bio; // User bio (max 200 characters)
+    private String coverUrl; // Cover image URL
     private Map<String, Boolean> devices; // Map<deviceToken, true> để hỗ trợ đa thiết bị
     
     // Custom tags - map of tag name to boolean (for Firestore compatibility)
@@ -56,6 +58,14 @@ public class User {
         return avatarUrl;
     }
 
+    public String getBio() {
+        return bio;
+    }
+
+    public String getCoverUrl() {
+        return coverUrl;
+    }
+
     public Map<String, Boolean> getDevices() {
         return devices;
     }
@@ -75,6 +85,14 @@ public class User {
 
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
+    }
+
+    public void setBio(String bio) {
+        this.bio = bio;
+    }
+
+    public void setCoverUrl(String coverUrl) {
+        this.coverUrl = coverUrl;
     }
 
     public void setDevices(Map<String, Boolean> devices) {
