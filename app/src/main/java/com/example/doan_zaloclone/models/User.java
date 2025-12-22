@@ -8,7 +8,16 @@ public class User {
     private String name;
     private String email;
     private String avatarUrl;
+    private String bio; // User bio (max 200 characters)
+    private String coverUrl; // Cover image URL
+    private String phoneNumber; // Phone number (optional, for business card and future phone login)
     private Map<String, Boolean> devices; // Map<deviceToken, true> để hỗ trợ đa thiết bị
+    
+    // Custom tags - map of tag name to boolean (for Firestore compatibility)
+    private Map<String, Boolean> customTags;
+    
+    // Custom tag colors - map of tag name to color integer
+    private Map<String, Integer> customTagColors;
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public User() {
@@ -50,6 +59,18 @@ public class User {
         return avatarUrl;
     }
 
+    public String getBio() {
+        return bio;
+    }
+
+    public String getCoverUrl() {
+        return coverUrl;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
     public Map<String, Boolean> getDevices() {
         return devices;
     }
@@ -69,6 +90,18 @@ public class User {
 
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
+    }
+
+    public void setBio(String bio) {
+        this.bio = bio;
+    }
+
+    public void setCoverUrl(String coverUrl) {
+        this.coverUrl = coverUrl;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
     }
 
     public void setDevices(Map<String, Boolean> devices) {
@@ -91,6 +124,61 @@ public class User {
 
     public boolean hasDevice(String deviceToken) {
         return this.devices != null && this.devices.containsKey(deviceToken);
+    }
+    
+    // Custom tags getters/setters
+    public java.util.List<String> getCustomTags() {
+        if (customTags == null) return new java.util.ArrayList<>();
+        return new java.util.ArrayList<>(customTags.keySet());
+    }
+    
+    public Map<String, Boolean> getCustomTagsMap() {
+        return customTags != null ? customTags : new HashMap<>();
+    }
+    
+    public void setCustomTags(Map<String, Boolean> customTags) {
+        this.customTags = customTags;
+    }
+    
+    public Map<String, Integer> getCustomTagColors() {
+        return customTagColors != null ? customTagColors : new HashMap<>();
+    }
+    
+    public void setCustomTagColors(Map<String, Integer> customTagColors) {
+        this.customTagColors = customTagColors;
+    }
+    
+    // Custom tags helper methods
+    public void addCustomTag(String tagName, int color) {
+        if (this.customTags == null) {
+            this.customTags = new HashMap<>();
+        }
+        if (this.customTagColors == null) {
+            this.customTagColors = new HashMap<>();
+        }
+        
+        this.customTags.put(tagName, true);
+        this.customTagColors.put(tagName, color);
+    }
+    
+    public void removeCustomTag(String tagName) {
+        if (this.customTags != null) {
+            this.customTags.remove(tagName);
+        }
+        if (this.customTagColors != null) {
+            this.customTagColors.remove(tagName);
+        }
+    }
+    
+    public boolean hasCustomTag(String tagName) {
+        return this.customTags != null && this.customTags.containsKey(tagName);
+    }
+    
+    public Integer getCustomTagColor(String tagName) {
+        if (this.customTagColors != null && this.customTagColors.containsKey(tagName)) {
+            return this.customTagColors.get(tagName);
+        }
+        return null;
     }
     
     @Override

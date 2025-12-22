@@ -1,14 +1,21 @@
 package com.example.doan_zaloclone.models;
 
+import java.util.Map;
+
 public class Message {
     // Message types
     public static final String TYPE_TEXT = "TEXT";
     public static final String TYPE_IMAGE = "IMAGE";
     public static final String TYPE_FILE = "FILE";
     public static final String TYPE_CALL = "CALL";
+    public static final String TYPE_POLL = "POLL";
+    public static final String TYPE_CONTACT = "CONTACT"; // Business card message
+    public static final String TYPE_LOCATION = "LOCATION"; // Location message
+    public static final String TYPE_LIVE_LOCATION = "LIVE_LOCATION"; // Live location message
 
     private String id;
     private String senderId;
+    private String senderName;      // Sender's display name (cached for performance)
     private String content;
     private String type; // TEXT, IMAGE, hoặc FILE
     private long timestamp;
@@ -30,6 +37,29 @@ public class Message {
     // Forward fields
     private boolean isForwarded;        // Message is forwarded
     private String originalSenderId;    // Original sender ID if forwarded
+    private String originalSenderName;  // Original sender name if forwarded
+    
+    // Reaction field - Map of userId to reaction type (heart, haha, sad, angry, wow, like)
+    private Map<String, String> reactions;
+    
+    // Reaction counts - Map of reaction type to total count (allows multiple clicks per user)
+    // Format: {"heart": 5, "haha": 3} - tracks total clicks, not just unique users
+    private Map<String, Integer> reactionCounts;
+    
+    // Poll data (only used for TYPE_POLL messages)
+    private Poll pollData;
+    
+    // Contact data (only used for TYPE_CONTACT messages)
+    private String contactUserId; // User ID of the contact being shared
+    
+    // Location data (only used for TYPE_LOCATION messages)
+    private double latitude;           // GPS latitude
+    private double longitude;          // GPS longitude
+    private String locationName;       // Name of the location (optional)
+    private String locationAddress;    // Full address of the location (optional)
+    
+    // Live Location data (only used for TYPE_LIVE_LOCATION messages)
+    private String liveLocationSessionId; // Session ID for live location tracking
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Message() {
@@ -76,6 +106,10 @@ public class Message {
         return senderId;
     }
 
+    public String getSenderName() {
+        return senderName;
+    }
+
     public String getContent() {
         return content;
     }
@@ -120,12 +154,30 @@ public class Message {
         return isRecalled;
     }
     
+    // Alias for Firestore deserialization (maps 'isRecalled' field to this getter)
+    public boolean getIsRecalled() {
+        return isRecalled;
+    }
+    
     public boolean isForwarded() {
+        return isForwarded;
+    }
+    
+    // Alias for Firestore deserialization (maps 'isForwarded' field to this getter)
+    public boolean getIsForwarded() {
         return isForwarded;
     }
     
     public String getOriginalSenderId() {
         return originalSenderId;
+    }
+    
+    public String getOriginalSenderName() {
+        return originalSenderName;
+    }
+    
+    public Map<String, String> getReactions() {
+        return reactions;
     }
 
     // Setters (cần cho Firestore)
@@ -135,6 +187,10 @@ public class Message {
 
     public void setSenderId(String senderId) {
         this.senderId = senderId;
+    }
+
+    public void setSenderName(String senderName) {
+        this.senderName = senderName;
     }
 
     public void setContent(String content) {
@@ -181,12 +237,86 @@ public class Message {
         isRecalled = recalled;
     }
     
+    // Alias for Firestore deserialization
+    public void setIsRecalled(boolean isRecalled) {
+        this.isRecalled = isRecalled;
+    }
+    
     public void setForwarded(boolean forwarded) {
         isForwarded = forwarded;
     }
     
+    // Alias for Firestore deserialization
+    public void setIsForwarded(boolean isForwarded) {
+        this.isForwarded = isForwarded;
+    }
+    
     public void setOriginalSenderId(String originalSenderId) {
         this.originalSenderId = originalSenderId;
+    }
+    
+    public void setOriginalSenderName(String originalSenderName) {
+        this.originalSenderName = originalSenderName;
+    }
+    
+    public void setReactions(Map<String, String> reactions) {
+        this.reactions = reactions;
+    }
+    
+    public Map<String, Integer> getReactionCounts() {
+        return reactionCounts;
+    }
+    
+    public void setReactionCounts(Map<String, Integer> reactionCounts) {
+        this.reactionCounts = reactionCounts;
+    }
+    
+    public Poll getPollData() {
+        return pollData;
+    }
+    
+    public void setPollData(Poll pollData) {
+        this.pollData = pollData;
+    }
+    
+    public String getContactUserId() {
+        return contactUserId;
+    }
+    
+    public void setContactUserId(String contactUserId) {
+        this.contactUserId = contactUserId;
+    }
+    
+    public double getLatitude() {
+        return latitude;
+    }
+    
+    public void setLatitude(double latitude) {
+        this.latitude = latitude;
+    }
+    
+    public double getLongitude() {
+        return longitude;
+    }
+    
+    public void setLongitude(double longitude) {
+        this.longitude = longitude;
+    }
+    
+    public String getLocationName() {
+        return locationName;
+    }
+    
+    public void setLocationName(String locationName) {
+        this.locationName = locationName;
+    }
+    
+    public String getLocationAddress() {
+        return locationAddress;
+    }
+    
+    public void setLocationAddress(String locationAddress) {
+        this.locationAddress = locationAddress;
     }
 
     // Helper methods
@@ -204,6 +334,18 @@ public class Message {
     
     public boolean isCallMessage() {
         return TYPE_CALL.equals(this.type);
+    }
+    
+    public boolean isPollMessage() {
+        return TYPE_POLL.equals(this.type);
+    }
+    
+    public boolean isContactMessage() {
+        return TYPE_CONTACT.equals(this.type);
+    }
+    
+    public boolean isLocationMessage() {
+        return TYPE_LOCATION.equals(this.type);
     }
     
     /**
@@ -253,5 +395,55 @@ public class Message {
         } else {
             return String.format("%.2f GB", fileSize / (1024.0 * 1024.0 * 1024.0));
         }
+    }
+    
+    /**
+     * Check if this message has any reactions
+     * @return true if message has at least one reaction
+     */
+    public boolean hasReactions() {
+        return reactions != null && !reactions.isEmpty();
+    }
+    
+    /**
+     * Get total reaction count
+     * @return Number of users who reacted
+     */
+    public int getReactionCount() {
+        return MessageReaction.getReactionCount(reactions);
+    }
+    
+    /**
+     * Get formatted reaction count for display
+     * @return Formatted string (e.g., "5", "99+")
+     */
+    public String getFormattedReactionCount() {
+        return MessageReaction.getFormattedReactionCount(reactions);
+    }
+    
+    /**
+     * Get user's reaction type
+     * @param userId User ID to check
+     * @return Reaction type or null if user hasn't reacted
+     */
+    public String getUserReaction(String userId) {
+        return MessageReaction.getUserReaction(reactions, userId);
+    }
+    
+    /**
+     * Check if a specific user has reacted
+     * @param userId User ID to check
+     * @return true if user has reacted
+     */
+    public boolean hasUserReacted(String userId) {
+        return MessageReaction.hasUserReacted(reactions, userId);
+    }
+    
+    public String getLiveLocationSessionId() {
+        return liveLocationSessionId;
+    }
+    
+    public void setLiveLocationSessionId(String liveLocationSessionId) {
+        this.liveLocationSessionId = liveLocationSessionId;
     }
 }

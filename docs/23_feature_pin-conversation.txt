@@ -1,0 +1,379 @@
+================================================================================
+TÍNH NĂNG GHIM CUỘC HỘI THOẠI (Pin Conversation Feature)
+================================================================================
+
+NGÀY TẠO: 21/12/2025
+LOẠI: Feature
+TÍNH NĂNG: Ghim cuộc hội thoại lên đầu danh sách
+KIẾN TRÚC: MVVM (Repository → ViewModel → View)
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Tính năng cho phép người dùng ghim các cuộc hội thoại quan trọng lên đầu 
+danh sách. Cuộc hội thoại đã ghim sẽ giữ nguyên vị trí ngay cả khi có tin 
+nhắn mới từ các cuộc hội thoại khác.
+
+TÍNH NĂNG CHÍNH:
+- Ghim không giới hạn số lượng cuộc hội thoại
+- Long-press để hiển thị menu ghim/bỏ ghim
+- Icon ghim hiển thị ở góc trên bên phải của conversation card
+- Cuộc hội thoại ghim giữ nguyên vị trí, không di chuyển khi có tin nhắn mới
+- Cuộc hội thoại ghim được sắp xếp theo thời điểm ghim (ghim sớm nhất ở trên)
+- Cập nhật real-time qua Firestore listener
+
+================================================================================
+2. DATA MODEL CHANGES
+================================================================================
+
+2.1. CONVERSATION MODEL (models/Conversation.java)
+
+Thêm field mới:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Field               │ Type                 │ Mô tả                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ pinnedByUsers       │ Map<String, Long>    │ userId -> pinnedAt timestamp   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Thêm methods:
+- getPinnedByUsers(): Map<String, Long> - Lấy map userId -> timestamp
+- setPinnedByUsers(Map<String, Long>) - Set map ghim
+- isPinnedByUser(String userId): boolean - Kiểm tra đã ghim chưa
+- getPinnedAtTimestamp(String userId): long - Lấy timestamp ghim
+- pinForUser(String userId) - Ghim cho user (set timestamp hiện tại)
+- unpinForUser(String userId) - Bỏ ghim cho user (xóa khỏi map)
+
+2.2. FIRESTORE STRUCTURE
+
+conversations/{conversationId}
+  - (các fields hiện tại)
+  - pinnedByUsers: Map<userId, pinnedAtTimestamp>
+  
+Ví dụ:
+{
+  "id": "conv123",
+  "name": "John Doe",
+  "lastMessage": "Hello!",
+  "timestamp": 1703145600000,
+  "memberIds": ["user1", "user2"],
+  "pinnedByUsers": {
+    "user1": 1703142000000,  // user1 ghim lúc này
+    "user2": 1703143000000   // user2 ghim lúc này
+  }
+}
+
+================================================================================
+3. SERVICE LAYER
+================================================================================
+
+3.1. FIRESTOREMANAGER.JAVA
+
+Thêm import:
+import com.google.firebase.firestore.FieldValue;
+
+Methods mới:
+/**
+ * Pin conversation for a user
+ */
+public void pinConversation(@NonNull String conversationId,
+                           @NonNull String userId,
+                           @NonNull OnGroupUpdatedListener listener)
+                           
+/**
+ * Unpin conversation for a user
+ */
+public void unpinConversation(@NonNull String conversationId,
+                             @NonNull String userId,
+                             @NonNull OnGroupUpdatedListener listener)
+
+Implementation:
+- pinConversation: Update "pinnedByUsers.{userId}" = timestamp
+- unpinConversation: Update "pinnedByUsers.{userId}" = FieldValue.delete()
+
+================================================================================
+4. REPOSITORY LAYER
+================================================================================
+
+4.1. CONVERSATIONREPOSITORY.JAVA
+
+Methods mới:
+/**
+ * Pin conversation for a user
+ */
+public LiveData<Resource<Void>> pinConversation(@NonNull String conversationId,
+                                                 @NonNull String userId)
+
+/**
+ * Unpin conversation for a user
+ */
+public LiveData<Resource<Void>> unpinConversation(@NonNull String conversationId,
+                                                   @NonNull String userId)
+
+================================================================================
+5. VIEWMODEL LAYER
+================================================================================
+
+5.1. HOMEVIEWMODEL.JAVA
+
+Logic sắp xếp mới:
+private List<Conversation> sortConversations(List<Conversation> list, String userId) {
+    // 1. Tách ra 2 danh sách: pinned và unpinned
+    // 2. Sort pinned theo pinnedAtTimestamp (ghim sớm nhất lên đầu)
+    // 3. Sort unpinned theo timestamp (tin nhắn mới nhất lên đầu)
+    // 4. Ghép: pinned + unpinned
+}
+
+Methods mới:
+- pinConversation(conversationId, userId): LiveData<Resource<Void>>
+- unpinConversation(conversationId, userId): LiveData<Resource<Void>>
+
+Sử dụng Transformations.map() để tự động sort khi có thay đổi.
+
+================================================================================
+6. UI COMPONENTS
+================================================================================
+
+6.1. LAYOUTS
+
+item_conversation.xml:
+- Đổi từ LinearLayout sang FrameLayout wrapper
+- Icon ghim đặt ở góc trên bên phải (layout_gravity="top|end")
+- Size: 20dp x 20dp
+- Margin: 8dp
+- Visibility: GONE (mặc định)
+- XÓA timestamp TextView để tránh overlap
+
+6.2. DRAWABLES
+
+ic_pin.xml:
+- Vector drawable với fillColor="#FF6200EE"
+- ViewportWidth/Height: 24
+- Size: 24dp x 24dp
+
+6.3. STRINGS
+
+strings.xml:
+- pin_conversation: "Ghim cuộc hội thoại"
+- unpin_conversation: "Bỏ ghim"
+
+================================================================================
+7. ADAPTER CHANGES
+================================================================================
+
+7.1. CONVERSATIONADAPTER.JAVA
+
+Interface mới:
+public interface OnConversationLongClickListener {
+    void onConversationLongClick(Conversation conversation);
+}
+
+ViewHolder changes:
+- Thêm field: private ImageView pinIndicator
+- Bind pin indicator: visibility based on isPinnedByUser()
+- Set onLongClickListener cho itemView
+
+DiffUtil.Callback update:
+- Thêm so sánh pinnedByUsers map trong areContentsTheSame()
+- Đảm bảo real-time update khi pin/unpin
+
+Method mới:
+public void setOnConversationLongClickListener(OnConversationLongClickListener)
+
+================================================================================
+8. FRAGMENT CHANGES
+================================================================================
+
+8.1. HOMEFRAGMENT.JAVA
+
+Methods mới:
+
+private void showConversationContextMenu(Conversation conversation):
+- Kiểm tra isPinnedByUser()
+- Show AlertDialog với option "Ghim" hoặc "Bỏ ghim"
+- Gọi pinConversation() hoặc unpinConversation()
+
+private void pinConversation(String conversationId, String userId):
+- Gọi homeViewModel.pinConversation()
+- Observe result và show toast
+
+private void unpinConversation(String conversationId, String userId):
+- Gọi homeViewModel.unpinConversation()
+- Observe result và show toast
+
+Set listener:
+conversationAdapter.setOnConversationLongClickListener(conversation -> {
+    showConversationContextMenu(conversation);
+});
+
+================================================================================
+9. FIRESTORE RULES
+================================================================================
+
+9.1. FIRESTORE.RULES.UPDATED
+
+Thêm helper function:
+function onlyPinFieldChanged() {
+  let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+  return affectedKeys.hasOnly(['pinnedByUsers']);
+}
+
+Update conversations rule:
+match /conversations/{conversationId} {
+  allow update: if request.auth != null &&
+                   (request.auth.uid in resource.data.memberIds ||
+                    onlyPinFieldChanged());
+}
+
+Giải thích:
+- Cho phép update pinnedByUsers ngay cả khi không phải member
+- Cần thiết vì user có thể ghim conversation từ search/contact
+- onlyPinFieldChanged() đảm bảo chỉ pin field được update
+
+================================================================================
+10. LOGIC FLOW
+================================================================================
+
+10.1. PIN CONVERSATION FLOW
+
+1. User long-press conversation item
+2. ConversationAdapter.onLongClickListener triggered
+3. HomeFragment.showConversationContextMenu() hiển thị
+4. User chọn "Ghim cuộc hội thoại"
+5. HomeFragment.pinConversation() gọi homeViewModel.pinConversation()
+6. HomeViewModel → ConversationRepository → FirestoreManager
+7. FirestoreManager update Firestore: pinnedByUsers.{userId} = timestamp
+8. Firestore listener trigger → conversations updated
+9. HomeViewModel.sortConversations() sắp xếp lại
+10. ConversationAdapter.updateConversations() với DiffUtil
+11. DiffUtil detect pinnedByUsers changed
+12. ViewHolder rebind → icon ghim hiện, conversation di chuyển lên đầu
+
+10.2. UNPIN FLOW
+
+Tương tự nhưng:
+- Chọn "Bỏ ghim"
+- FirestoreManager update: pinnedByUsers.{userId} = FieldValue.delete()
+- Icon ghim ẩn, conversation quay về vị trí theo timestamp
+
+10.3. SORTING LOGIC
+
+Mỗi khi conversations list update:
+1. Tách thành 2 nhóm: pinned và unpinned (theo userId hiện tại)
+2. Sort pinned: theo pinnedAtTimestamp ASC (ghim sớm → lên trước)
+3. Sort unpinned: theo timestamp DESC (tin nhắn mới → lên trước)
+4. Ghép: [pinned...] + [unpinned...]
+5. Return sorted list
+
+Kết quả:
+- Cuộc hội thoại ghim luôn ở trên
+- Trong nhóm ghim: ghim sớm nhất ở trên cùng
+- Trong nhóm chưa ghim: tin nhắn mới nhất ở trên cùng
+
+================================================================================
+11. FILES ẢNH HƯỞNG
+================================================================================
+
+11.1. JAVA FILES
+
+[NEW/MODIFIED] models/Conversation.java:
+- Thêm field pinnedByUsers
+- Thêm 6 methods quản lý pin
+
+[MODIFIED] services/FirestoreManager.java:
+- Thêm import FieldValue
+- Thêm pinConversation()
+- Thêm unpinConversation()
+
+[MODIFIED] repository/ConversationRepository.java:
+- Thêm pinConversation()
+- Thêm unpinConversation()
+
+[MODIFIED] viewmodel/HomeViewModel.java:
+- Thêm sortConversations() private method
+- Update getConversations() với Transformations.map()
+- Thêm pinConversation()
+- Thêm unpinConversation()
+
+[MODIFIED] ui/home/ConversationAdapter.java:
+- Thêm OnConversationLongClickListener interface
+- Thêm longClickListener field
+- Thêm setOnConversationLongClickListener()
+- ViewHolder: thêm pinIndicator field
+- Update bind() để show/hide pin indicator
+- Update DiffUtil.Callback.areContentsTheSame()
+
+[MODIFIED] ui/home/HomeFragment.java:
+- Thêm showConversationContextMenu()
+- Thêm pinConversation()
+- Thêm unpinConversation()
+- Set long-click listener trong setupRecyclerView()
+
+11.2. XML FILES
+
+[MODIFIED] res/layout/item_conversation.xml:
+- Đổi root LinearLayout → FrameLayout wrapper
+- Thêm pinIndicator ImageView ở góc trên phải
+- XÓA timestampTextView
+
+[NEW] res/drawable/ic_pin.xml:
+- Vector drawable cho pin icon
+
+[MODIFIED] res/values/strings.xml:
+- Thêm pin_conversation
+- Thêm unpin_conversation
+
+11.3. CONFIG FILES
+
+[MODIFIED] firestore.rules.updated:
+- Thêm onlyPinFieldChanged() helper
+- Update conversations update rule
+
+================================================================================
+12. TESTING CHECKLIST
+================================================================================
+
+□ Long-press conversation → Menu xuất hiện với option "Ghim"
+□ Chọn "Ghim" → Icon ghim xuất hiện ở góc trên phải
+□ Conversation ghim di chuyển lên đầu danh sách
+□ Ghim nhiều conversation → Sắp xếp đúng theo thời điểm ghim
+□ Có tin nhắn mới từ conversation chưa ghim → Conversation ghim vẫn ở trên
+□ Long-press conversation đã ghim → Menu hiện "Bỏ ghim"
+□ Chọn "Bỏ ghim" → Icon ghim biến mất
+□ Conversation bỏ ghim quay về vị trí theo timestamp
+□ Pin indicator cập nhật real-time (không cần refresh)
+□ Đóng mở app → Trạng thái ghim được giữ nguyên
+□ Multi-device: Ghim trên thiết bị A → Không ảnh hưởng thiết bị B
+□ Toast message hiển thị khi ghim/bỏ ghim thành công
+□ Build app thành công không lỗi
+
+================================================================================
+13. KNOWN LIMITATIONS
+================================================================================
+
+- Không có limit số lượng conversation có thể ghim
+- Timestamp được xóa khỏi conversation item (để tránh overlap với pin icon)
+- Pin status là per-user (mỗi user có pin riêng trong cùng conversation)
+- Không hỗ trợ reorder conversations đã ghim bằng tay (chỉ theo thời điểm ghim)
+
+================================================================================
+14. FUTURE IMPROVEMENTS
+================================================================================
+
+- Drag & drop để reorder pinned conversations
+- Limit số lượng conversation có thể ghim (ví dụ: 10)
+- Settings để chọn cách sắp xếp pinned conversations
+- Animation khi pin/unpin
+- Bulk pin/unpin multiple conversations
+- Hiển thị lại timestamp ở vị trí khác (không overlap icon ghim)
+- Pin với màu sắc khác nhau (priority levels)
+
+================================================================================
+PHIÊN BẢN
+================================================================================
+
+Tạo ngày: 21/12/2025
+Cập nhật lần cuối: 21/12/2025
+Phiên bản: 1.0
+Trạng thái: Hoàn thành (Phase 1)
+Tác giả: MVVM Implementation Team

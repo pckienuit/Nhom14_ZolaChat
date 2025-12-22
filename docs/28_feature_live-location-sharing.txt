@@ -1,0 +1,150 @@
+================================================================================
+KẾ HOẠCH PHÁT TRIỂN: TÍNH NĂNG CHIA SẺ VỊ TRÍ TRỰC TIẾP (LIVE LOCATION)
+================================================================================
+
+NGÀY TẠO: 22/12/2025
+LOẠI: Feature Implementation
+TÍNH NĂNG: Chia sẻ vị trí trực tiếp (Live Location Realtime)
+CÔNG NGHỆ: Foreground Service, Firestore Realtime Updates, OSMDroid Map
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Tính năng cho phép người dùng chia sẻ vị trí hiện tại của mình theo thời gian thực 
+cho người khác trong cuộc trò chuyện (1-1 hoặc nhóm). Vị trí được cập nhật liên tục 
+ngay cả khi ứng dụng chạy ngầm (background).
+
+CÔNG NGHỆ SỬ DỤNG:
+- Foreground Service: Để duy trì việc lấy vị trí khi app minimized
+- Firestore Listener: Để cập nhật vị trí realtime cho người nhận
+- OSMDroid: Hiển thị bản đồ OpenStreetMap
+- FusedLocationProviderClient: Lấy tọa độ GPS chính xác và tiết kiệm pin
+
+================================================================================
+2. KIẾN TRÚC & LUỒNG (WORKFLOW)
+================================================================================
+
+2.1. LUỒNG GỬI LIVE LOCATION
+1. User mở Location Picker -> Chọn tab "Vị trí trực tiếp".
+2. Chọn thời gian chia sẻ (15p, 1h, 8h).
+3. Bấm "Gửi".
+4. App tạo `LiveLocation` session ID (UUID).
+5. App gửi tin nhắn loại `TYPE_LIVE_LOCATION_SENT` vào chat room.
+6. `RoomActivity` start `LocationSharingService` với session ID.
+7. Service chạy ngầm, hiện Notification "Đang chia sẻ vị trí".
+8. Service định kỳ (5s) lấy tọa độ -> Update lên Firestore `liveLocations/{sessionId}`.
+
+2.2. LUỒNG NHẬN & HIỂN THỊ
+1. `MessageAdapter` nhận diện message type `LIVE_LOCATION`.
+2. `LiveLocationMessageViewHolder` lắng nghe Firestore `liveLocations/{sessionId}`.
+3. Khi có tọa độ mới -> Cập nhật marker trên MapView nhỏ (Preview).
+4. Hiển thị Countdown Timer đếm ngược thời gian còn lại.
+5. User bấm vào bản đồ hoặc nút "Xem vị trí" -> Mở `LiveLocationViewActivity` (Full Screen).
+
+2.3. LUỒNG DỪNG CHIA SẺ
+- Tự động: Khi hết thời gian (`endTime`), Timer kết thúc, Firestore status update `isActive = false`, Service tự stop.
+- Thủ công (Sender): User bấm nút "Dừng chia sẻ" -> Gọi Update Firestore `isActive = false` -> Gửi Intent `STOP_SHARING` tới Service.
+
+================================================================================
+3. COMPONENT ĐÃ TRIỂN KHAI
+================================================================================
+
+3.1. MODELS
+- LiveLocation.java: Model chứa sessionId, lat, long, timestamp, endTime, isActive.
+- Message.java: Thêm field `liveLocationSessionId`, type constants.
+
+3.2. SERVICE
+- LocationSharingService.java: 
+    + Foreground Service với Notification.
+    + Quản lý FusedLocationClient request updates.
+    + Tự động dừng khi hết giờ hoặc nhận Intent STOP.
+
+3.3. UI LAYER - ADAPTER
+- MessageAdapter.java:
+    + Added `VIEW_TYPE_LIVE_LOCATION_SENT` & `RECEIVED`.
+    + Inner class `LiveLocationMessageViewHolder`:
+        * Init MapView (OSMDroid).
+        * Firestore addSnapshotListener.
+        * CountDownTimer.
+        * Logic ẩn/hiện nút "Stop Sharing" (Sender) / "View Location" (Receiver).
+        * Mở `LiveLocationViewActivity`.
+
+3.4. UI LAYER - ACTIVITIES
+- LocationPickerActivity.java: 
+    + Thêm UI chọn thời gian (Spinner) cho Live Location.
+    + Trả về kết quả kèm cờ `EXTRA_IS_LIVE_LOCATION`.
+- LiveLocationViewActivity.java (Mới):
+    + Màn hình xem bản đồ full-screen.
+    + Realtime tracking marker.
+    + Nút Stop Sharing cho sender.
+- RoomActivity.java:
+    + Xử lý kết quả từ LocationPicker -> Gửi tin nhắn -> Start Service.
+
+3.5. REPOSITORY
+- ChatRepository.java:
+    + `updateLiveLocation(LiveLocation)`: Ghi đè tọa độ mới lên Firestore.
+    + `stopLiveLocation(sessionId)`: Set `isActive = false`.
+
+3.6. RESOURCES & LAYOUT
+- item_message_live_location_sent.xml
+- item_message_live_location_received.xml
+- activity_live_location_view.xml
+- activity_location_picker.xml (Updated)
+
+================================================================================
+4. FIRESTORE DATA STRUCTURE
+================================================================================
+
+Collection: `liveLocations`
+Document ID: `{sessionId}` (UUID)
+Fields:
+- sessionId: String
+- userId: String (Sender)
+- latitude: Double
+- longitude: Double
+- timestamp: Long (Update time)
+- endTime: Long (Expiry time)
+- isActive: Boolean
+
+================================================================================
+5. PERMISSIONS & CONFIG
+================================================================================
+
+AndroidManifest.xml:
+- Permissions: `FOREGROUND_SERVICE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`.
+- Service declaration: `LocationSharingService`.
+- Activity declaration: `LiveLocationViewActivity`.
+
+================================================================================
+6. BÀI HỌC KINH NGHIỆM & LƯU Ý
+================================================================================
+
+6.1. SERVICE LIFECYCLE
+- Vấn đề: User bấm dừng trên UI nhưng Service vẫn chạy ngầm và tiếp tục update status thành Active.
+- Giải quyết: Adapter gửi Intent `ACTION_STOP_SHARING` trực tiếp tới Service để kill process ngay lập tức.
+
+6.2. MAP INTERACTION
+- Vấn đề: MapView trong tin nhắn (RecyclerView) chiếm quyền cảm ứng, khiến không cuộn tin nhắn được.
+- Giải quyết: Disable `MultiTouchControls` và `Clickable` của MapView preview. Dùng overlay hoặc click listener trên CardView để mở màn hình Full Screen xem bản đồ.
+
+6.3. STRUCTURAL INTEGRITY
+- Vấn đề: Code file `MessageAdapter.java` quá lớn (>2000 dòng), dễ bị lỗi cấu trúc (thiếu dấu đóng ngoặc) khi sửa đổi tự động.
+- Giải pháp: Cần cẩn trọng khi replace code block lớn. Nên tách ViewHolder ra file riêng nếu có thể trong tương lai (Refactor).
+
+================================================================================
+7. FUTURE IMPROVEMENTS
+================================================================================
+
+- Hiển thị avatar người dùng di chuyển trên bản đồ thay vì marker default.
+- Hiển thị danh sách các thành viên đang chia sẻ trong Group Chat (Multi-user live location).
+- Cảnh báo pin yếu khi đang chia sẻ.
+- Tối ưu tần suất update location dựa trên tốc độ di chuyển để tiết kiệm pin.
+
+================================================================================
+PHIÊN BẢN
+================================================================================
+
+Tạo ngày: 22/12/2025
+Phiên bản: 1.0
+Trạng thái: Completed

@@ -23,6 +23,18 @@
         android:layout_marginBottom="4dp"
         android:visibility="gone" />
 
+    <!-- Forwarded Indicator (visible only when message is forwarded from another user) -->
+    <TextView
+        android:id="@+id/forwardedIndicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Đã chuyển tiếp một tin nhắn"
+        android:textSize="11sp"
+        android:textColor="@color/textSecondary"
+        android:textStyle="italic"
+        android:layout_marginBottom="2dp"
+        android:visibility="gone" />
+
     <!-- Image bubble with pin indicator -->
     <FrameLayout
         android:layout_width="wrap_content"

@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <!-- Toolbar -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        android:elevation="4dp"
+        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
+        app:popupTheme="@style/ThemeOverlay.AppCompat.Light" />
+
+    <!-- Map Container -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+    <!-- OSM Map View -->
+    <org.osmdroid.views.MapView
+        android:id="@+id/mapView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:focusable="true" />
+
+    <!-- FAB for current location -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabMyLocation"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|top"
+        android:layout_margin="16dp"
+        android:layout_marginTop="72dp"
+        android:src="@android:drawable/ic_menu_mylocation"
+        android:contentDescription="Vị trí của tôi"
+        app:backgroundTint="@android:color/white"
+        app:tint="@color/colorPrimary" />
+
+    <!-- Bottom card with location info and send button -->
+    <com.google.android.material.card.MaterialCardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_margin="16dp"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="8dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- Location Type Selection -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Loại vị trí"
+                android:textSize="12sp"
+                android:textColor="#999999"
+                android:paddingBottom="8dp" />
+
+            <RadioGroup
+                android:id="@+id/locationTypeGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <RadioButton
+                    android:id="@+id/radioStaticLocation"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="📍 Gửi vị trí hiện tại"
+                    android:textSize="14sp"
+                    android:checked="true" />
+
+                <RadioButton
+                    android:id="@+id/radioLiveLocation"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🔴 Chia sẻ vị trí trực tiếp"
+                    android:textSize="14sp" />
+
+            </RadioGroup>
+
+            <!-- Duration Picker (only visible for live location) -->
+            <LinearLayout
+                android:id="@+id/durationPickerLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:paddingTop="12dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Thời gian chia sẻ"
+                    android:textSize="12sp"
+                    android:textColor="#999999"
+                    android:paddingBottom="8dp" />
+
+                <Spinner
+                    android:id="@+id/durationSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:background="@android:drawable/btn_dropdown"
+                    android:spinnerMode="dropdown" />
+
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#EEEEEE"
+                android:layout_marginVertical="12dp" />
+
+            <!-- Location info -->
+            <TextView
+                android:id="@+id/locationInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Chọn vị trí trên bản đồ"
+                android:textSize="14sp"
+                android:textColor="#666666"
+                android:paddingBottom="12dp" />
+
+            <!-- Send button -->
+            <Button
+                android:id="@+id/btnSendLocation"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="Gửi vị trí"
+                android:textColor="@android:color/white"
+                android:backgroundTint="@color/colorPrimary"
+                android:enabled="false" />
+
+        </LinearLayout>
+
+    </com.google.android.material.card.MaterialCardView>
+
+    </FrameLayout>
+
+</LinearLayout>

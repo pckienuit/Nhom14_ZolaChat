@@ -1,0 +1,535 @@
+================================================================================
+TÍNH NĂNG BIỂU CẢM TIN NHẮN (Message Reactions Feature)
+================================================================================
+
+NGÀY TẠO: 21/12/2025
+LOẠI: Feature
+TÍNH NĂNG: Reaction/emoji cho tin nhắn trong cuộc trò chuyện
+KIẾN TRÚC: MVVM (Repository → ViewModel → View)
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Tính năng cho phép người dùng thể hiện cảm xúc (react) với tin nhắn bằng cách 
+thêm emoji reactions. Người dùng có thể xem thống kê reactions và xóa tất cả 
+reactions của một tin nhắn.
+
+TÍNH NĂNG CHÍNH:
+- 6 loại reactions: ❤️ Heart, 😂 Haha, 😢 Sad, 😠 Angry, 😮 Wow, 👍 Like
+- Long-press tin nhắn để mở reaction picker
+- Click vào reaction hiện có để thay đổi reaction của mình
+- Hiển thị tổng số reactions và biểu tượng phổ biến nhất
+- Nút X để xóa TẤT CẢ reactions của tin nhắn (reset về 0)
+- Smooth UI updates không gây nhấp nháy hoặc auto-scroll không mong muốn
+
+================================================================================
+2. DATA MODEL CHANGES
+================================================================================
+
+2.1. MESSAGE MODEL (models/Message.java)
+
+Thêm các fields mới để lưu trữ reactions:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Field               │ Type                  │ Mô tả                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ reactions           │ Map<String, String>   │ userId → reactionType         │
+│ reactionCounts      │ Map<String, Integer>  │ reactionType → count          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Thêm methods:
+- hasReactions(): boolean - Kiểm tra tin nhắn có reactions hay không
+- getUserReaction(userId): String - Lấy reaction type của user cụ thể
+- getTotalReactionCount(): int - Tổng số reactions
+- Getters/Setters cho Firestore serialization
+
+2.2. MESSAGE REACTION CONSTANTS (models/MessageReaction.java)
+
+Các constants định nghĩa reaction types:
+- REACTION_HEART = "heart"
+- REACTION_HAHA = "haha" 
+- REACTION_SAD = "sad"
+- REACTION_ANGRY = "angry"
+- REACTION_WOW = "wow"
+- REACTION_LIKE = "like"
+
+Helper methods:
+- isValidReactionType(String): boolean - Validate reaction type
+- getReactionTypeCounts(Map, Map): Map - Tính toán counts từ reactions map
+- getMostCommonReaction(Map): String - Lấy reaction type phổ biến nhất
+
+2.3. FIRESTORE STRUCTURE
+
+conversations/{conversationId}/messages/{messageId}
+  - (các fields hiện tại)
+  - reactions: map
+      - {userId1}: "heart"
+      - {userId2}: "haha"
+      - ...
+  - reactionCounts: map
+      - "heart": 5
+      - "haha": 3
+      - "sad": 1
+      - ...
+
+================================================================================
+3. UI COMPONENTS
+================================================================================
+
+3.1. LAYOUTS MỚI
+
+layout_reaction_picker.xml
+- Popup picker hiển thị 6 loại reactions + nút X (xóa)
+- LinearLayout horizontal với 7 FrameLayouts
+- Mỗi reaction: 44dp x 44dp container, icon 32dp
+- Nút X: 44dp x 44dp container, icon 24dp màu xám (#757575)
+- Padding 4dp, không có background (vì PopupWindow đã có)
+
+3.2. LAYOUTS SỬA ĐỔI
+
+item_message_sent.xml & item_message_received.xml:
+- Thêm `reactionsContainer` (LinearLayout horizontal) bên dưới message bubble
+- Container bao gồm:
+  + reactionIcon: ImageView hiển thị reaction phổ biến nhất (16dp)
+  + reactionCount: TextView hiển thị tổng số reactions
+  + addReactionButton: ImageView (+) để thêm reaction
+- Visibility: GONE (mặc định), VISIBLE khi message.hasReactions()
+- Background: rounded rectangle (#F0F0F0 cho received, #30FFFFFF cho sent)
+
+3.3. DRAWABLES MỚI
+
+Reaction icons (32dp, drawable-nodpi):
+- ic_reaction_heart.xml (❤️)
+- ic_reaction_haha.xml (😂)
+- ic_reaction_sad.xml (😢)
+- ic_reaction_angry.xml (😠)
+- ic_reaction_wow.xml (😮)
+- ic_reaction_like.xml (👍)
+
+bg_reaction_picker.xml:
+- Rounded rectangle background cho reaction picker popup
+- Corner radius: 8dp
+- Color: #FFFFFF
+- Shadow/elevation được set trong PopupWindow
+
+================================================================================
+4. REACTION PICKER POPUP
+================================================================================
+
+4.1. IMPLEMENTATION (ui/room/ReactionPickerPopup.java)
+
+Class kế thừa PopupWindow:
+- Layout: layout_reaction_picker.xml
+- Hiển thị trên tin nhắn (showAboveAnchor)
+- Tự động dismiss sau khi chọn reaction
+- Scale-in animation khi xuất hiện (0.8 → 1.0 trong 150ms)
+
+4.2. POSITIONING
+
+- Hiển thị phía TRÊN tin nhắn (16dp margin)
+- Center horizontally theo message bubble
+- Auto-adjust để không tràn ra ngoài màn hình (16dp margin từ edges)
+- Pivot point: bottom-center (animation mọc lên từ tin nhắn)
+
+4.3. INTERACTION
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Action                    │ Behavior                                       │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Click reaction icon       │ Thêm/cập nhật reaction → dismiss popup        │
+│ Click nút X              │ Xóa TẤT CẢ reactions → dismiss popup          │
+│ Click outside            │ Dismiss popup                                  │
+│ Back button              │ Dismiss popup                                  │
+└────────────────────────────────────────────────────────────────────────────┘
+
+Callback interface:
+```java
+public interface OnReactionSelectedListener {
+    void onReactionSelected(String reactionType); // null = remove all
+}
+```
+
+================================================================================
+5. REPOSITORY LAYER
+================================================================================
+
+5.1. CHAT REPOSITORY (repository/ChatRepository.java)
+
+addReaction(conversationId, messageId, userId, reactionType)
+- Validate reaction type
+- Sử dụng Firestore FieldValue.increment(1) để tăng count atomically
+- Update map reactions với userId → reactionType
+- Return LiveData<Resource<Boolean>>
+
+removeReaction(conversationId, messageId, userId)
+- XÓA TẤT CẢ reactions và counts (không chỉ của user hiện tại)
+- Set reactions = {} (empty map)
+- Set reactionCounts = {} (empty map)
+- Mục đích: Nút X reset toàn bộ reactions về 0
+- Return LiveData<Resource<Boolean>>
+
+toggleReaction(conversationId, messageId, userId, reactionType)
+- Fetch message hiện tại
+- Luôn luôn add/update reaction (Zalo-style, không toggle off)
+- Gọi addReaction() nội bộ
+- Return LiveData<Resource<Boolean>>
+
+5.2. LOGIC QUAN TRỌNG
+
+Khi user thay đổi reaction (từ ❤️ sang 😂):
+1. addReaction() được gọi với reactionType mới
+2. Firestore update: reactions.{userId} = "haha"
+3. Increment reactionCounts.haha += 1
+4. Lưu ý: Count của reaction cũ (heart) KHÔNG tự động giảm
+5. Đây là intentional behavior - giữ nguyên logic hiện tại
+
+Khi user nhấn nút X:
+1. removeReaction() được gọi
+2. Clear toàn bộ reactions map
+3. Clear toàn bộ reactionCounts map
+4. Tất cả users mất reaction → Reset về 0
+
+Count management:
+- Khi count giảm về 0 (nếu có logic decrement), key bị remove khỏi map
+- Tránh hiển thị "❤️ 0" trên UI (key không tồn tại = không hiển thị)
+
+================================================================================
+6. VIEWMODEL LAYER
+================================================================================
+
+6.1. ROOM VIEWMODEL (viewmodel/RoomViewModel.java)
+
+Methods:
+- toggleReaction(conversationId, messageId, userId, reactionType)
+  → Call chatRepository.toggleReaction()
+- removeReaction(conversationId, messageId, userId)
+  → Call chatRepository.removeReaction()
+
+LiveData observers:
+- Observe result và update UI state
+- Handle loading, success, error states
+
+================================================================================
+7. ADAPTER LAYER
+================================================================================
+
+7.1. MESSAGE ADAPTER (ui/room/MessageAdapter.java)
+
+Interface definitions:
+```java
+public interface OnMessageReactionListener {
+    void onReactionClick(Message message, String reactionType);
+    void onReactionLongPress(Message message, View anchorView);
+    void onReactionStatsClick(Message message);
+}
+```
+
+Binding reactions:
+- Check message.hasReactions()
+- Hiển thị reactionsContainer nếu có
+- Bind icon của reaction phổ biến nhất
+- Bind tổng số reactions
+- Set click listeners
+
+DiffUtil callback:
+- areContentsTheSame() so sánh cả reactions và reactionCounts maps
+- Đảm bảo chỉ update item thay đổi, không refresh toàn bộ list
+
+================================================================================
+8. ACTIVITY LAYER
+================================================================================
+
+8.1. ROOM ACTIVITY (ui/room/RoomActivity.java)
+
+Setup reaction listener:
+```java
+messageAdapter.setOnMessageReactionListener(new OnMessageReactionListener() {
+    @Override
+    public void onReactionClick(Message message, String reactionType) {
+        handleReactionClick(message, reactionType);
+    }
+    
+    @Override
+    public void onReactionLongPress(Message message, View anchorView) {
+        showReactionPicker(message, anchorView);
+    }
+    
+    @Override
+    public void onReactionStatsClick(Message message) {
+        showReactionStatsDialog(message);
+    }
+});
+```
+
+handleReactionClick(Message, String):
+- Lấy currentUserId
+- Call roomViewModel.toggleReaction()
+- ViewModel tự động update UI qua LiveData
+
+showReactionPicker(Message, View):
+- Tạo ReactionPickerPopup instance
+- Pass callback: reactionType → toggleReaction (null → removeReaction)
+- Show popup phía trên message bubble
+
+showReactionStatsDialog(Message):
+- Build dialog hiển thị thống kê reactions
+- Format: "❤️ Thích: 5\n😂 Haha: 3\n...\nTổng số lượt: 8"
+
+================================================================================
+9. UI OPTIMIZATION
+================================================================================
+
+9.1. NGĂN NHẤP NHÁY (Prevent Flicker)
+
+Vấn đề:
+- Khi reaction update, DiffUtil trigger change animation
+- RecyclerView mặc định có fade animation → nhấp nháy
+
+Giải pháp:
+```java
+RecyclerView.ItemAnimator animator = messagesRecyclerView.getItemAnimator();
+if (animator instanceof SimpleItemAnimator) {
+    ((SimpleItemAnimator) animator).setSupportsChangeAnimations(false);
+}
+```
+
+Kết quả:
+- Tắt change animation (item thay đổi content)
+- Giữ nguyên add/remove animation (item mới/xóa)
+- Reaction update mượt mà, không nhấp nháy
+
+9.2. NGĂN AUTO-SCROLL KHÔNG MONG MUỐN
+
+Vấn đề:
+- Mỗi khi messages LiveData emit, code tự động scroll xuống cuối
+- User đang đọc tin cũ → reaction update → bị cuộn xuống tin mới
+
+Giải pháp:
+```java
+// Chỉ scroll khi có tin nhắn MỚI (size tăng)
+int oldSize = messages != null ? messages.size() : 0;
+int newSize = newMessages.size();
+boolean isNewMessage = newSize > oldSize;
+
+if (isNewMessage && messageAdapter.getItemCount() > 0) {
+    messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
+}
+```
+
+Kết quả:
+- Chỉ scroll khi tin nhắn MỚI được thêm vào
+- Reaction updates KHÔNG gây scroll
+- User có thể đọc tin cũ và reaction thoải mái
+
+================================================================================
+10. FLOW CHI TIẾT
+================================================================================
+
+10.1. THÊM REACTION
+
+1. User long-press tin nhắn
+2. ReactionPickerPopup hiển thị phía trên
+3. User click icon ❤️
+4. Popup dismiss
+5. RoomActivity.handleReactionClick() được gọi với "heart"
+6. RoomViewModel.toggleReaction() → ChatRepository.addReaction()
+7. Firestore update:
+   - reactions.{userId} = "heart"
+   - reactionCounts.heart += 1 (atomic increment)
+8. Firestore snapshot trigger
+9. RoomViewModel emit messages LiveData
+10. MessageAdapter.updateMessages() với DiffUtil
+11. Chỉ item có reaction thay đổi được re-bind (không nhấp nháy)
+12. UI hiển thị "❤️ 1" hoặc "❤️ 5" (nếu có nhiều người)
+
+10.2. XÓA TẤT CẢ REACTIONS (NÚT X)
+
+1. User long-press tin nhắn
+2. ReactionPickerPopup hiển thị
+3. User click nút X
+4. Popup dismiss
+5. RoomActivity callback với reactionType = null
+6. RoomViewModel.removeReaction() → ChatRepository.removeReaction()
+7. Firestore update:
+   - reactions = {} (empty map)
+   - reactionCounts = {} (empty map)
+8. Firestore snapshot trigger
+9. UI update: reactionsContainer visibility = GONE
+10. Tất cả reactions của tin nhắn bị xóa (từ tất cả users)
+
+10.3. XEM THỐNG KÊ REACTIONS
+
+1. User click vào reaction count/icon (onReactionStatsClick)
+2. RoomActivity.showReactionStatsDialog() được gọi
+3. Parse message.getReactionCounts() map
+4. Build text:
+   ```
+   Thống kê cảm xúc:
+   
+   ❤️ Thích: 5
+   😂 Haha: 3
+   😮 Wow: 1
+   
+   Tổng số lượt: 9
+   ```
+5. Hiển thị AlertDialog với nội dung trên
+
+================================================================================
+11. CÁC VẤN ĐỀ ĐÃ XỬ LÝ
+================================================================================
+
+11.1. DOUBLE BACKGROUND
+
+Vấn đề:
+- layout_reaction_picker.xml có background + elevation
+- ReactionPickerPopup.java cũng set background
+- Kết quả: 2 backgrounds chồng lên nhau
+
+Khắc phục:
+- Xóa android:background và android:elevation khỏi XML
+- Chỉ giữ background trong PopupWindow (Java code)
+- Popup hiển thị đúng 1 background, đẹp hơn
+
+11.2. REACTION COUNT KHÔNG RESET VỀ 0
+
+Vấn đề:
+- Nút X chỉ xóa reaction của user hiện tại
+- Count giảm đi 1 nhưng không về 0
+- Các user khác vẫn có reaction
+
+Khắc phục:
+- Thay đổi logic removeReaction()
+- Thay vì xóa reaction của 1 user → xóa TẤT CẢ
+- Set reactions = {}, reactionCounts = {}
+- Count reset về 0 hoàn toàn
+
+11.3. MESSAGE FLICKER KHI REACTION
+
+Vấn đề:
+- Item nhấp nháy khi reaction update
+- RecyclerView change animation gây fade in/out
+
+Khắc phục:
+- setSupportsChangeAnimations(false)
+- Tắt change animation, giữ add/remove animation
+- UI mượt mà hơn
+
+11.4. AUTO-SCROLL KHI REACTION TIN NHẮN CŨ
+
+Vấn đề:
+- User đang đọc tin cũ
+- Reaction vào tin nhắn cũ
+- Bị auto-scroll xuống tin mới nhất
+
+Khắc phục:
+- Kiểm tra size change trước khi scroll
+- Chỉ scroll nếu có tin nhắn MỚI (size tăng)
+- Reaction update không scroll
+
+================================================================================
+12. FILES ẢNH HƯỞNG
+================================================================================
+
+12.1. JAVA FILES
+
+models/Message.java:
+- Thêm Map<String, String> reactions
+- Thêm Map<String, Integer> reactionCounts
+- Thêm hasReactions(), getUserReaction(), getTotalReactionCount()
+
+models/MessageReaction.java [NEW]:
+- Constants cho 6 loại reactions
+- Helper methods: isValidReactionType(), getReactionTypeCounts(), getMostCommonReaction()
+
+repository/ChatRepository.java:
+- addReaction(): Thêm reaction với FieldValue.increment
+- removeReaction(): Clear toàn bộ reactions
+- toggleReaction(): Always add (không toggle off)
+
+viewmodel/RoomViewModel.java:
+- toggleReaction(): Bridge đến repository
+- removeReaction(): Bridge đến repository
+
+ui/room/ReactionPickerPopup.java [NEW]:
+- PopupWindow custom cho reaction picker
+- Positioning logic
+- Animation và callbacks
+
+ui/room/MessageAdapter.java:
+- Thêm OnMessageReactionListener interface
+- Bind reaction UI trong all ViewHolders
+- Update DiffUtil callback để so sánh reactions
+
+ui/room/RoomActivity.java:
+- handleReactionClick(): Xử lý reaction click
+- showReactionPicker(): Hiển thị popup
+- showReactionStatsDialog(): Hiển thị thống kê
+- Optimize scroll logic
+- Disable change animations
+
+12.2. XML FILES
+
+res/layout/layout_reaction_picker.xml [NEW]
+res/layout/item_message_sent.xml [MODIFIED]
+res/layout/item_message_received.xml [MODIFIED]
+res/drawable/ic_reaction_heart.png [NEW]
+res/drawable/ic_reaction_haha.png [NEW]
+res/drawable/ic_reaction_sad.png [NEW]
+res/drawable/ic_reaction_angry.png [NEW]
+res/drawable/ic_reaction_wow.png [NEW]
+res/drawable/ic_reaction_like.png [NEW]
+res/drawable/bg_reaction_picker.xml [NEW]
+
+================================================================================
+13. TESTING CHECKLIST
+================================================================================
+
+□ Long-press tin nhắn → Reaction picker xuất hiện
+□ Click reaction icon → Reaction được thêm vào tin nhắn
+□ Click reaction icon khác → Reaction thay đổi
+□ Click nút X → TẤT CẢ reactions bị xóa (về 0)
+□ Reaction count hiển thị đúng số lượng
+□ Icon hiển thị reaction phổ biến nhất
+□ Click vào reactions → Dialog thống kê hiển thị đúng
+□ Reaction update không gây nhấp nháy item
+□ Reaction tin nhắn cũ không gây auto-scroll
+□ Popup hiển thị đúng vị trí (phía trên tin nhắn)
+□ Popup không tràn ra ngoài màn hình
+□ Animation mượt mà khi popup xuất hiện
+□ Popup dismiss sau khi chọn reaction
+□ Multiple users có thể reaction cùng 1 tin nhắn
+□ Reaction persist sau khi thoát và vào lại app
+□ Reaction hiển thị đúng cho cả tin gửi và nhận
+
+================================================================================
+14. KNOWN LIMITATIONS
+================================================================================
+
+- Không hiển thị danh sách users đã react (chỉ có tổng count)
+- Không thể xem ai react gì (chỉ có thống kê tổng quát)
+- Nút X xóa toàn bộ reactions (không phân biệt user)
+- Không có animation cho reaction icon khi thay đổi
+- Không hỗ trợ custom reactions/stickers
+- Reaction picker cố định 6 icons (không scroll)
+
+================================================================================
+15. FUTURE IMPROVEMENTS
+================================================================================
+
+- Hiển thị avatar của users đã react
+- Detail dialog: Ai react gì (grouped by reaction type)
+- Haptic feedback khi react
+- Bounce animation cho reaction icon
+- Support thêm reactions (mở rộng picker)
+- Reaction từ notification
+- Analytics: Track popular reactions
+- Keyboard shortcut cho reactions (desktop web)
+
+================================================================================
+PHIÊN BẢN
+================================================================================
+
+Tạo ngày: 21/12/2025
+Cập nhật lần cuối: 21/12/2025
+Phiên bản: 1.0
+Trạng thái: Hoàn thành
