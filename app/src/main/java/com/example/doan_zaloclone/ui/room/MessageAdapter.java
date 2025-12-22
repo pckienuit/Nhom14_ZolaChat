@@ -1,6 +1,7 @@
 package com.example.doan_zaloclone.ui.room;
 
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -24,6 +25,9 @@ import android.content.Intent;
 import android.os.CountDownTimer;
 import com.example.doan_zaloclone.models.LiveLocation;
 import com.example.doan_zaloclone.repository.ChatRepository;
+import com.example.doan_zaloclone.services.LocationSharingService;
+import com.example.doan_zaloclone.ui.location.LiveLocationViewActivity;
+import com.example.doan_zaloclone.ui.room.RoomActivity; // If needed, or check usages
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
@@ -2290,6 +2294,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private TextView timestampTextView;
         private TextView btnStopSharing;
         private View messageCard;
+        private View mapOverlay;
         private ListenerRegistration liveLocationListener;
         private CountDownTimer countDownTimer;
         private Marker userMarker;
@@ -2303,6 +2308,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
             btnStopSharing = itemView.findViewById(R.id.btnStopSharing); // Only present in sent layout
             messageCard = itemView.findViewById(R.id.messageCard);
+            mapOverlay = itemView.findViewById(R.id.mapOverlay);
+            
+            // Ensure overlay is visible to block map touch and capture click
+            if (mapOverlay != null) {
+                mapOverlay.setVisibility(View.VISIBLE);
+            }
             
             // Basic Map Setup
             setupMap();
@@ -2311,8 +2322,13 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private void setupMap() {
             Configuration.getInstance().setUserAgentValue(itemView.getContext().getPackageName());
             mapView.setTileSource(TileSourceFactory.MAPNIK);
-            mapView.setMultiTouchControls(false); // Disable interaction for preview
+            
+            // Disable interaction for preview (User wanted separate full screen view)
+            mapView.setMultiTouchControls(false); 
+            mapView.setClickable(false); 
+            
             mapView.getController().setZoom(15.0);
+            mapView.setOnTouchListener(null);
             
             // Performance settings
             mapView.setUseDataConnection(true);
@@ -2345,7 +2361,13 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             // Handle Stop Sharing button
             if (btnStopSharing != null && isSender) {
                 btnStopSharing.setOnClickListener(v -> {
+                    // Update Firestore
                     new ChatRepository().stopLiveLocation(sessionId);
+                    
+                    // Stop Background Service
+                    Intent intent = new Intent(itemView.getContext(), LocationSharingService.class);
+                    intent.setAction(LocationSharingService.ACTION_STOP_SHARING);
+                    itemView.getContext().startService(intent);
                 });
             }
              
@@ -2377,24 +2399,16 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             mapView.getController().setCenter(point);
             mapView.invalidate();
             
-            // Define click action for Map/View Button
+            // Define click action for Map/View Button -> Open Activity
             View.OnClickListener openMapAction = v -> {
-                 android.net.Uri gmmIntentUri = android.net.Uri.parse(
-                        "geo:" + liveLocation.getLatitude() + "," + liveLocation.getLongitude() + "?q=" + liveLocation.getLatitude() + "," + liveLocation.getLongitude());
-                 Intent mapIntent = new Intent(Intent.ACTION_VIEW, gmmIntentUri);
-                 mapIntent.setPackage("com.google.android.apps.maps");
-                 if (mapIntent.resolveActivity(itemView.getContext().getPackageManager()) != null) {
-                     itemView.getContext().startActivity(mapIntent);
-                 } else {
-                     // Fallback to browser
-                     android.net.Uri browserAndriod = android.net.Uri.parse(
-                            "https://www.google.com/maps/search/?api=1&query=" + liveLocation.getLatitude() + "," + liveLocation.getLongitude());
-                     Intent browserIntent = new Intent(Intent.ACTION_VIEW, browserAndriod);
-                     itemView.getContext().startActivity(browserIntent);
-                 }
+                 Intent intent = new Intent(itemView.getContext(), LiveLocationViewActivity.class);
+                 intent.putExtra(LiveLocationViewActivity.EXTRA_SESSION_ID, liveLocation.getSessionId());
+                 intent.putExtra(LiveLocationViewActivity.EXTRA_IS_SENDER, isSender);
+                 itemView.getContext().startActivity(intent);
             };
             
             messageCard.setOnClickListener(openMapAction);
+            if (mapOverlay != null) mapOverlay.setOnClickListener(openMapAction);
             
             // Check active status
             boolean isActive = liveLocation.isActive();
