@@ -86,6 +86,9 @@ public class RoomActivity extends AppCompatActivity {
     private List<Uri> selectedPhotos = new ArrayList<>();
     private ActivityResultLauncher<String> permissionLauncher;
     
+    // Sticker button
+    private ImageButton stickerButton;
+    
     // Action menu UI
     private ImageButton moreActionsButton;
     private FrameLayout actionMenuContainer;
@@ -291,6 +294,7 @@ public class RoomActivity extends AppCompatActivity {
         messageEditText = findViewById(R.id.messageEditText);
         sendButton = findViewById(R.id.sendButton);
         attachImageButton = findViewById(R.id.attachImageButton);
+        stickerButton = findViewById(R.id.stickerButton);
         
         // Image picker views
         imagePickerContainer = findViewById(R.id.imagePickerContainer);
@@ -898,6 +902,9 @@ public class RoomActivity extends AppCompatActivity {
         moreActionsButton.setOnClickListener(v -> showActionMenu());
         backButton.setOnClickListener(v -> hideImagePicker());
         sendImagesButton.setOnClickListener(v -> handleSendImages());
+        
+        // Sticker button
+        stickerButton.setOnClickListener(v -> showStickerPicker());
     }
     
     private void requestPermissionAndShowPicker() {
@@ -2261,6 +2268,51 @@ public class RoomActivity extends AppCompatActivity {
                         });
                     }
                 });
+    }
+    
+    // ========== Sticker Methods ==========
+    
+    /**
+     * Show sticker picker bottom sheet
+     */
+    private void showStickerPicker() {
+        StickerPickerFragment stickerPicker = new StickerPickerFragment();
+        stickerPicker.setOnStickerSelectedListener(sticker -> {
+            sendStickerMessage(sticker);
+        });
+        stickerPicker.show(getSupportFragmentManager(), "StickerPicker");
+    }
+    
+    /**
+     * Send a sticker message
+     */
+    private void sendStickerMessage(com.example.doan_zaloclone.models.Sticker sticker) {
+        if (firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Bạn cần đăng nhập để gửi sticker", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String senderId = firebaseAuth.getCurrentUser().getUid();
+        
+        // Create sticker message
+        Message stickerMessage = new Message();
+        stickerMessage.setId(java.util.UUID.randomUUID().toString());
+        stickerMessage.setSenderId(senderId);
+        stickerMessage.setType(Message.TYPE_STICKER);
+        stickerMessage.setTimestamp(System.currentTimeMillis());
+        stickerMessage.setStickerId(sticker.getId());
+        stickerMessage.setStickerPackId(sticker.getPackId());
+        stickerMessage.setStickerUrl(sticker.getImageUrl());
+        stickerMessage.setStickerAnimated(sticker.isAnimated());
+        
+        // Set sender name
+        String displayName = firebaseAuth.getCurrentUser().getDisplayName();
+        if (displayName != null && !displayName.isEmpty()) {
+            stickerMessage.setSenderName(displayName);
+        }
+        
+        // Send via ViewModel
+        roomViewModel.sendMessage(conversationId, stickerMessage);
     }
     
     @Override
