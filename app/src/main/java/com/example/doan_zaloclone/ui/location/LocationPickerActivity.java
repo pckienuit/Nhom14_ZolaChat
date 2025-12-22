@@ -63,6 +63,17 @@ public class LocationPickerActivity extends AppCompatActivity {
         
         setContentView(R.layout.activity_location_picker);
         
+        // Setup toolbar
+        androidx.appcompat.widget.Toolbar toolbar = findViewById(R.id.toolbar);
+        if (toolbar != null) {
+            setSupportActionBar(toolbar);
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+                getSupportActionBar().setDisplayShowHomeEnabled(true);
+                getSupportActionBar().setTitle("Chọn vị trí");
+            }
+        }
+        
         // Initialize views
         mapView = findViewById(R.id.mapView);
         locationInfo = findViewById(R.id.locationInfo);
@@ -83,6 +94,12 @@ public class LocationPickerActivity extends AppCompatActivity {
         checkLocationPermission();
     }
     
+    @Override
+    public boolean onSupportNavigateUp() {
+        onBackPressed();
+        return true;
+    }
+    
     private void setupMap() {
         mapView.setTileSource(TileSourceFactory.MAPNIK);
         mapView.setMultiTouchControls(true);
@@ -94,6 +111,9 @@ public class LocationPickerActivity extends AppCompatActivity {
         // Default location (Hanoi, Vietnam)
         GeoPoint defaultPoint = new GeoPoint(21.0285, 105.8542);
         mapController.setCenter(defaultPoint);
+        
+        // Place default marker at Hanoi
+        placeMarker(21.0285, 105.8542);
         
         // Add map click listener
         MapEventsReceiver mapEventsReceiver = new MapEventsReceiver() {

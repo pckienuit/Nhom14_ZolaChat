@@ -2229,6 +2229,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             // Set click listener to open Google Maps
             messageCard.setOnClickListener(v -> {
                 android.content.Context context = v.getContext();
+                
+                // Debug log
+                android.util.Log.d("LocationMessage", "Opening maps with: lat=" + lat + ", lng=" + lng);
+                android.util.Log.d("LocationMessage", "Message latitude: " + message.getLatitude());
+                android.util.Log.d("LocationMessage", "Message longitude: " + message.getLongitude());
+                
                 android.net.Uri gmmIntentUri = android.net.Uri.parse(
                         "geo:" + lat + "," + lng + "?q=" + lat + "," + lng);
                 android.content.Intent mapIntent = new android.content.Intent(

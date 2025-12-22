@@ -116,8 +116,7 @@
         <activity
             android:name=".ui.location.LocationPickerActivity"
             android:exported="false"
-            android:parentActivityName=".ui.room.RoomActivity"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+            android:parentActivityName=".ui.room.RoomActivity" />
             
         <!-- Call Activity -->
         <activity

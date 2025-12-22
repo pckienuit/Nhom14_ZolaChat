@@ -2118,6 +2118,13 @@ public class RoomActivity extends AppCompatActivity {
             return;
         }
         
+        // Debug log
+        android.util.Log.d("RoomActivity", "sendLocationMessage called with:");
+        android.util.Log.d("RoomActivity", "  Latitude: " + latitude);
+        android.util.Log.d("RoomActivity", "  Longitude: " + longitude);
+        android.util.Log.d("RoomActivity", "  LocationName: " + locationName);
+        android.util.Log.d("RoomActivity", "  LocationAddress: " + locationAddress);
+        
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
         
         // Create location message
@@ -2135,6 +2142,11 @@ public class RoomActivity extends AppCompatActivity {
         if (displayName != null && !displayName.isEmpty()) {
             locationMessage.setSenderName(displayName);
         }
+        
+        // Debug log after setting
+        android.util.Log.d("RoomActivity", "Created message with:");
+        android.util.Log.d("RoomActivity", "  Message.getLatitude(): " + locationMessage.getLatitude());
+        android.util.Log.d("RoomActivity", "  Message.getLongitude(): " + locationMessage.getLongitude());
         
         // Send via ViewModel
         roomViewModel.sendMessage(conversationId, locationMessage);

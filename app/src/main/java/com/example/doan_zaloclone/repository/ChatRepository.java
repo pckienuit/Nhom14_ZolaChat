@@ -138,6 +138,18 @@ public class ChatRepository {
         if (Message.TYPE_CONTACT.equals(message.getType()) && message.getContactUserId() != null) {
             messageData.put("contactUserId", message.getContactUserId());
         }
+        
+        // Add location data if this is a location message
+        if (Message.TYPE_LOCATION.equals(message.getType())) {
+            messageData.put("latitude", message.getLatitude());
+            messageData.put("longitude", message.getLongitude());
+            if (message.getLocationName() != null) {
+                messageData.put("locationName", message.getLocationName());
+            }
+            if (message.getLocationAddress() != null) {
+                messageData.put("locationAddress", message.getLocationAddress());
+            }
+        }
 
         // Save message to Firestore
         messageRef.set(messageData)
