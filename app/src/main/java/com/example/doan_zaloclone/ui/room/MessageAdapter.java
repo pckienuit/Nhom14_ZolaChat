@@ -33,6 +33,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public static final int VIEW_TYPE_RECALLED_RECEIVED = 9;
     public static final int VIEW_TYPE_POLL_SENT = 10;
     public static final int VIEW_TYPE_POLL_RECEIVED = 11;
+    public static final int VIEW_TYPE_CONTACT_SENT = 12;
+    public static final int VIEW_TYPE_CONTACT_RECEIVED = 13;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -175,6 +177,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         boolean isFile = Message.TYPE_FILE.equals(message.getType());
         boolean isCall = Message.TYPE_CALL.equals(message.getType());
         boolean isPoll = Message.TYPE_POLL.equals(message.getType());
+        boolean isContact = Message.TYPE_CONTACT.equals(message.getType());
         
         // Call history messages are always centered
         if (isCall) {
@@ -184,6 +187,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         // Poll messages
         if (isPoll) {
             return isSent ? VIEW_TYPE_POLL_SENT : VIEW_TYPE_POLL_RECEIVED;
+        }
+        
+        // Contact messages (business cards)
+        if (isContact) {
+            return isSent ? VIEW_TYPE_CONTACT_SENT : VIEW_TYPE_CONTACT_RECEIVED;
         }
         
         if (isSent) {

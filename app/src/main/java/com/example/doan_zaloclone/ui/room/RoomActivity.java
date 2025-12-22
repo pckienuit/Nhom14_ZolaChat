@@ -1222,7 +1222,10 @@ public class RoomActivity extends AppCompatActivity {
             @Override
             public void onShowUI() {
                 // Check which action triggered this
-                if (action instanceof com.example.doan_zaloclone.ui.room.actions.SendPollAction) {
+                if (action instanceof com.example.doan_zaloclone.ui.room.actions.SendContactAction) {
+                    // Show friend selection dialog for business card
+                    showSendContactDialog();
+                } else if (action instanceof com.example.doan_zaloclone.ui.room.actions.SendPollAction) {
                     // Launch poll creation activity
                     showCreatePollActivity();
                 } else {
@@ -1808,6 +1811,69 @@ public class RoomActivity extends AppCompatActivity {
                 Toast.makeText(this, "Đã chuyển tiếp: " + successCount + ", Lỗi: " + errorCount, Toast.LENGTH_SHORT).show();
             }
         }
+    }
+    
+    // =============== BUSINESS CARD / CONTACT HANDLING ===============
+    
+    /**
+     * Show dialog to select a friend to send as business card
+     */
+    private void showSendContactDialog() {
+        if (firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Bạn cần đăng nhập để gửi danh thiếp", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        SendContactDialog dialog = new SendContactDialog(this, currentUserId, this);
+        
+        dialog.setOnContactSelectedListener(contactUserId -> {
+            sendContactMessage(contactUserId);
+        });
+        
+        dialog.show();
+    }
+    
+    /**
+     * Send a contact message (business card)
+     * @param contactUserId User ID of the contact to share
+     */
+    private void sendContactMessage(String contactUserId) {
+        if (firebaseAuth.getCurrentUser() == null || contactUserId == null) {
+            Toast.makeText(this, "Không thể gửi danh thiếp", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        // Create contact message
+        Message contactMessage = new Message();
+        contactMessage.setType(Message.TYPE_CONTACT);
+        contactMessage.setContactUserId(contactUserId);
+        contactMessage.setSenderId(currentUserId);
+        contactMessage.setTimestamp(System.currentTimeMillis());
+        
+        // Fetch sender name
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(currentUserId)
+            .get()
+            .addOnSuccessListener(doc -> {
+                if (doc.exists()) {
+                    String name = doc.getString("name");
+                    if (name != null && !name.isEmpty()) {
+                        contactMessage.setSenderName(name);
+                    }
+                }
+                // Send message via ViewModel
+                roomViewModel.sendMessage(conversationId, contactMessage);
+                Toast.makeText(this, "Đã gửi danh thiếp", Toast.LENGTH_SHORT).show();
+            })
+            .addOnFailureListener(e -> {
+                // Send without senderName
+                roomViewModel.sendMessage(conversationId, contactMessage);
+                Toast.makeText(this, "Đã gửi danh thiếp", Toast.LENGTH_SHORT).show();
+            });
     }
     
     // =============== REACTION HANDLING ===============
