@@ -9,6 +9,7 @@ public class Message {
     public static final String TYPE_FILE = "FILE";
     public static final String TYPE_CALL = "CALL";
     public static final String TYPE_POLL = "POLL";
+    public static final String TYPE_CONTACT = "CONTACT"; // Business card message
 
     private String id;
     private String senderId;
@@ -45,6 +46,9 @@ public class Message {
     
     // Poll data (only used for TYPE_POLL messages)
     private Poll pollData;
+    
+    // Contact data (only used for TYPE_CONTACT messages)
+    private String contactUserId; // User ID of the contact being shared
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Message() {
@@ -263,6 +267,14 @@ public class Message {
     public void setPollData(Poll pollData) {
         this.pollData = pollData;
     }
+    
+    public String getContactUserId() {
+        return contactUserId;
+    }
+    
+    public void setContactUserId(String contactUserId) {
+        this.contactUserId = contactUserId;
+    }
 
     // Helper methods
     public boolean isTextMessage() {
@@ -283,6 +295,10 @@ public class Message {
     
     public boolean isPollMessage() {
         return TYPE_POLL.equals(this.type);
+    }
+    
+    public boolean isContactMessage() {
+        return TYPE_CONTACT.equals(this.type);
     }
     
     /**

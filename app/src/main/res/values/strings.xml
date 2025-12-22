@@ -85,4 +85,16 @@
     <string name="tag_updated">Đã cập nhật thẻ</string>
     <string name="tag_update_failed">Không thể cập nhật thẻ</string>
     <string name="choose_display_tag">Chọn thẻ hiển thị</string>
+    
+    <!-- Friend Request Strings -->
+    <string name="button_add_friend">Kết bạn</string>
+    <string name="toast_friend_request_sent">Đã gửi lời mời kết bạn</string>
+    <string name="toast_already_friends">Các bạn đã là bạn bè</string>
+    
+    <!-- Business Card Strings -->
+    <string name="action_send_contact">Danh thiếp</string>
+    <string name="dialog_send_contact_title">Gửi danh thiếp</string>
+    <string name="dialog_send_contact_search_hint">Tìm kiếm bạn bè...</string>
+    <string name="button_call">Gọi điện</string>
+    <string name="error_load_contact">Không thể tải thông tin danh thiếp</string>
 </resources>
