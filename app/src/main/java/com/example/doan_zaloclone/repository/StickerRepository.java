@@ -1,0 +1,501 @@
+package com.example.doan_zaloclone.repository;
+
+import android.content.Context;
+import android.net.Uri;
+import android.util.Log;
+
+import androidx.annotation.NonNull;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.MutableLiveData;
+
+import com.example.doan_zaloclone.models.Sticker;
+import com.example.doan_zaloclone.models.StickerPack;
+import com.example.doan_zaloclone.utils.Resource;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QuerySnapshot;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+/**
+ * Repository for sticker operations
+ * Manages sticker packs, stickers, and user sticker data
+ */
+public class StickerRepository {
+    private static final String TAG = "StickerRepository";
+    
+    // VPS Configuration
+    private static final String VPS_BASE_URL = "http://163.61.182.20";
+    private static final String VPS_UPLOAD_URL = VPS_BASE_URL + "/api/stickers/upload";
+    private static final String VPS_CREATE_PACK_URL = VPS_BASE_URL + "/api/stickers/packs";
+    
+    // Firestore collections
+    private static final String COLLECTION_STICKER_PACKS = "stickerPacks";
+    private static final String COLLECTION_STICKERS = "stickers";
+    private static final String COLLECTION_SAVED_PACKS = "savedStickerPacks";
+    private static final String COLLECTION_RECENT_STICKERS = "recentStickers";
+    private static final String COLLECTION_USERS = "users";
+    
+    private final FirebaseFirestore db;
+    private final FirebaseAuth auth;
+    private final OkHttpClient httpClient;
+    
+    // Singleton instance
+    private static StickerRepository instance;
+    
+    private StickerRepository() {
+        this.db = FirebaseFirestore.getInstance();
+        this.auth = FirebaseAuth.getInstance();
+        this.httpClient = new OkHttpClient();
+    }
+    
+    public static synchronized StickerRepository getInstance() {
+        if (instance == null) {
+            instance = new StickerRepository();
+        }
+        return instance;
+    }
+    
+    // ========== Sticker Pack Operations ==========
+    
+    /**
+     * Get all official sticker packs
+     */
+    public LiveData<Resource<List<StickerPack>>> getOfficialPacks() {
+        MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        db.collection(COLLECTION_STICKER_PACKS)
+                .whereEqualTo("type", StickerPack.TYPE_OFFICIAL)
+                .whereEqualTo("isPublished", true)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    List<StickerPack> packs = querySnapshot.toObjects(StickerPack.class);
+                    result.setValue(Resource.success(packs));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error getting official packs", e);
+                    result.setValue(Resource.error("Không thể tải sticker packs: " + e.getMessage()));
+                });
+        
+        return result;
+    }
+    
+    /**
+     * Get user's saved sticker packs
+     */
+    public LiveData<Resource<List<StickerPack>>> getUserSavedPacks(@NonNull String userId) {
+        MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        db.collection(COLLECTION_USERS)
+                .document(userId)
+                .collection(COLLECTION_SAVED_PACKS)
+                .get()
+                .addOnSuccessListener(savedPacksSnapshot -> {
+                    List<String> packIds = new ArrayList<>();
+                    for (DocumentSnapshot doc : savedPacksSnapshot.getDocuments()) {
+                        packIds.add(doc.getId());
+                    }
+                    
+                    if (packIds.isEmpty()) {
+                        result.setValue(Resource.success(new ArrayList<>()));
+                        return;
+                    }
+                    
+                    // Fetch pack details
+                    db.collection(COLLECTION_STICKER_PACKS)
+                            .whereIn("id", packIds)
+                            .get()
+                            .addOnSuccessListener(packsSnapshot -> {
+                                List<StickerPack> packs = packsSnapshot.toObjects(StickerPack.class);
+                                result.setValue(Resource.success(packs));
+                            })
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG, "Error fetching pack details", e);
+                                result.setValue(Resource.error("Lỗi tải pack details: " + e.getMessage()));
+                            });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error getting user saved packs", e);
+                    result.setValue(Resource.error("Không thể tải saved packs: " + e.getMessage()));
+                });
+        
+        return result;
+    }
+    
+    /**
+     * Get stickers in a pack
+     */
+    public LiveData<Resource<List<Sticker>>> getStickersInPack(@NonNull String packId) {
+        MutableLiveData<Resource<List<Sticker>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        db.collection(COLLECTION_STICKER_PACKS)
+                .document(packId)
+                .collection(COLLECTION_STICKERS)
+                .orderBy("createdAt", Query.Direction.ASCENDING)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    List<Sticker> stickers = querySnapshot.toObjects(Sticker.class);
+                    result.setValue(Resource.success(stickers));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error getting stickers in pack", e);
+                    result.setValue(Resource.error("Không thể tải stickers: " + e.getMessage()));
+                });
+        
+        return result;
+    }
+    
+    /**
+     * Add pack to user's collection
+     */
+    public Task<Void> addPackToUser(@NonNull String userId, @NonNull String packId) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("addedAt", System.currentTimeMillis());
+        
+        return db.collection(COLLECTION_USERS)
+                .document(userId)
+                .collection(COLLECTION_SAVED_PACKS)
+                .document(packId)
+                .set(data)
+                .addOnSuccessListener(aVoid -> {
+                    // Increment download count
+                    db.collection(COLLECTION_STICKER_PACKS)
+                            .document(packId)
+                            .update("downloadCount", com.google.firebase.firestore.FieldValue.increment(1));
+                });
+    }
+    
+    /**
+     * Remove pack from user's collection
+     */
+    public Task<Void> removePackFromUser(@NonNull String userId, @NonNull String packId) {
+        return db.collection(COLLECTION_USERS)
+                .document(userId)
+                .collection(COLLECTION_SAVED_PACKS)
+                .document(packId)
+                .delete();
+    }
+    
+    /**
+     * Get recently used stickers
+     */
+    public LiveData<Resource<List<Sticker>>> getRecentStickers(@NonNull String userId) {
+        MutableLiveData<Resource<List<Sticker>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        db.collection(COLLECTION_USERS)
+                .document(userId)
+                .collection(COLLECTION_RECENT_STICKERS)
+                .orderBy("lastUsedAt", Query.Direction.DESCENDING)
+                .limit(20)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    List<Sticker> stickers = querySnapshot.toObjects(Sticker.class);
+                    result.setValue(Resource.success(stickers));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error getting recent stickers", e);
+                    result.setValue(Resource.error("Lỗi tải recent stickers: " + e.getMessage()));
+                });
+        
+        return result;
+    }
+    
+    /**
+     * Add sticker to recent stickers
+     */
+    public void addToRecentStickers(@NonNull String userId, @NonNull Sticker sticker) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("stickerId", sticker.getId());
+        data.put("packId", sticker.getPackId());
+        data.put("imageUrl", sticker.getImageUrl());
+        data.put("thumbnailUrl", sticker.getThumbnailUrl());
+        data.put("isAnimated", sticker.isAnimated());
+        data.put("format", sticker.getFormat());
+        data.put("lastUsedAt", System.currentTimeMillis());
+        
+        db.collection(COLLECTION_USERS)
+                .document(userId)
+                .collection(COLLECTION_RECENT_STICKERS)
+                .document(sticker.getId())
+                .set(data)
+                .addOnFailureListener(e -> Log.e(TAG, "Error adding to recent stickers", e));
+    }
+    
+    /**
+     * Search stickers by tag
+     */
+    public LiveData<Resource<List<Sticker>>> searchStickers(@NonNull String query) {
+        MutableLiveData<Resource<List<Sticker>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        // TODO: Implement search across all sticker packs
+        // For now, return empty list
+        result.setValue(Resource.success(new ArrayList<>()));
+        
+        return result;
+    }
+    
+    // ========== Custom Sticker Upload ==========
+    
+    /**
+     * Upload custom sticker to VPS
+     */
+    public LiveData<Resource<Sticker>> uploadCustomSticker(@NonNull Uri imageUri, 
+                                                            @NonNull String userId,
+                                                            @NonNull Context context) {
+        MutableLiveData<Resource<Sticker>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        try {
+            File imageFile = uriToFile(imageUri, context);
+            if (imageFile == null) {
+                result.setValue(Resource.error("Không thể đọc file ảnh"));
+                return result;
+            }
+            
+            RequestBody requestBody = new MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("sticker", imageFile.getName(),
+                            RequestBody.create(imageFile, MediaType.parse("image/*")))
+                    .addFormDataPart("userId", userId)
+                    .build();
+            
+            Request request = new Request.Builder()
+                    .url(VPS_UPLOAD_URL)
+                    .post(requestBody)
+                    .build();
+            
+            httpClient.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                    if (response.isSuccessful() && response.body() != null) {
+                        // Parse response and create Sticker object
+                        // TODO: Parse JSON response properly
+                        Sticker sticker = new Sticker();
+                        sticker.setId(generateStickerId());
+                        sticker.setCreatorId(userId);
+                        sticker.setCreatedAt(System.currentTimeMillis());
+                        
+                        result.postValue(Resource.success(sticker));
+                    } else {
+                        result.postValue(Resource.error("Upload failed: " + response.code()));
+                    }
+                    response.close();
+                }
+                
+                @Override
+                public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                    Log.e(TAG, "Upload failed", e);
+                    result.postValue(Resource.error("Không thể upload: " + e.getMessage()));
+                }
+            });
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error preparing upload", e);
+            result.setValue(Resource.error("Lỗi chuẩn bị upload: " + e.getMessage()));
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Create custom sticker pack
+     */
+    public LiveData<Resource<StickerPack>> createCustomPack(@NonNull String userId, 
+                                                             @NonNull String name,
+                                                             @NonNull String description) {
+        MutableLiveData<Resource<StickerPack>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        String packId = db.collection(COLLECTION_STICKER_PACKS).document().getId();
+        
+        StickerPack pack = new StickerPack();
+        pack.setId(packId);
+        pack.setName(name);
+        pack.setDescription(description);
+        pack.setCreatorId(userId);
+        pack.setType(StickerPack.TYPE_USER);
+        pack.setCreatedAt(System.currentTimeMillis());
+        pack.setUpdatedAt(System.currentTimeMillis());
+        pack.setPublished(false);
+        pack.setFree(true);
+        pack.setStickerCount(0);
+        pack.setDownloadCount(0);
+        
+        db.collection(COLLECTION_STICKER_PACKS)
+                .document(packId)
+                .set(pack)
+                .addOnSuccessListener(aVoid -> {
+                    result.setValue(Resource.success(pack));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error creating pack", e);
+                    result.setValue(Resource.error("Không thể tạo pack: " + e.getMessage()));
+                });
+        
+        return result;
+    }
+    
+    /**
+     * Publish custom pack to store
+     */
+    public Task<Void> publishPackToStore(@NonNull String packId) {
+        return db.collection(COLLECTION_STICKER_PACKS)
+                .document(packId)
+                .update("isPublished", true, "updatedAt", System.currentTimeMillis());
+    }
+    
+    // ========== Store Operations ==========
+    
+    /**
+     * Get featured packs
+     */
+    public LiveData<Resource<List<StickerPack>>> getFeaturedPacks() {
+        MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        db.collection(COLLECTION_STICKER_PACKS)
+                .whereEqualTo("isPublished", true)
+                .whereEqualTo("type", StickerPack.TYPE_OFFICIAL)
+                .orderBy("downloadCount", Query.Direction.DESCENDING)
+                .limit(10)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    List<StickerPack> packs = querySnapshot.toObjects(StickerPack.class);
+                    result.setValue(Resource.success(packs));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error getting featured packs", e);
+                    result.setValue(Resource.error("Lỗi tải featured packs: " + e.getMessage()));
+                });
+        
+        return result;
+    }
+    
+    /**
+     * Get trending packs (by download count)
+     */
+    public LiveData<Resource<List<StickerPack>>> getTrendingPacks() {
+        MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        db.collection(COLLECTION_STICKER_PACKS)
+                .whereEqualTo("isPublished", true)
+                .orderBy("downloadCount", Query.Direction.DESCENDING)
+                .limit(20)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    List<StickerPack> packs = querySnapshot.toObjects(StickerPack.class);
+                    result.setValue(Resource.success(packs));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error getting trending packs", e);
+                    result.setValue(Resource.error("Lỗi tải trending packs: " + e.getMessage()));
+                });
+        
+        return result;
+    }
+    
+    /**
+     * Get new packs
+     */
+    public LiveData<Resource<List<StickerPack>>> getNewPacks() {
+        MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        db.collection(COLLECTION_STICKER_PACKS)
+                .whereEqualTo("isPublished", true)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .limit(20)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    List<StickerPack> packs = querySnapshot.toObjects(StickerPack.class);
+                    result.setValue(Resource.success(packs));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error getting new packs", e);
+                    result.setValue(Resource.error("Lỗi tải new packs: " + e.getMessage()));
+                });
+        
+        return result;
+    }
+    
+    /**
+     * Get packs by creator
+     */
+    public LiveData<Resource<List<StickerPack>>> getPacksByCreator(@NonNull String creatorId) {
+        MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        db.collection(COLLECTION_STICKER_PACKS)
+                .whereEqualTo("creatorId", creatorId)
+                .whereEqualTo("isPublished", true)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    List<StickerPack> packs = querySnapshot.toObjects(StickerPack.class);
+                    result.setValue(Resource.success(packs));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error getting packs by creator", e);
+                    result.setValue(Resource.error("Lỗi tải creator packs: " + e.getMessage()));
+                });
+        
+        return result;
+    }
+    
+    // ========== Helper Methods ==========
+    
+    private File uriToFile(Uri uri, Context context) {
+        try {
+            InputStream inputStream = context.getContentResolver().openInputStream(uri);
+            if (inputStream == null) return null;
+            
+            File tempFile = new File(context.getCacheDir(), "temp_sticker_" + System.currentTimeMillis() + ".jpg");
+            FileOutputStream outputStream = new FileOutputStream(tempFile);
+            
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            
+            outputStream.close();
+            inputStream.close();
+            
+            return tempFile;
+            
+        } catch (IOException e) {
+            Log.e(TAG, "Error converting URI to File", e);
+            return null;
+        }
+    }
+    
+    private String generateStickerId() {
+        return db.collection(COLLECTION_STICKER_PACKS).document().getId();
+    }
+}
