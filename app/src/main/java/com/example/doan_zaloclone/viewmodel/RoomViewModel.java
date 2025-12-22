@@ -198,6 +198,79 @@ public class RoomViewModel extends BaseViewModel {
         pinMessageState.setValue(null);
     }
     
+    // ===================== MESSAGE REACTIONS METHODS =====================
+    
+    private final MutableLiveData<Resource<Boolean>> reactionState = new MutableLiveData<>();
+    
+    /**
+     * Add or update a reaction to a message
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to react to
+     * @param userId ID of the user adding the reaction
+     * @param reactionType Type of reaction (heart, haha, sad, angry, wow, like)
+     */
+    public void addReaction(@NonNull String conversationId,
+                           @NonNull String messageId,
+                           @NonNull String userId,
+                           @NonNull String reactionType) {
+        LiveData<Resource<Boolean>> result = chatRepository.addReaction(
+                conversationId, messageId, userId, reactionType);
+        reactionState.setValue(result.getValue());
+        
+        // Observe and forward the result
+        result.observeForever(reactionState::setValue);
+    }
+    
+    /**
+     * Remove a user's reaction from a message
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message
+     * @param userId ID of the user removing their reaction
+     */
+    public void removeReaction(@NonNull String conversationId,
+                              @NonNull String messageId,
+                              @NonNull String userId) {
+        LiveData<Resource<Boolean>> result = chatRepository.removeReaction(
+                conversationId, messageId, userId);
+        reactionState.setValue(result.getValue());
+        
+        // Observe and forward the result
+        result.observeForever(reactionState::setValue);
+    }
+    
+    /**
+     * Toggle a reaction - if user already has this reaction type, remove it; otherwise add/update it
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message
+     * @param userId ID of the user toggling the reaction
+     * @param reactionType Type of reaction to toggle
+     */
+    public void toggleReaction(@NonNull String conversationId,
+                              @NonNull String messageId,
+                              @NonNull String userId,
+                              @NonNull String reactionType) {
+        LiveData<Resource<Boolean>> result = chatRepository.toggleReaction(
+                conversationId, messageId, userId, reactionType);
+        reactionState.setValue(result.getValue());
+        
+        // Observe and forward the result
+        result.observeForever(reactionState::setValue);
+    }
+    
+    /**
+     * Get reaction operation state
+     */
+    public LiveData<Resource<Boolean>> getReactionState() {
+        return reactionState;
+    }
+    
+    /**
+     * Reset reaction state (call after handling the result)
+     */
+    public void resetReactionState() {
+        reactionState.setValue(null);
+    }
+    
     /**
      * Reset send message state (call after handling the result)
      */

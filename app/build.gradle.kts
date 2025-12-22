@@ -74,6 +74,12 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.messaging)
     
+    // OpenStreetMap - osmdroid (FREE, no API key needed)
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
+    
+    // Location services (FREE)
+    implementation("com.google.android.gms:play-services-location:21.0.1")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Reaction Picker Layout - Shows 6 reaction options in a horizontal row -->
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="4dp">
+
+    <!-- Heart Reaction -->
+    <FrameLayout
+        android:id="@+id/reactionHeart"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless">
+        
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_reaction_heart"
+            android:contentDescription="Heart reaction"
+            android:scaleType="fitCenter" />
+    </FrameLayout>
+
+    <!-- Haha Reaction -->
+    <FrameLayout
+        android:id="@+id/reactionHaha"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless">
+        
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_reaction_haha"
+            android:contentDescription="Haha reaction"
+            android:scaleType="fitCenter" />
+    </FrameLayout>
+
+    <!-- Sad Reaction -->
+    <FrameLayout
+        android:id="@+id/reactionSad"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless">
+        
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_reaction_sad"
+            android:contentDescription="Sad reaction"
+            android:scaleType="fitCenter" />
+    </FrameLayout>
+
+    <!-- Angry Reaction -->
+    <FrameLayout
+        android:id="@+id/reactionAngry"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless">
+        
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_reaction_angry"
+            android:contentDescription="Angry reaction"
+            android:scaleType="fitCenter" />
+    </FrameLayout>
+
+    <!-- Wow Reaction -->
+    <FrameLayout
+        android:id="@+id/reactionWow"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless">
+        
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_reaction_wow"
+            android:contentDescription="Wow reaction"
+            android:scaleType="fitCenter" />
+    </FrameLayout>
+
+    <!-- Like Reaction -->
+    <FrameLayout
+        android:id="@+id/reactionLike"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?attr/selectableItemBackgroundBorderless">
+        
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_reaction_like"
+            android:contentDescription="Like reaction"
+            android:scaleType="fitCenter" />
+    </FrameLayout>
+
+    <!-- Remove Reaction (X button) -->
+    <FrameLayout
+        android:id="@+id/reactionRemove"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:layout_marginStart="4dp"
+        android:foreground="?attr/selectableItemBackgroundBorderless">
+        
+        <ImageView
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:src="@drawable/ic_close"
+            android:contentDescription="Remove reaction"
+            android:scaleType="fitCenter"
+            android:tint="#757575" />
+    </FrameLayout>
+
+</LinearLayout>

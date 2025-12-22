@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingVertical="6dp"
+    android:background="?attr/selectableItemBackground">
+
+    <!-- Radio/Checkbox indicator -->
+    <View
+        android:id="@+id/selectionIndicator"
+        android:layout_width="16dp"
+        android:layout_height="16dp"
+        android:background="@drawable/bg_poll_option_unchecked" />
+
+    <!-- Option text and progress -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="8dp">
+
+        <TextView
+            android:id="@+id/optionText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="#000000" />
+
+        <!-- Progress bar (shown after vote or always if not hideResultsUntilVoted) -->
+        <LinearLayout
+            android:id="@+id/progressContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="4dp"
+            android:visibility="gone">
+
+            <ProgressBar
+                android:id="@+id/progressBar"
+                android:layout_width="0dp"
+                android:layout_height="4dp"
+                android:layout_weight="1"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:progressTint="#0068FF"
+                android:max="100" />
+
+            <TextView
+                android:id="@+id/percentageText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#757575"
+                android:layout_marginStart="8dp"
+                android:minWidth="40dp"
+                android:gravity="end" />
+        </LinearLayout>
+
+        <!-- Voter avatars (bottom right) -->
+        <LinearLayout
+            android:id="@+id/voterAvatarsContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            android:visibility="gone" />
+    </LinearLayout>
+</LinearLayout>

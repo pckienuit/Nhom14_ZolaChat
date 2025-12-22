@@ -1,0 +1,221 @@
+================================================================================
+TÍNH NĂNG THU HỒI TIN NHẮN (RECALL MESSAGE)
+================================================================================
+Ngày tạo: 2025-12-20
+Phiên bản: 1.0
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Tính năng cho phép người dùng thu hồi (recall) tin nhắn đã gửi trong vòng 1 giờ.
+Tin nhắn sau khi thu hồi sẽ không bị xóa mà được đánh dấu và hiển thị dưới dạng
+placeholder với nội dung "Tin nhắn này đã bị thu hồi".
+
+Đặc điểm:
+- Chỉ người gửi mới có quyền thu hồi tin nhắn của mình
+- Chỉ có thể thu hồi trong vòng 1 giờ sau khi gửi
+- Tin nhắn đã thu hồi không thể thu hồi lại
+- Cả hai bên đều thấy tin nhắn đã được thu hồi (real-time sync)
+
+================================================================================
+2. KIẾN TRÚC & LUỒNG HOẠT ĐỘNG
+================================================================================
+
+2.1. Data Flow:
+    User long-press message
+           |
+           v
+    Context Menu hiển thị "🔄 Thu hồi" (nếu canBeRecalled = true)
+           |
+           v
+    User chọn "Thu hồi"
+           |
+           v
+    showRecallConfirmDialog() - Hiển thị dialog xác nhận
+           |
+           v
+    User xác nhận
+           |
+           v
+    RoomActivity.recallMessage()
+           |
+           v
+    ChatRepository.recallMessage() - Update Firestore
+           |
+           v
+    Firestore listener trigger
+           |
+           v
+    MessageAdapter.updateMessages() - DiffUtil detect change
+           |
+           v
+    getItemViewType() returns VIEW_TYPE_RECALLED_SENT/RECEIVED
+           |
+           v
+    UI hiển thị placeholder thu hồi
+
+2.2. Business Rules (trong Message.canBeRecalled()):
+    - message.getSenderId().equals(currentUserId) : Chỉ sender
+    - !message.isRecalled() : Chưa bị thu hồi
+    - (currentTime - timestamp) < 1 hour : Trong vòng 1 giờ
+
+================================================================================
+3. FILES ĐÃ THAY ĐỔI
+================================================================================
+
+3.1. MODEL:
+    app/src/main/java/com/example/doan_zaloclone/models/Message.java
+    - Field: isRecalled (boolean)
+    - Method: isRecalled(), getIsRecalled() (Firestore compatibility)
+    - Method: setRecalled(), setIsRecalled() (Firestore compatibility)
+    - Method: canBeRecalled(String currentUserId) - Kiểm tra điều kiện thu hồi
+
+3.2. REPOSITORY:
+    app/src/main/java/com/example/doan_zaloclone/repository/ChatRepository.java
+    - Method: recallMessage(conversationId, messageId, callback)
+    - Interface: RecallMessageCallback (onSuccess, onError)
+
+3.3. UI - ADAPTER:
+    app/src/main/java/com/example/doan_zaloclone/ui/room/MessageAdapter.java
+    - Constants: VIEW_TYPE_RECALLED_SENT = 8, VIEW_TYPE_RECALLED_RECEIVED = 9
+    - Interface: OnMessageRecallListener
+    - Method: setOnMessageRecallListener()
+    - Class: RecalledMessageViewHolder
+    - Updated: getItemViewType() - Check isRecalled first
+    - Updated: onCreateViewHolder() - Inflate recalled layouts
+    - Updated: showMessageContextMenu() - Early return if recalled
+
+3.4. UI - ACTIVITY:
+    app/src/main/java/com/example/doan_zaloclone/ui/room/RoomActivity.java
+    - Method: showRecallConfirmDialog(Message) - AlertDialog xác nhận
+    - Method: recallMessage(Message) - Gọi repository
+    - Listener: OnMessageRecallListener trong setupRecyclerView()
+
+3.5. LAYOUTS:
+    app/src/main/res/layout/item_message_recalled_sent.xml
+    - Căn phải (gravity="end")
+    - Màu xám (#E0E0E0), không đổ bóng (cardElevation="0dp")
+    - Chữ in nghiêng, màu xám (#757575)
+
+    app/src/main/res/layout/item_message_recalled_received.xml
+    - Căn trái (gravity="start")
+    - Cùng style với sent
+
+3.6. FIRESTORE SECURITY RULES:
+    docs/04_config_firestore-security-rules.txt
+    - Updated: Messages allow update if sender matches
+
+================================================================================
+4. FIRESTORE SECURITY RULES
+================================================================================
+
+Cần cập nhật rules cho messages subcollection để cho phép sender update:
+
+    match /conversations/{conversationId}/messages/{messageId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      // Allow update only for message sender (for recall functionality)
+      allow update: if request.auth != null && 
+                       request.auth.uid == resource.data.senderId;
+      allow delete: if false;
+    }
+
+LƯU Ý: Chỉ giữ MỘT rule cho messages, không duplicate!
+
+================================================================================
+5. FIRESTORE DATA STRUCTURE
+================================================================================
+
+Collection: conversations/{conversationId}/messages/{messageId}
+
+Sau khi thu hồi:
+{
+    "id": "messageId",
+    "senderId": "userId",
+    "content": "",                  // Cleared
+    "type": "TEXT",
+    "timestamp": 1703062800000,
+    "isRecalled": true,             // Marked as recalled
+    ...other fields
+}
+
+================================================================================
+6. UI/UX SPECIFICATIONS
+================================================================================
+
+6.1. Context Menu:
+    - Menu item: "🔄 Thu hồi"
+    - Chỉ hiển thị khi canBeRecalled() = true
+    - Không hiển thị cho tin nhắn đã thu hồi
+
+6.2. Confirmation Dialog:
+    - Title: "Thu hồi tin nhắn"
+    - Message: "Bạn có chắc muốn thu hồi tin nhắn này?"
+    - Buttons: "Thu hồi" (positive), "Hủy" (negative)
+
+6.3. Recalled Message Display:
+    - Background: Xám (#E0E0E0)
+    - Elevation: 0dp (không đổ bóng)
+    - Text: "Tin nhắn này đã bị thu hồi"
+    - Text style: Italic, màu xám (#757575)
+    - Position: Căn phải (sent) hoặc căn trái (received)
+    - Interaction: Không có (clickable=false, focusable=false)
+    - Context menu: Không hiển thị
+
+6.4. Toast Messages:
+    - Success: "Đã thu hồi tin nhắn"
+    - Error: "Lỗi: {error message}"
+
+================================================================================
+7. INTERFACES & CALLBACKS
+================================================================================
+
+7.1. MessageAdapter.OnMessageRecallListener:
+    public interface OnMessageRecallListener {
+        void onRecallMessage(Message message);
+    }
+
+7.2. ChatRepository.RecallMessageCallback:
+    public interface RecallMessageCallback {
+        void onSuccess();
+        void onError(String error);
+    }
+
+================================================================================
+8. TESTING CHECKLIST
+================================================================================
+
+[ ] Thu hồi tin nhắn text thành công
+[ ] Thu hồi tin nhắn image thành công
+[ ] Thu hồi tin nhắn file thành công
+[ ] Tin nhắn > 1 giờ không có option thu hồi
+[ ] Tin nhắn của người khác không có option thu hồi
+[ ] Tin nhắn đã thu hồi không có option thu hồi
+[ ] Hiển thị đúng vị trí (căn trái/phải)
+[ ] Không có context menu cho tin nhắn đã thu hồi
+[ ] Real-time sync - người nhận thấy tin nhắn đã thu hồi
+[ ] Dialog xác nhận hoạt động đúng
+[ ] Toast messages hiển thị đúng
+[ ] Firestore security rules đúng
+
+================================================================================
+9. KNOWN LIMITATIONS
+================================================================================
+
+- Không thể undo việc thu hồi
+- Tin nhắn thu hồi vẫn tồn tại trong database (chỉ ẩn nội dung)
+- Không có thông báo push khi tin nhắn bị thu hồi
+- Reply preview đến tin nhắn đã thu hồi vẫn hiển thị nội dung cũ (nếu đã cache)
+
+================================================================================
+10. FUTURE IMPROVEMENTS
+================================================================================
+
+- Thêm animation khi thu hồi
+- Thêm notification push khi tin nhắn bị thu hồi
+- Update reply preview khi original message bị thu hồi
+- Cho phép admin group thu hồi tin nhắn của member
+- Cấu hình thời gian cho phép thu hồi (hiện tại hardcode 1 giờ)
+
+================================================================================

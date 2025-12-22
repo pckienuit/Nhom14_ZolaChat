@@ -25,6 +25,19 @@
         android:layout_marginBottom="2dp"
         android:visibility="gone" />
 
+    <!-- Forwarded Indicator (visible only when message is forwarded from another user) -->
+    <TextView
+        android:id="@+id/forwardedIndicator"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Đã chuyển tiếp một tin nhắn"
+        android:textSize="11sp"
+        android:textColor="@color/textSecondary"
+        android:textStyle="italic"
+        android:layout_marginStart="4dp"
+        android:layout_marginBottom="2dp"
+        android:visibility="gone" />
+
     <!-- Message bubble with pin indicator -->
     <FrameLayout
         android:layout_width="wrap_content"
@@ -133,14 +146,199 @@
 
     </FrameLayout>
 
-    <TextView
-        android:id="@+id/timestampTextView"
+    <!-- Timestamp and Reaction row -->
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="10:30"
-        android:textSize="12sp"
-        android:textColor="@color/textSecondary"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|start"
+        android:layout_gravity="start"
         android:layout_marginTop="4dp"
-        android:layout_marginStart="4dp" />
+        android:layout_marginStart="4dp">
+
+        <TextView
+            android:id="@+id/timestampTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="10:30"
+            android:textSize="12sp"
+            android:textColor="@color/textSecondary" />
+
+        <!-- Reaction container - shows reactions horizontally like Zalo -->
+        <LinearLayout
+            android:id="@+id/reactionContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="8dp"
+            android:visibility="visible">
+
+            <!-- Existing reactions with counts (shown horizontally) -->
+            <LinearLayout
+                android:id="@+id/existingReactionsLayout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_reaction_container"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:visibility="gone">
+
+                <!-- Heart reaction with count -->
+                <LinearLayout
+                    android:id="@+id/heartReactionLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:visibility="gone">
+                    <ImageView
+                        android:id="@+id/heartReactionIcon"
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:src="@drawable/ic_reaction_heart" />
+                    <TextView
+                        android:id="@+id/heartReactionCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="10sp"
+                        android:textColor="#333333"
+                        android:layout_marginStart="1dp"
+                        android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+                <!-- Like reaction with count -->
+                <LinearLayout
+                    android:id="@+id/likeReactionLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:visibility="gone">
+                    <ImageView
+                        android:id="@+id/likeReactionIcon"
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:src="@drawable/ic_reaction_like" />
+                    <TextView
+                        android:id="@+id/likeReactionCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="10sp"
+                        android:textColor="#333333"
+                        android:layout_marginStart="1dp"
+                        android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+                <!-- Haha reaction with count -->
+                <LinearLayout
+                    android:id="@+id/hahaReactionLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:visibility="gone">
+                    <ImageView
+                        android:id="@+id/hahaReactionIcon"
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:src="@drawable/ic_reaction_haha" />
+                    <TextView
+                        android:id="@+id/hahaReactionCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="10sp"
+                        android:textColor="#333333"
+                        android:layout_marginStart="1dp"
+                        android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+                <!-- Sad reaction with count -->
+                <LinearLayout
+                    android:id="@+id/sadReactionLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:visibility="gone">
+                    <ImageView
+                        android:id="@+id/sadReactionIcon"
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:src="@drawable/ic_reaction_sad" />
+                    <TextView
+                        android:id="@+id/sadReactionCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="10sp"
+                        android:textColor="#333333"
+                        android:layout_marginStart="1dp"
+                        android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+                <!-- Angry reaction with count -->
+                <LinearLayout
+                    android:id="@+id/angryReactionLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:visibility="gone">
+                    <ImageView
+                        android:id="@+id/angryReactionIcon"
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:src="@drawable/ic_reaction_angry" />
+                    <TextView
+                        android:id="@+id/angryReactionCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="10sp"
+                        android:textColor="#333333"
+                        android:layout_marginStart="1dp"
+                        android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+                <!-- Wow reaction with count -->
+                <LinearLayout
+                    android:id="@+id/wowReactionLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:visibility="gone">
+                    <ImageView
+                        android:id="@+id/wowReactionIcon"
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:src="@drawable/ic_reaction_wow" />
+                    <TextView
+                        android:id="@+id/wowReactionCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textSize="10sp"
+                        android:textColor="#333333"
+                        android:layout_marginStart="1dp"
+                        android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Add reaction button (heart outline) -->
+            <ImageView
+                android:id="@+id/addReactionButton"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_reaction_heart_outline"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Add reaction" />
+
+        </LinearLayout>
+
+    </LinearLayout>
 
 </LinearLayout>

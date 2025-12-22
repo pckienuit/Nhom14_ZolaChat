@@ -68,6 +68,52 @@ LƯU Ý
 - File build artifacts (trong app/build/) KHÔNG cần tổ chức lại
 
 
+QUY ƯỚC TRÌNH BÀY NỘI DUNG (Content Formatting Convention)
+----------------------------------------------------------
+
+Để đảm bảo tính nhất quán, các file tài liệu (đặc biệt là Feature và Architecture)
+nên tuân theo cấu trúc sau:
+
+1. HEADER
+   - Dùng 80 dấu bằng (=) để phân cách header.
+   - Tiêu đề viết HOA.
+
+   Ví dụ:
+   ================================================================================
+   TÊN TÍNH NĂNG (Feature Name)
+   ================================================================================
+
+2. METADATA
+   - NGÀY TẠO: DD/MM/YYYY
+   - LOẠI: Feature/Bugfix/Architecture...
+   - TÍNH NĂNG: Mô tả ngắn gọn
+   - KIẾN TRÚC: MVVM/Repository...
+
+3. CẤU TRÚC MỤC (SECTIONS)
+   - Dùng 80 dấu bằng (=) để phân cách các mục lớn.
+   - Đánh số 1. 2. 3.
+   - Tiêu đề mục viết HOA.
+
+   Ví dụ:
+   ================================================================================
+   1. TỔNG QUAN
+   ================================================================================
+
+4. TIỂU MỤC (SUBSECTIONS)
+   - Đánh số 1.1, 1.2...
+   - Tiêu đề viết HOA.
+
+5. BẢNG BIỂU (TABLES)
+   - Sử dụng ASCII art để mô tả thay đổi Data Model.
+
+   Ví dụ:
+   ┌─────────────────────────────────────────────────────────────────────────────┐
+   │ Field               │ Type    │ Mô tả                                      │
+   ├─────────────────────────────────────────────────────────────────────────────┤
+   │ fieldName           │ String  │ Description                                │
+   └─────────────────────────────────────────────────────────────────────────────┘
+
+
 DANH SÁCH FILE HIỆN TẠI
 -----------------------
 

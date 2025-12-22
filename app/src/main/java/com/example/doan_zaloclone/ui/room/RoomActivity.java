@@ -1,10 +1,13 @@
 package com.example.doan_zaloclone.ui.room;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.EditText;
@@ -35,6 +38,7 @@ import com.example.doan_zaloclone.utils.ImageUtils;
 import com.example.doan_zaloclone.utils.MediaStoreHelper;
 import com.example.doan_zaloclone.utils.PermissionHelper;
 import com.example.doan_zaloclone.viewmodel.RoomViewModel;
+import com.example.doan_zaloclone.viewmodel.ContactViewModel;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.ListenerRegistration;
 import androidx.lifecycle.ViewModelProvider;
@@ -43,6 +47,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class RoomActivity extends AppCompatActivity {
+    
+    // Auto-call extras (for triggering call from business card)
+    public static final String EXTRA_AUTO_START_CALL = "auto_start_call";
+    public static final String EXTRA_IS_VIDEO_CALL = "is_video_call";
 
     private Toolbar toolbar;
     private TextView titleTextView;
@@ -55,6 +63,7 @@ public class RoomActivity extends AppCompatActivity {
     private String conversationName;
     
     private RoomViewModel roomViewModel;
+    private ContactViewModel contactViewModel;
     private ChatRepository chatRepository; // For backward compatibility with image uploads
     private FirebaseAuth firebaseAuth;
     
@@ -95,6 +104,12 @@ public class RoomActivity extends AppCompatActivity {
     private FrameLayout filePickerBottomSheet;
     private FilePreviewAdapter filePreviewAdapter;
     private List<FilePreviewAdapter.FileItem> selectedFilesForPreview = new ArrayList<>();
+    
+    // Poll creation
+    private ActivityResultLauncher<Intent> createPollLauncher;
+    
+    // Location picker
+    private ActivityResultLauncher<Intent> locationPickerLauncher;
 
     // Pinned messages UI
     private FrameLayout pinnedMessagesContainer;
@@ -125,6 +140,7 @@ public class RoomActivity extends AppCompatActivity {
         
         // Initialize ViewModel
         roomViewModel = new ViewModelProvider(this).get(RoomViewModel.class);
+        contactViewModel = new ViewModelProvider(this).get(ContactViewModel.class);
         chatRepository = new ChatRepository(); // For legacy image upload operations
         firebaseAuth = FirebaseAuth.getInstance();
         
@@ -161,6 +177,67 @@ public class RoomActivity extends AppCompatActivity {
                     }
                 }
         );
+        
+        // Register poll creation launcher
+        createPollLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                        com.example.doan_zaloclone.models.Poll poll = 
+                                (com.example.doan_zaloclone.models.Poll) result.getData()
+                                .getSerializableExtra(CreatePollActivity.EXTRA_POLL_DATA);
+                        if (poll != null) {
+                            sendPollMessage(poll);
+                        }
+                    }
+                }
+        );
+        
+        // Register location picker launcher
+        locationPickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                        boolean isLiveLocation = result.getData().getBooleanExtra(
+                                com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_IS_LIVE_LOCATION, false);
+                        
+                        if (isLiveLocation) {
+                            // Handle Live Location
+                            long duration = result.getData().getLongExtra(
+                                    com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LIVE_DURATION, 15 * 60 * 1000);
+                            String sessionId = java.util.UUID.randomUUID().toString();
+                            
+                            // Start Service
+                            Intent serviceIntent = new Intent(this, com.example.doan_zaloclone.services.LocationSharingService.class);
+                            serviceIntent.setAction(com.example.doan_zaloclone.services.LocationSharingService.ACTION_START_SHARING);
+                            serviceIntent.putExtra(com.example.doan_zaloclone.services.LocationSharingService.EXTRA_SESSION_ID, sessionId);
+                            serviceIntent.putExtra(com.example.doan_zaloclone.services.LocationSharingService.EXTRA_DURATION, duration);
+                            
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                startForegroundService(serviceIntent);
+                            } else {
+                                startService(serviceIntent);
+                            }
+                            
+                            // Send Live Location Message
+                            sendLiveLocationMessage(sessionId);
+                            
+                        } else {
+                            // Handle Static Location
+                            double latitude = result.getData().getDoubleExtra(
+                                    com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LATITUDE, 0);
+                            double longitude = result.getData().getDoubleExtra(
+                                    com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LONGITUDE, 0);
+                            String locationName = result.getData().getStringExtra(
+                                    com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LOCATION_NAME);
+                            String locationAddress = result.getData().getStringExtra(
+                                    com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LOCATION_ADDRESS);
+                            
+                            sendLocationMessage(latitude, longitude, locationName, locationAddress);
+                        }
+                    }
+                }
+        );
 
         initViews();
         setupToolbar();
@@ -171,6 +248,28 @@ public class RoomActivity extends AppCompatActivity {
         
         loadMessages();
         setupListeners();
+        
+        // Check if we should auto-start a call (from business card)
+        checkAutoStartCall();
+    }
+    
+    /**
+     * Check if activity was opened with auto-start call intent
+     */
+    private void checkAutoStartCall() {
+        Intent intent = getIntent();
+        if (intent != null && intent.getBooleanExtra(EXTRA_AUTO_START_CALL, false)) {
+            boolean isVideo = intent.getBooleanExtra(EXTRA_IS_VIDEO_CALL, false);
+            
+            // Clear the flag to prevent re-triggering
+            intent.removeExtra(EXTRA_AUTO_START_CALL);
+            
+            // Delay slightly to allow UI to initialize
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                android.util.Log.d("RoomActivity", "Auto-starting " + (isVideo ? "video" : "voice") + " call");
+                startCall(isVideo);
+            }, 500);
+        }
     }
     
     private void checkNetworkConnectivity() {
@@ -360,10 +459,13 @@ public class RoomActivity extends AppCompatActivity {
         // Set initial name
         titleTextView.setText(conversationName != null ? conversationName : "Conversation");
         
-        // Add click listener to open group info
+        // Add click listener to open group info or user profile
         titleTextView.setOnClickListener(v -> {
             if ("GROUP".equals(conversationType)) {
                 openGroupInfo();
+            } else if (!otherUserId.isEmpty()) {
+                // Open user profile for 1-1 chat
+                com.example.doan_zaloclone.utils.ProfileNavigator.openUserProfile(this, otherUserId);
             }
         });
         
@@ -472,11 +574,68 @@ public class RoomActivity extends AppCompatActivity {
             }
         });
         
+        // Set recall listener - show confirmation dialog
+        messageAdapter.setOnMessageRecallListener(new MessageAdapter.OnMessageRecallListener() {
+            @Override
+            public void onRecallMessage(Message message) {
+                showRecallConfirmDialog(message);
+            }
+        });
+        
+        // Set forward listener - show forward dialog
+        messageAdapter.setOnMessageForwardListener(new MessageAdapter.OnMessageForwardListener() {
+            @Override
+            public void onForwardMessage(Message message) {
+                showForwardDialog(message);
+            }
+        });
+        
+        // Set reaction listener - show reaction picker on long press, toggle default reaction on click
+        messageAdapter.setOnMessageReactionListener(new MessageAdapter.OnMessageReactionListener() {
+            @Override
+            public void onReactionClick(Message message, String currentReactionType) {
+                // Add reaction
+                handleReactionClick(message, currentReactionType);
+            }
+            
+            @Override
+            public void onReactionLongPress(Message message, View anchorView) {
+                // Show reaction picker popup
+                showReactionPicker(message, anchorView);
+            }
+            
+            @Override
+            public void onReactionStatsClick(Message message) {
+                // Show reaction statistics dialog
+                showReactionStatsDialog(message);
+            }
+        });
+        
+        // Set poll interaction listener
+        messageAdapter.setOnPollInteractionListener(new MessageAdapter.OnPollInteractionListener() {
+            @Override
+            public void onVotePoll(Message message, String optionId) {
+                handlePollVote(message, optionId);
+            }
+            
+            @Override
+            public void onClosePoll(Message message) {
+                handleClosePoll(message);
+            }
+        });
+        
         LinearLayoutManager layoutManager = new LinearLayoutManager(this);
         layoutManager.setStackFromEnd(true);
         messagesRecyclerView.setLayoutManager(layoutManager);
         // Note: Not using setHasFixedSize(true) because messages have variable heights (text vs images)
         messagesRecyclerView.setAdapter(messageAdapter);
+        
+        // Disable change animation to prevent flicker when reactions update
+        // Keep add/remove animations for smooth list updates
+        androidx.recyclerview.widget.RecyclerView.ItemAnimator animator = messagesRecyclerView.getItemAnimator();
+        if (animator instanceof androidx.recyclerview.widget.SimpleItemAnimator) {
+            ((androidx.recyclerview.widget.SimpleItemAnimator) animator).setSupportsChangeAnimations(false);
+        }
         
         // Setup swipe-to-reply gesture
         SwipeToReplyCallback swipeCallback = new SwipeToReplyCallback(this, messageAdapter, new SwipeToReplyCallback.SwipeToReplyListener() {
@@ -510,19 +669,27 @@ public class RoomActivity extends AppCompatActivity {
                     replyingToName.setText("You");
                 }
             } else {
-                // Fetch name from Firestore
-                com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                    .collection("users")
-                    .document(senderId)
-                    .get()
-                    .addOnSuccessListener(doc -> {
-                        if (doc.exists()) {
-                            String senderName = doc.getString("name");
-                            if (replyingToName != null) {
-                                replyingToName.setText(senderName != null ? senderName : "User");
+                // Try to use cached sender name first
+                String cachedName = message.getSenderName();
+                if (cachedName != null && !cachedName.isEmpty()) {
+                    if (replyingToName != null) {
+                        replyingToName.setText(cachedName);
+                    }
+                } else {
+                    // Fallback: Fetch name from Firestore for old messages
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .document(senderId)
+                        .get()
+                        .addOnSuccessListener(doc -> {
+                            if (doc.exists()) {
+                                String senderName = doc.getString("name");
+                                if (replyingToName != null) {
+                                    replyingToName.setText(senderName != null ? senderName : "User");
+                                }
                             }
-                        }
-                    });
+                        });
+                }
             }
             
             // Set content preview
@@ -554,10 +721,23 @@ public class RoomActivity extends AppCompatActivity {
             if (resource == null) return;
             
             if (resource.isSuccess()) {
-                messages = resource.getData(); // Store for counting
-                if (messages != null) {
-                    messageAdapter.updateMessages(messages);
-                    if (messageAdapter.getItemCount() > 0) {
+                List<Message> newMessages = resource.getData();
+                
+                if (newMessages != null) {
+                    // Check if this is a new message addition (not just an update)
+                    int oldSize = messages != null ? messages.size() : 0;
+                    int newSize = newMessages.size();
+                    boolean isNewMessage = newSize > oldSize;
+                    
+                    // Store for counting
+                    messages = newMessages;
+                    
+                    // Update adapter
+                    messageAdapter.updateMessages(newMessages);
+                    
+                    // Only auto-scroll if there's a NEW message added
+                    // Don't scroll for reaction updates or other changes
+                    if (isNewMessage && messageAdapter.getItemCount() > 0) {
                         messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
                     }
                 }
@@ -599,6 +779,21 @@ public class RoomActivity extends AppCompatActivity {
             } else if (resource.isError()) {
                 Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
                 roomViewModel.resetPinMessageState();
+            }
+        });
+        
+        // Observe reaction operations
+        roomViewModel.getReactionState().observe(this, resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                // Reaction updated successfully - messages will auto-update via Firestore listener
+                android.util.Log.d("RoomActivity", "Reaction updated successfully");
+                roomViewModel.resetReactionState();
+            } else if (resource.isError()) {
+                Toast.makeText(this, "Lỗi cập nhật reaction: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                android.util.Log.e("RoomActivity", "Error updating reaction: " + resource.getMessage());
+                roomViewModel.resetReactionState();
             }
         });
     }
@@ -996,6 +1191,36 @@ public class RoomActivity extends AppCompatActivity {
                 System.currentTimeMillis()
         );
         
+        // Set sender name from Firebase Auth or fetch from Firestore if needed
+        String displayName = firebaseAuth.getCurrentUser().getDisplayName();
+        if (displayName != null && !displayName.isEmpty()) {
+            newMessage.setSenderName(displayName);
+            // Continue with send
+            sendMessageNow(newMessage);
+        } else {
+            // Fetch from Firestore
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(currentUserId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists()) {
+                        String name = doc.getString("name");
+                        if (name != null && !name.isEmpty()) {
+                            newMessage.setSenderName(name);
+                        }
+                    }
+                    sendMessageNow(newMessage);
+                })
+                .addOnFailureListener(e -> {
+                    // Send anyway without name
+                    sendMessageNow(newMessage);
+                });
+            return; // Exit early, will send after fetch
+        }
+    }
+    
+    private void sendMessageNow(Message newMessage) {
         // Debug: Check replyingToMessage state
         android.util.Log.d("RoomActivity", "handleSendMessage - replyingToMessage: " + 
             (replyingToMessage != null ? "SET (id=" + replyingToMessage.getId() + ")" : "NULL"));
@@ -1073,8 +1298,20 @@ public class RoomActivity extends AppCompatActivity {
         action.execute(this, new com.example.doan_zaloclone.ui.room.actions.QuickActionCallback() {
             @Override
             public void onShowUI() {
-                // Launch file picker
-                launchFilePicker();
+                // Check which action triggered this
+                if (action instanceof com.example.doan_zaloclone.ui.room.actions.SendContactAction) {
+                    // Show friend selection dialog for business card
+                    showSendContactDialog();
+                } else if (action instanceof com.example.doan_zaloclone.ui.room.actions.SendPollAction) {
+                    // Launch poll creation activity
+                    showCreatePollActivity();
+                } else if (action instanceof com.example.doan_zaloclone.ui.room.actions.SendLocationAction) {
+                    // Launch location picker activity
+                    launchLocationPicker();
+                } else {
+                    // Launch file picker for other actions
+                    launchFilePicker();
+                }
             }
             
             @Override
@@ -1085,6 +1322,19 @@ public class RoomActivity extends AppCompatActivity {
             @Override
             public void onFilesSelected(List<Uri> fileUris) {
                 // Handle multiple files (future enhancement)
+            }
+            
+            @Override
+            public void onPollCreated(com.example.doan_zaloclone.models.Poll poll) {
+                // Send poll message (to be implemented in Phase 5)
+                // sendPollMessage(poll);
+                Toast.makeText(RoomActivity.this, "Poll created: " + poll.getQuestion(), Toast.LENGTH_SHORT).show();
+            }
+            
+            @Override
+            public void onLocationSelected(double latitude, double longitude, String locationName, String locationAddress) {
+                // Handle location selected (Phase 3 - not yet implemented)
+                Toast.makeText(RoomActivity.this, "Location selected: " + latitude + ", " + longitude, Toast.LENGTH_SHORT).show();
             }
             
             @Override
@@ -1430,6 +1680,587 @@ public class RoomActivity extends AppCompatActivity {
             default:
                 return message.getContent() != null ? message.getContent() : "";
         }
+    }
+    
+    /**
+     * Show confirmation dialog before recalling a message
+     */
+    private void showRecallConfirmDialog(Message message) {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Thu hồi tin nhắn")
+                .setMessage("Bạn có chắc muốn thu hồi tin nhắn này?")
+                .setPositiveButton("Thu hồi", (dialog, which) -> {
+                    recallMessage(message);
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+    
+    /**
+     * Recall a message via ChatRepository
+     */
+    private void recallMessage(Message message) {
+        if (chatRepository == null || conversationId == null) {
+            Toast.makeText(this, "Lỗi: Không thể thu hồi tin nhắn", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        chatRepository.recallMessage(conversationId, message.getId(), new ChatRepository.RecallMessageCallback() {
+            @Override
+            public void onSuccess() {
+                Toast.makeText(RoomActivity.this, "Đã thu hồi tin nhắn", Toast.LENGTH_SHORT).show();
+            }
+            
+            @Override
+            public void onError(String error) {
+                Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    
+    /**
+     * Show forward message dialog
+     */
+    private void showForwardDialog(Message message) {
+        // Inflate dialog layout
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_forward_message, null);
+        
+        // Find views
+        EditText searchEditText = dialogView.findViewById(R.id.searchEditText);
+        TextView selectedCountText = dialogView.findViewById(R.id.selectedCountText);
+        RecyclerView friendsRecyclerView = dialogView.findViewById(R.id.friendsRecyclerView);
+        TextView emptyStateText = dialogView.findViewById(R.id.emptyStateText);
+        
+        // Create final reference for use in callbacks
+        final View sendBtn = dialogView.findViewById(R.id.sendButton);
+        
+        // Setup RecyclerView
+        ForwardFriendsAdapter adapter = new ForwardFriendsAdapter(new ArrayList<>(), selectedCount -> {
+            // Handle selection change - update UI
+            if (selectedCount > 0) {
+                selectedCountText.setVisibility(View.VISIBLE);
+                selectedCountText.setText("Đã chọn " + selectedCount + " bạn");
+                sendBtn.setEnabled(true);
+            } else {
+                selectedCountText.setVisibility(View.GONE);
+                sendBtn.setEnabled(false);
+            }
+        });
+        
+        friendsRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        friendsRecyclerView.setAdapter(adapter);
+        
+        // Create dialog
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(dialogView)
+                .create();
+        
+        // Setup buttons
+        dialogView.findViewById(R.id.cancelButton).setOnClickListener(v -> dialog.dismiss());
+        
+        dialogView.findViewById(R.id.sendButton).setOnClickListener(v -> {
+            java.util.List<String> selectedFriendIds = adapter.getSelectedFriendIds();
+            if (selectedFriendIds.isEmpty()) {
+                Toast.makeText(this, "Vui lòng chọn ít nhất một người nhận", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // Forward message to all selected friends
+            String currentUserId = firebaseAuth.getCurrentUser() != null 
+                    ? firebaseAuth.getCurrentUser().getUid() : "";
+            
+            // Get sender name for forwarding
+            fetchSenderNameAndForward(message, selectedFriendIds, currentUserId, dialog);
+        });
+        
+        // Disable send button initially (enabled via selection listener)
+        dialogView.findViewById(R.id.sendButton).setEnabled(false);
+        
+        // Setup search
+        searchEditText.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                adapter.filter(s.toString());
+            }
+            
+            @Override
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+        
+        // Load friends
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+                ? firebaseAuth.getCurrentUser().getUid() : "";
+        contactViewModel.getFriends(currentUserId).observe(this, resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                java.util.List<com.example.doan_zaloclone.models.User> friends = resource.getData();
+                if (friends.isEmpty()) {
+                    emptyStateText.setVisibility(View.VISIBLE);
+                    friendsRecyclerView.setVisibility(View.GONE);
+                } else {
+                    emptyStateText.setVisibility(View.GONE);
+                    friendsRecyclerView.setVisibility(View.VISIBLE);
+                    adapter.updateFriends(friends);
+                }
+            }
+        });
+        
+        dialog.show();
+    }
+    
+    /**
+     * Fetch sender name and forward message
+     */
+    private void fetchSenderNameAndForward(Message message, java.util.List<String> friendIds, String currentUserId, AlertDialog dialog) {
+        // Try to use cached sender name first
+        String cachedName = message.getSenderName();
+        if (cachedName != null && !cachedName.isEmpty()) {
+            // Use cached name directly
+            forwardMessageToFriends(message, friendIds, currentUserId, cachedName, dialog);
+        } else {
+            // Fallback: Fetch sender name from Firestore for old messages
+            String senderId = message.getSenderId();
+            
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    .collection("users")
+                    .document(senderId)
+                    .get()
+                    .addOnSuccessListener(doc -> {
+                        String senderName = "User";
+                        if (doc.exists()) {
+                            senderName = doc.getString("name");
+                            if (senderName == null) senderName = "User";
+                        }
+                        
+                        // Forward to each selected friend
+                        forwardMessageToFriends(message, friendIds, currentUserId, senderName, dialog);
+                    })
+                    .addOnFailureListener(e -> {
+                        // Use default name on error
+                        forwardMessageToFriends(message, friendIds, currentUserId, "User", dialog);
+                    });
+        }
+    }
+    
+    /**
+     * Forward message to selected friends
+     */
+    private void forwardMessageToFriends(Message message, java.util.List<String> friendIds, String currentUserId, String originalSenderName, AlertDialog dialog) {
+        final int[] successCount = {0};
+        final int[] errorCount = {0};
+        final int totalCount = friendIds.size();
+        
+        android.util.Log.d("RoomActivity", "forwardMessageToFriends - currentUserId: " + currentUserId + ", friendIds: " + friendIds);
+        
+        for (String friendId : friendIds) {
+            android.util.Log.d("RoomActivity", "Forwarding to friendId: " + friendId);
+            // Get or create conversation with friend
+            chatRepository.getOrCreateConversationWithFriend(currentUserId, friendId, new ChatRepository.ConversationCallback() {
+                @Override
+                public void onSuccess(String targetConversationId) {
+                    // Forward the message
+                    chatRepository.forwardMessage(targetConversationId, message, currentUserId, originalSenderName, new ChatRepository.ForwardMessageCallback() {
+                        @Override
+                        public void onSuccess() {
+                            successCount[0]++;
+                            checkForwardCompletion(successCount[0], errorCount[0], totalCount, dialog);
+                        }
+                        
+                        @Override
+                        public void onError(String error) {
+                            errorCount[0]++;
+                            checkForwardCompletion(successCount[0], errorCount[0], totalCount, dialog);
+                        }
+                    });
+                }
+                
+                @Override
+                public void onError(String error) {
+                    errorCount[0]++;
+                    checkForwardCompletion(successCount[0], errorCount[0], totalCount, dialog);
+                }
+            });
+        }
+    }
+    
+    /**
+     * Check if all forward operations completed
+     */
+    private void checkForwardCompletion(int successCount, int errorCount, int totalCount, AlertDialog dialog) {
+        if (successCount + errorCount == totalCount) {
+            dialog.dismiss();
+            if (errorCount == 0) {
+                Toast.makeText(this, "Đã chuyển tiếp tin nhắn đến " + successCount + " người", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Đã chuyển tiếp: " + successCount + ", Lỗi: " + errorCount, Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+    
+    // =============== BUSINESS CARD / CONTACT HANDLING ===============
+    
+    /**
+     * Show dialog to select a friend to send as business card
+     */
+    private void showSendContactDialog() {
+        if (firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Bạn cần đăng nhập để gửi danh thiếp", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        SendContactDialog dialog = new SendContactDialog(this, currentUserId, this);
+        
+        dialog.setOnContactSelectedListener(contactUserId -> {
+            sendContactMessage(contactUserId);
+        });
+        
+        dialog.show();
+    }
+    
+    /**
+     * Send a contact message (business card)
+     * @param contactUserId User ID of the contact to share
+     */
+    private void sendContactMessage(String contactUserId) {
+        if (firebaseAuth.getCurrentUser() == null || contactUserId == null) {
+            Toast.makeText(this, "Không thể gửi danh thiếp", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        // Create contact message
+        Message contactMessage = new Message();
+        contactMessage.setType(Message.TYPE_CONTACT);
+        contactMessage.setContactUserId(contactUserId);
+        contactMessage.setSenderId(currentUserId);
+        contactMessage.setTimestamp(System.currentTimeMillis());
+        
+        // Fetch sender name
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(currentUserId)
+            .get()
+            .addOnSuccessListener(doc -> {
+                if (doc.exists()) {
+                    String name = doc.getString("name");
+                    if (name != null && !name.isEmpty()) {
+                        contactMessage.setSenderName(name);
+                    }
+                }
+                // Send message via ViewModel
+                roomViewModel.sendMessage(conversationId, contactMessage);
+                Toast.makeText(this, "Đã gửi danh thiếp", Toast.LENGTH_SHORT).show();
+            })
+            .addOnFailureListener(e -> {
+                // Send without senderName
+                roomViewModel.sendMessage(conversationId, contactMessage);
+                Toast.makeText(this, "Đã gửi danh thiếp", Toast.LENGTH_SHORT).show();
+            });
+    }
+    
+    // =============== REACTION HANDLING ===============
+    
+    /**
+     * Handle reaction click - add reaction (Zalo style, does not toggle off)
+     * When clicking the add button, adds heart. When clicking existing reaction, adds that type.
+     */
+    private void handleReactionClick(Message message, String reactionType) {
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+                ? firebaseAuth.getCurrentUser().getUid() 
+                : "";
+        
+        if (currentUserId.isEmpty()) {
+            Toast.makeText(this, "Không thể thêm reaction", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        android.util.Log.d("RoomActivity", "handleReactionClick - messageId: " + message.getId() 
+                + ", reactionType: " + reactionType);
+        
+        // Use ViewModel to add reaction (uses the passed reaction type)
+        roomViewModel.toggleReaction(conversationId, message.getId(), currentUserId, reactionType);
+    }
+    
+    /**
+     * Show reaction picker popup above the message
+     */
+    private void showReactionPicker(Message message, View anchorView) {
+        String currentUserId = firebaseAuth.getCurrentUser() != null 
+                ? firebaseAuth.getCurrentUser().getUid() 
+                : "";
+        
+        if (currentUserId.isEmpty()) {
+            Toast.makeText(this, "Không thể thêm reaction", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        android.util.Log.d("RoomActivity", "showReactionPicker - messageId: " + message.getId());
+        
+        // Create and show reaction picker popup
+        ReactionPickerPopup popup = new ReactionPickerPopup(this, reactionType -> {
+            // User selected a reaction or remove (null)
+            android.util.Log.d("RoomActivity", "Reaction selected: " + reactionType + " for message: " + message.getId());
+            
+            if (reactionType == null) {
+                // Remove user's reaction
+                roomViewModel.removeReaction(conversationId, message.getId(), currentUserId);
+            } else {
+                // Add/update reaction
+                roomViewModel.toggleReaction(conversationId, message.getId(), currentUserId, reactionType);
+            }
+        });
+        
+        // Show popup above the message bubble
+        popup.showAboveAnchor(anchorView);
+    }
+    
+    /**
+     * Show reaction statistics dialog
+     */
+    private void showReactionStatsDialog(Message message) {
+        if (message == null || !message.hasReactions()) {
+            return;
+        }
+        
+        // Get reaction counts
+        java.util.Map<String, Integer> reactionCounts = 
+                com.example.doan_zaloclone.models.MessageReaction.getReactionTypeCounts(
+                        message.getReactions(), message.getReactionCounts());
+        
+        // Build dialog content
+        StringBuilder statsText = new StringBuilder();
+        statsText.append("Thống kê cảm xúc:\n\n");
+        
+        int totalReactions = 0;
+        if (message.getReactionCounts() != null) {
+            for (Integer count : message.getReactionCounts().values()) {
+                totalReactions += count;
+            }
+        } else {
+            totalReactions = message.getReactions() != null ? message.getReactions().size() : 0;
+        }
+        
+        // Add each reaction type with count
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART) > 0) {
+            statsText.append("❤️ Thích: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA) > 0) {
+            statsText.append("😂 Haha: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_HAHA))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW) > 0) {
+            statsText.append("😮 Wow: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_WOW))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD) > 0) {
+            statsText.append("😢 Buồn: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_SAD))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY) > 0) {
+            statsText.append("😠 Phẫn nộ: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_ANGRY))
+                    .append("\n");
+        }
+        if (reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE) > 0) {
+            statsText.append("👍 Like: ")
+                    .append(reactionCounts.get(com.example.doan_zaloclone.models.MessageReaction.REACTION_LIKE))
+                    .append("\n");
+        }
+        
+        statsText.append("\nTổng số lượt: ").append(totalReactions);
+        
+        // Show dialog
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("Cảm xúc của tin nhắn")
+                .setMessage(statsText.toString())
+                .setPositiveButton("Đóng", null)
+                .show();
+    }
+    
+    // ============== POLL METHODS ==============
+    
+    /**
+     * Show poll creation activity
+     */
+    private void showCreatePollActivity() {
+        Intent intent = new Intent(this, CreatePollActivity.class);
+        intent.putExtra(CreatePollActivity.EXTRA_CONVERSATION_NAME, conversationName);
+        createPollLauncher.launch(intent);
+    }
+    
+    /**
+     * Send poll message to conversation
+     */
+    private void sendPollMessage(com.example.doan_zaloclone.models.Poll poll) {
+        if (poll == null || firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Lỗi: Không thể gửi poll", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        chatRepository.sendPollMessage(conversationId, currentUserId, poll,
+                new ChatRepository.SendMessageCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Đã tạo poll", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
+    }
+    
+    // ===================== LOCATION HANDLING METHODS =====================
+    
+    /**
+     * Launch location picker activity
+     */
+    private void launchLocationPicker() {
+        Intent intent = new Intent(this, com.example.doan_zaloclone.ui.location.LocationPickerActivity.class);
+        locationPickerLauncher.launch(intent);
+    }
+    
+    /**
+     * Send location message
+     */
+    private void sendLocationMessage(double latitude, double longitude, String locationName, String locationAddress) {
+        if (firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Bạn cần đăng nhập để gửi vị trí", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Debug log
+        android.util.Log.d("RoomActivity", "sendLocationMessage called with:");
+        android.util.Log.d("RoomActivity", "  Latitude: " + latitude);
+        android.util.Log.d("RoomActivity", "  Longitude: " + longitude);
+        android.util.Log.d("RoomActivity", "  LocationName: " + locationName);
+        android.util.Log.d("RoomActivity", "  LocationAddress: " + locationAddress);
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        // Create location message
+        Message locationMessage = new Message();
+        locationMessage.setSenderId(currentUserId);
+        locationMessage.setType(Message.TYPE_LOCATION);
+        locationMessage.setLatitude(latitude);
+        locationMessage.setLongitude(longitude);
+        locationMessage.setLocationName(locationName);
+        locationMessage.setLocationAddress(locationAddress);
+        locationMessage.setTimestamp(System.currentTimeMillis());
+        
+        // Set sender name
+        String displayName = firebaseAuth.getCurrentUser().getDisplayName();
+        if (displayName != null && !displayName.isEmpty()) {
+            locationMessage.setSenderName(displayName);
+        }
+        
+        // Debug log after setting
+        android.util.Log.d("RoomActivity", "Created message with:");
+        android.util.Log.d("RoomActivity", "  Message.getLatitude(): " + locationMessage.getLatitude());
+        android.util.Log.d("RoomActivity", "  Message.getLongitude(): " + locationMessage.getLongitude());
+        
+        // Send via ViewModel
+        roomViewModel.sendMessage(conversationId, locationMessage);
+        
+        Toast.makeText(this, "Đã gửi vị trí", Toast.LENGTH_SHORT).show();
+    }
+    
+    /**
+     * Send live location message
+     */
+    private void sendLiveLocationMessage(String sessionId) {
+        if (firebaseAuth.getCurrentUser() == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        Message liveLocationMessage = new Message();
+        liveLocationMessage.setSenderId(currentUserId);
+        liveLocationMessage.setType(Message.TYPE_LIVE_LOCATION);
+        liveLocationMessage.setLiveLocationSessionId(sessionId);
+        liveLocationMessage.setContent("Đang chia sẻ vị trí trực tiếp");
+        liveLocationMessage.setTimestamp(System.currentTimeMillis());
+        
+        // Set sender name
+        String displayName = firebaseAuth.getCurrentUser().getDisplayName();
+        if (displayName != null && !displayName.isEmpty()) {
+            liveLocationMessage.setSenderName(displayName);
+        }
+        
+        roomViewModel.sendMessage(conversationId, liveLocationMessage);
+        Toast.makeText(this, "Đang chia sẻ vị trí trực tiếp...", Toast.LENGTH_SHORT).show();
+    }
+    
+    // ===================== POLL INTERACTION HANDLERS =====================
+    
+    /**
+     * Handle voting for a poll option
+     */
+    private void handlePollVote(Message message, String optionId) {
+        if (message == null || optionId == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        chatRepository.votePoll(conversationId, message.getId(), optionId, currentUserId,
+                new ChatRepository.VotePollCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            // Poll will auto-update via Firestore listener
+                            android.util.Log.d("RoomActivity", "Vote successful");
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
+    }
+    
+    /**
+     * Handle closing a poll
+     */
+    private void handleClosePoll(Message message) {
+        if (message == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        // TODO: Check if user is group admin (for now, pass false)
+        boolean isGroupAdmin = false;
+        
+        chatRepository.closePoll(conversationId, message.getId(), currentUserId, isGroupAdmin,
+                new ChatRepository.VotePollCallback() {
+                    @Override
+                    public void onSuccess() {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Đã đóng bình chọn", Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+                        });
+                    }
+                });
     }
     
     @Override
