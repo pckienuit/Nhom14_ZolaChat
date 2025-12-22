@@ -1,0 +1,286 @@
+# Business Card Button State Management - Dev Notes
+
+Date: 22/12/2025
+
+## Bug Summary
+Business card "Add Friend" button trong message adapter không cập nhật trạng thái UI đúng khi:
+1. Gửi lời mời kết bạn
+2. Bạn bè chấp nhận lời mời 
+3. Xóa bạn bè
+4. ViewHolder bị recycle hoặc rebind
+
+## Root Causes
+
+### Issue 1: Không có Real-time Updates
+**Problem:** Ban đầu sử dụng one-time `.get()` query thay vì snapshot listeners
+**Impact:** UI không tự động cập nhật khi friendship status thay đổi
+
+### Issue 2: ViewHolder Recycling Issues  
+**Problem:** RecyclerView recycle ViewHolders nhưng old listeners vẫn update UI
+**Impact:** Button hiển thị sai trạng thái cho contact user khác
+
+### Issue 3: Document ID Format Mismatch
+**Problem:** Code listen to document với ID `userId1_userId2` nhưng Firestore dùng auto-generated IDs
+**Impact:** Listeners không bao giờ nhận được updates vì document không tồn tại
+
+### Issue 4: Multiple Documents với cùng User Pair
+**Problem:** Có nhiều friendRequest documents (REMOVED, ACCEPTED, PENDING) cho cùng cặp users
+**Impact:** Chỉ lấy document đầu tiên có thể là REMOVED thay vì ACCEPTED
+
+## Files Modified
+
+### 1. MessageAdapter.java - ContactMessageViewHolder (Lines 1558-1562)
+**Added:** Tracking fields cho listener management
+```java
+// Track current contact to validate async callbacks
+private String currentContactUserId;
+// Store listeners for cleanup on rebind
+private ListenerRegistration friendRequestListener;
+private ListenerRegistration friendsListener;
+```
+
+**Why:** Cần track current contact để validate callbacks và cleanup listeners để tránh memory leaks
+
+### 2. MessageAdapter.java - bind() method (Lines 1579-1591)
+**Added:** Immediate UI reset và listener cleanup
+```java
+// CRITICAL: Reset UI state immediately to prevent ViewHolder recycling issues
+btnAddFriendFromCard.setVisibility(View.GONE);
+friendRequestDivider.setVisibility(View.GONE);
+
+// Remove old listeners if exists to prevent memory leaks
+if (friendRequestListener != null) {
+    friendRequestListener.remove();
+    friendRequestListener = null;
+}
+if (friendsListener != null) {
+    friendsListener.remove();
+    friendsListener = null;
+}
+```
+
+**Why:** 
+- Reset UI ngay lập tức để tránh hiển thị trạng thái của contact trước đó
+- Cleanup listeners cũ trước khi tạo mới để tránh memory leaks và duplicate updates
+
+### 3. MessageAdapter.java - setupFriendshipListener() (Lines 1717-1847)
+**Evolution:** Method này đã trải qua 4 iterations để fix các issues
+
+#### Iteration 1: Document ID listening (FAILED)
+```java
+// ❌ WRONG: Document IDs are auto-generated, not userId1_userId2
+friendshipListener = db.collection("friendRequests")
+    .document(currentUserId + "_" + contactUserId)
+    .addSnapshotListener(...);
+```
+**Problem:** Document không tồn tại → Listener không bao giờ fire
+
+#### Iteration 2: Query-based listening (PARTIAL)
+```java
+// ⚠️ INCOMPLETE: Only gets first document
+friendRequestListener = db.collection("friendRequests")
+    .whereEqualTo("fromUserId", currentUserId)
+    .whereEqualTo("toUserId", contactUserId)
+    .addSnapshotListener((snapshots, error) -> {
+        DocumentSnapshot doc = snapshots.getDocuments().get(0);
+        requestStatusFromMe[0] = doc.getString("status");
+    });
+```
+**Problem:** Nếu có nhiều documents (REMOVED, ACCEPTED), chỉ lấy đầu tiên có thể sai
+
+#### Iteration 3: Best status selection (WORKING)
+```java
+// ✅ CORRECT: Find best status from ALL documents
+if (snapshots != null && !snapshots.isEmpty()) {
+    String bestStatus = null;
+    for (DocumentSnapshot doc : snapshots.getDocuments()) {
+        String status = doc.getString("status");
+        if ("ACCEPTED".equals(status)) {
+            bestStatus = "ACCEPTED";
+            break; // Can't get better than this
+        } else if ("PENDING".equals(status)) {
+            bestStatus = "PENDING";
+        } else if (bestStatus == null) {
+            bestStatus = status;
+        }
+    }
+    requestStatusFromMe[0] = bestStatus;
+}
+```
+
+**Final Implementation:**
+```java
+private void setupFriendshipListener(String contactUserId, String currentUserId) {
+    FirebaseFirestore db = FirebaseFirestore.getInstance();
+    
+    final String[] requestStatusFromMe = {null};  // Current → Contact
+    final String[] requestStatusToMe = {null};    // Contact → Current
+    
+    // Helper to update UI based on state
+    Runnable updateUI = () -> {
+        if (!contactUserId.equals(this.currentContactUserId)) return;
+        
+        boolean areFriends = "ACCEPTED".equals(requestStatusFromMe[0]) || 
+                            "ACCEPTED".equals(requestStatusToMe[0]);
+        boolean hasPendingRequest = "PENDING".equals(requestStatusFromMe[0]);
+        boolean hasIncomingRequest = "PENDING".equals(requestStatusToMe[0]);
+        
+        if (areFriends) {
+            // Hide button
+        } else if (hasPendingRequest) {
+            // Show "ĐÃ GỬI LỜI MỜI" (disabled)
+        } else if (hasIncomingRequest) {
+            // Show "ĐANG CHỜ PHẢN HỒI" (disabled)
+        } else {
+            // Show "GỬI LỜI MỜI KẾT BẠN" (enabled)
+        }
+    };
+    
+    // Listen to outgoing requests (with best status selection)
+    friendRequestListener = db.collection("friendRequests")
+        .whereEqualTo("fromUserId", currentUserId)
+        .whereEqualTo("toUserId", contactUserId)
+        .addSnapshotListener(...);
+    
+    // Listen to incoming requests (with best status selection)
+    friendsListener = db.collection("friendRequests")
+        .whereEqualTo("fromUserId", contactUserId)
+        .whereEqualTo("toUserId", currentUserId)
+        .addSnapshotListener(...);
+}
+```
+
+### 4. MessageAdapter.java - Message button fix (Lines 1704-1741)
+**Changed:** From showing toast to opening conversation
+```java
+// BEFORE ❌
+btnMessageFromCard.setOnClickListener(v -> {
+    Toast.show("Bạn đang trong cuộc trò chuyện này");
+});
+
+// AFTER ✅
+btnMessageFromCard.setOnClickListener(v -> {
+    String loggedInUserId = auth.getCurrentUser().getUid();
+    ChatRepository chatRepo = new ChatRepository();
+    
+    chatRepo.getOrCreateConversationWithFriend(loggedInUserId, contactUserId, 
+        new ConversationCallback() {
+            @Override
+            public void onSuccess(String conversationId) {
+                Intent intent = new Intent(context, RoomActivity.class);
+                intent.putExtra("conversationId", conversationId);
+                context.startActivity(intent);
+            }
+            
+            @Override
+            public void onError(String error) {
+                Toast.show("Không thể mở cuộc trò chuyện: " + error);
+            }
+        });
+});
+```
+
+## Key Learnings
+
+### 1. Firestore Document Structure
+**Discovery:** App không dùng separate `friends` collection. Friendship được lưu trong `friendRequests` với:
+- `status = "PENDING"` → Chờ chấp nhận
+- `status = "ACCEPTED"` → Đã là bạn bè  
+- `status = "REMOVED"` → Đã xóa bạn
+- Document IDs are **auto-generated**, NOT `userId1_userId2`
+
+### 2. ViewHolder Lifecycle Management
+**Critical Rules:**
+- ALWAYS reset UI state at start of `bind()`
+- ALWAYS cleanup old listeners before creating new ones
+- ALWAYS validate callbacks against current bound item
+- Track `currentContactUserId` to prevent stale updates
+
+### 3. Query-based Listeners vs Document Listeners
+**Use query-based when:**
+- Document ID format is unknown or dynamic
+- Need to handle multiple related documents
+- Need to prioritize certain document states
+
+**Pattern:**
+```java
+db.collection("friendRequests")
+    .whereEqualTo("fromUserId", userId1)
+    .whereEqualTo("toUserId", userId2)
+    .addSnapshotListener((snapshots, error) -> {
+        // Process ALL documents, not just first
+    });
+```
+
+### 4. Status Priority Logic
+When multiple documents exist, priority order:
+1. **ACCEPTED** (highest) - Already friends
+2. **PENDING** - Waiting for response  
+3. **REMOVED** / others (lowest) - No active relationship
+
+### 5. Compound Queries and Indexes
+**May need Firestore composite index for:**
+```
+Collection: friendRequests
+Fields: 
+  - fromUserId (Ascending)
+  - toUserId (Ascending)
+```
+
+Check Firebase Console if you see: `FAILED_PRECONDITION: The query requires an index`
+
+## Compilation Errors Fixed
+
+### Error 1: Variable name conflict
+```
+error: variable currentUserId is already defined in method setupActionButtons
+```
+**Fix:** Renamed to `loggedInUserId` to avoid conflict with method parameter
+
+### Error 2: Method not found
+```
+error: cannot find symbol method getOrCreateConversation(String,String,String,String)
+```
+**Fix:** Changed to `getOrCreateConversationWithFriend(userId1, userId2, callback)`
+
+## Testing Checklist
+
+- [x] Gửi lời mời kết bạn → Button chuyển sang "ĐÃ GỬI LỜI MỜI" ngay lập tức
+- [x] Bạn bè chấp nhận lời mời → Button tự động ẩn (real-time)
+- [x] Xóa bạn bè → Button hiện lại "GỬI LỜI MỜI KẾT BẠN" (real-time)
+- [x] Scroll RecyclerView → Button states đúng cho mỗi contact
+- [x] Nhận lời mời từ contact → Hiển thị "ĐANG CHỜ PHẢN HỒI"
+- [x] Nút "Nhắn tin" → Mở đúng conversation với contact user
+- [x] No memory leaks from listeners
+- [x] No crashes from null pointers
+
+## Performance Considerations
+
+**Listener Count:** 2 listeners per visible business card message
+- 1 for outgoing requests (current → contact)
+- 1 for incoming requests (contact → current)
+
+**Optimization:** Listeners are automatically cleaned up when ViewHolder is recycled
+
+**Best Practice:** Keep business card messages to reasonable scrollback limit
+
+## Debug Logging
+Added comprehensive logging for troubleshooting:
+```
+ContactMessageViewHolder: Outgoing request status (best): ACCEPTED
+ContactMessageViewHolder: Incoming request status (best): null
+ContactMessageViewHolder: Already friends - hiding button
+```
+
+## Future Improvements
+
+1. **Cache friendship status** để reduce Firestore reads
+2. **Batch listener setup** nếu có nhiều business cards cùng lúc
+3. **Implement retry logic** cho failed listener connections
+4. **Add loading state** while checking friendship status
+5. **Consider using single collection listener** thay vì per-document listeners
+
+## References
+- Firestore Real-time Updates: https://firebase.google.com/docs/firestore/query-data/listen
+- RecyclerView ViewHolder Lifecycle: https://developer.android.com/reference/androidx/recyclerview/widget/RecyclerView.ViewHolder
+- Memory Leak Prevention: https://developer.android.com/topic/performance/memory
