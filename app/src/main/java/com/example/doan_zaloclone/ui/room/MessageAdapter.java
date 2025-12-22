@@ -36,6 +36,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public static final int VIEW_TYPE_POLL_RECEIVED = 11;
     public static final int VIEW_TYPE_CONTACT_SENT = 12;
     public static final int VIEW_TYPE_CONTACT_RECEIVED = 13;
+    public static final int VIEW_TYPE_LOCATION_SENT = 14;
+    public static final int VIEW_TYPE_LOCATION_RECEIVED = 15;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -179,6 +181,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         boolean isCall = Message.TYPE_CALL.equals(message.getType());
         boolean isPoll = Message.TYPE_POLL.equals(message.getType());
         boolean isContact = Message.TYPE_CONTACT.equals(message.getType());
+        boolean isLocation = Message.TYPE_LOCATION.equals(message.getType());
         
         // Call history messages are always centered
         if (isCall) {
@@ -193,6 +196,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         // Contact messages (business cards)
         if (isContact) {
             return isSent ? VIEW_TYPE_CONTACT_SENT : VIEW_TYPE_CONTACT_RECEIVED;
+        }
+        
+        // Location messages
+        if (isLocation) {
+            return isSent ? VIEW_TYPE_LOCATION_SENT : VIEW_TYPE_LOCATION_RECEIVED;
         }
         
         if (isSent) {
@@ -261,6 +269,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_contact_received, parent, false);
                 return new ContactMessageViewHolder(view, false);
+            case VIEW_TYPE_LOCATION_SENT:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_location_sent, parent, false);
+                return new LocationMessageViewHolder(view);
+            case VIEW_TYPE_LOCATION_RECEIVED:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_location_received, parent, false);
+                return new LocationMessageViewHolder(view);
             default:
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_sent, parent, false);
@@ -292,6 +308,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((PollMessageViewHolder) holder).bind(message, currentUserId, isPinned, isHighlighted, pollInteractionListener);
         } else if (holder instanceof ContactMessageViewHolder) {
             ((ContactMessageViewHolder) holder).bind(message, currentUserId);
+        } else if (holder instanceof LocationMessageViewHolder) {
+            ((LocationMessageViewHolder) holder).bind(message);
         } else if (holder instanceof RecalledMessageViewHolder) {
             // Recalled messages just display static text, no binding needed
         }
@@ -2160,6 +2178,73 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                         "Không thể gửi lời mời kết bạn", 
                         android.widget.Toast.LENGTH_SHORT).show();
                 });
+        }
+    }
+    
+    // ================ LOCATION MESSAGE VIEW HOLDER ================
+    
+    static class LocationMessageViewHolder extends RecyclerView.ViewHolder {
+        private TextView locationNameText;
+        private TextView locationAddressText;
+        private TextView coordinatesText;
+        private TextView timestampTextView;
+        private View messageCard;
+        
+        public LocationMessageViewHolder(@NonNull View itemView) {
+            super(itemView);
+            locationNameText = itemView.findViewById(R.id.locationNameText);
+            locationAddressText = itemView.findViewById(R.id.locationAddressText);
+            coordinatesText = itemView.findViewById(R.id.coordinatesText);
+            timestampTextView = itemView.findViewById(R.id.timestampTextView);
+            messageCard = itemView.findViewById(R.id.messageCard);
+        }
+        
+        public void bind(Message message) {
+            // Set location name
+            String locationName = message.getLocationName();
+            if (locationName != null && !locationName.isEmpty()) {
+                locationNameText.setText(locationName);
+            } else {
+                locationNameText.setText("Vị trí");
+            }
+            
+            // Set address
+            String address = message.getLocationAddress();
+            if (address != null && !address.isEmpty()) {
+                locationAddressText.setText(address);
+                locationAddressText.setVisibility(View.VISIBLE);
+            } else {
+                locationAddressText.setVisibility(View.GONE);
+            }
+            
+            // Set coordinates
+            double lat = message.getLatitude();
+            double lng = message.getLongitude();
+            coordinatesText.setText(String.format(java.util.Locale.getDefault(), 
+                    "📍 %.4f, %.4f", lat, lng));
+            
+            // Set timestamp
+            timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            
+            // Set click listener to open Google Maps
+            messageCard.setOnClickListener(v -> {
+                android.content.Context context = v.getContext();
+                android.net.Uri gmmIntentUri = android.net.Uri.parse(
+                        "geo:" + lat + "," + lng + "?q=" + lat + "," + lng);
+                android.content.Intent mapIntent = new android.content.Intent(
+                        android.content.Intent.ACTION_VIEW, gmmIntentUri);
+                mapIntent.setPackage("com.google.android.apps.maps");
+                
+                // Try to open Google Maps, if not installed, open in any maps app
+                try {
+                    context.startActivity(mapIntent);
+                } catch (android.content.ActivityNotFoundException ex) {
+                    // Google Maps not installed, try generic geo intent
+                    android.content.Intent genericIntent = new android.content.Intent(
+                            android.content.Intent.ACTION_VIEW, gmmIntentUri);
+                    context.startActivity(genericIntent);
+                }
+            });
         }
     }
 }

@@ -107,6 +107,9 @@ public class RoomActivity extends AppCompatActivity {
     
     // Poll creation
     private ActivityResultLauncher<Intent> createPollLauncher;
+    
+    // Location picker
+    private ActivityResultLauncher<Intent> locationPickerLauncher;
 
     // Pinned messages UI
     private FrameLayout pinnedMessagesContainer;
@@ -186,6 +189,25 @@ public class RoomActivity extends AppCompatActivity {
                         if (poll != null) {
                             sendPollMessage(poll);
                         }
+                    }
+                }
+        );
+        
+        // Register location picker launcher
+        locationPickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                        double latitude = result.getData().getDoubleExtra(
+                                com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LATITUDE, 0);
+                        double longitude = result.getData().getDoubleExtra(
+                                com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LONGITUDE, 0);
+                        String locationName = result.getData().getStringExtra(
+                                com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LOCATION_NAME);
+                        String locationAddress = result.getData().getStringExtra(
+                                com.example.doan_zaloclone.ui.location.LocationPickerActivity.EXTRA_LOCATION_ADDRESS);
+                        
+                        sendLocationMessage(latitude, longitude, locationName, locationAddress);
                     }
                 }
         );
@@ -1256,6 +1278,9 @@ public class RoomActivity extends AppCompatActivity {
                 } else if (action instanceof com.example.doan_zaloclone.ui.room.actions.SendPollAction) {
                     // Launch poll creation activity
                     showCreatePollActivity();
+                } else if (action instanceof com.example.doan_zaloclone.ui.room.actions.SendLocationAction) {
+                    // Launch location picker activity
+                    launchLocationPicker();
                 } else {
                     // Launch file picker for other actions
                     launchFilePicker();
@@ -2072,6 +2097,49 @@ public class RoomActivity extends AppCompatActivity {
                         });
                     }
                 });
+    }
+    
+    // ===================== LOCATION HANDLING METHODS =====================
+    
+    /**
+     * Launch location picker activity
+     */
+    private void launchLocationPicker() {
+        Intent intent = new Intent(this, com.example.doan_zaloclone.ui.location.LocationPickerActivity.class);
+        locationPickerLauncher.launch(intent);
+    }
+    
+    /**
+     * Send location message
+     */
+    private void sendLocationMessage(double latitude, double longitude, String locationName, String locationAddress) {
+        if (firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(this, "Bạn cần đăng nhập để gửi vị trí", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        // Create location message
+        Message locationMessage = new Message();
+        locationMessage.setSenderId(currentUserId);
+        locationMessage.setType(Message.TYPE_LOCATION);
+        locationMessage.setLatitude(latitude);
+        locationMessage.setLongitude(longitude);
+        locationMessage.setLocationName(locationName);
+        locationMessage.setLocationAddress(locationAddress);
+        locationMessage.setTimestamp(System.currentTimeMillis());
+        
+        // Set sender name
+        String displayName = firebaseAuth.getCurrentUser().getDisplayName();
+        if (displayName != null && !displayName.isEmpty()) {
+            locationMessage.setSenderName(displayName);
+        }
+        
+        // Send via ViewModel
+        roomViewModel.sendMessage(conversationId, locationMessage);
+        
+        Toast.makeText(this, "Đã gửi vị trí", Toast.LENGTH_SHORT).show();
     }
     
     // ===================== POLL INTERACTION HANDLERS =====================

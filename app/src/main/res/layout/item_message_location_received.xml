@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="4dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="start"
+        android:orientation="horizontal">
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/messageCard"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="48dp"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="2dp"
+            app:cardBackgroundColor="#FFFFFF">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <!-- Location Icon and Name -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <ImageView
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:src="@drawable/ic_map_marker"
+                        android:contentDescription="Location icon" />
+
+                    <TextView
+                        android:id="@+id/locationNameText"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:text="Vị trí"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="#000000" />
+
+                </LinearLayout>
+
+                <!-- Address -->
+                <TextView
+                    android:id="@+id/locationAddressText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Địa chỉ"
+                    android:textSize="12sp"
+                    android:textColor="#666666"
+                    android:maxLines="2"
+                    android:ellipsize="end" />
+
+                <!-- Coordinates -->
+                <TextView
+                    android:id="@+id/coordinatesText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="📍 0.0000, 0.0000"
+                    android:textSize="11sp"
+                    android:textColor="#999999" />
+
+                <!-- Open in Maps prompt -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="👆 Nhấn để mở bản đồ"
+                    android:textSize="11sp"
+                    android:textColor="#4CAF50"
+                    android:textStyle="italic"
+                    android:gravity="start" />
+
+            </LinearLayout>
+
+        </com.google.android.material.card.MaterialCardView>
+
+    </LinearLayout>
+
+    <!-- Timestamp -->
+    <TextView
+        android:id="@+id/timestampTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start"
+        android:layout_marginTop="2dp"
+        android:layout_marginStart="4dp"
+        android:text="12:00"
+        android:textSize="10sp"
+        android:textColor="#666666" />
+
+</LinearLayout>
