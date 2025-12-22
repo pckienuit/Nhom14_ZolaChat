@@ -18,6 +18,7 @@ import com.example.doan_zaloclone.ui.call.CallActivity;
 import com.example.doan_zaloclone.ui.contact.ContactFragment;
 import com.example.doan_zaloclone.ui.home.HomeFragment;
 import com.example.doan_zaloclone.ui.login.LoginActivity;
+import com.example.doan_zaloclone.ui.newsfeed.NewsfeedFragment;
 import com.example.doan_zaloclone.ui.personal.PersonalFragment;
 import com.example.doan_zaloclone.viewmodel.MainViewModel;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
@@ -34,6 +35,7 @@ public class MainActivity extends AppCompatActivity {
     // Cache fragments to preserve state
     private HomeFragment homeFragment;
     private ContactFragment contactFragment;
+    private NewsfeedFragment newsfeedFragment;
     private PersonalFragment personalFragment;
     
     // Incoming call listener
@@ -251,6 +253,9 @@ public class MainActivity extends AppCompatActivity {
         if (contactFragment != null) {
             transaction.hide(contactFragment);
         }
+        if (newsfeedFragment != null) {
+            transaction.hide(newsfeedFragment);
+        }
         if (personalFragment != null) {
             transaction.hide(personalFragment);
         }
@@ -273,7 +278,15 @@ public class MainActivity extends AppCompatActivity {
                     transaction.show(contactFragment);
                 }
                 break;
-            case 2: // Personal
+            case 2: // Newsfeed
+                if (newsfeedFragment == null) {
+                    newsfeedFragment = new NewsfeedFragment();
+                    transaction.add(R.id.fragmentContainer, newsfeedFragment, "CONTACT");
+                } else {
+                    transaction.show(newsfeedFragment);
+                }
+                break;
+            case 3: // Personal
                 if (personalFragment == null) {
                     personalFragment = new PersonalFragment();
                     transaction.add(R.id.fragmentContainer, personalFragment, "PERSONAL");
