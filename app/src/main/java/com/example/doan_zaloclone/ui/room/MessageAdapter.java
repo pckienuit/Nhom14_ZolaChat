@@ -1548,9 +1548,9 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private TextView contactName;
         private TextView contactPhone;
         private LinearLayout phoneContainer;
-        private com.google.android.material.button.MaterialButton btnAddFriendFromCard;
-        private com.google.android.material.button.MaterialButton btnCallFromCard;
-        private TextView messageTimestamp;
+        private com.google.android.material.button.MaterialButton btnAddFriendFromCard; // Kept for compatibility
+        private LinearLayout btnCallFromCard; // Changed to LinearLayout
+        private LinearLayout btnMessageFromCard; // New button
         private boolean isSent;
         
         public ContactMessageViewHolder(@NonNull View itemView, boolean isSent) {
@@ -1562,7 +1562,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             phoneContainer = itemView.findViewById(R.id.phoneContainer);
             btnAddFriendFromCard = itemView.findViewById(R.id.btnAddFriendFromCard);
             btnCallFromCard = itemView.findViewById(R.id.btnCallFromCard);
-            messageTimestamp = itemView.findViewById(R.id.messageTimestamp);
+            btnMessageFromCard = itemView.findViewById(R.id.btnMessageFromCard);
         }
         
         public void bind(Message message, String currentUserId) {
@@ -1571,11 +1571,6 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             android.util.Log.d("ContactMessageViewHolder", "Message ID: " + message.getId());
             android.util.Log.d("ContactMessageViewHolder", "Message Type: " + message.getType());
             android.util.Log.d("ContactMessageViewHolder", "Contact User ID: " + message.getContactUserId());
-            
-            // Set timestamp
-            if (messageTimestamp != null) {
-                messageTimestamp.setText(TIMESTAMP_FORMAT.format(new java.util.Date(message.getTimestamp())));
-            }
             
             // Get contact user ID from message
             String contactUserId = message.getContactUserId();
@@ -1615,16 +1610,16 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                             contactAvatar.setImageResource(R.drawable.ic_avatar);
                         }
                         
-                        // Set phone number (if available)
+                        // Set phone number in header (if available)
                         if (phoneNumber != null && !phoneNumber.isEmpty()) {
                             contactPhone.setText(phoneNumber);
-                            phoneContainer.setVisibility(View.VISIBLE);
+                            contactPhone.setVisibility(View.VISIBLE);
                         } else {
-                            phoneContainer.setVisibility(View.GONE);
+                            contactPhone.setVisibility(View.GONE);
                         }
                         
-                        // Check friendship status and show appropriate buttons
-                        checkFriendshipAndShowButtons(contactUserId, currentUserId, phoneNumber);
+                        // Setup action buttons
+                        setupActionButtons(contactUserId, currentUserId, phoneNumber);
                         
                         // Set click listener on avatar/name to view profile
                         View.OnClickListener profileClickListener = v -> {
@@ -1643,15 +1638,116 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                         contactName.setOnClickListener(profileClickListener);
                     } else {
                         contactName.setText("Người dùng không tồn tại");
-                        btnAddFriendFromCard.setVisibility(View.GONE);
-                        btnCallFromCard.setVisibility(View.GONE);
                     }
                 })
                 .addOnFailureListener(e -> {
                     android.util.Log.e("ContactMessageViewHolder", "ERROR fetching contact user: " + e.getMessage(), e);
                     contactName.setText("Lỗi tải thông tin");
+                });
+        }
+        
+        /**
+         * Setup Call and Message buttons
+         */
+        private void setupActionButtons(String contactUserId, String currentUserId, String phoneNumber) {
+            // Setup "Gọi điện" button
+            if (phoneNumber != null && !phoneNumber.isEmpty()) {
+                btnCallFromCard.setAlpha(1.0f); // Enabled
+                btnCallFromCard.setOnClickListener(v -> {
+                    // Launch call activity
+                    android.content.Intent intent = new android.content.Intent(
+                        itemView.getContext(),
+                        com.example.doan_zaloclone.ui.call.CallActivity.class
+                    );
+                    intent.putExtra("EXTRA_RECEIVER_ID", contactUserId);
+                    intent.putExtra("EXTRA_IS_VIDEO", false);
+                    intent.putExtra("EXTRA_IS_INCOMING", false);
+                    itemView.getContext().startActivity(intent);
+                });
+            } else {
+                // No phone number - disable button
+                btnCallFromCard.setAlpha(0.5f);
+                btnCallFromCard.setOnClickListener(v -> {
+                    android.widget.Toast.makeText(itemView.getContext(), 
+                        "Người dùng này chưa có số điện thoại", 
+                        android.widget.Toast.LENGTH_SHORT).show();
+                });
+            }
+            
+            // Setup "Nhắn tin" button - always enabled
+            btnMessageFromCard.setOnClickListener(v -> {
+                // This contact message is already in a conversation
+                // Just show a toast or do nothing since user is already in chat
+                android.widget.Toast.makeText(itemView.getContext(), 
+                    "Bạn đang trong cuộc trò chuyện này", 
+                    android.widget.Toast.LENGTH_SHORT).show();
+            });
+            
+            // Check friendship status for friend request button
+            checkFriendshipAndShowButton(contactUserId, currentUserId);
+        }
+        
+        /**
+         * Check friendship status and show/hide friend request button
+         */
+        private void checkFriendshipAndShowButton(String contactUserId, String currentUserId) {
+            // Use FriendRepository to check friendship
+            com.example.doan_zaloclone.repository.FriendRepository friendRepo = 
+                new com.example.doan_zaloclone.repository.FriendRepository();
+                
+            friendRepo.checkFriendship(currentUserId, contactUserId).observeForever(resource -> {
+                if (resource != null && resource.isSuccess()) {
+                    boolean areFriends = resource.getData() != null && resource.getData();
+                    
+                    if (areFriends) {
+                        // Already friends - hide friend request button
+                        btnAddFriendFromCard.setVisibility(View.GONE);
+                    } else {
+                        // Not friends yet - check if there's a pending request
+                        checkPendingRequestAndShowButton(contactUserId, currentUserId);
+                    }
+                } else {
+                    // Error checking - hide button
                     btnAddFriendFromCard.setVisibility(View.GONE);
-                    btnCallFromCard.setVisibility(View.GONE);
+                }
+            });
+        }
+        
+        /**
+         * Check if there's a pending friend request
+         */
+        private void checkPendingRequestAndShowButton(String contactUserId, String currentUserId) {
+            // Check if current user has sent a request to contact user
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("friendRequests")
+                .document(currentUserId + "_" + contactUserId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists() && "pending".equals(doc.getString("status"))) {
+                        // Request already sent - show "Đã gửi lời mời" (disabled)
+                        btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                        btnAddFriendFromCard.setText("Đã gửi lời mời");
+                        btnAddFriendFromCard.setEnabled(false);
+                    } else {
+                        // No pending request - show "Gửi lời mời kết bạn" (enabled)
+                        btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                        btnAddFriendFromCard.setText("Gửi lời mời kết bạn");
+                        btnAddFriendFromCard.setEnabled(true);
+                        
+                        btnAddFriendFromCard.setOnClickListener(v -> {
+                            sendFriendRequest(contactUserId, currentUserId);
+                        });
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    // Error - show default
+                    btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                    btnAddFriendFromCard.setText("Gửi lời mời kết bạn");
+                    btnAddFriendFromCard.setEnabled(true);
+                    
+                    btnAddFriendFromCard.setOnClickListener(v -> {
+                        sendFriendRequest(contactUserId, currentUserId);
+                    });
                 });
         }
         
@@ -1668,9 +1764,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     boolean areFriends = resource.getData() != null && resource.getData();
                     
                     if (areFriends) {
-                        // Already friends - hide add friend button, show call button if has phone
-                        btnAddFriendFromCard.setVisibility(View.GONE);
+                        // Already friends - show "Bạn bè" button (disabled)
+                        btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                        btnAddFriendFromCard.setText("Bạn bè");
+                        btnAddFriendFromCard.setEnabled(false);
                         
+                        // Show call button if has phone number
                         if (phoneNumber != null && !phoneNumber.isEmpty()) {
                             btnCallFromCard.setVisibility(View.VISIBLE);
                             btnCallFromCard.setOnClickListener(v -> {
@@ -1688,17 +1787,15 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                             btnCallFromCard.setVisibility(View.GONE);
                         }
                     } else {
-                        // Not friends - show add friend button, hide call button
-                        btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                        // Not friends yet - check if there's a pending request
+                        checkPendingRequestAndShowButton(contactUserId, currentUserId, friendRepo);
                         btnCallFromCard.setVisibility(View.GONE);
-                        
-                        btnAddFriendFromCard.setOnClickListener(v -> {
-                            sendFriendRequest(contactUserId, currentUserId);
-                        });
                     }
                 } else {
-                    // Error or not friends - show add friend button by default
+                    // Error checking - show default add friend button
                     btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                    btnAddFriendFromCard.setText("Kết bạn");
+                    btnAddFriendFromCard.setEnabled(true);
                     btnCallFromCard.setVisibility(View.GONE);
                     
                     btnAddFriendFromCard.setOnClickListener(v -> {
@@ -1706,6 +1803,45 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     });
                 }
             });
+        }
+        
+        /**
+         * Check if there's a pending friend request
+         */
+        private void checkPendingRequestAndShowButton(String contactUserId, String currentUserId, 
+                                                       com.example.doan_zaloclone.repository.FriendRepository friendRepo) {
+            // Check if current user has sent a request to contact user
+            com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("friendRequests")
+                .document(currentUserId + "_" + contactUserId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (doc.exists() && "pending".equals(doc.getString("status"))) {
+                        // Request already sent - show "Đã gửi" (disabled)
+                        btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                        btnAddFriendFromCard.setText("Đã gửi");
+                        btnAddFriendFromCard.setEnabled(false);
+                    } else {
+                        // No pending request - show "Kết bạn" (enabled)
+                        btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                        btnAddFriendFromCard.setText("Kết bạn");
+                        btnAddFriendFromCard.setEnabled(true);
+                        
+                        btnAddFriendFromCard.setOnClickListener(v -> {
+                            sendFriendRequest(contactUserId, currentUserId);
+                        });
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    // Error - show default
+                    btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                    btnAddFriendFromCard.setText("Kết bạn");
+                    btnAddFriendFromCard.setEnabled(true);
+                    
+                    btnAddFriendFromCard.setOnClickListener(v -> {
+                        sendFriendRequest(contactUserId, currentUserId);
+                    });
+                });
         }
         
         /**
