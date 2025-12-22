@@ -138,6 +138,25 @@ public class ChatRepository {
         if (Message.TYPE_CONTACT.equals(message.getType()) && message.getContactUserId() != null) {
             messageData.put("contactUserId", message.getContactUserId());
         }
+        
+        // Add location data if this is a location message
+        if (Message.TYPE_LOCATION.equals(message.getType())) {
+            messageData.put("latitude", message.getLatitude());
+            messageData.put("longitude", message.getLongitude());
+            if (message.getLocationName() != null) {
+                messageData.put("locationName", message.getLocationName());
+            }
+            if (message.getLocationAddress() != null) {
+                messageData.put("locationAddress", message.getLocationAddress());
+            }
+        }
+        
+        // Add live location data if this is a live location message
+        if (Message.TYPE_LIVE_LOCATION.equals(message.getType())) {
+            if (message.getLiveLocationSessionId() != null) {
+                messageData.put("liveLocationSessionId", message.getLiveLocationSessionId());
+            }
+        }
 
         // Save message to Firestore
         messageRef.set(messageData)
@@ -1536,4 +1555,34 @@ public class ChatRepository {
         void onSuccess();
         void onError(String error);
     }
+    
+    /**
+     * Update live location data in Firestore
+     * @param liveLocation The updated live location object
+     */
+    public void updateLiveLocation(com.example.doan_zaloclone.models.LiveLocation liveLocation) {
+        if (liveLocation == null || liveLocation.getSessionId() == null) return;
+        
+        firestore.collection("liveLocations")
+                .document(liveLocation.getSessionId())
+                .set(liveLocation)
+                .addOnFailureListener(e -> android.util.Log.e("ChatRepo", "Failed to update live location", e));
+    }
+    
+    /**
+     * Stop live location sharing
+     * @param sessionId Session ID to stop
+     */
+    public void stopLiveLocation(String sessionId) {
+        if (sessionId == null) return;
+        
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("active", false);
+        
+        firestore.collection("liveLocations")
+                .document(sessionId)
+                .update(updates)
+                .addOnFailureListener(e -> android.util.Log.e("ChatRepo", "Failed to stop live location", e));
+    }
 }
+

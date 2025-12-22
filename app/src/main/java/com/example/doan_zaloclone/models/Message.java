@@ -10,6 +10,8 @@ public class Message {
     public static final String TYPE_CALL = "CALL";
     public static final String TYPE_POLL = "POLL";
     public static final String TYPE_CONTACT = "CONTACT"; // Business card message
+    public static final String TYPE_LOCATION = "LOCATION"; // Location message
+    public static final String TYPE_LIVE_LOCATION = "LIVE_LOCATION"; // Live location message
 
     private String id;
     private String senderId;
@@ -49,6 +51,15 @@ public class Message {
     
     // Contact data (only used for TYPE_CONTACT messages)
     private String contactUserId; // User ID of the contact being shared
+    
+    // Location data (only used for TYPE_LOCATION messages)
+    private double latitude;           // GPS latitude
+    private double longitude;          // GPS longitude
+    private String locationName;       // Name of the location (optional)
+    private String locationAddress;    // Full address of the location (optional)
+    
+    // Live Location data (only used for TYPE_LIVE_LOCATION messages)
+    private String liveLocationSessionId; // Session ID for live location tracking
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Message() {
@@ -275,6 +286,38 @@ public class Message {
     public void setContactUserId(String contactUserId) {
         this.contactUserId = contactUserId;
     }
+    
+    public double getLatitude() {
+        return latitude;
+    }
+    
+    public void setLatitude(double latitude) {
+        this.latitude = latitude;
+    }
+    
+    public double getLongitude() {
+        return longitude;
+    }
+    
+    public void setLongitude(double longitude) {
+        this.longitude = longitude;
+    }
+    
+    public String getLocationName() {
+        return locationName;
+    }
+    
+    public void setLocationName(String locationName) {
+        this.locationName = locationName;
+    }
+    
+    public String getLocationAddress() {
+        return locationAddress;
+    }
+    
+    public void setLocationAddress(String locationAddress) {
+        this.locationAddress = locationAddress;
+    }
 
     // Helper methods
     public boolean isTextMessage() {
@@ -299,6 +342,10 @@ public class Message {
     
     public boolean isContactMessage() {
         return TYPE_CONTACT.equals(this.type);
+    }
+    
+    public boolean isLocationMessage() {
+        return TYPE_LOCATION.equals(this.type);
     }
     
     /**
@@ -390,5 +437,13 @@ public class Message {
      */
     public boolean hasUserReacted(String userId) {
         return MessageReaction.hasUserReacted(reactions, userId);
+    }
+    
+    public String getLiveLocationSessionId() {
+        return liveLocationSessionId;
+    }
+    
+    public void setLiveLocationSessionId(String liveLocationSessionId) {
+        this.liveLocationSessionId = liveLocationSessionId;
     }
 }

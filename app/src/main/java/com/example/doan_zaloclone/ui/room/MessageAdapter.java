@@ -1,6 +1,7 @@
 package com.example.doan_zaloclone.ui.room;
 
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -20,6 +21,21 @@ import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import android.content.Intent;
+import android.os.CountDownTimer;
+import com.example.doan_zaloclone.models.LiveLocation;
+import com.example.doan_zaloclone.repository.ChatRepository;
+import com.example.doan_zaloclone.services.LocationSharingService;
+import com.example.doan_zaloclone.ui.location.LiveLocationViewActivity;
+import com.example.doan_zaloclone.ui.room.RoomActivity; // If needed, or check usages
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+import org.osmdroid.config.Configuration;
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
+import org.osmdroid.util.GeoPoint;
+import org.osmdroid.views.MapView;
+import org.osmdroid.views.overlay.Marker;
 
 public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
@@ -36,6 +52,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public static final int VIEW_TYPE_POLL_RECEIVED = 11;
     public static final int VIEW_TYPE_CONTACT_SENT = 12;
     public static final int VIEW_TYPE_CONTACT_RECEIVED = 13;
+    public static final int VIEW_TYPE_LOCATION_SENT = 14;
+    public static final int VIEW_TYPE_LOCATION_RECEIVED = 15;
+    public static final int VIEW_TYPE_LIVE_LOCATION_SENT = 16;
+    public static final int VIEW_TYPE_LIVE_LOCATION_RECEIVED = 17;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -179,6 +199,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         boolean isCall = Message.TYPE_CALL.equals(message.getType());
         boolean isPoll = Message.TYPE_POLL.equals(message.getType());
         boolean isContact = Message.TYPE_CONTACT.equals(message.getType());
+        boolean isLocation = Message.TYPE_LOCATION.equals(message.getType());
         
         // Call history messages are always centered
         if (isCall) {
@@ -193,6 +214,16 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         // Contact messages (business cards)
         if (isContact) {
             return isSent ? VIEW_TYPE_CONTACT_SENT : VIEW_TYPE_CONTACT_RECEIVED;
+        }
+        
+        // Location messages
+        if (isLocation) {
+            return isSent ? VIEW_TYPE_LOCATION_SENT : VIEW_TYPE_LOCATION_RECEIVED;
+        }
+        
+        // Live Location messages
+        if (Message.TYPE_LIVE_LOCATION.equals(message.getType())) {
+            return isSent ? VIEW_TYPE_LIVE_LOCATION_SENT : VIEW_TYPE_LIVE_LOCATION_RECEIVED;
         }
         
         if (isSent) {
@@ -261,6 +292,22 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_contact_received, parent, false);
                 return new ContactMessageViewHolder(view, false);
+            case VIEW_TYPE_LOCATION_SENT:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_location_sent, parent, false);
+                return new LocationMessageViewHolder(view);
+            case VIEW_TYPE_LOCATION_RECEIVED:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_location_received, parent, false);
+                return new LocationMessageViewHolder(view);
+            case VIEW_TYPE_LIVE_LOCATION_SENT:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_live_location_sent, parent, false);
+                return new LiveLocationMessageViewHolder(view, true);
+            case VIEW_TYPE_LIVE_LOCATION_RECEIVED:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_live_location_received, parent, false);
+                return new LiveLocationMessageViewHolder(view, false);
             default:
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_sent, parent, false);
@@ -280,6 +327,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((ReceivedMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof ImageSentViewHolder) {
             ((ImageSentViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
+        } else if (holder instanceof LiveLocationMessageViewHolder) {
+            ((LiveLocationMessageViewHolder) holder).bind(message, currentUserId);
         } else if (holder instanceof ImageReceivedViewHolder) {
             ((ImageReceivedViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof FileMessageSentViewHolder) {
@@ -292,6 +341,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((PollMessageViewHolder) holder).bind(message, currentUserId, isPinned, isHighlighted, pollInteractionListener);
         } else if (holder instanceof ContactMessageViewHolder) {
             ((ContactMessageViewHolder) holder).bind(message, currentUserId);
+        } else if (holder instanceof LocationMessageViewHolder) {
+            ((LocationMessageViewHolder) holder).bind(message);
         } else if (holder instanceof RecalledMessageViewHolder) {
             // Recalled messages just display static text, no binding needed
         }
@@ -2160,6 +2211,272 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                         "Không thể gửi lời mời kết bạn", 
                         android.widget.Toast.LENGTH_SHORT).show();
                 });
+        }
+    }
+    
+    // ================ LOCATION MESSAGE VIEW HOLDER ================
+    
+    static class LocationMessageViewHolder extends RecyclerView.ViewHolder {
+        private TextView locationNameText;
+        private TextView locationAddressText;
+        private TextView coordinatesText;
+        private TextView timestampTextView;
+        private View messageCard;
+        
+        public LocationMessageViewHolder(@NonNull View itemView) {
+            super(itemView);
+            locationNameText = itemView.findViewById(R.id.locationNameText);
+            locationAddressText = itemView.findViewById(R.id.locationAddressText);
+            coordinatesText = itemView.findViewById(R.id.coordinatesText);
+            timestampTextView = itemView.findViewById(R.id.timestampTextView);
+            messageCard = itemView.findViewById(R.id.messageCard);
+        }
+        
+        public void bind(Message message) {
+            // Set location name
+            String locationName = message.getLocationName();
+            if (locationName != null && !locationName.isEmpty()) {
+                locationNameText.setText(locationName);
+            } else {
+                locationNameText.setText("Vị trí");
+            }
+            
+            // Set address
+            String address = message.getLocationAddress();
+            if (address != null && !address.isEmpty()) {
+                locationAddressText.setText(address);
+                locationAddressText.setVisibility(View.VISIBLE);
+            } else {
+                locationAddressText.setVisibility(View.GONE);
+            }
+            
+            // Set coordinates
+            double lat = message.getLatitude();
+            double lng = message.getLongitude();
+            coordinatesText.setText(String.format(java.util.Locale.getDefault(), 
+                    "📍 %.4f, %.4f", lat, lng));
+            
+            // Set timestamp
+            timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            
+            // Set click listener to open Google Maps
+            messageCard.setOnClickListener(v -> {
+                android.net.Uri gmmIntentUri = android.net.Uri.parse(
+                        "geo:" + lat + "," + lng + "?q=" + lat + "," + lng);
+                android.content.Intent mapIntent = new android.content.Intent(
+                        android.content.Intent.ACTION_VIEW, gmmIntentUri);
+                mapIntent.setPackage("com.google.android.apps.maps");
+                
+                if (mapIntent.resolveActivity(itemView.getContext().getPackageManager()) != null) {
+                    itemView.getContext().startActivity(mapIntent);
+                } else {
+                    // Fallback to browser
+                    android.net.Uri browserAndriod = android.net.Uri.parse(
+                            "https://www.google.com/maps/search/?api=1&query=" + lat + "," + lng);
+                    android.content.Intent browserIntent = new android.content.Intent(
+                            android.content.Intent.ACTION_VIEW, browserAndriod);
+                    itemView.getContext().startActivity(browserIntent);
+                }
+            });
+            
+            // Set timestamp
+            if (timestampTextView != null) {
+                timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            }
+        }
+    }
+    
+    // ================ LIVE LOCATION MESSAGE VIEW HOLDER ================
+    
+    static class LiveLocationMessageViewHolder extends RecyclerView.ViewHolder {
+        private MapView mapView;
+        private TextView statusText;
+        private TextView timestampTextView;
+        private TextView btnStopSharing;
+        private View messageCard;
+        private View mapOverlay;
+        private ListenerRegistration liveLocationListener;
+        private CountDownTimer countDownTimer;
+        private Marker userMarker;
+        private boolean isSender;
+        
+        public LiveLocationMessageViewHolder(@NonNull View itemView, boolean isSender) {
+            super(itemView);
+            this.isSender = isSender;
+            mapView = itemView.findViewById(R.id.mapView);
+            statusText = itemView.findViewById(R.id.statusText);
+            timestampTextView = itemView.findViewById(R.id.timestampTextView);
+            btnStopSharing = itemView.findViewById(R.id.btnStopSharing); // Only present in sent layout
+            messageCard = itemView.findViewById(R.id.messageCard);
+            mapOverlay = itemView.findViewById(R.id.mapOverlay);
+            
+            // Ensure overlay is visible to block map touch and capture click
+            if (mapOverlay != null) {
+                mapOverlay.setVisibility(View.VISIBLE);
+            }
+            
+            // Basic Map Setup
+            setupMap();
+        }
+        
+        private void setupMap() {
+            Configuration.getInstance().setUserAgentValue(itemView.getContext().getPackageName());
+            mapView.setTileSource(TileSourceFactory.MAPNIK);
+            
+            // Disable interaction for preview (User wanted separate full screen view)
+            mapView.setMultiTouchControls(false); 
+            mapView.setClickable(false); 
+            
+            mapView.getController().setZoom(15.0);
+            mapView.setOnTouchListener(null);
+            
+            // Performance settings
+            mapView.setUseDataConnection(true);
+        }
+        
+        public void bind(Message message, String currentUserId) {
+            String sessionId = message.getLiveLocationSessionId();
+            if (sessionId == null) return;
+            
+            // Cleanup previous listener
+            cleanup();
+            
+            // Listen to Live Location updates
+            liveLocationListener = FirebaseFirestore.getInstance()
+                    .collection("liveLocations")
+                    .document(sessionId)
+                    .addSnapshotListener((snapshot, e) -> {
+                        if (e != null || snapshot == null || !snapshot.exists()) {
+                            statusText.setText("Phiên chia sẻ đã kết thúc");
+                            if (btnStopSharing != null) btnStopSharing.setVisibility(View.GONE);
+                            return;
+                        }
+                        
+                        LiveLocation liveLocation = snapshot.toObject(LiveLocation.class);
+                        if (liveLocation != null) {
+                            updateUI(liveLocation, message, currentUserId);
+                        }
+                    });
+            
+            // Handle Stop Sharing button
+            if (btnStopSharing != null && isSender) {
+                btnStopSharing.setOnClickListener(v -> {
+                    // Update Firestore
+                    new ChatRepository().stopLiveLocation(sessionId);
+                    
+                    // Stop Background Service
+                    Intent intent = new Intent(itemView.getContext(), LocationSharingService.class);
+                    intent.setAction(LocationSharingService.ACTION_STOP_SHARING);
+                    itemView.getContext().startService(intent);
+                });
+            }
+             
+            // Set timestamp
+            if (timestampTextView != null) {
+                timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            }
+            
+            // Handle view detachment to cleanup listener
+            itemView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
+                @Override
+                public void onViewAttachedToWindow(View v) {}
+                @Override
+                public void onViewDetachedFromWindow(View v) {
+                    cleanup();
+                }
+            });
+        }
+        
+        private void updateUI(LiveLocation liveLocation, Message message, String currentUserId) {
+            // Update Map Marker
+            GeoPoint point = new GeoPoint(liveLocation.getLatitude(), liveLocation.getLongitude());
+            if (userMarker == null) {
+                userMarker = new Marker(mapView);
+                userMarker.setTitle("Vị trí trực tiếp");
+                mapView.getOverlays().add(userMarker);
+            }
+            userMarker.setPosition(point);
+            mapView.getController().setCenter(point);
+            mapView.invalidate();
+            
+            // Define click action for Map/View Button -> Open Activity
+            View.OnClickListener openMapAction = v -> {
+                 Intent intent = new Intent(itemView.getContext(), LiveLocationViewActivity.class);
+                 intent.putExtra(LiveLocationViewActivity.EXTRA_SESSION_ID, liveLocation.getSessionId());
+                 intent.putExtra(LiveLocationViewActivity.EXTRA_IS_SENDER, isSender);
+                 itemView.getContext().startActivity(intent);
+            };
+            
+            messageCard.setOnClickListener(openMapAction);
+            if (mapOverlay != null) mapOverlay.setOnClickListener(openMapAction);
+            
+            // Check active status
+            boolean isActive = liveLocation.isActive();
+            long remainingTime = liveLocation.getEndTime() - System.currentTimeMillis();
+            
+            if (!isActive || remainingTime <= 0) {
+                statusText.setText("Đã dừng chia sẻ");
+                if (isSender) {
+                    if (btnStopSharing != null) btnStopSharing.setVisibility(View.GONE);
+                } else {
+                    // Receiver: Show View Location button even if ended
+                    if (btnStopSharing != null) {
+                        btnStopSharing.setVisibility(View.VISIBLE);
+                        btnStopSharing.setText("Xem vị trí");
+                        btnStopSharing.setOnClickListener(openMapAction);
+                    }
+                }
+                cleanupTimer();
+            } else {
+                if (isSender) {
+                    if (btnStopSharing != null) {
+                        btnStopSharing.setVisibility(View.VISIBLE);
+                        btnStopSharing.setText("Dừng chia sẻ");
+                        // Note: Stop action is set in bind()
+                    }
+                } else {
+                    if (btnStopSharing != null) {
+                        btnStopSharing.setVisibility(View.VISIBLE);
+                        btnStopSharing.setText("Xem vị trí");
+                        btnStopSharing.setOnClickListener(openMapAction);
+                    }
+                }
+                startTimer(remainingTime);
+            }
+        }
+        
+        private void startTimer(long durationMillis) {
+            cleanupTimer();
+            if (durationMillis <= 0) return;
+            
+            countDownTimer = new CountDownTimer(durationMillis, 1000) {
+                @Override
+                public void onTick(long millisUntilFinished) {
+                    long minutes = millisUntilFinished / 1000 / 60;
+                    long seconds = (millisUntilFinished / 1000) % 60;
+                    statusText.setText(String.format("Đang chia sẻ • Còn %02d:%02d", minutes, seconds));
+                }
+                @Override
+                public void onFinish() {
+                    statusText.setText("Đã hết thời gian chia sẻ");
+                    if (btnStopSharing != null) btnStopSharing.setVisibility(View.GONE);
+                }
+            }.start();
+        }
+        
+        private void cleanupTimer() {
+            if (countDownTimer != null) {
+                countDownTimer.cancel();
+                countDownTimer = null;
+            }
+        }
+        
+        private void cleanup() {
+            if (liveLocationListener != null) {
+                liveLocationListener.remove();
+                liveLocationListener = null;
+            }
+            cleanupTimer();
         }
     }
 }

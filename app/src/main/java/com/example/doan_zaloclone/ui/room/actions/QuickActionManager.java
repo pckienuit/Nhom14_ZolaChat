@@ -41,8 +41,8 @@ public class QuickActionManager {
         // Register send contact action (business card)
         registerAction(new SendContactAction());
         
-        // Future actions can be added here
-        // registerAction(new SendLocationAction());
+        // Register send location action
+        registerAction(new SendLocationAction());
     }
     
     /**
