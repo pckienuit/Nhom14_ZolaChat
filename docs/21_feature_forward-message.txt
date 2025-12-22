@@ -1,0 +1,94 @@
+================================================================================
+TÍNH NĂNG CHUYỂN TIẾP TIN NHẮN (Forward Message Feature)
+================================================================================
+
+NGÀY TẠO: 20/12/2025
+LOẠI: Feature
+TÍNH NĂNG: Chuyển tiếp tin nhắn sang cuộc trò chuyện khác
+KIẾN TRÚC: MVVM (Repository → ViewModel → View)
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Tính năng cho phép người dùng chuyển tiếp (forward) một tin nhắn từ cuộc trò chuyện 
+hiện tại sang một cuộc trò chuyện khác (hoặc tạo mới cuộc trò chuyện với bạn bè).
+
+TÍNH NĂNG CHÍNH:
+- Chọn tin nhắn cần chuyển tiếp -> Chọn người nhận từ danh sách bạn bè.
+- Tự động tạo cuộc trò chuyện mới nếu chưa tồn tại.
+- Hiển thị indicator "Đã chuyển tiếp một tin nhắn" trên UI người nhận.
+- Xử lý tương thích ngược với dữ liệu cũ (Legacy Data).
+
+================================================================================
+2. DATA MODEL CHANGES
+================================================================================
+
+2.1. MESSAGE MODEL (models/Message.java)
+
+Thêm các fields mới để đánh dấu tin nhắn chuyển tiếp:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Field               │ Type    │ Mô tả                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ isForwarded         │ boolean │ Đánh dấu tin nhắn là chuyển tiếp           │
+│ originalSenderId    │ String  │ ID người gửi gốc (optional)                │
+│ originalSenderName  │ String  │ Tên người gửi gốc (optional)               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Thêm methods:
+- isForwardedFromOther(currentUserId): boolean - Kiểm tra để hiển thị UI indicator.
+- Getters/Setters tương ứng cho Firestore serialization.
+
+================================================================================
+3. LOGIC & FLOW
+================================================================================
+
+3.1. CHAT REPOSITORY (repository/ChatRepository.java)
+
+- forwardMessageToUser(): Entry point chính.
+  1. Kiểm tra conversation tồn tại với người nhận (getOrCreateConversationWithFriend).
+  2. Tạo message mới với nội dung copy từ message gốc.
+  3. Set flag `isForwarded = true`.
+  4. Gửi message vào conversation đích.
+
+- createConversationWithFriend():
+  - Cập nhật logic: Fetch thông tin User (Sender & Receiver) TRƯỚC KHI tạo conversation.
+  - Mục đích: Lưu đầy đủ `memberNames` vào Firestore ngay lúc tạo để tránh lỗi hiển thị tên.
+
+3.2. UI ADAPTERS
+
+- MessageAdapter:
+  - Bind view `forwardedIndicator` (TextView).
+  - Logic: `visibility = message.isForwardedFromOther(...) ? VISIBLE : GONE`.
+
+- ConversationAdapter:
+  - Thêm fallback logic: Nếu `displayName` bị lỗi ("User + ID") hoặc rỗng -> Gọi Firestore lấy tên thật và update UI.
+
+================================================================================
+4. CÁC VẤN ĐỀ ĐÃ XỬ LÝ (BUG FIXES)
+================================================================================
+
+4.1. LỖI TRÙNG LẶP CUỘC TRÒ CHUYỆN (Duplicate Conversations)
+- Hiện tượng: Chuyển tiếp tin nhắn tạo ra cuộc trò chuyện MỚI dù đã có cuộc trò chuyện cũ.
+- Nguyên nhân: Query Firestore lọc theo `.whereEqualTo("type", "FRIEND")`. Dữ liệu cũ (Legacy) không có trường `type` (null) nên bị bỏ qua.
+- Khắc phục:
+  - Bỏ filter `type` trong query tìm kiếm ban đầu.
+  - Tìm theo `memberIds` -> Lọc thủ công kết quả (chấp nhận `type` null hoặc "FRIEND").
+  - Self-healing: Tự động update `type="FRIEND"` cho conversation cũ khi tìm thấy.
+
+4.2. LỖI HIỂN THỊ TÊN "USER + ID"
+- Hiện tượng: Cuộc trò chuyện mới tạo hiển thị tên là "User [ID]" thay vì tên bạn bè.
+- Nguyên nhân: Hàm tạo conversation cũ chỉ lưu `memberIds`, thiếu `memberNames`. Adapter không có dữ liệu để hiển thị.
+- Khắc phục:
+  - Sử dụng `Tasks.whenAllSuccess` để lấy profile cả 2 users trước khi tạo conversation.
+  - Lưu Map `memberNames` (userId -> name) vào document Conversation.
+
+================================================================================
+5. FILES MODIFIED
+================================================================================
+
+- app/src/main/java/.../models/Message.java
+- app/src/main/java/.../repository/ChatRepository.java
+- app/src/main/java/.../utils/FirestoreManager.java
+- app/src/main/java/.../ui/home/ConversationAdapter.java
+- app/src/main/java/.../ui/room/MessageAdapter.java

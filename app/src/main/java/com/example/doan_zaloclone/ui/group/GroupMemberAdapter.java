@@ -123,6 +123,12 @@ public class GroupMemberAdapter extends RecyclerView.Adapter<GroupMemberAdapter.
                 avatarImageView.setImageResource(R.drawable.ic_person);
             }
             
+            // Click avatar to view profile
+            avatarImageView.setOnClickListener(v -> {
+                com.example.doan_zaloclone.utils.ProfileNavigator.openUserProfile(
+                    itemView.getContext(), member.getUserId());
+            });
+            
             // Long click for admin transfer
             itemView.setOnLongClickListener(v -> {
                 if (listener != null) {

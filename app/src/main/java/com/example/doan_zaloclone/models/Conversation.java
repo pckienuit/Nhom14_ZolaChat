@@ -20,11 +20,22 @@ public class Conversation {
     
     // Pinned messages - list of message IDs (unlimited)
     private List<String> pinnedMessageIds;
+    
+    // Pinned conversations - map of userId to pinnedAt timestamp
+    private java.util.Map<String, Long> pinnedByUsers;
+    
+    // Tags - map of userId to list of tags
+    private java.util.Map<String, java.util.List<String>> userTags;
+    
+    // Displayed tag - map of userId to displayed tag (null means show latest, "ALL" means show all)
+    private java.util.Map<String, String> displayedTags;
 
     public Conversation() {
         this.memberIds = new ArrayList<>();
         this.type = TYPE_FRIEND;
         this.pinnedMessageIds = new ArrayList<>();
+        this.pinnedByUsers = new java.util.HashMap<>();
+        this.userTags = new java.util.HashMap<>();
     }
 
     public Conversation(String id, String name, String lastMessage, long timestamp) {
@@ -35,6 +46,8 @@ public class Conversation {
         this.memberIds = new ArrayList<>();
         this.type = TYPE_FRIEND;
         this.pinnedMessageIds = new ArrayList<>();
+        this.pinnedByUsers = new java.util.HashMap<>();
+        this.userTags = new java.util.HashMap<>();
     }
 
     public Conversation(String id, String name, String lastMessage, long timestamp, List<String> memberIds) {
@@ -45,6 +58,8 @@ public class Conversation {
         this.memberIds = memberIds != null ? memberIds : new ArrayList<>();
         this.type = TYPE_FRIEND;
         this.pinnedMessageIds = new ArrayList<>();
+        this.pinnedByUsers = new java.util.HashMap<>();
+        this.userTags = new java.util.HashMap<>();
     }
     
     public Conversation(String id, String name, String lastMessage, long timestamp, 
@@ -62,6 +77,8 @@ public class Conversation {
         }
         this.avatarUrl = avatarUrl;
         this.pinnedMessageIds = new ArrayList<>();
+        this.pinnedByUsers = new java.util.HashMap<>();
+        this.userTags = new java.util.HashMap<>();
     }
 
     // Getters
@@ -277,6 +294,66 @@ public class Conversation {
         return this.pinnedMessageIds != null ? this.pinnedMessageIds.size() : 0;
     }
     
+    // Pinned conversation helper methods
+    
+    /**
+     * Get pinned by users map
+     * @return map of userId to pinnedAt timestamp
+     */
+    public java.util.Map<String, Long> getPinnedByUsers() {
+        return pinnedByUsers != null ? pinnedByUsers : new java.util.HashMap<>();
+    }
+    
+    /**
+     * Set pinned by users map
+     * @param pinnedByUsers map of userId to pinnedAt timestamp
+     */
+    public void setPinnedByUsers(java.util.Map<String, Long> pinnedByUsers) {
+        this.pinnedByUsers = pinnedByUsers;
+    }
+    
+    /**
+     * Check if conversation is pinned by a user
+     * @param userId ID of user to check
+     * @return true if pinned by this user
+     */
+    public boolean isPinnedByUser(String userId) {
+        return this.pinnedByUsers != null && this.pinnedByUsers.containsKey(userId);
+    }
+    
+    /**
+     * Get pinned timestamp for a user
+     * @param userId ID of user
+     * @return timestamp when pinned, or 0 if not pinned
+     */
+    public long getPinnedAtTimestamp(String userId) {
+        if (this.pinnedByUsers != null && this.pinnedByUsers.containsKey(userId)) {
+            return this.pinnedByUsers.get(userId);
+        }
+        return 0;
+    }
+    
+    /**
+     * Pin conversation for a user
+     * @param userId ID of user pinning the conversation
+     */
+    public void pinForUser(String userId) {
+        if (this.pinnedByUsers == null) {
+            this.pinnedByUsers = new java.util.HashMap<>();
+        }
+        this.pinnedByUsers.put(userId, System.currentTimeMillis());
+    }
+    
+    /**
+     * Unpin conversation for a user
+     * @param userId ID of user unpinning the conversation
+     */
+    public void unpinForUser(String userId) {
+        if (this.pinnedByUsers != null) {
+            this.pinnedByUsers.remove(userId);
+        }
+    }
+    
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -294,8 +371,148 @@ public class Conversation {
     }
     
     @Override
-    public int hashCode() {
+     public int hashCode() {
         return java.util.Objects.hash(id, name, lastMessage, timestamp, memberIds, memberNames, 
                                       type, adminIds, avatarUrl);
+    }
+    
+    // Tag management helper methods
+    
+    /**
+     * Get user tags map
+     * @return map of userId to list of tags
+     */
+    public java.util.Map<String, java.util.List<String>> getUserTags() {
+        return userTags != null ? userTags : new java.util.HashMap<>();
+    }
+    
+    /**
+     * Set user tags map
+     * @param userTags map of userId to list of tags
+     */
+    public void setUserTags(java.util.Map<String, java.util.List<String>> userTags) {
+        this.userTags = userTags;
+    }
+    
+    /**
+     * Get tags for a specific user
+     * @param userId ID of user
+     * @return list of tags for this user (empty if none)
+     */
+    public java.util.List<String> getUserTagsForUser(String userId) {
+        if (this.userTags == null || !this.userTags.containsKey(userId)) {
+            return new java.util.ArrayList<>();
+        }
+        return new java.util.ArrayList<>(this.userTags.get(userId));
+    }
+    
+    /**
+     * Add a tag for a user
+     * @param userId ID of user
+     * @param tag Tag to add
+     */
+    public void addTag(String userId, String tag) {
+        if (this.userTags == null) {
+            this.userTags = new java.util.HashMap<>();
+        }
+        if (!this.userTags.containsKey(userId)) {
+            this.userTags.put(userId, new java.util.ArrayList<>());
+        }
+        if (!this.userTags.get(userId).contains(tag)) {
+            this.userTags.get(userId).add(tag);
+        }
+    }
+    
+    /**
+     * Remove a tag for a user
+     * @param userId ID of user
+     * @param tag Tag to remove
+     */
+    public void removeTag(String userId, String tag) {
+        if (this.userTags != null && this.userTags.containsKey(userId)) {
+            this.userTags.get(userId).remove(tag);
+            // Clean up empty lists
+            if (this.userTags.get(userId).isEmpty()) {
+                this.userTags.remove(userId);
+            }
+        }
+    }
+    
+    /**
+     * Check if user has a specific tag
+     * @param userId ID of user
+     * @param tag Tag to check
+     * @return true if user has this tag
+     */
+    public boolean hasTag(String userId, String tag) {
+        return this.userTags != null && 
+               this.userTags.containsKey(userId) && 
+               this.userTags.get(userId).contains(tag);
+    }
+    
+    // Displayed tag management
+    
+    /**
+     * Get displayedTags map
+     * @return map of userId to displayed tag
+     */
+    public java.util.Map<String, String> getDisplayedTags() {
+        return displayedTags != null ? displayedTags : new java.util.HashMap<>();
+    }
+    
+    /**
+     * Set displayedTags map
+     * @param displayedTags map of userId to displayed tag
+     */
+    public void setDisplayedTags(java.util.Map<String, String> displayedTags) {
+        this.displayedTags = displayedTags;
+    }
+    
+    /**
+     * Get which tags should be displayed for a user
+     * @param userId ID of user
+     * @return List of tags to display (latest tag, specific tag, or all tags)
+     */
+    public java.util.List<String> getDisplayedTagsForUser(String userId) {
+        java.util.List<String> allTags = getUserTagsForUser(userId);
+        if (allTags == null || allTags.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+        
+        // Get display preference
+        String displayPref = (displayedTags != null && displayedTags.containsKey(userId)) 
+            ? displayedTags.get(userId) 
+            : null;
+        
+        if ("ALL".equals(displayPref)) {
+            // Show all tags
+            return allTags;
+        } else if (displayPref != null && allTags.contains(displayPref)) {
+            // Show specific tag
+            java.util.List<String> result = new java.util.ArrayList<>();
+            result.add(displayPref);
+            return result;
+        } else {
+            // Default: show latest tag only
+            java.util.List<String> result = new java.util.ArrayList<>();
+            result.add(allTags.get(allTags.size() - 1));
+            return result;
+        }
+    }
+    
+    /**
+     * Set which tag should be displayed for a user
+     * @param userId ID of user
+     * @param tag Tag to display (null for latest, "ALL" for all tags, or specific tag name)
+     */
+    public void setDisplayedTag(String userId, String tag) {
+        if (this.displayedTags == null) {
+            this.displayedTags = new java.util.HashMap<>();
+        }
+        if (tag == null) {
+            this.displayedTags.remove(userId);
+        } else {
+            this.displayedTags.put(userId, tag);
+        }
     }
 }

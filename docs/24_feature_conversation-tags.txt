@@ -1,0 +1,628 @@
+================================================================================
+TÍNH NĂNG GẮN THẺ CUỘC HỘI THOẠI (Conversation Tags Feature)
+================================================================================
+
+NGÀY TẠO: 21/12/2025
+LOẠI: Feature
+TÍNH NĂNG: Gắn thẻ (tag) cho cuộc hội thoại để phân loại và tổ chức
+KIẾN TRÚC: MVVM (Repository → ViewModel → View)
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Tính năng cho phép người dùng gắn các thẻ (tags) cho cuộc hội thoại để phân 
+loại và tổ chức tin nhắn. Mỗi user có thể gắn thẻ riêng cho cuộc hội thoại mà 
+không ảnh hưởng đến các thành viên khác.
+
+TÍNH NĂNG CHÍNH:
+- 3 thẻ mặc định: Công việc, Gia đình, Bạn bè
+- 1 thẻ hệ thống tự động: Người lạ (không thể xóa thủ công)
+- Tạo thẻ tùy chỉnh với tên và màu sắc riêng
+- Gắn nhiều thẻ cho một cuộc hội thoại
+- Chọn hiển thị: Mới nhất, Tất cả, hoặc một thẻ cụ thể
+- Thẻ hiển thị dưới dạng icon màu sắc ở conversation card
+- Custom tags được lưu global cho user (dùng chung cho tất cả conversations)
+
+================================================================================
+2. DATA MODEL CHANGES
+================================================================================
+
+2.1. CONVERSATION MODEL (models/Conversation.java)
+
+Thêm fields mới:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Field               │ Type                                │ Mô tả          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ userTags            │ Map<String, List<String>>           │ userId -> tags │
+│ displayedTags       │ Map<String, String>                 │ userId -> pref │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Methods mới:
+- getUserTags(): Map<String, List<String>> - Lấy toàn bộ map
+- getUserTagsForUser(userId): List<String> - Lấy tags của user cụ thể
+- addTag(userId, tag) - Thêm tag cho user
+- removeTag(userId, tag) - Xóa tag của user
+- hasTag(userId, tag): boolean - Kiểm tra user có tag này không
+- getDisplayedTags(): Map<String, String> - Lấy map preference hiển thị
+- setDisplayedTag(userId, displayPref) - Set preference hiển thị
+- getDisplayedTagsForUser(userId): List<String> - Lấy tags để hiển thị theo pref
+
+Display Preference Values:
+- null = hiển thị tag mới nhất (latest)
+- "ALL" = hiển thị tất cả tags
+- "{tagName}" = hiển thị tag cụ thể
+
+2.2. USER MODEL (models/User.java)
+
+Thêm fields để lưu custom tags (global cho user):
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Field               │ Type                  │ Mô tả                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ customTags          │ Map<String, Boolean>  │ tagName -> true (map format)  │
+│ customTagColors     │ Map<String, Integer>  │ tagName -> color int          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+**LƯU Ý QUAN TRỌNG - DATA TYPE CONSISTENCY:**
+- customTags được lưu dưới dạng Map<String, Boolean> trong Firestore
+- Lý do: Sử dụng nested field update ("customTags.{tagName}": true)
+- Trước đây định nghĩa là List<String> gây lỗi deserialize
+- getCustomTags() vẫn trả về List<String> bằng cách lấy map.keySet()
+
+Methods:
+- getCustomTags(): List<String> - Trả về list tag names (từ map.keySet())
+- getCustomTagsMap(): Map<String, Boolean> - Lấy raw map
+- setCustomTags(Map<String, Boolean>) - Set map
+- getCustomTagColors(): Map<String, Integer> - Lấy màu sắc
+- setCustomTagColors(Map<String, Integer>) - Set màu sắc
+- addCustomTag(tagName, color) - Thêm tag tùy chỉnh
+- removeCustomTag(tagName) - Xóa tag tùy chỉnh
+- hasCustomTag(tagName): boolean - Kiểm tra tag tồn tại
+
+2.3. CONVERSATIONTAG MODEL (models/ConversationTag.java)
+
+Constants định nghĩa:
+- TAG_STRANGER = "Người lạ" (system tag)
+- TAG_WORK = "Công việc" (default tag)
+- TAG_FAMILY = "Gia đình" (default tag)
+- TAG_FRIENDS = "Bạn bè" (default tag)
+
+Color palette cho custom tags (12 màu):
+- Purple, Deep Purple, Teal, Dark Teal
+- Red, Deep Orange, Orange, Amber
+- Green, Blue, Pink, Brown
+
+Helper methods:
+- getTagColor(context, tag): int - Lấy màu của tag
+- setCustomTagColor(context, tag, color) - Set màu custom (SharedPreferences)
+- getCustomTagColor(context, tag): Integer - Lấy màu custom
+- isSystemTag(tag): boolean - Kiểm tra system tag
+- isDefaultTag(tag): boolean - Kiểm tra default tag
+- isCustomTag(tag): boolean - Kiểm tra custom tag
+
+2.4. FIRESTORE STRUCTURE
+
+conversations/{conversationId}
+  - (các fields hiện tại)
+  - userTags: map
+      - {userId1}: ["Công việc", "Bạn bè", "CustomTag1"]
+      - {userId2}: ["Gia đình"]
+  - displayedTags: map
+      - {userId1}: "ALL"           // Hiển thị tất cả
+      - {userId2}: "Công việc"     // Hiển thị tag cụ thể
+      - {userId3}: (không có)      // Hiển thị latest (default)
+
+users/{userId}
+  - (các fields hiện tại)
+  - customTags: map
+      - "CustomTag1": true
+      - "CustomTag2": true
+  - customTagColors: map
+      - "CustomTag1": -12345678    // Color integer
+      - "CustomTag2": -98765432
+
+Ví dụ đầy đủ:
+{
+  "id": "conv123",
+  "name": "John Doe",
+  "lastMessage": "Hello!",
+  "timestamp": 1703145600000,
+  "memberIds": ["user1", "user2"],
+  "userTags": {
+    "user1": ["Công việc", "ProjectX"],
+    "user2": ["Bạn bè"]
+  },
+  "displayedTags": {
+    "user1": "ALL",
+    "user2": null  // hoặc không có field
+  }
+}
+
+================================================================================
+3. SERVICE LAYER
+================================================================================
+
+3.1. FIRESTOREMANAGER.JAVA (services/FirestoreManager.java)
+
+Method mới:
+/**
+ * Update tags for a specific user in a conversation
+ * @param conversationId ID of conversation
+ * @param userId ID of user
+ * @param tags List of tag names to set
+ * @param listener Callback listener
+ */
+public void updateConversationTags(@NonNull String conversationId,
+                                   @NonNull String userId,
+                                   @NonNull List<String> tags,
+                                   @NonNull OnGroupUpdatedListener listener)
+
+Implementation:
+- Update field: "userTags.{userId}" = tags
+- Sử dụng update() với nested field path
+- Callback onSuccess/onFailure
+
+3.2. FIRESTORE SECURITY RULES
+
+Helper function:
+function onlyTagsFieldChanged() {
+  let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+  return affectedKeys.hasOnly(['userTags']);
+}
+
+Conversations collection update rule:
+allow update: if request.auth != null &&
+                 (request.auth.uid in resource.data.memberIds ||
+                  onlyPinFieldChanged() ||
+                  onlyTagsFieldChanged());
+
+- Cho phép member update tags của chính họ
+- Không cần phải là member để update displayedTags
+
+Users collection:
+allow write: if request.auth != null && request.auth.uid == userId;
+- User chỉ có thể update customTags/customTagColors của chính họ
+
+================================================================================
+4. REPOSITORY LAYER
+================================================================================
+
+4.1. CONVERSATIONREPOSITORY.JAVA (repository/ConversationRepository.java)
+
+Method mới:
+/**
+ * Update tags for a user in a conversation
+ * @param conversationId Conversation ID
+ * @param userId User ID
+ * @param tags List of tags
+ * @return LiveData with Resource status
+ */
+public LiveData<Resource<Void>> updateTags(@NonNull String conversationId,
+                                           @NonNull String userId,
+                                           @NonNull List<String> tags)
+
+Implementation:
+1. Tạo MutableLiveData<Resource<Void>>
+2. Set loading state
+3. Gọi firestoreManager.updateConversationTags()
+4. Callback:
+   - onSuccess → Resource.success(null)
+   - onFailure → Resource.error(errorMessage)
+5. Return LiveData
+
+================================================================================
+5. VIEWMODEL LAYER
+================================================================================
+
+5.1. HOMEVIEWMODEL.JAVA (viewmodel/HomeViewModel.java)
+
+Method mới:
+/**
+ * Update tags for conversation
+ * @param conversationId Conversation ID
+ * @param userId User ID
+ * @param tags List of tags to set
+ * @return LiveData with operation result
+ */
+public LiveData<Resource<Void>> updateTags(@NonNull String conversationId,
+                                           @NonNull String userId,
+                                           @NonNull List<String> tags)
+
+Implementation:
+- Delegate to conversationRepository.updateTags()
+- No additional logic needed
+
+================================================================================
+6. UI COMPONENTS
+================================================================================
+
+6.1. HOMEFRAGMENT.JAVA (ui/home/HomeFragment.java)
+
+Main dialog methods:
+
+1. showTagManagementDialog(conversation)
+   - Load user's custom tags từ Firestore
+   - Đọc field "customTags" (Map) từ users/{userId}
+   - Lấy keySet() để có list tag names
+   - Gọi showTagManagementDialogWithCustomTags()
+
+2. showTagManagementDialogWithCustomTags(conversation, userId, globalCustomTags)
+   - Build available tags = [Default tags] + [Global custom tags]
+   - Multi-choice dialog với checkboxes
+   - Pre-check các tags đã có
+   - Buttons:
+     * Apply: Update tags
+     * Cancel: Dismiss
+     * Add Custom Tag: Mở dialog tạo tag mới
+
+3. showAddCustomTagDialog(conversation, currentTags)
+   - Input dialog để nhập tên tag
+   - Sau khi nhập → Gọi showColorPickerDialog()
+
+4. showColorPickerDialog(conversation, userId, tagName, currentTags)
+   - GridLayout 4 cột với 12 màu từ COLOR_PALETTE
+   - Mỗi màu: ImageView với GradientDrawable oval
+   - Click để chọn (stroke 8dp white khi selected)
+   - Apply:
+     * Lưu custom tag vào Firestore (users collection)
+     * Thêm tag vào currentTags
+     * Update conversation tags
+
+5. saveCustomTagToFirestore(userId, tagName, color)
+   - Update nested fields:
+     * "customTags.{tagName}": true
+     * "customTagColors.{tagName}": colorInt
+   - Sử dụng SetOptions.merge() nếu update fail
+
+6. updateConversationTags(conversationId, userId, tags)
+   - Gọi homeViewModel.updateTags()
+   - Observe result:
+     * Success: Toast "Đã cập nhật thẻ"
+     * Error: Toast "Không thể cập nhật thẻ"
+
+7. showDisplayTagDialog(conversation, userId, tags)
+   - Single-choice dialog với options:
+     * "Mới nhất (mặc định)" → displayPref = null
+     * "Hiển thị tất cả" (nếu >= 2 tags) → displayPref = "ALL"
+     * Từng tag riêng lẻ → displayPref = tagName
+   - Update displayedTags field
+
+8. updateDisplayedTag(conversationId, userId, displayTag)
+   - Direct Firestore update (không qua Repository)
+   - Update field: "displayedTags.{userId}"
+   - FieldValue.delete() nếu displayTag = null
+
+Context menu flow:
+Long-press conversation → Show dialog với options:
+1. Ghim/Bỏ ghim
+2. Quản lý thẻ → showTagManagementDialog()
+3. Chọn thẻ hiển thị → showDisplayTagDialog()
+
+6.2. CONVERSATIONADAPTER.JAVA (ui/home/ConversationAdapter.java)
+
+ViewHolder changes:
+- Thêm tagsContainer (LinearLayout horizontal)
+- Method renderTags(conversation, currentUserId):
+  1. Clear existing views
+  2. Lấy displayedTags từ conversation.getDisplayedTagsForUser()
+  3. Tạo ImageView icon cho mỗi tag
+  4. Set color từ customTagColorsCache hoặc ConversationTag.getTagColor()
+
+Tag icon rendering:
+- createTagIcon(tag): ImageView
+  * Drawable: ic_tag
+  * ColorFilter: tag color
+  * Size: 16dp x 16dp
+  * Margin: 2dp end
+
+Custom color caching:
+- Static Map<String, Integer> customTagColorsCache
+- loadCustomTagColors(userId): Load từ Firestore
+  * Đọc "customTagColors" field từ users/{userId}
+  * Parse Long/Integer → int
+  * Store in cache
+- getTagColorWithCache(tag):
+  * Check cache first
+  * Fallback to ConversationTag.getTagColor()
+
+Load timing:
+- Call loadCustomTagColors() trong HomeFragment onCreate
+- Khi user login lần đầu
+
+6.3. LAYOUT CHANGES
+
+item_conversation.xml:
+Thêm tagsContainer bên dưới lastMessageTextView:
+
+<LinearLayout
+    android:id="@+id/tagsContainer"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:layout_marginTop="4dp"
+    android:visibility="gone" />
+
+Tag icons được add động vào container này.
+
+6.4. STRINGS RESOURCES (res/values/strings.xml)
+
+<string name="tag_stranger">Người lạ</string>
+<string name="tag_work">Công việc</string>
+<string name="tag_family">Gia đình</string>
+<string name="tag_friends">Bạn bè</string>
+<string name="manage_tags">Quản lý thẻ</string>
+<string name="add_custom_tag">Thêm thẻ tùy chỉnh</string>
+<string name="enter_tag_name">Nhập tên thẻ</string>
+<string name="tag_updated">Đã cập nhật thẻ</string>
+<string name="tag_update_failed">Không thể cập nhật thẻ</string>
+<string name="choose_display_tag">Chọn thẻ hiển thị</string>
+<string name="apply">Áp dụng</string>
+<string name="cancel">Hủy</string>
+
+================================================================================
+7. USER FLOW
+================================================================================
+
+7.1. GẮN THẺ CHO CUỘC HỘI THOẠI
+
+1. User long-press vào conversation card
+2. Dialog hiện với 3 options: Ghim/Bỏ ghim | Quản lý thẻ | Chọn thẻ hiển thị
+3. Chọn "Quản lý thẻ"
+4. Dialog hiển thị:
+   - Checkboxes cho: Công việc, Gia đình, Bạn bè
+   - Checkboxes cho các custom tags đã tạo
+   - Pre-checked các tags đã gắn
+   - Button "Thêm thẻ tùy chỉnh"
+5. Check/uncheck tags → Click "Áp dụng"
+6. Tags được update lên Firestore
+7. Conversation card tự động refresh qua listener
+8. Tags hiển thị dưới dạng icon màu sắc
+
+7.2. TẠO THẺ TÙY CHỈNH
+
+1. Trong dialog "Quản lý thẻ", click "Thêm thẻ tùy chỉnh"
+2. Input dialog xuất hiện
+3. Nhập tên tag (ví dụ: "Dự án X")
+4. Click "Áp dụng"
+5. Color picker dialog hiện 12 màu
+6. Chọn màu mong muốn (highlight bằng white stroke)
+7. Click "Áp dụng"
+8. Custom tag được lưu vào users/{userId}:
+   - customTags.{"Dự án X"}: true
+   - customTagColors.{"Dự án X"}: colorInt
+9. Tag tự động gắn vào conversation hiện tại
+10. Custom tag có thể dùng cho các conversations khác
+
+7.3. CHỌN HIỂN THỊ THẺ
+
+1. Long-press conversation
+2. Chọn "Chọn thẻ hiển thị"
+3. Dialog single-choice:
+   - "Mới nhất (mặc định)" ← selected nếu không có pref
+   - "Hiển thị tất cả" (nếu có >= 2 tags)
+   - Danh sách từng tag
+4. Chọn option mong muốn
+5. displayedTags.{userId} được update
+6. Conversation card refresh hiển thị theo preference:
+   - null: Hiển thị tag cuối cùng trong list
+   - "ALL": Hiển thị tất cả tags
+   - tagName: Hiển thị tag cụ thể
+
+================================================================================
+8. CÁC VẤN ĐỀ ĐÃ XỬ LÝ (BUG FIXES)
+================================================================================
+
+8.1. LỖI KIỂU DỮ LIỆU CUSTOMTAGS
+
+Hiện tượng: Custom tags không hiển thị trong dialog quản lý thẻ
+
+Nguyên nhân:
+- Firestore lưu customTags dưới dạng Map<String, Boolean>:
+  updates.put("customTags." + tagName, true);
+- User model định nghĩa: private List<String> customTags;
+- Firestore deserializer không thể convert Map → List
+- Gây lỗi silent (không throw exception nhưng data = null)
+
+Khắc phục:
+1. Thay đổi User model:
+   - Đổi: private Map<String, Boolean> customTags;
+   - Giữ method getCustomTags(): List<String> { return new ArrayList<>(map.keySet()); }
+2. Thêm getCustomTagsMap() để access raw map
+3. Update addCustomTag(): customTags.put(tagName, true)
+4. Thêm hasCustomTag(tagName): return customTags.containsKey(tagName)
+5. Consistent với cách Firestore lưu nested fields
+
+Lý do Map<String, Boolean> tốt hơn List<String>:
+- Firestore update nested field: "customTags.{tagName}": true
+- Không cần load toàn bộ list để add/remove
+- Performance tốt hơn với số lượng tags lớn
+- Dễ check existence: containsKey() vs contains()
+
+8.2. LỖI CUSTOM TAG COLORS KHÔNG ĐỒNG BỘ
+
+Hiện tượng: Màu custom tag không hiển thị đúng
+
+Nguyên nhân:
+- Colors lưu trong Firestore (users collection)
+- Adapter không load colors khi init
+- Cache rỗng khi app khởi động
+
+Khắc phục:
+1. Thêm loadCustomTagColors() trong ConversationAdapter
+2. Gọi trong HomeFragment.onCreate():
+   ConversationAdapter.loadCustomTagColors(currentUserId);
+3. Lưu vào static cache: Map<String, Integer> customTagColorsCache
+4. Adapter check cache trước khi dùng default color
+
+8.3. SECURITY RULES CHO TAG UPDATES
+
+Vấn đề: User bình thường không update được tags
+
+Giải pháp: Thêm helper function và update rule
+function onlyTagsFieldChanged() {
+  let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+  return affectedKeys.hasOnly(['userTags']);
+}
+
+allow update: if request.auth != null &&
+                 (request.auth.uid in resource.data.memberIds ||
+                  onlyPinFieldChanged() ||
+                  onlyTagsFieldChanged());
+
+- Cho phép update nếu chỉ thay đổi userTags field
+- Hoặc nếu là member của conversation
+
+================================================================================
+9. FILES MODIFIED
+================================================================================
+
+MODELS:
+- app/src/main/java/.../models/Conversation.java
+  * Thêm userTags, displayedTags fields
+  * Methods: getUserTagsForUser, addTag, removeTag, hasTag
+  * Methods: getDisplayedTagsForUser, setDisplayedTag
+
+- app/src/main/java/.../models/User.java
+  * Thay đổi customTags: List<String> → Map<String, Boolean>
+  * Methods: getCustomTags (return list from keySet), getCustomTagsMap
+  * Methods: addCustomTag, removeCustomTag, hasCustomTag
+
+- app/src/main/java/.../models/ConversationTag.java (NEW)
+  * Constants: TAG_STRANGER, TAG_WORK, TAG_FAMILY, TAG_FRIENDS
+  * Color palette cho custom tags
+  * Helper methods: getTagColor, setCustomTagColor, isSystemTag, etc.
+
+SERVICES:
+- app/src/main/java/.../services/FirestoreManager.java
+  * Method: updateConversationTags()
+
+REPOSITORY:
+- app/src/main/java/.../repository/ConversationRepository.java
+  * Method: updateTags()
+
+VIEWMODEL:
+- app/src/main/java/.../viewmodel/HomeViewModel.java
+  * Method: updateTags()
+
+UI:
+- app/src/main/java/.../ui/home/HomeFragment.java
+  * showTagManagementDialog() - Main dialog
+  * showTagManagementDialogWithCustomTags() - Multi-choice tags
+  * showAddCustomTagDialog() - Input tag name
+  * showColorPickerDialog() - Choose color
+  * saveCustomTagToFirestore() - Save to users collection
+  * updateConversationTags() - Update conversation
+  * showDisplayTagDialog() - Choose display preference
+  * updateDisplayedTag() - Update display setting
+  * Context menu option "Quản lý thẻ"
+
+- app/src/main/java/.../ui/home/ConversationAdapter.java
+  * ViewHolder: thêm tagsContainer binding
+  * Method: renderTags() - Hiển thị tag icons
+  * Method: createTagIcon() - Tạo icon view
+  * Static cache: customTagColorsCache
+  * Static method: loadCustomTagColors()
+
+LAYOUTS:
+- app/src/main/res/layout/item_conversation.xml
+  * Thêm tagsContainer (LinearLayout)
+
+RESOURCES:
+- app/src/main/res/values/strings.xml
+  * Thêm strings: tag_*, manage_tags, add_custom_tag, etc.
+
+SECURITY:
+- firestore.rules.updated
+  * Helper function: onlyTagsFieldChanged()
+  * Update rule cho conversations collection
+
+================================================================================
+10. TESTING CHECKLIST
+================================================================================
+
+□ Gắn thẻ mặc định (Công việc, Gia đình, Bạn bè)
+□ Tạo thẻ tùy chỉnh với tên và màu
+□ Gắn nhiều thẻ cho một conversation
+□ Hiển thị icon thẻ với màu đúng
+□ Chọn hiển thị: Mới nhất, Tất cả, Một thẻ cụ thể
+□ Custom tag xuất hiện trong danh sách tags của conversations khác
+□ Custom tag colors được cache đúng
+□ Xóa thẻ khỏi conversation
+□ Real-time update khi thay đổi tags
+□ Security rules cho phép user update tags của mình
+□ Security rules chặn user update tags của người khác
+□ Custom tags lưu đúng vào users/{userId}
+□ Conversation tags lưu đúng vào conversations/{conversationId}/userTags
+□ Display preference lưu đúng vào displayedTags
+□ App hoạt động khi không có custom tags (new user)
+□ App hoạt động khi không có tags nào trên conversation
+□ Nhiều user gắn tags khác nhau trên cùng conversation
+
+================================================================================
+11. FUTURE ENHANCEMENTS
+================================================================================
+
+TÍNH NĂNG MỞ RỘNG:
+1. Filter conversations by tag
+   - Tab/chip filter ở HomeFragment
+   - Hiển thị conversations có tag cụ thể
+
+2. Tag analytics
+   - Thống kê số conversations theo tag
+   - Most used tags
+
+3. Tag suggestions
+   - AI suggest tags dựa trên nội dung tin nhắn
+   - Auto-tag conversations mới
+
+4. Shared tags trong group chat
+   - Admin tạo tags chung cho nhóm
+   - Members không thay đổi được
+
+5. Tag color themes
+   - Preset themes thay vì chọn từng màu
+   - Dark/Light mode compatible colors
+
+6. Bulk tag operations
+   - Select multiple conversations
+   - Apply/remove tags một lần
+
+7. Tag search
+   - Search conversations by tag name
+   - Combine multiple tags trong search
+
+8. Tag export/import
+   - Backup custom tags
+   - Sync across devices
+
+================================================================================
+12. PERFORMANCE CONSIDERATIONS
+================================================================================
+
+1. Custom Tag Colors Cache
+   - Load một lần khi app start
+   - Store in static Map
+   - Không cần query Firestore mỗi lần render
+
+2. Firestore Listeners
+   - displayedTags update không trigger full refresh
+   - Chỉ update UI của conversation affected
+
+3. Nested Field Updates
+   - Update "userTags.{userId}" thay vì replace whole map
+   - Giảm write operations
+   - Ít bandwidth hơn
+
+4. Tag Icon Rendering
+   - Reuse ImageView trong LinearLayout
+   - Không tạo mới mỗi lần bind
+   - Clear và add lại views
+
+5. Map vs List for customTags
+   - Map.containsKey() = O(1)
+   - List.contains() = O(n)
+   - Better performance với nhiều tags
+
+================================================================================
+END OF DOCUMENT
+================================================================================

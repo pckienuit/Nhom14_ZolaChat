@@ -120,7 +120,7 @@ public class WebRtcRepository {
         
         PeerConnection.RTCConfiguration rtcConfig = new PeerConnection.RTCConfiguration(iceServers);
         
-        // Set ICE transport policy (relay for TURN-only, all for STUN+TURN)
+        // Set ICE transport policy - ALL uses both STUN (direct) and TURN (relay)
         rtcConfig.iceTransportsType = PeerConnection.IceTransportsType.ALL;
         Log.d(TAG, "ICE Transport Type: ALL (STUN + TURN)");
         

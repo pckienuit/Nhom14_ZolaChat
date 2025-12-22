@@ -10,6 +10,7 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.QuerySnapshot;
 
@@ -267,17 +268,21 @@ public class FirestoreManager {
                 .addOnSuccessListener(new OnSuccessListener<QuerySnapshot>() {
                     @Override
                     public void onSuccess(QuerySnapshot querySnapshot) {
-                        // Lọc thêm để tìm conversation có cả 2 users VÀ là loại FRIEND
+                        // Lọc thêm để tìm conversation có cả 2 users VÀ là loại FRIEND (hoặc không có type)
                         for (DocumentSnapshot document : querySnapshot.getDocuments()) {
                             Conversation conversation = document.toObject(Conversation.class);
                             if (conversation != null && 
                                 conversation.getMemberIds() != null &&
                                 conversation.getMemberIds().contains(otherUserId) &&
-                                Conversation.TYPE_FRIEND.equals(conversation.getType())) {
-                                // Tìm thấy friend conversation (not group)
-                                Log.d(TAG, "Found existing friend conversation: " + conversation.getId());
-                                listener.onFound(conversation);
-                                return;
+                                conversation.getMemberIds().size() == 2) {
+                                // Check if this is a 1-1 conversation (FRIEND type, null, or empty)
+                                String type = conversation.getType();
+                                if (type == null || type.isEmpty() || Conversation.TYPE_FRIEND.equals(type)) {
+                                    // Tìm thấy friend conversation (not group)
+                                    Log.d(TAG, "Found existing friend conversation: " + conversation.getId());
+                                    listener.onFound(conversation);
+                                    return;
+                                }
                             }
                         }
                         // Không tìm thấy
@@ -653,6 +658,78 @@ public class FirestoreManager {
                     listener.onFailure(e);
                 });
     }
+
+    /**
+     * Pin conversation for a user
+     */
+    public void pinConversation(@NonNull String conversationId,
+                               @NonNull String userId,
+                               @NonNull OnGroupUpdatedListener listener) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("pinnedByUsers." + userId, System.currentTimeMillis());
+        
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Conversation pinned: " + conversationId + " by user: " + userId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error pinning conversation", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Unpin conversation for a user
+     */
+    public void unpinConversation(@NonNull String conversationId,
+                                 @NonNull String userId,
+                                 @NonNull OnGroupUpdatedListener listener) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("pinnedByUsers." + userId, FieldValue.delete());
+        
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Conversation unpinned: " + conversationId + " by user: " + userId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error unpinning conversation", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Update conversation tags for a user
+     * @param conversationId ID of the conversation
+     * @param userId ID of the user
+     * @param tags List of tags to set for this user
+     * @param listener Callback listener
+     */
+    public void updateConversationTags(@NonNull String conversationId,
+                                      @NonNull String userId,
+                                      @NonNull List<String> tags,
+                                      @NonNull OnGroupUpdatedListener listener) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("userTags." + userId, tags);
+        
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Conversation tags updated: " + conversationId + " for user: " + userId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error updating conversation tags", e);
+                    listener.onFailure(e);
+                });
+    }
+
 
     // Callback Interfaces
 

@@ -78,6 +78,16 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
             messageButton = itemView.findViewById(R.id.messageButton);
             unfriendButton = itemView.findViewById(R.id.unfriendButton);
 
+            // Click avatar to view profile
+            friendAvatar.setOnClickListener(v -> {
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION) {
+                    User friend = friends.get(position);
+                    com.example.doan_zaloclone.utils.ProfileNavigator.openUserProfile(
+                        itemView.getContext(), friend.getId());
+                }
+            });
+
             messageButton.setOnClickListener(v -> {
                 int position = getAdapterPosition();
                 if (position != RecyclerView.NO_POSITION && listener != null) {
