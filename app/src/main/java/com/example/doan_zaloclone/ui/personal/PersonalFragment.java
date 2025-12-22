@@ -86,22 +86,26 @@ public class PersonalFragment extends Fragment {
     private void setupMenuItems() {
         // QR Wallet
         setupMenuItem(menuQrWallet, R.drawable.ic_qr_code, 
-            "Ví QR", "Lưu trữ và xuất trình các mã QR quan trọng");
+            "Ví QR", "Lưu trữ và xuất trình các mã QR quan trọng",
+            new QrWalletFragment());
         
         // Account & Security
         setupMenuItem(menuSecurity, R.drawable.ic_security, 
-            "Tài khoản và bảo mật", "Quản lý thông tin tài khoản");
+            "Tài khoản và bảo mật", "Quản lý thông tin tài khoản",
+            new SecurityFragment());
         
         // Privacy
         setupMenuItem(menuPrivacy, R.drawable.ic_privacy, 
-            "Quyền riêng tư", "Cài đặt quyền riêng tư");
+            "Quyền riêng tư", "Cài đặt quyền riêng tư",
+            new PrivacyFragment());
         
         // My Cloud
         setupMenuItem(menuCloud, R.drawable.ic_cloud, 
-            "Cloud của tôi", "Lưu trữ các tin nhắn quan trọng");
+            "Cloud của tôi", "Lưu trữ các tin nhắn quan trọng",
+            new MyCloudFragment());
     }
     
-    private void setupMenuItem(View menuView, int iconRes, String title, String description) {
+    private void setupMenuItem(View menuView, int iconRes, String title, String description, Fragment targetFragment) {
         ImageView icon = menuView.findViewById(R.id.menuIcon);
         TextView titleView = menuView.findViewById(R.id.menuTitle);
         TextView descView = menuView.findViewById(R.id.menuDescription);
@@ -110,12 +114,14 @@ public class PersonalFragment extends Fragment {
         titleView.setText(title);
         descView.setText(description);
         
-        // TODO: Phase 4 - Open respective fragments instead of toast
-        menuView.setOnClickListener(v -> 
-            Toast.makeText(requireContext(), 
-                "Tính năng đang phát triển: " + title, 
-                Toast.LENGTH_SHORT).show()
-        );
+        // Navigate to placeholder fragment
+        menuView.setOnClickListener(v -> {
+            requireActivity().getSupportFragmentManager()
+                .beginTransaction()
+                .replace(R.id.fragmentContainer, targetFragment)
+                .addToBackStack(null)
+                .commit();
+        });
     }
     
     private void observeViewModel() {
