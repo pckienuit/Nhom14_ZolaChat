@@ -26,6 +26,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     
@@ -141,6 +143,12 @@
             android:name=".services.OngoingCallService"
             android:exported="false"
             android:foregroundServiceType="camera|microphone" />
+
+        <!-- Location Sharing Service -->
+        <service
+            android:name=".services.LocationSharingService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
             
         <!-- FileProvider for sharing downloaded files -->
         <provider
