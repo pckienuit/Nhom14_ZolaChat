@@ -1555,6 +1555,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         private LinearLayout btnMessageFromCard;
         private boolean isSent;
         
+        // Track current contact to validate async callbacks
+        private String currentContactUserId;
+        // Store listeners for cleanup on rebind
+        private com.google.firebase.firestore.ListenerRegistration friendRequestListener;
+        private com.google.firebase.firestore.ListenerRegistration friendsListener;
+        
         public ContactMessageViewHolder(@NonNull View itemView, boolean isSent) {
             super(itemView);
             this.isSent = isSent;
@@ -1570,6 +1576,20 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
         
         public void bind(Message message, String currentUserId) {
+            // CRITICAL: Reset UI state immediately to prevent ViewHolder recycling issues
+            btnAddFriendFromCard.setVisibility(View.GONE);
+            friendRequestDivider.setVisibility(View.GONE);
+            
+            // Remove old listeners if exists to prevent memory leaks
+            if (friendRequestListener != null) {
+                friendRequestListener.remove();
+                friendRequestListener = null;
+            }
+            if (friendsListener != null) {
+                friendsListener.remove();
+                friendsListener = null;
+            }
+            
             // Debug logs
             android.util.Log.d("ContactMessageViewHolder", "Binding contact message");
             android.util.Log.d("ContactMessageViewHolder", "Message ID: " + message.getId());
@@ -1583,6 +1603,9 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 contactName.setText("Không thể tải thông tin");
                 return;
             }
+            
+            // Store current contact ID for callback validation
+            this.currentContactUserId = contactUserId;
             
             android.util.Log.d("ContactMessageViewHolder", "Fetching user info for: " + contactUserId);
             
@@ -1688,67 +1711,60 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             });
             
             // Check friendship status for friend request button
-            checkFriendshipAndShowButton(contactUserId, currentUserId);
+            setupFriendshipListener(contactUserId, currentUserId);
         }
         
         /**
-         * Check friendship status and show/hide friend request button
+         * Setup real-time listeners for friendship and friend request status
+         * NOTE: Friendship is stored in friendRequests collection with status "ACCEPTED"
+         * Document IDs are auto-generated, so we need to query by fromUserId/toUserId
          */
-        private void checkFriendshipAndShowButton(String contactUserId, String currentUserId) {
-            // Use FriendRepository to check friendship
-            com.example.doan_zaloclone.repository.FriendRepository friendRepo = 
-                new com.example.doan_zaloclone.repository.FriendRepository();
+        private void setupFriendshipListener(String contactUserId, String currentUserId) {
+            com.google.firebase.firestore.FirebaseFirestore db = 
+                com.google.firebase.firestore.FirebaseFirestore.getInstance();
+            
+            // Track state to determine button visibility
+            final String[] requestStatusFromMe = {null};  // Request from currentUser to contact
+            final String[] requestStatusToMe = {null};    // Request from contact to currentUser
+            
+            // Helper to update UI based on current state
+            Runnable updateUI = () -> {
+                if (!contactUserId.equals(this.currentContactUserId)) return;
                 
-            friendRepo.checkFriendship(currentUserId, contactUserId).observeForever(resource -> {
-                if (resource != null && resource.isSuccess()) {
-                    boolean areFriends = resource.getData() != null && resource.getData();
-                    
-                    if (areFriends) {
-                        // Already friends - hide friend request button
-                        btnAddFriendFromCard.setVisibility(View.GONE);
-                    } else {
-                        // Not friends yet - check if there's a pending request
-                        checkPendingRequestAndShowButton(contactUserId, currentUserId);
-                    }
-                } else {
-                    // Error checking - hide button
+                // Check if either request is ACCEPTED (already friends)
+                boolean areFriends = "ACCEPTED".equals(requestStatusFromMe[0]) || "ACCEPTED".equals(requestStatusToMe[0]);
+                
+                // Check if current user has sent a pending request
+                boolean hasPendingRequest = "PENDING".equals(requestStatusFromMe[0]);
+                
+                // Check if contact has sent a pending request (incoming request)
+                boolean hasIncomingRequest = "PENDING".equals(requestStatusToMe[0]);
+                
+                if (areFriends) {
+                    // Already friends - hide button
                     btnAddFriendFromCard.setVisibility(View.GONE);
-                }
-            });
-        }
-        
-        /**
-         * Check if there's a pending friend request
-         */
-        private void checkPendingRequestAndShowButton(String contactUserId, String currentUserId) {
-            // Check if current user has sent a request to contact user
-            com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                .collection("friendRequests")
-                .document(currentUserId + "_" + contactUserId)
-                .get()
-                .addOnSuccessListener(doc -> {
-                    if (doc.exists() && "pending".equals(doc.getString("status"))) {
-                        // Request already sent - show "Đã gửi lời mời" (disabled)
-                        btnAddFriendFromCard.setVisibility(View.VISIBLE);
-                        friendRequestDivider.setVisibility(View.VISIBLE);
-                        btnAddFriendText.setText("ĐÃ GỬI LỜI MỜI");
-                        btnAddFriendFromCard.setEnabled(false);
-                        btnAddFriendFromCard.setAlpha(0.6f);
-                    } else {
-                        // No pending request - show "Gửi lời mời kết bạn" (enabled)
-                        btnAddFriendFromCard.setVisibility(View.VISIBLE);
-                        friendRequestDivider.setVisibility(View.VISIBLE);
-                        btnAddFriendText.setText("GỬI LỜI MỜI KẾT BẠN");
-                        btnAddFriendFromCard.setEnabled(true);
-                        btnAddFriendFromCard.setAlpha(1.0f);
-                        
-                        btnAddFriendFromCard.setOnClickListener(v -> {
-                            sendFriendRequest(contactUserId, currentUserId);
-                        });
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    // Error - show default
+                    friendRequestDivider.setVisibility(View.GONE);
+                    android.util.Log.d("ContactMessageViewHolder", "Already friends - hiding button");
+                } else if (hasPendingRequest) {
+                    // Request already sent by current user
+                    btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                    friendRequestDivider.setVisibility(View.VISIBLE);
+                    btnAddFriendText.setText("ĐÃ GỬI LỜI MỜI");
+                    btnAddFriendFromCard.setEnabled(false);
+                    btnAddFriendFromCard.setAlpha(0.6f);
+                    btnAddFriendFromCard.setOnClickListener(null);
+                    android.util.Log.d("ContactMessageViewHolder", "Pending request - showing disabled button");
+                } else if (hasIncomingRequest) {
+                    // Contact has sent a request - show "waiting for response"
+                    btnAddFriendFromCard.setVisibility(View.VISIBLE);
+                    friendRequestDivider.setVisibility(View.VISIBLE);
+                    btnAddFriendText.setText("ĐANG CHỜ PHẢN HỒI");
+                    btnAddFriendFromCard.setEnabled(false);
+                    btnAddFriendFromCard.setAlpha(0.6f);
+                    btnAddFriendFromCard.setOnClickListener(null);
+                    android.util.Log.d("ContactMessageViewHolder", "Incoming request - showing waiting button");
+                } else {
+                    // No relationship - show send button
                     btnAddFriendFromCard.setVisibility(View.VISIBLE);
                     friendRequestDivider.setVisibility(View.VISIBLE);
                     btnAddFriendText.setText("GỬI LỜI MỜI KẾT BẠN");
@@ -1758,6 +1774,76 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                     btnAddFriendFromCard.setOnClickListener(v -> {
                         sendFriendRequest(contactUserId, currentUserId);
                     });
+                    android.util.Log.d("ContactMessageViewHolder", "No relationship - showing send button");
+                }
+            };
+            
+            // Listen to requests FROM current user TO contact (query-based)
+            friendRequestListener = db.collection("friendRequests")
+                .whereEqualTo("fromUserId", currentUserId)
+                .whereEqualTo("toUserId", contactUserId)
+                .addSnapshotListener((snapshots, error) -> {
+                    if (!contactUserId.equals(this.currentContactUserId)) return;
+                    if (error != null) {
+                        android.util.Log.e("ContactMessageViewHolder", "Error listening to outgoing requests", error);
+                        return;
+                    }
+                    
+                    if (snapshots != null && !snapshots.isEmpty()) {
+                        // Find the best status: ACCEPTED > PENDING > others
+                        String bestStatus = null;
+                        for (com.google.firebase.firestore.DocumentSnapshot doc : snapshots.getDocuments()) {
+                            String status = doc.getString("status");
+                            if ("ACCEPTED".equals(status)) {
+                                bestStatus = "ACCEPTED";
+                                break; // Can't get better than this
+                            } else if ("PENDING".equals(status)) {
+                                bestStatus = "PENDING";
+                            } else if (bestStatus == null) {
+                                bestStatus = status;
+                            }
+                        }
+                        requestStatusFromMe[0] = bestStatus;
+                        android.util.Log.d("ContactMessageViewHolder", "Outgoing request status (best): " + requestStatusFromMe[0]);
+                    } else {
+                        requestStatusFromMe[0] = null;
+                        android.util.Log.d("ContactMessageViewHolder", "No outgoing request found");
+                    }
+                    updateUI.run();
+                });
+            
+            // Listen to requests FROM contact TO current user (query-based)
+            friendsListener = db.collection("friendRequests")
+                .whereEqualTo("fromUserId", contactUserId)
+                .whereEqualTo("toUserId", currentUserId)
+                .addSnapshotListener((snapshots, error) -> {
+                    if (!contactUserId.equals(this.currentContactUserId)) return;
+                    if (error != null) {
+                        android.util.Log.e("ContactMessageViewHolder", "Error listening to incoming requests", error);
+                        return;
+                    }
+                    
+                    if (snapshots != null && !snapshots.isEmpty()) {
+                        // Find the best status: ACCEPTED > PENDING > others
+                        String bestStatus = null;
+                        for (com.google.firebase.firestore.DocumentSnapshot doc : snapshots.getDocuments()) {
+                            String status = doc.getString("status");
+                            if ("ACCEPTED".equals(status)) {
+                                bestStatus = "ACCEPTED";
+                                break; // Can't get better than this
+                            } else if ("PENDING".equals(status)) {
+                                bestStatus = "PENDING";
+                            } else if (bestStatus == null) {
+                                bestStatus = status;
+                            }
+                        }
+                        requestStatusToMe[0] = bestStatus;
+                        android.util.Log.d("ContactMessageViewHolder", "Incoming request status (best): " + requestStatusToMe[0]);
+                    } else {
+                        requestStatusToMe[0] = null;
+                        android.util.Log.d("ContactMessageViewHolder", "No incoming request found");
+                    }
+                    updateUI.run();
                 });
         }
         
