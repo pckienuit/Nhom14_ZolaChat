@@ -451,13 +451,147 @@ function openModal(packId = null) {
             document.getElementById('isFeatured').checked = pack.isFeatured === true;
             document.getElementById('isFree').checked = pack.isFree !== false;
             document.getElementById('packPrice').disabled = pack.isFree !== false;
+            
+            // Load existing stickers
+            loadExistingStickers(packId);
         }
     } else {
         // Add mode
         document.getElementById('modalTitle').textContent = 'Thêm Sticker Pack mới';
+        document.getElementById('existingStickersSection').style.display = 'none';
     }
     
     packModal.classList.add('active');
+}
+
+/**
+ * Load existing stickers in pack
+ */
+async function loadExistingStickers(packId) {
+    const section = document.getElementById('existingStickersSection');
+    const grid = document.getElementById('existingStickersGrid');
+    const countLabel = document.getElementById('existingStickerCount');
+    
+    section.style.display = 'block';
+    grid.innerHTML = `
+        <div class="loading-placeholder">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>Đang tải stickers...</p>
+        </div>
+    `;
+    
+    try {
+        const stickersSnapshot = await db.collection('stickerPacks')
+            .doc(packId)
+            .collection('stickers')
+            .orderBy('createdAt', 'asc')
+            .get();
+        
+        const stickers = [];
+        stickersSnapshot.forEach(doc => {
+            stickers.push({ id: doc.id, ...doc.data() });
+        });
+        
+        // --- PROACTIVE FIX: Sync stickerCount if mismatch detected ---
+        const realCount = stickers.length;
+        const currentPack = stickerPacks.find(p => p.id === packId);
+        
+        if (currentPack && currentPack.stickerCount !== realCount) {
+            console.log(`Fixing sticker count mismatch. Meta: ${currentPack.stickerCount}, Real: ${realCount}`);
+            
+            // Update Firestore silently
+            db.collection('stickerPacks').doc(packId).update({
+                stickerCount: realCount
+            }).then(() => {
+                // Refresh outside list to show correct count
+                loadStickerPacks();
+            }).catch(err => console.error("Auto-fix count failed:", err));
+        }
+        // -----------------------------------------------------------
+        
+        if (stickers.length === 0) {
+            grid.innerHTML = `
+                <div class="loading-placeholder">
+                    <i class="fas fa-info-circle"></i>
+                    <p>Chưa có sticker nào trong pack này</p>
+                </div>
+            `;
+            countLabel.textContent = '(0 stickers)';
+            return;
+        }
+        
+        countLabel.textContent = `(${stickers.length} stickers)`;
+        grid.innerHTML = stickers.map(sticker => `
+            <div class="existing-sticker-item" data-sticker-id="${sticker.id}">
+                <img src="${sticker.imageUrl || sticker.thumbnailUrl}" 
+                     alt="Sticker ${sticker.id}"
+                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%2250%22 font-size=%2250%22%3E❓%3C/text%3E%3C/svg%3E'">
+                <button class="delete-sticker-btn" 
+                        onclick="deleteSticker('${packId}', '${sticker.id}')"
+                        title="Xóa sticker">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `).join('');
+        
+    } catch (error) {
+        console.error('Error loading existing stickers:', error);
+        grid.innerHTML = `
+            <div class="loading-placeholder">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Lỗi tải stickers: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Delete a sticker from pack
+ */
+async function deleteSticker(packId, stickerId) {
+    if (!confirm('Bạn có chắc chắn muốn xóa sticker này?')) {
+        return;
+    }
+    
+    // UI Feedback immediately (Optimistic UI could go here, but let's stick to safe)
+    const btn = document.querySelector(`div[data-sticker-id="${stickerId}"] button`);
+    if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    try {
+        // 1. Critical Phase: Delete Data
+        await db.collection('stickerPacks')
+            .doc(packId)
+            .collection('stickers')
+            .doc(stickerId)
+            .delete();
+        
+        await db.collection('stickerPacks')
+            .doc(packId)
+            .update({
+                stickerCount: firebase.firestore.FieldValue.increment(-1)
+            });
+
+        // Delete success flag
+        console.log('Sticker deleted successfully from DB');
+        
+        try {
+            // 2. Non-critical Phase: Refresh UI
+            // Reload existing stickers to update grid
+            await loadExistingStickers(packId);
+            
+            // Reload packs to update count on card
+            loadStickerPacks(); 
+        } catch (refreshError) {
+            console.error('Sticker deleted but UI refresh failed:', refreshError);
+            // Don't alert the user, just log it. The sticker is gone.
+        }
+        
+    } catch (error) {
+        console.error('Error deleting sticker:', error);
+        alert('Lỗi xóa sticker: ' + error.message);
+        // Reset button if failed
+        if (btn) btn.innerHTML = '<i class="fas fa-times"></i>';
+    }
 }
 
 /**
