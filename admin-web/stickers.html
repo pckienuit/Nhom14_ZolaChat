@@ -152,8 +152,18 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="packIcon">Icon URL</label>
-                    <input type="url" id="packIcon" placeholder="https://example.com/icon.png">
+                    <label for="packIcon">Icon Pack</label>
+                    <div style="display: flex; gap: 0.75rem; align-items: end;">
+                        <div style="flex: 1;">
+                            <input type="url" id="packIcon" placeholder="https://example.com/icon.png hoặc chọn file">
+                        </div>
+                        <label for="iconFileInput" class="btn btn-secondary" style="margin: 0; cursor: pointer;">
+                            <i class="fas fa-upload"></i> Chọn file
+                        </label>
+                        <input type="file" id="iconFileInput" accept="image/*" style="display: none;">
+                    </div>
+                    <small class="text-muted" style="font-size: 0.75rem;">Tải file lên VPS hoặc nhập URL trực
+                        tiếp</small>
                 </div>
 
                 <div class="form-row checkboxes">
@@ -169,6 +179,28 @@
                         <input type="checkbox" id="isFree" checked>
                         <span>Miễn phí</span>
                     </label>
+                </div>
+
+                <!-- Stickers Upload Section -->
+                <div class="form-group">
+                    <label>Stickers <small class="text-muted">(Có thể thêm sau)</small></label>
+                    <div class="sticker-upload-zone" id="stickerUploadZone">
+                        <input type="file" id="stickerFilesInput" accept=".png,.jpg,.jpeg,.webp,.gif" multiple
+                            style="display: none;">
+                        <div class="upload-placeholder" id="uploadPlaceholder">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p>Kéo thả ảnh vào đây hoặc <span class="text-primary" style="cursor:pointer;">chọn
+                                    files</span></p>
+                            <small>Hỗ trợ: PNG, JPG, WebP, GIF (Tối đa 2MB/file)</small>
+                        </div>
+                        <div class="sticker-preview-grid" id="stickerPreviewGrid"></div>
+                    </div>
+                    <div class="upload-progress hidden" id="uploadProgress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <span id="progressText">0%</span>
+                    </div>
                 </div>
 
                 <div id="formError" class="error-message hidden"></div>
@@ -215,6 +247,104 @@
     <script src="js/firebase-config.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/stickers.js"></script>
+
+    <style>
+        .sticker-upload-zone {
+            border: 2px dashed var(--gray-600);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.2s;
+            min-height: 120px;
+        }
+
+        .sticker-upload-zone:hover,
+        .sticker-upload-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .upload-placeholder i {
+            font-size: 2.5rem;
+            color: var(--gray-500);
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-placeholder p {
+            margin: 0.5rem 0;
+            color: var(--text-secondary);
+        }
+
+        .sticker-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .sticker-preview-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: var(--radius);
+            overflow: hidden;
+            background: var(--gray-700);
+        }
+
+        .sticker-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .sticker-preview-item .remove-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--danger);
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 0.6rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sticker-preview-item.uploading::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-progress {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background: var(--gray-700);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
 </body>
 
 </html>

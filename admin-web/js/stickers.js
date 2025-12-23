@@ -61,7 +61,195 @@ function setupEventListeners() {
             document.getElementById('packPrice').value = 0;
         }
     });
+    
+    // Icon file upload
+    document.getElementById('iconFileInput').addEventListener('change', handleIconUpload);
+    
+    // Stickers upload zone
+    const uploadZone = document.getElementById('stickerUploadZone');
+    const stickerFilesInput = document.getElementById('stickerFilesInput');
+    
+    // Click to select files
+    uploadZone.addEventListener('click', () => stickerFilesInput.click());
+    
+    // File input change
+    stickerFilesInput.addEventListener('change', (e) => handleStickerFiles(e.target.files));
+    
+    // Drag and drop
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+    });
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+    });
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        handleStickerFiles(e.dataTransfer.files);
+    });
 }
+
+// Store uploaded stickers temporarily
+let uploadedStickers = [];
+
+/**
+ * Handle sticker files selection
+ */
+async function handleStickerFiles(files) {
+    const previewGrid = document.getElementById('stickerPreviewGrid');
+    const placeholder = document.getElementById('uploadPlaceholder');
+    const progressDiv = document.getElementById('uploadProgress');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    
+    if (!files || files.length === 0) return;
+    
+    // Hide placeholder, show progress
+    placeholder.style.display = 'none';
+    progressDiv.classList.remove('hidden');
+    
+    let completed = 0;
+    const total = files.length;
+    
+    for (const file of files) {
+        // Validate
+        if (!file.type.startsWith('image/')) continue;
+        if (file.size > 2 * 1024 * 1024) {
+            alert(`${file.name} quá lớn (max 2MB)`);
+            continue;
+        }
+        
+        // Create preview item
+        const previewId = 'preview_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const previewItem = document.createElement('div');
+        previewItem.className = 'sticker-preview-item uploading';
+        previewItem.id = previewId;
+        previewItem.innerHTML = `
+            <img src="${URL.createObjectURL(file)}" alt="preview">
+            <button class="remove-btn" style="display:none;"><i class="fas fa-times"></i></button>
+        `;
+        previewGrid.appendChild(previewItem);
+        
+        try {
+            // Upload to VPS
+            const formData = new FormData();
+            formData.append('sticker', file);
+            formData.append('userId', auth.currentUser.uid);
+            
+            const response = await fetch('http://163.61.182.20/api/stickers/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success && result.sticker) {
+                // Store sticker info
+                uploadedStickers.push(result.sticker);
+                
+                // Update preview
+                previewItem.classList.remove('uploading');
+                const removeBtn = previewItem.querySelector('.remove-btn');
+                removeBtn.style.display = 'flex';
+                removeBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    previewItem.remove();
+                    uploadedStickers = uploadedStickers.filter(s => s.id !== result.sticker.id);
+                    if (previewGrid.children.length === 0) {
+                        placeholder.style.display = 'block';
+                    }
+                };
+            } else {
+                previewItem.remove();
+                console.error('Upload failed:', result.error);
+            }
+        } catch (error) {
+            previewItem.remove();
+            console.error('Upload error:', error);
+        }
+        
+        // Update progress
+        completed++;
+        const percent = Math.round((completed / total) * 100);
+        progressFill.style.width = percent + '%';
+        progressText.textContent = percent + '%';
+    }
+    
+    // Hide progress
+    setTimeout(() => {
+        progressDiv.classList.add('hidden');
+        progressFill.style.width = '0%';
+    }, 500);
+}
+
+/**
+ * Handle icon file upload
+ */
+async function handleIconUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        alert('Vui lòng chọn file ảnh!');
+        return;
+    }
+    
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+        alert('File quá lớn! Tối đa 2MB.');
+        return;
+    }
+    
+    // Show progress
+    const iconInput = document.getElementById('packIcon');
+    const originalPlaceholder = iconInput.placeholder;
+    iconInput.placeholder = 'Đang upload...';
+    iconInput.disabled = true;
+    
+    try {
+        // Upload to VPS
+        const formData = new FormData();
+        formData.append('sticker', file);
+        formData.append('userId', auth.currentUser.uid);
+        
+        const response = await fetch('http://163.61.182.20/api/stickers/upload', {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Upload response:', errorText);
+            throw new Error('Upload failed: ' + response.statusText);
+        }
+        
+        const result = await response.json();
+        console.log('Upload result:', result);
+        
+        // Server trả về { success, sticker: { url, ... } }
+        if (result.success && result.sticker && result.sticker.url) {
+            iconInput.value = result.sticker.url;
+            iconInput.placeholder = originalPlaceholder;
+            console.log('Icon uploaded successfully:', result.sticker.url);
+        } else if (result.error) {
+            throw new Error(result.error);
+        } else {
+            throw new Error('Upload failed: Invalid response');
+        }
+        
+    } catch (error) {
+        console.error('Error uploading icon:', error);
+        alert('Lỗi upload file: ' + error.message);
+        iconInput.placeholder = originalPlaceholder;
+    } finally {
+        iconInput.disabled = false;
+        // Reset file input
+        event.target.value = '';
+    }
+}
+
 
 /**
  * Load sticker packs from Firestore
@@ -163,9 +351,9 @@ function createPackCard(pack) {
     return `
         <div class="pack-card" data-id="${pack.id}">
             <div class="pack-card-header">
-                <img class="pack-icon" src="${pack.iconUrl || 'assets/images/default-sticker.png'}" 
-                     alt="${escapeHtml(pack.name)}" 
-                     onerror="this.src='assets/images/default-sticker.png'">
+                ${pack.iconUrl 
+                    ? `<img class="pack-icon" src="${pack.iconUrl}" alt="${escapeHtml(pack.name)}">` 
+                    : `<div class="pack-icon" style="display: flex; align-items: center; justify-content: center; background: var(--gray-700); font-size: 2rem;">😊</div>`}
                 <div class="pack-info">
                     <div class="pack-name">${escapeHtml(pack.name)}</div>
                     <div class="pack-description">${escapeHtml(pack.description || 'Không có mô tả')}</div>

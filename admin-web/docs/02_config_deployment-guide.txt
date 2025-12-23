@@ -1,0 +1,236 @@
+================================================================================
+HƯỚNG DẪN TRIỂN KHAI ADMIN WEB (Deployment Guide)
+================================================================================
+
+NGÀY TẠO: 23/12/2025
+LOẠI: Config
+MÔ TẢ: Hướng dẫn deploy Admin Web lên VPS
+
+
+================================================================================
+1. YÊU CẦU
+================================================================================
+
+SERVER:
+- VPS với Apache2 hoặc Nginx
+- SSH access (root hoặc sudo user)
+
+CLIENT (máy local):
+- Git Bash, PowerShell hoặc terminal có hỗ trợ SCP
+- SSH key hoặc password access đến VPS
+
+THÔNG TIN VPS:
+- IP: 163.61.182.20
+- User: root
+- Web root: /var/www/admin/
+
+
+================================================================================
+2. DEPLOY LẦN ĐẦU (Initial Setup)
+================================================================================
+
+BƯỚC 1: SSH vào VPS
+--------------------
+ssh root@163.61.182.20
+
+
+BƯỚC 2: Tạo thư mục
+--------------------
+mkdir -p /var/www/admin/css
+mkdir -p /var/www/admin/js
+
+
+BƯỚC 3: Cấu hình Apache
+------------------------
+Tạo file: /etc/apache2/sites-available/admin.conf
+
+<VirtualHost *:80>
+    ServerName 163.61.182.20
+    
+    Alias /admin /var/www/admin
+    
+    <Directory /var/www/admin>
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    ErrorLog ${APACHE_LOG_DIR}/admin_error.log
+    CustomLog ${APACHE_LOG_DIR}/admin_access.log combined
+</VirtualHost>
+
+
+BƯỚC 4: Kích hoạt site
+-----------------------
+a2ensite admin.conf
+systemctl reload apache2
+
+
+BƯỚC 5: Upload files từ máy local
+----------------------------------
+cd d:\DoAn_ZaloClone
+
+# Upload HTML files
+scp admin-web/*.html root@163.61.182.20:/var/www/admin/
+
+# Upload CSS files
+scp admin-web/css/*.css root@163.61.182.20:/var/www/admin/css/
+
+# Upload JS files
+scp admin-web/js/*.js root@163.61.182.20:/var/www/admin/js/
+
+
+BƯỚC 6: Set permissions
+------------------------
+ssh root@163.61.182.20 "chmod -R 755 /var/www/admin"
+
+
+BƯỚC 7: Truy cập
+-----------------
+Mở browser: http://163.61.182.20/admin/
+
+
+================================================================================
+3. CẬP NHẬT SAU NÀY (Subsequent Updates)
+================================================================================
+
+3.1. UPDATE TẤT CẢ FILES
+-------------------------
+cd d:\DoAn_ZaloClone
+scp admin-web/*.html root@163.61.182.20:/var/www/admin/
+scp admin-web/css/*.css root@163.61.182.20:/var/www/admin/css/
+scp admin-web/js/*.js root@163.61.182.20:/var/www/admin/js/
+
+
+3.2. UPDATE TỪNG FILE CỤ THỂ
+-----------------------------
+# Ví dụ: chỉ update stickers.js
+scp admin-web/js/stickers.js root@163.61.182.20:/var/www/admin/js/
+
+# Update nhiều files
+scp admin-web/stickers.html admin-web/js/stickers.js root@163.61.182.20:/var/www/admin/
+
+
+3.3. SAU KHI UPDATE
+--------------------
+- Hard refresh browser: Ctrl + Shift + R
+- Hoặc mở Incognito window: Ctrl + Shift + N
+- Clear cache nếu không thấy thay đổi
+
+
+================================================================================
+4. CẤU HÌNH ADMIN ACCOUNTS
+================================================================================
+
+4.1. THÊM EMAIL VÀO WHITELIST (Development)
+--------------------------------------------
+Sửa file: admin-web/js/auth.js
+
+Tìm đoạn:
+const adminEmails = [
+    'admin@example.com',
+    'admin@zaloclone.com',
+    'phanchikien@gmail.com'  // Thêm email ở đây
+];
+
+Upload lại:
+scp admin-web/js/auth.js root@163.61.182.20:/var/www/admin/js/
+
+
+4.2. SET CUSTOM CLAIM (Production)
+-----------------------------------
+Chạy script:
+cd d:\DoAn_ZaloClone\scripts
+npm install firebase-admin
+node set_admin_claim.js your-email@example.com
+
+
+4.3. TẠO DOCUMENT TRONG /admins COLLECTION
+-------------------------------------------
+1. Vào Firebase Console → Firestore
+2. Tạo collection "admins"
+3. Tạo document với ID = UID của user
+4. Content: { "role": "admin" }
+
+
+================================================================================
+5. DEPLOY FIRESTORE RULES
+================================================================================
+
+BƯỚC 1: Copy nội dung từ file
+------------------------------
+Mở: d:\DoAn_ZaloClone\firestore.rules.updated
+Copy toàn bộ nội dung
+
+
+BƯỚC 2: Paste vào Firebase Console
+-----------------------------------
+1. Vào https://console.firebase.google.com/
+2. Chọn project zalo-clone-dd021
+3. Firestore Database → Rules (tab)
+4. Xóa rules cũ, paste rules mới
+5. Click "Publish"
+
+
+BƯỚC 3: Đợi rules apply
+------------------------
+Đợi 30 giây - 1 phút rồi test lại
+
+
+================================================================================
+6. TROUBLESHOOTING
+================================================================================
+
+6.1. LỖI 404 NOT FOUND
+-----------------------
+- Kiểm tra file đã upload đúng thư mục chưa
+- Kiểm tra Apache config đã enable chưa
+- Chạy: systemctl reload apache2
+
+
+6.2. LỖI "TÀI KHOẢN KHÔNG CÓ QUYỀN ADMIN"
+-----------------------------------------
+- Thêm email vào whitelist trong auth.js
+- Upload lại auth.js và refresh browser
+
+
+6.3. LỖI "MISSING OR INSUFFICIENT PERMISSIONS"
+----------------------------------------------
+- Deploy Firestore rules mới (xem mục 5)
+- Kiểm tra user đã có trong whitelist/admins collection
+
+
+6.4. LỖI UPLOAD STICKERS "NOT FOUND"
+------------------------------------
+- Kiểm tra sticker-upload service: systemctl status sticker-upload
+- Kiểm tra Apache proxy config trong stickers.conf
+- Restart service: systemctl restart sticker-upload
+
+
+6.5. BROWSER CACHE
+------------------
+- Hard refresh: Ctrl + Shift + R
+- Clear cache: Ctrl + Shift + Delete
+- Mở Incognito: Ctrl + Shift + N
+
+
+================================================================================
+7. SCRIPT TỰ ĐỘNG (Optional)
+================================================================================
+
+Có 2 scripts hỗ trợ deploy tự động:
+
+LINUX/GIT BASH:
+scripts/deploy_admin_web.sh
+
+WINDOWS POWERSHELL:
+scripts/deploy_admin_web.ps1
+
+Chạy:
+cd d:\DoAn_ZaloClone\scripts
+./deploy_admin_web.ps1
+
+
+CẬP NHẬT
+--------
+Ngày tạo: 23/12/2025

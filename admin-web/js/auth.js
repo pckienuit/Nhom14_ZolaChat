@@ -32,13 +32,9 @@ auth.onAuthStateChanged(async (user) => {
         } else {
             // User is not admin
             console.warn('User is not an admin');
-            if (!isLoginPage) {
-                // Sign out and redirect to login
-                await auth.signOut();
-                window.location.href = 'index.html';
-            } else {
-                showError('Tài khoản không có quyền Admin');
-            }
+            showError('Tài khoản không có quyền Admin');
+            // Sign out regardless of page to prevent auth loop
+            await auth.signOut();
         }
     } else {
         // User is signed out
@@ -57,32 +53,44 @@ auth.onAuthStateChanged(async (user) => {
  */
 async function checkAdminClaim(user) {
     try {
-        // Method 1: Check custom claims (preferred)
-        const idTokenResult = await user.getIdTokenResult();
-        if (idTokenResult.claims.admin === true) {
-            return true;
-        }
-        
-        // Method 2: Check against Firestore admin list
-        const adminDoc = await db.collection('admins').doc(user.uid).get();
-        if (adminDoc.exists) {
-            return true;
-        }
-        
-        // Method 3: Fallback - check if user document has isAdmin flag
-        const userDoc = await db.collection('users').doc(user.uid).get();
-        if (userDoc.exists && userDoc.data().isAdmin === true) {
-            return true;
-        }
-        
-        // Method 4: For development - allow specific emails
+        // Method 1: For development - Check email whitelist FIRST (không cần Firestore)
         const adminEmails = [
             'admin@example.com',
-            'admin@zaloclone.com'
-            // Add your admin email here
+            'admin@zaloclone.com',
+            'phanchikien@gmail.com'
         ];
         if (adminEmails.includes(user.email)) {
+            console.log('Admin verified via email whitelist');
             return true;
+        }
+        
+        // Method 2: Check custom claims (preferred for production)
+        const idTokenResult = await user.getIdTokenResult();
+        if (idTokenResult.claims.admin === true) {
+            console.log('Admin verified via custom claims');
+            return true;
+        }
+        
+        // Method 3: Check against Firestore admin list
+        try {
+            const adminDoc = await db.collection('admins').doc(user.uid).get();
+            if (adminDoc.exists) {
+                console.log('Admin verified via /admins collection');
+                return true;
+            }
+        } catch (error) {
+            console.warn('Could not check /admins collection:', error.message);
+        }
+        
+        // Method 4: Check if user document has isAdmin flag
+        try {
+            const userDoc = await db.collection('users').doc(user.uid).get();
+            if (userDoc.exists && userDoc.data().isAdmin === true) {
+                console.log('Admin verified via user.isAdmin flag');
+                return true;
+            }
+        } catch (error) {
+            console.warn('Could not check user document:', error.message);
         }
         
         return false;
