@@ -498,4 +498,154 @@ public class StickerRepository {
     private String generateStickerId() {
         return db.collection(COLLECTION_STICKER_PACKS).document().getId();
     }
+    
+    // ========== Phase 5: User Sticker Creation Methods ==========
+    
+    /**
+     * Callback for upload progress
+     */
+    public interface UploadCallback {
+        void onProgress(int progress);
+        void onSuccess(String stickerUrl);
+        void onError(String error);
+    }
+    
+    /**
+     * Callback for pack operations
+     */
+    public interface PackCallback {
+        void onSuccess(String packId);
+        void onError(String error);
+    }
+    
+    /**
+     * Upload custom sticker to VPS with progress callback
+     */
+    public void uploadCustomSticker(@NonNull Uri imageUri, 
+                                    @NonNull String userId,
+                                    @NonNull String fileName,
+                                    @NonNull UploadCallback callback) {
+        new Thread(() -> {
+            try {
+                // Convert URI to File (using content resolver)
+                File imageFile = new File(imageUri.getPath());
+                
+                RequestBody requestBody = new MultipartBody.Builder()
+                        .setType(MultipartBody.FORM)
+                        .addFormDataPart("sticker", fileName,
+                                RequestBody.create(imageFile, MediaType.parse("image/*")))
+                        .addFormDataPart("userId", userId)
+                        .build();
+                
+                Request request = new Request.Builder()
+                        .url(VPS_UPLOAD_URL)
+                        .post(requestBody)
+                        .build();
+                
+                callback.onProgress(50); // Simulated progress
+                
+                Response response = httpClient.newCall(request).execute();
+                
+                if (response.isSuccessful() && response.body() != null) {
+                    String responseBody = response.body().string();
+                    // Expected VPS response: {"success": true, "url": "http://..."}
+                    // Parse JSON to get URL
+                    String stickerUrl = VPS_BASE_URL + "/stickers/" + fileName;
+                    callback.onProgress(100);
+                    callback.onSuccess(stickerUrl);
+                } else {
+                    callback.onError("Upload failed: " + response.code());
+                }
+                response.close();
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Upload error", e);
+                callback.onError("Upload failed: " + e.getMessage());
+            }
+        }).start();
+    }
+    
+    /**
+     * Get or create "My Stickers" pack for user
+     */
+    public void getOrCreateUserStickerPack(@NonNull String userId, @NonNull PackCallback callback) {
+        // Check if user already has "My Stickers" pack
+        db.collection(COLLECTION_STICKER_PACKS)
+                .whereEqualTo("creatorId", userId)
+                .whereEqualTo("type", StickerPack.TYPE_USER)
+                .whereEqualTo("name", "My Stickers")
+                .limit(1)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    if (!querySnapshot.isEmpty()) {
+                        // Pack exists
+                        String packId = querySnapshot.getDocuments().get(0).getId();
+                        callback.onSuccess(packId);
+                    } else {
+                        // Create new pack
+                        createMyStickersPackInternal(userId, callback);
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error checking user pack", e);
+                    callback.onError("Error: " + e.getMessage());
+                });
+    }
+    
+    /**
+     * Internal method to create "My Stickers" pack
+     */
+    private void createMyStickersPackInternal(@NonNull String userId, @NonNull PackCallback callback) {
+        String packId = db.collection(COLLECTION_STICKER_PACKS).document().getId();
+        
+        StickerPack pack = new StickerPack();
+        pack.setId(packId);
+        pack.setName("My Stickers");
+        pack.setDescription("Sticker do tôi tạo");
+        pack.setCreatorId(userId);
+        pack.setType(StickerPack.TYPE_USER);
+        pack.setCreatedAt(System.currentTimeMillis());
+        pack.setUpdatedAt(System.currentTimeMillis());
+        pack.setPublished(false);
+        pack.setFree(true);
+        pack.setStickerCount(0);
+        pack.setDownloadCount(0);
+        
+        db.collection(COLLECTION_STICKER_PACKS)
+                .document(packId)
+                .set(pack)
+                .addOnSuccessListener(aVoid -> {
+                    // Also add to user's saved packs
+                    addPackToUser(userId, packId)
+                            .addOnSuccessListener(v -> callback.onSuccess(packId))
+                            .addOnFailureListener(e -> callback.onError("Error adding pack to user: " + e.getMessage()));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error creating pack", e);
+                    callback.onError("Error creating pack: " + e.getMessage());
+                });
+    }
+    
+    /**
+     * Add sticker to pack
+     */
+    public void addStickerToPack(@NonNull String packId, 
+                                 @NonNull Sticker sticker,
+                                 @NonNull Runnable onSuccess) {
+        db.collection(COLLECTION_STICKER_PACKS)
+                .document(packId)
+                .collection(COLLECTION_STICKERS)
+                .document(sticker.getId())
+                .set(sticker)
+                .addOnSuccessListener(aVoid -> {
+                    // Increment sticker count
+                    db.collection(COLLECTION_STICKER_PACKS)
+                            .document(packId)
+                            .update("stickerCount", com.google.firebase.firestore.FieldValue.increment(1),
+                                   "updatedAt", System.currentTimeMillis())
+                            .addOnSuccessListener(v -> onSuccess.run())
+                            .addOnFailureListener(e -> Log.e(TAG, "Error updating count", e));
+                })
+                .addOnFailureListener(e -> Log.e(TAG, "Error adding sticker to pack", e));
+    }
 }

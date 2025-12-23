@@ -83,6 +83,9 @@ dependencies {
     // OkHttp for HTTP requests (background removal API)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     
+    // UCrop for image cropping in sticker creation
+    implementation("com.github.yalantis:ucrop:2.2.8")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

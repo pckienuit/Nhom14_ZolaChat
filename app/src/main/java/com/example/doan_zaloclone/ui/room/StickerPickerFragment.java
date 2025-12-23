@@ -163,9 +163,11 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
 
         // Add sticker button
         btnAddSticker.setOnClickListener(v -> {
-            // TODO: Open CreateStickerActivity
-            Toast.makeText(requireContext(), "Tạo sticker (coming soon)", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.sticker.CreateStickerActivity.class);
+            startActivity(intent);
+            dismiss(); // Close sticker picker
         });
+
 
         // Sticker store button
         btnStickerStore.setOnClickListener(v -> {
