@@ -1,16 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Base layer - light gray -->
-    <item>
-        <shape android:shape="rectangle">
-            <solid android:color="#E0E0E0"/>
-        </shape>
-    </item>
-    
-    <!-- Dark squares pattern -->
-    <item>
-        <bitmap
-            android:src="@drawable/checkerboard_tile"
-            android:tileMode="repeat" />
-    </item>
-</layer-list>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#E8E8E8"/>
+</shape>
