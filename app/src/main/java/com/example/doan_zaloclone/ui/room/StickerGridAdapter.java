@@ -36,7 +36,17 @@ public class StickerGridAdapter extends RecyclerView.Adapter<StickerGridAdapter.
     }
 
     public void setStickers(List<Sticker> stickers) {
-        this.stickers = stickers != null ? stickers : new ArrayList<>();
+        if (stickers == null) {
+            this.stickers = new ArrayList<>();
+        } else {
+            // Filter invalid stickers
+            this.stickers = new ArrayList<>();
+            for (Sticker s : stickers) {
+                if (s.getId() != null && s.getImageUrl() != null && !s.getImageUrl().isEmpty()) {
+                    this.stickers.add(s);
+                }
+            }
+        }
         notifyDataSetChanged();
     }
 
@@ -85,6 +95,11 @@ public class StickerGridAdapter extends RecyclerView.Adapter<StickerGridAdapter.
             if (imageUrl == null || imageUrl.isEmpty()) {
                 imageUrl = sticker.getImageUrl();
             }
+            
+            // Debug log
+            android.util.Log.d("StickerGridAdapter", "Loading sticker - ID: " + sticker.getId() 
+                + ", imageUrl: " + imageUrl 
+                + ", thumbnailUrl: " + sticker.getThumbnailUrl());
 
             if (imageUrl != null && !imageUrl.isEmpty()) {
                 Glide.with(itemView.getContext())

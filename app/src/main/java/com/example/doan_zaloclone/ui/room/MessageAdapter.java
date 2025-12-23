@@ -2544,6 +2544,10 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             // Load sticker image
             if (stickerImageView != null) {
                 String stickerUrl = message.getStickerUrl();
+                android.util.Log.d("StickerMessage", "Binding sticker - messageId: " + message.getId()
+                    + ", stickerUrl: " + stickerUrl
+                    + ", stickerId: " + message.getStickerId());
+                    
                 if (stickerUrl != null && !stickerUrl.isEmpty()) {
                     Glide.with(itemView.getContext())
                             .load(stickerUrl)

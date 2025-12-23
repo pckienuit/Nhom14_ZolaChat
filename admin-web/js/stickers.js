@@ -430,6 +430,12 @@ function openModal(packId = null) {
     document.getElementById('formError').classList.add('hidden');
     document.getElementById('packPrice').disabled = true;
     
+    // Reset sticker upload
+    uploadedStickers = [];
+    document.getElementById('stickerPreviewGrid').innerHTML = '';
+    document.getElementById('uploadPlaceholder').style.display = 'block';
+    document.getElementById('uploadProgress').classList.add('hidden');
+    
     if (packId) {
         // Edit mode - populate form
         const pack = stickerPacks.find(p => p.id === packId);
@@ -496,6 +502,7 @@ async function handleFormSubmit(e) {
     
     try {
         const packId = document.getElementById('packId').value;
+        let savedPackId = packId;
         
         if (packId) {
             // Update existing pack
@@ -505,12 +512,44 @@ async function handleFormSubmit(e) {
             // Create new pack
             packData.createdAt = Date.now();
             packData.creatorId = auth.currentUser.uid;
-            packData.stickerCount = 0;
+            packData.stickerCount = uploadedStickers.length;
             packData.downloadCount = 0;
             
             const docRef = await db.collection('stickerPacks').add(packData);
-            console.log('Pack created:', docRef.id);
+            savedPackId = docRef.id;
+            console.log('Pack created:', savedPackId);
         }
+        
+        // Save uploaded stickers to Firestore subcollection
+        if (uploadedStickers.length > 0) {
+            const batch = db.batch();
+            const packRef = db.collection('stickerPacks').doc(savedPackId);
+            
+            uploadedStickers.forEach((sticker, index) => {
+                const stickerRef = packRef.collection('stickers').doc(sticker.id);
+                batch.set(stickerRef, {
+                    imageUrl: sticker.url,
+                    thumbnailUrl: sticker.thumbnailUrl,
+                    width: sticker.width || 512,
+                    height: sticker.height || 512,
+                    isAnimated: sticker.isAnimated || false,
+                    format: sticker.format || 'webp',
+                    order: index,
+                    createdAt: Date.now()
+                });
+            });
+            
+            // Update sticker count on pack
+            batch.update(packRef, {
+                stickerCount: firebase.firestore.FieldValue.increment(uploadedStickers.length)
+            });
+            
+            await batch.commit();
+            console.log('Saved', uploadedStickers.length, 'stickers to pack:', savedPackId);
+        }
+        
+        // Reset uploaded stickers array
+        uploadedStickers = [];
         
         closeModal();
         loadStickerPacks();

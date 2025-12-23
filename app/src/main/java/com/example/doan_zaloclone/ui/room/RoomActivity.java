@@ -2292,6 +2292,18 @@ public class RoomActivity extends AppCompatActivity {
             return;
         }
         
+        // Validate sticker data
+        if (sticker == null || sticker.getId() == null || sticker.getImageUrl() == null) {
+            android.util.Log.e("StickerMessage", "Invalid sticker data: " + (sticker != null ? sticker.getId() : "null"));
+            Toast.makeText(this, "Sticker bị lỗi dữ liệu, vui lòng chọn sticker khác", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // Debug log
+        android.util.Log.d("StickerMessage", "sendStickerMessage - sticker.getId(): " + sticker.getId()
+            + ", sticker.getImageUrl(): " + sticker.getImageUrl()
+            + ", sticker.getPackId(): " + sticker.getPackId());
+        
         String senderId = firebaseAuth.getCurrentUser().getUid();
         
         // Create sticker message
