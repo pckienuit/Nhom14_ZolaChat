@@ -2,6 +2,28 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ========================================
+    // ADMIN HELPER FUNCTION
+    // ========================================
+    // Check if user has admin custom claim or is in admins collection
+    function isAdmin() {
+      return request.auth != null && 
+             (request.auth.token.admin == true ||
+              exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    // ========================================
+    // ADMIN FULL ACCESS RULE
+    // ========================================
+    // Admin can read/write all documents
+    match /{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    // ========================================
+    // EXISTING HELPER FUNCTIONS
+    // ========================================
+
     // Helper function to check if only reactions field changed
     function onlyReactionsChanged() {
       let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
