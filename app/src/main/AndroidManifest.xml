@@ -116,6 +116,12 @@
             android:parentActivityName=".ui.room.RoomActivity"
             android:windowSoftInputMode="adjustResize" />
             
+        <!-- Sticker Store Activity -->
+        <activity
+            android:name=".ui.sticker.StickerStoreActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.room.RoomActivity" />
+            
                 <!-- Profile Card Activity -->
         <activity
             android:name=".ui.personal.ProfileCardActivity"
