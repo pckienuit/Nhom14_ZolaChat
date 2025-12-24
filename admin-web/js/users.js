@@ -32,18 +32,15 @@ function setupEventListeners() {
     searchInput.addEventListener('input', debounce(filterUsers, 300));
     filterStatus.addEventListener('change', filterUsers);
     
-    // Modal
+    // Modal close
     document.getElementById('closeUserModal').addEventListener('click', closeModal);
-    document.getElementById('closeUserBtn').addEventListener('click', closeModal);
     document.querySelector('#userModal .modal-overlay').addEventListener('click', closeModal);
     
-    // Actions
-    document.getElementById('toggleBanBtn').addEventListener('click', () => {
-        if (currentUserId) toggleUserBan(currentUserId);
-    });
-
-    // Edit user logic
+    // Action buttons
+    document.getElementById('resetPasswordBtn').addEventListener('click', resetUserPassword);
     document.getElementById('editUserBtn').addEventListener('click', toggleEditMode);
+    document.getElementById('forceLogoutBtn').addEventListener('click', forceLogoutUser);
+    document.getElementById('toggleBanBtn').addEventListener('click', toggleBan);
 }
 
 /**
@@ -357,7 +354,7 @@ function updateActionButtons(user) {
         banBtn.classList.remove('btn-warning');
         banBtn.classList.add('btn-success');
     } else {
-        banBtn.innerHTML = '<i class="fas fa-ban"></i> <span>Khóa User</span>';
+        banBtn.innerHTML = '<i class="fas fa-ban"></i> <span>Khóa</span>';
         banBtn.title = '';
         banBtn.classList.remove('btn-success');
         banBtn.classList.add('btn-warning');
@@ -382,10 +379,17 @@ async function toggleBan() {
     if (!user) return;
     
     try {
-        await db.collection('users').doc(currentUserId).update({
+        const updateData = {
             isBanned: !user.isBanned,
             bannedAt: user.isBanned ? null : Date.now()
-        });
+        };
+        
+        // Also force logout when banning
+        if (!user.isBanned) {
+            updateData.forceLogoutAt = Date.now();
+        }
+        
+        await db.collection('users').doc(currentUserId).update(updateData);
         
         // Update local state
         user.isBanned = !user.isBanned;
@@ -394,6 +398,32 @@ async function toggleBan() {
         
     } catch (error) {
         console.error('Error toggling ban:', error);
+        alert('Lỗi: ' + error.message);
+    }
+}
+
+/**
+ * Force logout user remotely
+ */
+async function forceLogoutUser() {
+    if (!currentUserId) return;
+    
+    const user = users.find(u => u.id === currentUserId);
+    if (!user) return;
+    
+    if (!confirm(`Bạn có chắc muốn đăng xuất ${user.name || user.email} khỏi tất cả thiết bị?`)) {
+        return;
+    }
+    
+    try {
+        await db.collection('users').doc(currentUserId).update({
+            forceLogoutAt: Date.now()
+        });
+        
+        alert(`✅ Đã gửi lệnh đăng xuất đến ${user.name || user.email}`);
+        
+    } catch (error) {
+        console.error('Error forcing logout:', error);
         alert('Lỗi: ' + error.message);
     }
 }

@@ -148,6 +148,9 @@
                 <button class="btn btn-secondary" id="editUserBtn">
                     <i class="fas fa-edit"></i> <span>Sửa</span>
                 </button>
+                <button class="btn btn-danger" id="forceLogoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> <span>Logout</span>
+                </button>
                 <button class="btn btn-warning" id="toggleBanBtn">
                     <i class="fas fa-ban"></i> <span>Khóa</span>
                 </button>
@@ -199,6 +202,9 @@
             height: auto !important;
             min-width: unset !important;
             padding: 0.6rem 1.25rem !important;
+
+            /* Make all buttons equal width */
+            flex: 1 1 0;
 
             border-radius: var(--radius);
         }

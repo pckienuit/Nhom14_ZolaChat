@@ -35,17 +35,49 @@ public class AuthRepository {
                 .addOnCompleteListener(task -> {
                     if (task.isSuccessful()) {
                         FirebaseUser user = firebaseAuth.getCurrentUser();
-                        // Set Online status immediately upon login
                         if (user != null) {
-                            updateUserStatus(user.getUid(), true);
+                            // Check if user is banned before allowing login
+                            checkBannedStatus(user, callback);
+                        } else {
+                            callback.onError("Login failed");
                         }
-                        callback.onSuccess(user);
                     } else {
                         String errorMessage = task.getException() != null 
                                 ? task.getException().getMessage() 
                                 : "Login failed";
                         callback.onError(errorMessage);
                     }
+                });
+    }
+    
+    /**
+     * Check if user is banned in Firestore
+     */
+    private void checkBannedStatus(FirebaseUser user, AuthCallback callback) {
+        firestore.collection("users").document(user.getUid())
+                .get()
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        Boolean isBanned = documentSnapshot.getBoolean("isBanned");
+                        if (isBanned != null && isBanned) {
+                            // User is banned - sign out immediately
+                            firebaseAuth.signOut();
+                            callback.onError("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ admin.");
+                        } else {
+                            // User not banned - proceed with login
+                            updateUserStatus(user.getUid(), true);
+                            callback.onSuccess(user);
+                        }
+                    } else {
+                        // User document doesn't exist - allow login (new user edge case)
+                        updateUserStatus(user.getUid(), true);
+                        callback.onSuccess(user);
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    // If we can't check ban status, allow login but log error
+                    updateUserStatus(user.getUid(), true);
+                    callback.onSuccess(user);
                 });
     }
 
