@@ -86,6 +86,15 @@ dependencies {
     
     // OkHttp for HTTP requests (background removal API)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    
+    // Retrofit for API calls
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.google.code.gson:gson:2.10.1")
+    
+    // Socket.IO for WebSocket real-time messaging
+    implementation("io.socket:socket.io-client:2.1.0")
     
     // UCrop for image cropping in sticker creation
     implementation("com.github.yalantis:ucrop:2.2.8")

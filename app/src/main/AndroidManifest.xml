@@ -143,6 +143,13 @@
             android:hardwareAccelerated="true"
             android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
             
+        <!-- API Test Activity -->
+        <activity
+            android:name=".ApiTestActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:label="API Test" />
+            
         <!-- Call Activity -->
         <activity
             android:name=".ui.call.CallActivity"

@@ -77,6 +77,43 @@ public class MainActivity extends AppCompatActivity {
         
         // Start listening for force logout / ban
         setupForceLogoutListener();
+        
+        // TEMPORARY: API Test Button - Only in DEBUG builds
+        addApiTestButton();
+    }
+    
+    /**
+     * TEMPORARY: Add floating API test button
+     * Remove this method after API testing is complete!
+     */
+    private void addApiTestButton() {
+        // Note: Button always shows. Remove entire method after testing!
+        
+        android.widget.Button btnApiTest = new android.widget.Button(this);
+        btnApiTest.setText("🔧 API Test");
+        btnApiTest.setBackgroundColor(0xFF4CAF50);
+        btnApiTest.setTextColor(0xFFFFFFFF);
+        btnApiTest.setPadding(32, 16, 32, 16);
+        btnApiTest.setTextSize(12);
+        btnApiTest.setAllCaps(false);
+        
+        btnApiTest.setOnClickListener(v -> {
+            Intent intent = new Intent(this, ApiTestActivity.class);
+            startActivity(intent);
+        });
+        
+        // Add to root layout
+        android.view.ViewGroup rootLayout = findViewById(android.R.id.content);
+        if (rootLayout instanceof android.widget.FrameLayout) {
+            android.widget.FrameLayout.LayoutParams params = new android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
+            );
+            params.gravity = android.view.Gravity.TOP | android.view.Gravity.END;
+            params.setMargins(0, 200, 32, 0);
+            btnApiTest.setLayoutParams(params);
+            rootLayout.addView(btnApiTest);
+        }
     }
     
     /**
