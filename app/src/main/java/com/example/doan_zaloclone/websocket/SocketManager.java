@@ -33,6 +33,8 @@ public class SocketManager {
     private OnMessageListener messageListener;
     private OnTypingListener typingListener;
     private OnConnectionListener connectionListener;
+    private OnReactionListener reactionListener;
+    private OnSeenListener seenListener;
     
     private SocketManager() {
         // Private constructor for singleton
@@ -165,6 +167,69 @@ public class SocketManager {
             }
         });
         
+        // Reaction updated event
+        socket.on("reaction_updated", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject reactionData = (JSONObject) args[0];
+                    Log.d(TAG, "❤️ Reaction updated: " + reactionData.toString());
+                    
+                    if (reactionListener != null) {
+                        String conversationId = reactionData.optString("conversationId");
+                        String messageId = reactionData.optString("messageId");
+                        String userId = reactionData.optString("userId");
+                        String reactionType = reactionData.optString("reactionType");
+                        
+                        // Parse reactions map from server
+                        java.util.Map<String, String> reactions = new java.util.HashMap<>();
+                        JSONObject reactionsJson = reactionData.optJSONObject("reactions");
+                        if (reactionsJson != null) {
+                            java.util.Iterator<String> keys = reactionsJson.keys();
+                            while (keys.hasNext()) {
+                                String key = keys.next();
+                                reactions.put(key, reactionsJson.optString(key));
+                            }
+                        }
+                        
+                        // Parse reactionCounts map from server
+                        java.util.Map<String, Integer> reactionCounts = new java.util.HashMap<>();
+                        JSONObject countsJson = reactionData.optJSONObject("reactionCounts");
+                        if (countsJson != null) {
+                            java.util.Iterator<String> keys = countsJson.keys();
+                            while (keys.hasNext()) {
+                                String key = keys.next();
+                                reactionCounts.put(key, countsJson.optInt(key, 0));
+                            }
+                        }
+                        
+                        reactionListener.onReactionUpdated(conversationId, messageId, userId, reactionType, reactions, reactionCounts);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing reaction event", e);
+                }
+            }
+        });
+        
+        // Message read/seen event
+        socket.on("message_read", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject readData = (JSONObject) args[0];
+                    Log.d(TAG, "👁️ Message read: " + readData.toString());
+                    
+                    if (seenListener != null) {
+                        String conversationId = readData.optString("conversationId");
+                        String userId = readData.optString("userId");
+                        long timestamp = readData.optLong("timestamp", System.currentTimeMillis());
+                        
+                        seenListener.onMessageSeen(conversationId, userId, timestamp);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing message read event", e);
+                }
+            }
+        });
+        
         // Typing indicator event
         socket.on("user_typing", args -> {
             if (args.length > 0) {
@@ -265,6 +330,14 @@ public class SocketManager {
         this.connectionListener = listener;
     }
     
+    public void setReactionListener(OnReactionListener listener) {
+        this.reactionListener = listener;
+    }
+    
+    public void setSeenListener(OnSeenListener listener) {
+        this.seenListener = listener;
+    }
+    
     // ========== Listener Interfaces ==========
     
     public interface OnMessageListener {
@@ -281,5 +354,14 @@ public class SocketManager {
         void onConnected();
         void onDisconnected();
         void onError(String error);
+    }
+    
+    public interface OnReactionListener {
+        void onReactionUpdated(String conversationId, String messageId, String userId, String reactionType,
+                               java.util.Map<String, String> reactions, java.util.Map<String, Integer> reactionCounts);
+    }
+    
+    public interface OnSeenListener {
+        void onMessageSeen(String conversationId, String userId, long timestamp);
     }
 }

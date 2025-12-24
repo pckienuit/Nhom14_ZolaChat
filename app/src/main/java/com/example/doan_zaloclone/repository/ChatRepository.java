@@ -497,6 +497,58 @@ public class ChatRepository {
                 // 3. Join conversation room for real-time updates
                 Log.d("ChatRepository", "Joining WebSocket room: " + conversationId);
                 socketManager.joinConversation(conversationId);
+                
+                // 4. Setup reaction listener for real-time reaction updates
+                socketManager.setReactionListener(new SocketManager.OnReactionListener() {
+                    @Override
+                    public void onReactionUpdated(String convId, String messageId, String userId, String reactionType,
+                                                  java.util.Map<String, String> reactions, java.util.Map<String, Integer> reactionCounts) {
+                        try {
+                            if (!conversationId.equals(convId)) {
+                                return; // Not for this conversation
+                            }
+                            
+                            Log.d("ChatRepository", "Reaction updated via WebSocket - messageId: " + messageId 
+                                + ", userId: " + userId + ", type: " + reactionType
+                                + ", reactions: " + (reactions != null ? reactions.size() : 0)
+                                + ", reactionCounts: " + reactionCounts);
+                            
+                            // Find and update message reactions in cache
+                            boolean found = false;
+                            for (int i = 0; i < cachedMessages.size(); i++) {
+                                Message msg = cachedMessages.get(i);
+                                if (msg.getId() != null && msg.getId().equals(messageId)) {
+                                    // Use data from server directly (not recalculate)
+                                    msg.setReactions(reactions != null ? reactions : new java.util.HashMap<>());
+                                    msg.setReactionCounts(reactionCounts != null ? reactionCounts : new java.util.HashMap<>());
+                                    
+                                    found = true;
+                                    
+                                    Log.d("ChatRepository", "Reaction updated in cache from server - reactionCounts: " + reactionCounts);
+                                    
+                                    // CRITICAL: Create deep copy of messages list for UI
+                                    // DiffUtil compares old vs new by reference, so we need new Message objects
+                                    List<Message> messagesCopy = new ArrayList<>();
+                                    for (Message m : cachedMessages) {
+                                        messagesCopy.add(new Message(m)); // Use copy constructor
+                                    }
+                                    
+                                    // Notify UI with deep copy
+                                    mainHandler.post(() -> {
+                                        listener.onMessagesChanged(messagesCopy);
+                                    });
+                                    break;
+                                }
+                            }
+                            
+                            if (!found) {
+                                Log.w("ChatRepository", "Message not found in cache for reaction update: " + messageId);
+                            }
+                        } catch (Exception e) {
+                            Log.e("ChatRepository", "Error handling reaction update", e);
+                        }
+                    }
+                });
             }
             
             @Override
@@ -1244,30 +1296,47 @@ public class ChatRepository {
             return result;
         }
         
-        // Update the reactions map field in Firestore
-        DocumentReference messageRef = firestore
-                .collection("conversations")
-                .document(conversationId)
-                .collection("messages")
-                .document(messageId);
+        // Prepare request body
+        Map<String, String> reactionData = new HashMap<>();
+        reactionData.put("userId", userId);
+        reactionData.put("reactionType", reactionType);
         
-        // Update both reactions (userId -> reactionType) and reactionCounts (reactionType -> count)
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("reactions." + userId, reactionType);
-        updates.put("reactionCounts." + reactionType, com.google.firebase.firestore.FieldValue.increment(1));
+        // Call API to add reaction
+        Call<ApiResponse<Message>> call = apiService.addReaction(conversationId, messageId, reactionData);
         
-        messageRef.update(updates)
-                .addOnSuccessListener(aVoid -> {
-                    Log.d("ChatRepository", "Reaction added: " + reactionType + " by user: " + userId);
-                    result.setValue(Resource.success(true));
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("ChatRepository", "Error adding reaction", e);
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể thêm cảm xúc";
-                    result.setValue(Resource.error(errorMessage));
-                });
+        call.enqueue(new Callback<ApiResponse<Message>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Message>> call, Response<ApiResponse<Message>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    ApiResponse<Message> apiResponse = response.body();
+                    
+                    if (apiResponse.isSuccess()) {
+                        Log.d("ChatRepository", "Reaction added via API: " + reactionType + " by user: " + userId);
+                        
+                        // DO NOT update local cache here - WebSocket will handle it with correct reactionCounts
+                        // The WebSocket reaction_updated event contains authoritative data from server
+                        
+                        // Backend broadcasts update via WebSocket (reaction_updated event)
+                        result.setValue(Resource.success(true));
+                    } else {
+                        String error = apiResponse.getMessage() != null 
+                            ? apiResponse.getMessage() 
+                            : "Failed to add reaction";
+                        result.setValue(Resource.error(error));
+                    }
+                } else {
+                    result.setValue(Resource.error("HTTP " + response.code()));
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Message>> call, Throwable t) {
+                String error = t.getMessage() != null 
+                    ? t.getMessage() 
+                    : "Network error";
+                result.setValue(Resource.error(error));
+            }
+        });
         
         return result;
     }
@@ -1893,6 +1962,57 @@ public class ChatRepository {
                 callback.onError(e.getMessage());
             }
         });
+    }
+    
+    /**
+     * Mark conversation as seen/read via API
+     * @param conversationId ID of the conversation
+     * @param userId ID of the user marking as seen
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> markConversationAsSeen(@NonNull String conversationId,
+                                                                @NonNull String userId) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        // Prepare request body
+        Map<String, String> seenData = new HashMap<>();
+        seenData.put("userId", userId);
+        
+        // Call API to mark as seen
+        Call<ApiResponse<Map<String, Object>>> call = apiService.markConversationAsSeen(conversationId, seenData);
+        
+        call.enqueue(new Callback<ApiResponse<Map<String, Object>>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Map<String, Object>>> call, Response<ApiResponse<Map<String, Object>>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    ApiResponse<Map<String, Object>> apiResponse = response.body();
+                    
+                    if (apiResponse.isSuccess()) {
+                        Log.d("ChatRepository", "Conversation marked as seen via API: " + conversationId);
+                        // Backend broadcasts update via WebSocket (message_read event)
+                        result.setValue(Resource.success(true));
+                    } else {
+                        String error = apiResponse.getMessage() != null 
+                            ? apiResponse.getMessage() 
+                            : "Failed to mark as seen";
+                        result.setValue(Resource.error(error));
+                    }
+                } else {
+                    result.setValue(Resource.error("HTTP " + response.code()));
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Map<String, Object>>> call, Throwable t) {
+                String error = t.getMessage() != null 
+                    ? t.getMessage() 
+                    : "Network error";
+                result.setValue(Resource.error(error));
+            }
+        });
+        
+        return result;
     }
     
     /**

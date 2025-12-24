@@ -792,8 +792,11 @@ public class RoomActivity extends AppCompatActivity {
             if (resource == null) return;
             
             if (resource.isSuccess()) {
-                // Reaction updated successfully - messages will auto-update via Firestore listener
-                android.util.Log.d("RoomActivity", "Reaction updated successfully");
+                android.util.Log.d("RoomActivity", "Reaction updated successfully - will update via WebSocket");
+                
+                // Note: UI will be updated via WebSocket reaction_updated event
+                // No need to manually update here as ChatRepository handles WebSocket events
+                
                 roomViewModel.resetReactionState();
             } else if (resource.isError()) {
                 Toast.makeText(this, "Lỗi cập nhật reaction: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
@@ -2010,7 +2013,8 @@ public class RoomActivity extends AppCompatActivity {
         android.util.Log.d("RoomActivity", "handleReactionClick - messageId: " + message.getId() 
                 + ", reactionType: " + reactionType);
         
-        // Use ViewModel to add reaction (uses the passed reaction type)
+        // Just call API - WebSocket/Server will push update to refresh UI
+        // Removed optimistic update to avoid race condition with server response
         roomViewModel.toggleReaction(conversationId, message.getId(), currentUserId, reactionType);
     }
     
@@ -2034,6 +2038,8 @@ public class RoomActivity extends AppCompatActivity {
             // User selected a reaction or remove (null)
             android.util.Log.d("RoomActivity", "Reaction selected: " + reactionType + " for message: " + message.getId());
             
+            // Just call API - WebSocket/Server will push update to refresh UI
+            // Removed optimistic update to avoid race condition with server response
             if (reactionType == null) {
                 // Remove user's reaction
                 roomViewModel.removeReaction(conversationId, message.getId(), currentUserId);

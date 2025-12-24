@@ -86,6 +86,29 @@ public interface ApiService {
         @Path("messageId") String messageId
     );
     
+    // React to message
+    @POST("chats/{conversationId}/messages/{messageId}/react")
+    Call<ApiResponse<Message>> addReaction(
+        @Path("conversationId") String conversationId,
+        @Path("messageId") String messageId,
+        @Body Map<String, String> reactionData
+    );
+    
+    // Remove reaction
+    @HTTP(method = "DELETE", path = "chats/{conversationId}/messages/{messageId}/react", hasBody = false)
+    Call<ApiResponse<Message>> removeReaction(
+        @Path("conversationId") String conversationId,
+        @Path("messageId") String messageId,
+        @Query("userId") String userId
+    );
+    
+    // Mark conversation as seen/read
+    @POST("chats/{conversationId}/seen")
+    Call<ApiResponse<Map<String, Object>>> markConversationAsSeen(
+        @Path("conversationId") String conversationId,
+        @Body Map<String, String> seenData
+    );
+    
     @PUT("chats/messages/{messageId}")
     Call<ApiResponse<Void>> updateMessageOld(
         @Path("messageId") String messageId,
@@ -93,7 +116,7 @@ public interface ApiService {
     );
     
     @POST("chats/messages/{messageId}/reactions")
-    Call<ApiResponse<Void>> addReaction(
+    Call<ApiResponse<Void>> addReactionOld(
         @Path("messageId") String messageId,
         @Body Map<String, String> reactionData
     );

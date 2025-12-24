@@ -611,12 +611,42 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         }
         
         // Click on add reaction button - add current user's reaction (or heart if none)
+        // CRITICAL: Read userReaction from message at click time, NOT from captured variable
         addReactionButton.setOnClickListener(v -> {
             if (reactionListener != null) {
-                // Use user's current reaction if they have one, otherwise default to heart
-                String reactionToAdd = userReaction != null 
-                        ? userReaction 
+                // Get fresh userReaction at click time (not captured from bind time)
+                String currentUserReaction = message.getUserReaction(currentUserId);
+                String reactionToAdd = currentUserReaction != null 
+                        ? currentUserReaction 
                         : com.example.doan_zaloclone.models.MessageReaction.REACTION_HEART;
+                
+                android.util.Log.d("MessageAdapter", "onClick - messageId: " + message.getId() 
+                    + ", currentUserReaction: " + currentUserReaction
+                    + ", reactionToAdd: " + reactionToAdd
+                    + ", reactions: " + (message.getReactions() != null ? message.getReactions().size() : 0)
+                    + ", reactionCounts: " + message.getReactionCounts());
+                
+                // OPTIMISTIC UI UPDATE: Update count immediately for responsive UX
+                java.util.Map<String, Integer> counts = message.getReactionCounts();
+                if (counts == null) {
+                    counts = new java.util.HashMap<>();
+                    message.setReactionCounts(counts);
+                }
+                int currentCount = counts.getOrDefault(reactionToAdd, 0);
+                counts.put(reactionToAdd, currentCount + 1);
+                
+                // Update user's reaction type
+                java.util.Map<String, String> userReactions = message.getReactions();
+                if (userReactions == null) {
+                    userReactions = new java.util.HashMap<>();
+                    message.setReactions(userReactions);
+                }
+                userReactions.put(currentUserId, reactionToAdd);
+                
+                // Update UI immediately (visual feedback)
+                bindReactionIndicator(itemView, message, currentUserId, reactionListener);
+                
+                // Then send to server (WebSocket will confirm/correct)
                 reactionListener.onReactionClick(message, reactionToAdd);
             }
         });

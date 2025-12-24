@@ -73,6 +73,42 @@ public class Message {
         this.type = TYPE_TEXT; // Default type
     }
 
+    // Copy constructor - tạo deep copy để DiffUtil detect changes
+    public Message(Message other) {
+        this.id = other.id;
+        this.senderId = other.senderId;
+        this.senderName = other.senderName;
+        this.content = other.content;
+        this.type = other.type;
+        this.timestamp = other.timestamp;
+        this.fileName = other.fileName;
+        this.fileSize = other.fileSize;
+        this.fileMimeType = other.fileMimeType;
+        this.replyToId = other.replyToId;
+        this.replyToContent = other.replyToContent;
+        this.replyToSenderId = other.replyToSenderId;
+        this.replyToSenderName = other.replyToSenderName;
+        this.isRecalled = other.isRecalled;
+        this.isForwarded = other.isForwarded;
+        this.originalSenderId = other.originalSenderId;
+        this.originalSenderName = other.originalSenderName;
+        // Deep copy reactions map
+        this.reactions = other.reactions != null ? new java.util.HashMap<>(other.reactions) : null;
+        // Deep copy reactionCounts map
+        this.reactionCounts = other.reactionCounts != null ? new java.util.HashMap<>(other.reactionCounts) : null;
+        this.pollData = other.pollData; // Poll is complex, shallow copy for now
+        this.contactUserId = other.contactUserId;
+        this.latitude = other.latitude;
+        this.longitude = other.longitude;
+        this.locationName = other.locationName;
+        this.locationAddress = other.locationAddress;
+        this.liveLocationSessionId = other.liveLocationSessionId;
+        this.stickerId = other.stickerId;
+        this.stickerPackId = other.stickerPackId;
+        this.stickerUrl = other.stickerUrl;
+        this.isStickerAnimated = other.isStickerAnimated;
+    }
+
     // Constructor cũ (backward compatible) - mặc định type là TEXT
     public Message(String id, String senderId, String content, long timestamp) {
         this.id = id;
