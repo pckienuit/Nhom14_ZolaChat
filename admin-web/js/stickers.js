@@ -214,7 +214,7 @@ async function handleIconUpload(event) {
         formData.append('sticker', file);
         formData.append('userId', auth.currentUser.uid);
         
-        const response = await fetch('http://163.61.182.20/api/stickers/upload', {
+        const response = await fetch('https://zolachat.site/api/stickers/upload', {
             method: 'POST',
             body: formData
         });
