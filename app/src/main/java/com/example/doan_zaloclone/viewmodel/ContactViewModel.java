@@ -28,7 +28,7 @@ public class ContactViewModel extends BaseViewModel {
     
     public ContactViewModel() {
         this.friendRepository = new FriendRepository();
-        this.conversationRepository = new ConversationRepository();
+        this.conversationRepository = ConversationRepository.getInstance();
     }
     
     /**

@@ -567,6 +567,31 @@ public class HomeFragment extends Fragment {
                 }
             }
         });
+        
+        // Observe group_left event to remove conversation from UI
+        homeViewModel.getGroupLeftEvent().observe(getViewLifecycleOwner(), conversationId -> {
+            if (conversationId != null) {
+                android.util.Log.d("HomeFragment", "Removing conversation from UI: " + conversationId);
+                conversationAdapter.removeConversationById(conversationId);
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Đã rời nhóm", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        
+        // Observe conversation refresh events (new conversation, updates)
+        homeViewModel.getConversationRefreshNeeded().observe(getViewLifecycleOwner(), needsRefresh -> {
+            if (needsRefresh != null && needsRefresh) {
+                // Get current user ID at the time of refresh
+                if (firebaseAuth.getCurrentUser() != null) {
+                    String userId = firebaseAuth.getCurrentUser().getUid();
+                    android.util.Log.d("HomeFragment", "Refreshing conversations due to WebSocket event for user: " + userId);
+                    homeViewModel.refreshConversations(userId);
+                } else {
+                    android.util.Log.w("HomeFragment", "Cannot refresh - user not logged in");
+                }
+            }
+        });
     }
 
     private void loadConversations() {

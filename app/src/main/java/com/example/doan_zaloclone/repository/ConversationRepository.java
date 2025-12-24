@@ -35,6 +35,9 @@ public class ConversationRepository {
     
     private static final String TAG = "ConversationRepo";
     
+    // Singleton instance
+    private static ConversationRepository instance;
+    
     private final ApiService apiService;
     private final SocketManager socketManager;
     private final Handler mainHandler;
@@ -42,15 +45,111 @@ public class ConversationRepository {
     // Cache conversations locally
     private final List<Conversation> cachedConversations = new ArrayList<>();
     
+    // LiveData for real-time events
+    private final MutableLiveData<String> groupLeftEvent = new MutableLiveData<>();
+    private final MutableLiveData<Boolean> conversationRefreshNeeded = new MutableLiveData<>();
+    
     // Legacy Firestore (keep for now for features not migrated yet)
     private final FirestoreManager firestoreManager;
     private ListenerRegistration conversationsListener;
     
-    public ConversationRepository() {
+    /**
+     * Get singleton instance
+     */
+    public static synchronized ConversationRepository getInstance() {
+        if (instance == null) {
+            instance = new ConversationRepository();
+        }
+        return instance;
+    }
+    
+    /**
+     * Private constructor for singleton
+     */
+    private ConversationRepository() {
         this.apiService = RetrofitClient.getApiService();
         this.socketManager = SocketManager.getInstance();
         this.mainHandler = new Handler(Looper.getMainLooper());
         this.firestoreManager = FirestoreManager.getInstance();
+        
+        setupSocketListeners();
+        
+        // Connect SocketManager to receive real-time conversation events
+        socketManager.connect();
+    }
+    
+    /**
+     * Setup WebSocket listeners for real-time events
+     */
+    private void setupSocketListeners() {
+        // Listen for group events (when user leaves a group)
+        socketManager.setGroupEventListener(new SocketManager.OnGroupEventListener() {
+            @Override
+            public void onGroupLeft(String conversationId) {
+                Log.d(TAG, "🚪 Received group_left event for conversation: " + conversationId);
+                
+                // Remove from cache
+                synchronized (cachedConversations) {
+                    cachedConversations.removeIf(c -> c.getId().equals(conversationId));
+                }
+                
+                // Broadcast event to UI
+                mainHandler.post(() -> groupLeftEvent.setValue(conversationId));
+            }
+            
+            @Override
+            public void onMemberLeft(String conversationId, String userId, String userName) {
+                Log.d(TAG, "👥 Member " + userName + " left conversation: " + conversationId);
+                // Trigger refresh to update member count
+                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+            }
+            
+            @Override
+            public void onConversationCreated(String conversationId) {
+                Log.d(TAG, "➕ New conversation created: " + conversationId);
+                // Clear cache and trigger refresh
+                synchronized (cachedConversations) {
+                    cachedConversations.clear();
+                }
+                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+            }
+            
+            @Override
+            public void onConversationUpdated(String conversationId) {
+                Log.d(TAG, "🔄 Conversation updated: " + conversationId);
+                // Trigger refresh to get latest data
+                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+            }
+            
+            @Override
+            public void onConversationDeleted(String conversationId) {
+                Log.d(TAG, "🗑️ Conversation deleted: " + conversationId);
+                
+                // Remove from cache
+                synchronized (cachedConversations) {
+                    cachedConversations.removeIf(c -> c.getId().equals(conversationId));
+                }
+                
+                // Broadcast event to UI (same as group_left - removes from list)
+                mainHandler.post(() -> groupLeftEvent.setValue(conversationId));
+            }
+        });
+    }
+    
+    /**
+     * Get LiveData for group_left events
+     * UI can observe this to remove conversations from the list
+     */
+    public LiveData<String> getGroupLeftEvent() {
+        return groupLeftEvent;
+    }
+    
+    /**
+     * Get LiveData for conversation refresh events
+     * UI should observe this to reload conversations list
+     */
+    public LiveData<Boolean> getConversationRefreshNeeded() {
+        return conversationRefreshNeeded;
     }
     
     /**
@@ -474,6 +573,49 @@ public class ConversationRepository {
             public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
                 Log.e(TAG, "Network error leaving group", t);
+                result.setValue(Resource.error(error));
+            }
+        });
+        
+        return result;
+    }
+    
+    /**
+     * Delete/Dissolve group conversation via REST API
+     * @param conversationId ID of the group conversation
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Void>> deleteConversation(@NonNull String conversationId) {
+        MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        Log.d(TAG, "Deleting conversation " + conversationId);
+        
+        Call<ApiResponse<Void>> call = apiService.deleteConversation(conversationId);
+        
+        call.enqueue(new Callback<ApiResponse<Void>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+                if (response.isSuccessful()) {
+                    Log.d(TAG, "✅ Deleted conversation");
+                    
+                    // Remove from cache
+                    synchronized (cachedConversations) {
+                        cachedConversations.removeIf(c -> c.getId().equals(conversationId));
+                    }
+                    
+                    result.setValue(Resource.success(null));
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e(TAG, "Failed to delete conversation: " + error);
+                    result.setValue(Resource.error(error));
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e(TAG, "Network error deleting conversation", t);
                 result.setValue(Resource.error(error));
             }
         });

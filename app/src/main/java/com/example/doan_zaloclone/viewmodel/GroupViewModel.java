@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel;
 
 import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.repository.ChatRepository;
+import com.example.doan_zaloclone.repository.ConversationRepository;
 import com.example.doan_zaloclone.utils.Resource;
 
 import java.util.List;
@@ -17,13 +18,19 @@ import java.util.List;
 public class GroupViewModel extends ViewModel {
 
     private final ChatRepository chatRepository;
+    private final ConversationRepository conversationRepository;
     private MutableLiveData<Resource<Conversation>> createGroupResult;
     private MutableLiveData<Resource<Boolean>> updateResult;
+    private MutableLiveData<Resource<Void>> leaveGroupResult;
+    private MutableLiveData<Resource<Boolean>> deleteGroupResult;
 
     public GroupViewModel() {
         this.chatRepository = new ChatRepository();
+        this.conversationRepository = ConversationRepository.getInstance();
         this.createGroupResult = new MutableLiveData<>();
         this.updateResult = new MutableLiveData<>();
+        this.leaveGroupResult = new MutableLiveData<>();
+        this.deleteGroupResult = new MutableLiveData<>();
     }
 
     /**
@@ -79,11 +86,18 @@ public class GroupViewModel extends ViewModel {
     }
 
     /**
-     * Leave group
+     * Leave group (migrated to API)
      */
-    public void leaveGroup(@NonNull String conversationId, @NonNull String userId) {
-        chatRepository.leaveGroup(conversationId, userId)
-                .observeForever(resource -> updateResult.setValue(resource));
+    public void leaveGroup(@NonNull String conversationId) {
+        conversationRepository.leaveGroup(conversationId)
+                .observeForever(resource -> leaveGroupResult.setValue(resource));
+    }
+
+    /**
+     * Get LiveData for leave group result
+     */
+    public LiveData<Resource<Void>> getLeaveGroupResult() {
+        return leaveGroupResult;
     }
 
     /**
@@ -99,7 +113,14 @@ public class GroupViewModel extends ViewModel {
      */
     public void deleteGroup(@NonNull String conversationId) {
         chatRepository.deleteGroup(conversationId)
-                .observeForever(resource -> updateResult.setValue(resource));
+                .observeForever(resource -> deleteGroupResult.setValue(resource));
+    }
+
+    /**
+     * Get LiveData for delete group result
+     */
+    public LiveData<Resource<Boolean>> getDeleteGroupResult() {
+        return deleteGroupResult;
     }
 
     /**

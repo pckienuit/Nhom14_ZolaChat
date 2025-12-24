@@ -66,6 +66,7 @@ public class RoomActivity extends AppCompatActivity {
     private RoomViewModel roomViewModel;
     private ContactViewModel contactViewModel;
     private ChatRepository chatRepository; // For backward compatibility with image uploads
+    private com.example.doan_zaloclone.repository.ConversationRepository conversationRepository;
     private FirebaseAuth firebaseAuth;
     
     // Message limits for non-friends (only for 1-1 chats)
@@ -146,6 +147,7 @@ public class RoomActivity extends AppCompatActivity {
         roomViewModel = new ViewModelProvider(this).get(RoomViewModel.class);
         contactViewModel = new ViewModelProvider(this).get(ContactViewModel.class);
         chatRepository = new ChatRepository(); // For legacy image upload operations
+        conversationRepository = com.example.doan_zaloclone.repository.ConversationRepository.getInstance();
         firebaseAuth = FirebaseAuth.getInstance();
         
         observeViewModel();
@@ -797,11 +799,20 @@ public class RoomActivity extends AppCompatActivity {
                 // Note: UI will be updated via WebSocket reaction_updated event
                 // No need to manually update here as ChatRepository handles WebSocket events
                 
-                roomViewModel.resetReactionState();
+            roomViewModel.resetReactionState();
             } else if (resource.isError()) {
                 Toast.makeText(this, "Lỗi cập nhật reaction: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
                 android.util.Log.e("RoomActivity", "Error updating reaction: " + resource.getMessage());
                 roomViewModel.resetReactionState();
+            }
+        });
+        
+        // Observe group left/deleted events - auto-finish if this conversation is deleted
+        conversationRepository.getGroupLeftEvent().observe(this, deletedConversationId -> {
+            if (deletedConversationId != null && deletedConversationId.equals(conversationId)) {
+                android.util.Log.d("RoomActivity", "Conversation deleted, finishing activity: " + conversationId);
+                Toast.makeText(this, "Nhóm đã bị xóa hoặc bạn đã rời nhóm", Toast.LENGTH_SHORT).show();
+                finish();
             }
         });
     }

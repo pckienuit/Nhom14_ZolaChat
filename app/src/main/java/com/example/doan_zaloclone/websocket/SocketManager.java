@@ -35,6 +35,7 @@ public class SocketManager {
     private OnConnectionListener connectionListener;
     private OnReactionListener reactionListener;
     private OnSeenListener seenListener;
+    private OnGroupEventListener groupEventListener;
     
     private SocketManager() {
         // Private constructor for singleton
@@ -248,6 +249,98 @@ public class SocketManager {
                 }
             }
         });
+        
+        // Group left event
+        socket.on("group_left", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String conversationId = data.getString("conversationId");
+                    
+                    Log.d(TAG, "🚪 Group left event for conversation " + conversationId);
+                    
+                    if (groupEventListener != null) {
+                        groupEventListener.onGroupLeft(conversationId);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing group_left event", e);
+                }
+            }
+        });
+        
+        // Member left event
+        socket.on("member_left", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String conversationId = data.getString("conversationId");
+                    String userId = data.getString("userId");
+                    String userName = data.optString("userName", "Unknown");
+                    
+                    Log.d(TAG, "👥 Member " + userName + " left conversation " + conversationId);
+                    
+                    if (groupEventListener != null) {
+                        groupEventListener.onMemberLeft(conversationId, userId, userName);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing member_left event", e);
+                }
+            }
+        });
+        
+        // Conversation created event
+        socket.on("conversation_created", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String conversationId = data.getString("conversationId");
+                    
+                    Log.d(TAG, "➕ New conversation created: " + conversationId);
+                    
+                    if (groupEventListener != null) {
+                        groupEventListener.onConversationCreated(conversationId);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing conversation_created event", e);
+                }
+            }
+        });
+        
+        // Conversation updated event
+        socket.on("conversation_updated", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String conversationId = data.getString("conversationId");
+                    
+                    Log.d(TAG, "🔄 Conversation updated: " + conversationId);
+                    
+                    if (groupEventListener != null) {
+                        groupEventListener.onConversationUpdated(conversationId);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing conversation_updated event", e);
+                }
+            }
+        });
+        
+        // Conversation deleted event
+        socket.on("conversation_deleted", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String conversationId = data.getString("conversationId");
+                    
+                    Log.d(TAG, "🗑️ Conversation deleted: " + conversationId);
+                    
+                    if (groupEventListener != null) {
+                        groupEventListener.onConversationDeleted(conversationId);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing conversation_deleted event", e);
+                }
+            }
+        });
     }
     
     /**
@@ -338,6 +431,31 @@ public class SocketManager {
         this.seenListener = listener;
     }
     
+    public void setGroupEventListener(OnGroupEventListener listener) {
+        this.groupEventListener = listener;
+    }
+    
+    /**
+     * Manually trigger conversation created event (for Firestore-created conversations)
+     * This is a workaround until full API migration
+     */
+    public void triggerConversationCreated(String conversationId) {
+        if (groupEventListener != null) {
+            Log.d(TAG, "Manually triggering conversation_created for: " + conversationId);
+            groupEventListener.onConversationCreated(conversationId);
+        }
+    }
+    
+    /**
+     * Manually trigger conversation updated event
+     */
+    public void triggerConversationUpdated(String conversationId) {
+        if (groupEventListener != null) {
+            Log.d(TAG, "Manually triggering conversation_updated for: " + conversationId);
+            groupEventListener.onConversationUpdated(conversationId);
+        }
+    }
+    
     // ========== Listener Interfaces ==========
     
     public interface OnMessageListener {
@@ -363,5 +481,13 @@ public class SocketManager {
     
     public interface OnSeenListener {
         void onMessageSeen(String conversationId, String userId, long timestamp);
+    }
+    
+    public interface OnGroupEventListener {
+        void onGroupLeft(String conversationId);
+        void onMemberLeft(String conversationId, String userId, String userName);
+        void onConversationCreated(String conversationId);
+        void onConversationUpdated(String conversationId);
+        void onConversationDeleted(String conversationId);
     }
 }

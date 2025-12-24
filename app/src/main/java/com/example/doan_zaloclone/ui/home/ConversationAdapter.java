@@ -78,6 +78,24 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
         this.conversations = newConversations;
         diffResult.dispatchUpdatesTo(this);
     }
+    
+    /**
+     * Remove conversation by ID (e.g., when user leaves a group)
+     */
+    public void removeConversationById(String conversationId) {
+        int position = -1;
+        for (int i = 0; i < conversations.size(); i++) {
+            if (conversations.get(i).getId().equals(conversationId)) {
+                position = i;
+                break;
+            }
+        }
+        
+        if (position != -1) {
+            conversations.remove(position);
+            notifyItemRemoved(position);
+        }
+    }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
         private TextView nameTextView;

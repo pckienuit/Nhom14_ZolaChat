@@ -81,16 +81,56 @@ router.get('/', authenticateUser, async (req, res) => {
 
 router.post('/', authenticateUser, async (req, res) => {
   try {
-    const { participants, isGroup, groupName } = req.body;
+    const { participants, memberIds, isGroup, groupName, name, adminId, type } = req.body;
+    const userId = req.user.uid;
+    
+    // Support both old format (participants) and new format (memberIds)
+    const members = memberIds || participants || [];
+    const conversationType = type || (isGroup ? 'GROUP' : 'FRIEND');
+    const conversationName = name || groupName || '';
+    
+    console.log('📝 Creating conversation:', { type: conversationType, name: conversationName, members });
+    
     const conversation = {
-      participants, isGroup, groupName,
+      memberIds: members,
+      type: conversationType,
+      name: conversationName,
+      adminIds: adminId ? [adminId] : [userId],
       createdAt: Date.now(),
+      timestamp: Date.now(),
       lastMessage: '',
-      lastMessageTime: Date.now()
+      lastMessageTime: Date.now(),
+      // Legacy fields for compatibility
+      participants: members,
+      isGroup: conversationType === 'GROUP'
     };
+    
     const convRef = await db.collection('conversations').add(conversation);
-    res.json({ success: true, conversationId: convRef.id });
+    
+    console.log('✅ Created conversation:', convRef.id);
+    
+    // Emit WebSocket event to all members
+    const io = req.app.get('io');
+    if (io && members && members.length > 0) {
+      console.log('📢 Emitting conversation_created to members:', members);
+      members.forEach(memberId => {
+        const room = `user:${memberId}`;
+        console.log(`  → Emitting to room: ${room}`);
+        io.to(room).emit('conversation_created', {
+          conversationId: convRef.id,
+          conversation: { id: convRef.id, ...conversation }
+        });
+      });
+      console.log('✅ Notified all members of new conversation');
+    }
+    
+    res.json({ 
+      success: true, 
+      conversationId: convRef.id,
+      conversation: { id: convRef.id, ...conversation }
+    });
   } catch (error) {
+    console.error('❌ Error creating conversation:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -109,7 +149,23 @@ router.put('/:conversationId', authenticateUser, async (req, res) => {
     delete updates.participants;
     delete updates.createdAt;
     
-    await db.collection('conversations').doc(conversationId).update(updates);
+    const convRef = db.collection('conversations').doc(conversationId);
+    const doc = await convRef.get();
+    const data = doc.data();
+    
+    await convRef.update(updates);
+    
+    // Emit WebSocket event to all members
+    const io = req.app.get('io');
+    if (io && data && data.memberIds) {
+      data.memberIds.forEach(memberId => {
+        io.to(`user:${memberId}`).emit('conversation_updated', {
+          conversationId,
+          updates
+        });
+      });
+      console.log('✅ Notified members of conversation update');
+    }
     
     console.log('✅ Updated conversation', conversationId);
     res.json({ success: true });
@@ -206,6 +262,9 @@ router.post('/:conversationId/leave', authenticateUser, async (req, res) => {
     
     const data = doc.data();
     
+    // Get user name before removing
+    const userName = data.memberNames?.[userId] || 'Unknown';
+    
     // Remove self from memberIds
     const memberIds = (data.memberIds || []).filter(id => id !== userId);
     
@@ -215,10 +274,91 @@ router.post('/:conversationId/leave', authenticateUser, async (req, res) => {
     
     await convRef.update({ memberIds, memberNames });
     
-    console.log('✅ User left conversation');
+    // Emit WebSocket event to notify all remaining members
+    const io = req.app.get('io');
+    if (io) {
+      // Notify remaining members that someone left
+      memberIds.forEach(memberId => {
+        io.to(`user:${memberId}`).emit('member_left', {
+          conversationId,
+          userId,
+          userName,
+          remainingMembers: memberIds
+        });
+      });
+      
+      // Notify the user who left to remove conversation from their UI
+      io.to(`user:${userId}`).emit('group_left', {
+        conversationId
+      });
+    }
+    
+    console.log('✅ User left conversation, notified remaining members');
     res.json({ success: true });
   } catch (error) {
     console.error('❌ Error leaving conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete/Dissolve group conversation (admin only)
+router.delete('/:conversationId', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.uid;
+    
+    console.log('🗑️ User', userId, 'deleting conversation', conversationId);
+    
+    const convRef = db.collection('conversations').doc(conversationId);
+    const doc = await convRef.get();
+    
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    const data = doc.data();
+    
+    // Check if user is admin (creator) of the group
+    // For now, allow any member to delete (can add admin check later)
+    const memberIds = data.memberIds || [];
+    if (!memberIds.includes(userId)) {
+      return res.status(403).json({ error: 'You are not a member of this conversation' });
+    }
+    
+    // Notify all members before deletion
+    const io = req.app.get('io');
+    console.log('🔌 WebSocket io available:', !!io);
+    if (io) {
+      console.log('📢 Emitting conversation_deleted to members:', memberIds);
+      memberIds.forEach(memberId => {
+        const room = `user:${memberId}`;
+        console.log(`  → Emitting to room: ${room}`);
+        io.to(room).emit('conversation_deleted', {
+          conversationId,
+          deletedBy: userId
+        });
+      });
+      console.log('✅ Notified all members of conversation deletion');
+    } else {
+      console.log('❌ WebSocket io not available!');
+    }
+    
+    // Delete all messages in the conversation first
+    const messagesSnapshot = await convRef.collection('messages').get();
+    const batch = db.batch();
+    messagesSnapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    
+    // Delete the conversation document
+    batch.delete(convRef);
+    
+    await batch.commit();
+    
+    console.log('✅ Deleted conversation', conversationId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error deleting conversation:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -249,7 +249,7 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
                 .setTitle("Rời nhóm")
                 .setMessage("Bạn có chắc muốn rời khỏi nhóm này?")
                 .setPositiveButton("Rời nhóm", (dialog, which) -> 
-                    groupViewModel.leaveGroup(conversationId, currentUserId)
+                    groupViewModel.leaveGroup(conversationId)
                 )
                 .setNegativeButton("Hủy", null)
                 .show();
@@ -316,6 +316,58 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
                         
                     case ERROR:
                         Toast.makeText(this, resource.getMessage(), Toast.LENGTH_SHORT).show();
+                        break;
+                        
+                    case LOADING:
+                        // Show loading indicator if needed
+                        break;
+                }
+            }
+        });
+        
+        // Observe leave group result (API-based)
+        groupViewModel.getLeaveGroupResult().observe(this, resource -> {
+            if (resource != null) {
+                switch (resource.getStatus()) {
+                    case SUCCESS:
+                        Toast.makeText(this, "Đã rời nhóm thành công", Toast.LENGTH_SHORT).show();
+                        
+                        // Navigate to home and clear conversation from UI
+                        Intent intent = new Intent();
+                        intent.putExtra("conversationId", conversationId);
+                        intent.putExtra("action", "leave_group");
+                        setResult(RESULT_OK, intent);
+                        finish();
+                        break;
+                        
+                    case ERROR:
+                        Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                        break;
+                        
+                    case LOADING:
+                        // Show loading indicator if needed
+                        break;
+                }
+            }
+        });
+        
+        // Observe delete group result
+        groupViewModel.getDeleteGroupResult().observe(this, resource -> {
+            if (resource != null) {
+                switch (resource.getStatus()) {
+                    case SUCCESS:
+                        Toast.makeText(this, "Đã xóa nhóm thành công", Toast.LENGTH_SHORT).show();
+                        
+                        // Navigate to home - the WebSocket will notify other members
+                        Intent intent = new Intent();
+                        intent.putExtra("conversationId", conversationId);
+                        intent.putExtra("action", "delete_group");
+                        setResult(RESULT_OK, intent);
+                        finish();
+                        break;
+                        
+                    case ERROR:
+                        Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
                         break;
                         
                     case LOADING:

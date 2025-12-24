@@ -49,6 +49,8 @@ import org.json.JSONObject;
  */
 public class ChatRepository {
 
+    private static final String TAG = "ChatRepository";
+
     private final FirebaseFirestore firestore;
     private final FirestoreManager firestoreManager;
     private final ApiService apiService;
@@ -971,26 +973,51 @@ public class ChatRepository {
             return result;
         }
         
-        // Call FirestoreManager to create group
-        firestoreManager.createGroupConversation(
-            adminId,
-            groupName,
-            memberIds,
-            new FirestoreManager.OnConversationCreatedListener() {
-                @Override
-                public void onSuccess(Conversation conversation) {
+        // Call API to create group (enables real-time WebSocket notification)
+        Log.d(TAG, "Creating group via API: " + groupName + " with " + memberIds.size() + " members");
+        
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("memberIds", memberIds);
+        requestBody.put("name", groupName);
+        requestBody.put("type", "GROUP");
+        requestBody.put("adminId", adminId);
+        
+        Call<Map<String, Object>> call = apiService.createConversation(requestBody);
+        
+        call.enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Map<String, Object> body = response.body();
+                    String conversationId = (String) body.get("conversationId");
+                    
+                    Log.d(TAG, "✅ Group created via API: " + conversationId);
+                    
+                    // Create Conversation object from response
+                    Conversation conversation = new Conversation();
+                    conversation.setId(conversationId);
+                    conversation.setName(groupName);
+                    conversation.setMemberIds(memberIds);
+                    conversation.setType("GROUP");
+                    conversation.setAdminIds(java.util.Collections.singletonList(adminId));
+                    
                     result.setValue(Resource.success(conversation));
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể tạo nhóm";
-                    result.setValue(Resource.error(errorMessage));
+                    
+                    // WebSocket will handle the notification - no manual trigger needed
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e(TAG, "Failed to create group: " + error);
+                    result.setValue(Resource.error(error));
                 }
             }
-        );
+            
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e(TAG, "Network error creating group", t);
+                result.setValue(Resource.error(error));
+            }
+        });
         
         return result;
     }
@@ -1008,6 +1035,8 @@ public class ChatRepository {
                 @Override
                 public void onSuccess() {
                     result.setValue(Resource.success(true));
+                    // Trigger UI refresh
+                    socketManager.triggerConversationUpdated(conversationId);
                 }
 
                 @Override
@@ -1035,6 +1064,8 @@ public class ChatRepository {
                 @Override
                 public void onSuccess() {
                     result.setValue(Resource.success(true));
+                    // Trigger UI refresh
+                    socketManager.triggerConversationUpdated(conversationId);
                 }
 
                 @Override
@@ -1158,27 +1189,36 @@ public class ChatRepository {
     }
 
     /**
-     * Delete group
+     * Delete group via REST API
      */
     public LiveData<Resource<Boolean>> deleteGroup(@NonNull String conversationId) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        firestoreManager.deleteGroup(conversationId,
-            new FirestoreManager.OnGroupUpdatedListener() {
-                @Override
-                public void onSuccess() {
+        Log.d(TAG, "Deleting group via API: " + conversationId);
+        
+        Call<ApiResponse<Void>> call = apiService.deleteConversation(conversationId);
+        
+        call.enqueue(new Callback<ApiResponse<Void>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+                if (response.isSuccessful()) {
+                    Log.d(TAG, "✅ Group deleted successfully");
                     result.setValue(Resource.success(true));
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e(TAG, "Failed to delete group: " + error);
+                    result.setValue(Resource.error(error));
                 }
-
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể xóa nhóm";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e(TAG, "Network error deleting group", t);
+                result.setValue(Resource.error(error));
+            }
+        });
 
         return result;
     }

@@ -23,10 +23,12 @@ public class HomeViewModel extends BaseViewModel {
     private final FriendRepository friendRepository;
     private LiveData<Resource<List<Conversation>>> conversations;
     private MutableLiveData<String> selectedTagFilter = new MutableLiveData<>(null);
+    private MutableLiveData<Long> refreshTrigger = new MutableLiveData<>();
     
     public HomeViewModel() {
-        this.conversationRepository = new ConversationRepository();
+        this.conversationRepository = ConversationRepository.getInstance();
         this.friendRepository = new FriendRepository();
+        this.refreshTrigger.setValue(System.currentTimeMillis()); // Initial value
     }
     
     /**
@@ -37,16 +39,19 @@ public class HomeViewModel extends BaseViewModel {
      */
     public LiveData<Resource<List<Conversation>>> getConversations(@NonNull String userId) {
         if (conversations == null) {
-            LiveData<Resource<List<Conversation>>> rawConversations = 
-                conversationRepository.getConversations(userId);
-            
-            // Transform conversations to sort them: pinned first, then unpinned
-            conversations = Transformations.map(rawConversations, resource -> {
-                if (resource != null && resource.isSuccess() && resource.getData() != null) {
-                    List<Conversation> sorted = sortConversations(resource.getData(), userId);
-                    return Resource.success(sorted);
-                }
-                return resource;
+            // Use switchMap to automatically reload when refreshTrigger changes
+            conversations = Transformations.switchMap(refreshTrigger, trigger -> {
+                LiveData<Resource<List<Conversation>>> rawConversations = 
+                    conversationRepository.getConversations(userId);
+                
+                // Transform conversations to sort them: pinned first, then unpinned
+                return Transformations.map(rawConversations, resource -> {
+                    if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                        List<Conversation> sorted = sortConversations(resource.getData(), userId);
+                        return Resource.success(sorted);
+                    }
+                    return resource;
+                });
             });
         }
         return conversations;
@@ -160,13 +165,28 @@ public class HomeViewModel extends BaseViewModel {
         });
     }
 
+    /**
+     * Get LiveData for group_left events
+     * Observe this to remove conversations from UI when user leaves a group
+     */
+    public LiveData<String> getGroupLeftEvent() {
+        return conversationRepository.getGroupLeftEvent();
+    }
     
     /**
-     * Refresh conversations (call this if needed to reload)
-     * @param userId ID of the user
+     * Get LiveData for conversation refresh trigger
+     * Observe this to reload conversations when new conversation created or updated
+     */
+    public LiveData<Boolean> getConversationRefreshNeeded() {
+        return conversationRepository.getConversationRefreshNeeded();
+    }
+    
+    /**
+     * Refresh conversations (call this to reload)
+     * Updates trigger to force reload via switchMap
      */
     public void refreshConversations(@NonNull String userId) {
-        conversations = conversationRepository.getConversations(userId);
+        refreshTrigger.setValue(System.currentTimeMillis());
     }
     
     @Override

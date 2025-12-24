@@ -21,6 +21,9 @@ const server = http.createServer(app);
 // Initialize WebSocket
 const io = initializeWebSocket(server);
 
+// Make io available in routes for emitting events
+app.set('io', io);
+
 // Middleware
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
