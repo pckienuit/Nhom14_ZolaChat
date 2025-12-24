@@ -35,6 +35,10 @@ public class AuthRepository {
                 .addOnCompleteListener(task -> {
                     if (task.isSuccessful()) {
                         FirebaseUser user = firebaseAuth.getCurrentUser();
+                        // Set Online status immediately upon login
+                        if (user != null) {
+                            updateUserStatus(user.getUid(), true);
+                        }
                         callback.onSuccess(user);
                     } else {
                         String errorMessage = task.getException() != null 
@@ -54,7 +58,7 @@ public class AuthRepository {
                     if (task.isSuccessful()) {
                         FirebaseUser user = firebaseAuth.getCurrentUser();
                         if (user != null) {
-                            // Save user info to Firestore
+                            // Save user info to Firestore (isOnline defaults to true in saveUserToFirestore)
                             saveUserToFirestore(user.getUid(), name, email, callback);
                         } else {
                             callback.onError("Registration failed");
@@ -96,11 +100,32 @@ public class AuthRepository {
                     callback.onError(errorMessage);
                 });
     }
+    
+    /**
+     * Helper to update user status
+     */
+    private void updateUserStatus(String userId, boolean isOnline) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("isOnline", isOnline);
+        updates.put("lastSeen", System.currentTimeMillis());
+        
+        firestore.collection("users").document(userId).update(updates)
+                .addOnFailureListener(e -> {
+                    // Log error silently
+                    System.err.println("Failed to update user status: " + e.getMessage());
+                });
+    }
 
     /**
      * Logout current user
      */
     public void logout(LogoutCallback callback) {
+        FirebaseUser user = firebaseAuth.getCurrentUser();
+        if (user != null) {
+            // Set Offline before signing out
+            updateUserStatus(user.getUid(), false);
+        }
+        
         firebaseAuth.signOut();
         if (callback != null) {
             callback.onLogoutComplete();

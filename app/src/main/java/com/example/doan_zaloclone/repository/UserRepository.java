@@ -187,4 +187,25 @@ public class UserRepository {
                 .addOnSuccessListener(aVoid -> listener.onSuccess())
                 .addOnFailureListener(e -> listener.onError(e.getMessage()));
     }
+    
+    /**
+     * Update user online status and lastSeen timestamp.
+     * Called when app goes to foreground (online) or background (offline).
+     * 
+     * @param userId ID of the user
+     * @param isOnline true if user is online, false if offline
+     * @param listener Callback for result
+     */
+    public void updateUserStatus(@NonNull String userId, boolean isOnline, 
+                                 @NonNull OnUpdateListener listener) {
+        java.util.Map<String, Object> updates = new java.util.HashMap<>();
+        updates.put("isOnline", isOnline);
+        updates.put("lastSeen", System.currentTimeMillis());
+        
+        firestore.collection("users")
+                .document(userId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> listener.onSuccess())
+                .addOnFailureListener(e -> listener.onError(e.getMessage()));
+    }
 }

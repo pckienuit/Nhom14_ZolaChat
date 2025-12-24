@@ -50,7 +50,7 @@ function setupEventListeners() {
 async function loadUsers() {
     usersTableBody.innerHTML = `
         <tr>
-            <td colspan="6" class="loading-cell">
+            <td colspan="7" class="loading-cell">
                 <i class="fas fa-spinner fa-spin"></i> Đang tải...
             </td>
         </tr>
@@ -103,7 +103,7 @@ function renderUsers(usersList) {
     if (usersList.length === 0) {
         usersTableBody.innerHTML = `
             <tr>
-                <td colspan="6" class="loading-cell">
+                <td colspan="7" class="loading-cell">
                     Không tìm thấy người dùng nào
                 </td>
             </tr>
@@ -143,6 +143,7 @@ function createUserRow(user) {
             <td>${escapeHtml(user.phone || 'N/A')}</td>
             <td>${status}</td>
             <td>${joinDate}</td>
+            <td>${getLastSeenText(user)}</td>
             <td>
                 <div class="action-btns">
                     <button class="btn btn-icon view-user-btn" data-id="${user.id}" title="Xem chi tiết">
@@ -161,13 +162,48 @@ function getStatusBadge(user) {
     if (user.isBanned) {
         return '<span class="status-badge status-banned"><i class="fas fa-ban"></i> Bị khóa</span>';
     }
-    if (user.isVerified) {
-        return '<span class="status-badge status-verified"><i class="fas fa-check-circle"></i> Đã xác minh</span>';
-    }
-    if (user.isOnline) {
+    
+    // Priority: Show online/offline status first
+    // Check for STALE online status (e.g. app crashed and didn't update offline status)
+    // If lastSeen is older than 5 minutes, consider offline even if isOnline=true
+    const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+    const now = Date.now();
+    const isStale = user.isOnline && user.lastSeen && (now - user.lastSeen > OFFLINE_THRESHOLD_MS);
+    
+    if (user.isOnline && !isStale) {
         return '<span class="status-badge status-online"><i class="fas fa-circle"></i> Online</span>';
     }
-    return '<span class="status-badge status-offline"><i class="fas fa-circle"></i> Offline</span>';
+    
+    // Offline - show time since last seen
+    const lastSeenText = user.lastSeen ? ` - ${getRelativeTime(user.lastSeen)}` : '';
+    const offlineBadge = `<span class="status-badge status-offline"><i class="fas fa-circle"></i> Offline${lastSeenText}</span>`;
+    
+    // Secondary badges for verified (only if offline)
+    if (user.isVerified) {
+        return offlineBadge + ' <span class="status-badge status-verified"><i class="fas fa-check-circle"></i> Verified</span>';
+    }
+    
+    return offlineBadge;
+}
+
+/**
+ * Get relative time string (e.g., "5 phút trước")
+ */
+function getRelativeTime(timestamp) {
+    const now = Date.now();
+    const diff = now - timestamp;
+    
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (seconds < 60) return 'vừa mới';
+    if (minutes < 60) return `${minutes} phút trước`;
+    if (hours < 24) return `${hours} giờ trước`;
+    if (days < 7) return `${days} ngày trước`;
+    
+    return new Date(timestamp).toLocaleDateString('vi-VN');
 }
 
 /**
@@ -191,9 +227,14 @@ function filterUsers() {
     // Status filter
     if (statusFilter !== 'all') {
         filtered = filtered.filter(user => {
+            const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000;
+            const now = Date.now();
+            const isStale = user.isOnline && user.lastSeen && (now - user.lastSeen > OFFLINE_THRESHOLD_MS);
+            const effectiveOnline = user.isOnline && !isStale;
+
             switch (statusFilter) {
-                case 'online': return user.isOnline === true;
-                case 'offline': return user.isOnline !== true;
+                case 'online': return effectiveOnline === true;
+                case 'offline': return effectiveOnline !== true;
                 case 'banned': return user.isBanned === true;
                 case 'verified': return user.isVerified === true;
                 default: return true;
@@ -202,6 +243,38 @@ function filterUsers() {
     }
     
     renderUsers(filtered);
+}
+
+/**
+ * Get last seen text
+ */
+function getLastSeenText(user) {
+    const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+    const now = Date.now();
+    const isStale = user.isOnline && user.lastSeen && (now - user.lastSeen > OFFLINE_THRESHOLD_MS);
+
+    if (user.isOnline && !isStale) {
+        return '<span class="text-success" style="font-weight: 500; font-size: 0.85rem;">Đang hoạt động</span>';
+    }
+    
+    if (!user.lastSeen) {
+        return '<span class="text-muted" style="font-size: 0.85rem;">Chưa hoạt động</span>';
+    }
+    
+    // Format timestamp: HH:mm dd/MM/yyyy
+    const date = new Date(user.lastSeen);
+    const timeStr = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    
+    // Add relative time tooltip or sub-text
+    const relative = getRelativeTime(user.lastSeen);
+    
+    return `
+        <div style="display: flex; flex-direction: column;">
+            <span style="font-weight: 500; font-size: 0.9rem;">${timeStr} ${dateStr}</span>
+            <span class="text-muted" style="font-size: 0.75rem;">${relative}</span>
+        </div>
+    `;
 }
 
 /**
