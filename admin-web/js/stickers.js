@@ -137,7 +137,7 @@ async function handleStickerFiles(files) {
             formData.append('sticker', file);
             formData.append('userId', auth.currentUser.uid);
             
-            const response = await fetch('http://163.61.182.20/api/stickers/upload', {
+            const response = await fetch('https://zolachat.site/api/stickers/upload', {
                 method: 'POST',
                 body: formData
             });
@@ -352,7 +352,7 @@ function createPackCard(pack) {
         <div class="pack-card" data-id="${pack.id}">
             <div class="pack-card-header">
                 ${pack.iconUrl 
-                    ? `<img class="pack-icon" src="${pack.iconUrl}" alt="${escapeHtml(pack.name)}">` 
+                    ? `<img class="pack-icon" src="${fixUrl(pack.iconUrl)}" alt="${escapeHtml(pack.name)}">` 
                     : `<div class="pack-icon" style="display: flex; align-items: center; justify-content: center; background: var(--gray-700); font-size: 2rem;">😊</div>`}
                 <div class="pack-info">
                     <div class="pack-name">${escapeHtml(pack.name)}</div>
@@ -523,7 +523,7 @@ async function loadExistingStickers(packId) {
         countLabel.textContent = `(${stickers.length} stickers)`;
         grid.innerHTML = stickers.map(sticker => `
             <div class="existing-sticker-item" data-sticker-id="${sticker.id}">
-                <img src="${sticker.imageUrl || sticker.thumbnailUrl}" 
+                <img src="${fixUrl(sticker.imageUrl || sticker.thumbnailUrl)}" 
                      alt="Sticker ${sticker.id}"
                      onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%2250%22 font-size=%2250%22%3E❓%3C/text%3E%3C/svg%3E'">
                 <button class="delete-sticker-btn" 

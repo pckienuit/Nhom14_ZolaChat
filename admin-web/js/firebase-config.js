@@ -33,3 +33,24 @@ db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
 });
 
 console.log('Firebase initialized successfully');
+
+/**
+ * Global Utility: Fix image URLs for mixed content issues
+ * Converts IP-based URLs to Domain-based HTTPS URLs
+ */
+function fixUrl(url) {
+    if (!url) return '';
+    
+    // Replace IP with Domain and Force HTTPS
+    if (url.includes('163.61.182.20')) {
+        return url.replace('http://163.61.182.20', 'https://zolachat.site')
+                  .replace('163.61.182.20', 'zolachat.site');
+    }
+    
+    // Upgrade HTTP to HTTPS for domain
+    if (url.startsWith('http://zolachat.site')) {
+        return url.replace('http://', 'https://');
+    }
+    
+    return url;
+}

@@ -115,7 +115,7 @@ function createUserRow(user) {
                 <div class="user-cell">
                     <div class="user-avatar">
                         ${user.avatarUrl 
-                            ? `<img src="${user.avatarUrl}" alt="${escapeHtml(user.name)}" onerror="this.style.display='none'; this.parentNode.textContent='${initial}'">` 
+                            ? `<img src="${fixUrl(user.avatarUrl)}" alt="${escapeHtml(user.name)}" onerror="this.style.display='none'; this.parentNode.textContent='${initial}'">` 
                             : initial}
                     </div>
                     <div class="user-name">${escapeHtml(user.name || 'Chưa đặt tên')}</div>

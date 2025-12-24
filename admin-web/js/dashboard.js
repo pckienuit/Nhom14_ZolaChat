@@ -70,7 +70,7 @@ async function loadTopStickerPacks() {
             const li = document.createElement('li');
             li.innerHTML = `
                 <div class="item-info">
-                    <img class="item-icon" src="${pack.iconUrl || 'assets/images/default-sticker.png'}" 
+                    <img class="item-icon" src="${fixUrl(pack.iconUrl) || 'assets/images/default-sticker.png'}" 
                          alt="${pack.name}" onerror="this.src='assets/images/default-sticker.png'">
                     <div>
                         <div class="item-name">${escapeHtml(pack.name)}</div>

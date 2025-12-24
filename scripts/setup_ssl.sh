@@ -31,8 +31,27 @@ cat > /etc/apache2/sites-available/${DOMAIN}.conf <<EOF
     
     # Proxy API requests to backend
     ProxyPreserveHost On
-    ProxyPass /api http://localhost:3000/api
-    ProxyPassReverse /api http://localhost:3000/api
+    # Proxy API requests to backend services
+    ProxyPreserveHost On
+    
+    # Sticker Service (Port 3001)
+    ProxyPass /api/stickers http://localhost:3001/api/stickers
+    ProxyPassReverse /api/stickers http://localhost:3001/api/stickers
+    
+    # AI Background Removal Service (Port 5000)
+    ProxyPass /api/rembg http://localhost:5000/api/rembg
+    ProxyPassReverse /api/rembg http://localhost:5000/api/rembg
+
+    # Map Image URLs to Sticker Directory
+    Alias /user /var/www/stickers/user
+    Alias /thumbnails /var/www/stickers/thumbnails
+    
+    <Directory "/var/www/stickers">
+        Options Indexes FollowSymLinks
+        AllowOverride All
+        Require all granted
+        Header set Access-Control-Allow-Origin "*"
+    </Directory>
 
     <Directory "/var/www/admin">
         Options Indexes FollowSymLinks
