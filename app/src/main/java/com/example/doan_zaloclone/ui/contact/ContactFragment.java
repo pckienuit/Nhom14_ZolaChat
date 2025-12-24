@@ -346,7 +346,8 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 if (getActivity() != null) {
                     Toast.makeText(getContext(), "Accepted friend request from " + request.getFromUserName(), 
                         Toast.LENGTH_SHORT).show();
-                    // Friends list will auto-update via realtime listener
+                    // Reload both lists after accepting
+                    reloadFriendData();
                 }
             } else if (resource.isError()) {
                 if (getContext() != null) {
@@ -365,6 +366,8 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 if (getActivity() != null) {
                     Toast.makeText(getContext(), "Rejected friend request from " + request.getFromUserName(), 
                         Toast.LENGTH_SHORT).show();
+                    // Reload friend requests after rejecting
+                    reloadFriendData();
                 }
             } else if (resource.isError()) {
                 if (getContext() != null) {
@@ -427,9 +430,41 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
         Log.d("ContactFragment", "Loading friends for user: " + currentUserId);
         
-        // Friends are automatically loaded via ViewModel observer
-        // Just refresh if needed
-        contactViewModel.getFriends(currentUserId);
+        // Force reload friends
+        contactViewModel.loadFriends(currentUserId);
+        
+        // Re-observe the new LiveData
+        contactViewModel.getFriendsLiveData().observe(getViewLifecycleOwner(), resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess()) {
+                List<User> friends = resource.getData();
+                if (friends != null) {
+                    Log.d("ContactFragment", "Friends reloaded: " + friends.size());
+                    friendsAdapter.updateFriends(friends);
+                }
+            } else if (resource.isError()) {
+                Log.e("ContactFragment", "Error loading friends: " + resource.getMessage());
+            }
+        });
+    }
+    
+    private void reloadFriendData() {
+        if (firebaseAuth.getCurrentUser() == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        // Reload friend requests
+        contactViewModel.getFriendRequests(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                friendRequestAdapter.updateRequests(resource.getData());
+                friendRequestsHeader.setVisibility(resource.getData().isEmpty() ? View.GONE : View.VISIBLE);
+                friendRequestsRecyclerView.setVisibility(resource.getData().isEmpty() ? View.GONE : View.VISIBLE);
+            }
+        });
+        
+        // Reload friends list
+        loadFriends();
     }
 
     @Override

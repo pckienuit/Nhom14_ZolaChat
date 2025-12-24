@@ -90,9 +90,8 @@ public class ContactViewModel extends BaseViewModel {
      * @param userId ID of the user
      */
     public LiveData<Resource<List<FriendRequest>>> getFriendRequests(@NonNull String userId) {
-        if (friendRequests == null) {
-            friendRequests = friendRepository.getFriendRequests(userId);
-        }
+        // Always fetch fresh data to ensure UI is up-to-date after accept/reject
+        friendRequests = friendRepository.getFriendRequests(userId);
         return friendRequests;
     }
     
