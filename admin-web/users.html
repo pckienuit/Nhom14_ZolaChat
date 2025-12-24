@@ -4,10 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Quản lý Người dùng - ZaloClone Admin</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/dashboard.css">
-    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/style.css?v=3">
+    <link rel="stylesheet" href="css/dashboard.css?v=3">
+    <link rel="stylesheet" href="css/components.css?v=3">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
@@ -95,7 +98,6 @@
                         <option value="online">Online</option>
                         <option value="offline">Offline</option>
                         <option value="banned">Bị khóa</option>
-                        <option value="verified">Đã xác minh</option>
                     </select>
                 </div>
             </div>
@@ -129,7 +131,7 @@
     <!-- User Detail Modal -->
     <div class="modal" id="userModal">
         <div class="modal-overlay"></div>
-        <div class="modal-content">
+        <div class="modal-content" style="padding-bottom: 1.5rem;">
             <div class="modal-header">
                 <h2>Chi tiết Người dùng</h2>
                 <button class="modal-close" id="closeUserModal">
@@ -140,18 +142,14 @@
                 <!-- User details will be loaded here -->
             </div>
             <div class="modal-actions">
-                <button class="btn btn-secondary" id="closeUserBtn">Đóng</button>
                 <button class="btn btn-info" id="resetPasswordBtn">
-                    <i class="fas fa-key"></i> <span>Reset Password</span>
+                    <i class="fas fa-key"></i> <span>Reset</span>
                 </button>
                 <button class="btn btn-secondary" id="editUserBtn">
-                    <i class="fas fa-edit"></i> <span>Chỉnh sửa</span>
+                    <i class="fas fa-edit"></i> <span>Sửa</span>
                 </button>
                 <button class="btn btn-warning" id="toggleBanBtn">
-                    <i class="fas fa-ban"></i> <span>Ban User</span>
-                </button>
-                <button class="btn btn-primary" id="toggleVerifyBtn">
-                    <i class="fas fa-check-circle"></i> <span>Xác minh</span>
+                    <i class="fas fa-ban"></i> <span>Khóa</span>
                 </button>
             </div>
         </div>
@@ -164,7 +162,66 @@
 
     <script src="js/firebase-config.js"></script>
     <script src="js/auth.js"></script>
-    <script src="js/users.js"></script>
+    <script src="js/users.js?v=5"></script>
+
+    <style>
+        /* Additional styles for users page */
+        .table-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        /* ... existing styles ... */
+
+        .modal-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 2rem;
+            padding: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            width: 100%;
+        }
+
+        .modal-actions .btn {
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            /* Increase gap between icon and text */
+            gap: 0.75rem !important;
+
+            /* RESET ALL FIXED DIMENSIONS */
+            width: auto !important;
+            height: auto !important;
+            min-width: unset !important;
+            padding: 0.6rem 1.25rem !important;
+
+            border-radius: var(--radius);
+        }
+
+        .modal-actions .btn i {
+            font-size: 0.875rem;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+    </style>
+    </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <script src="js/firebase-config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/users.js?v=3"></script>
 
     <style>
         /* Additional styles for users page */
@@ -327,6 +384,37 @@
         .btn-success {
             background: #10b981;
             color: white;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            padding-bottom: 0.5rem;
+            /* Add breathing room at bottom */
+            border-top: 1px solid var(--border-color);
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            /* Align right */
+            margin-bottom: 0.5rem;
+        }
+
+        .modal-actions .btn {
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            min-width: 42px;
+            width: 42px;
+            height: 42px;
+            padding: 0;
+            border-radius: var(--radius);
+        }
+
+        .modal-actions .btn i {
+            font-size: 1.1rem;
         }
 
         .btn-success:hover {

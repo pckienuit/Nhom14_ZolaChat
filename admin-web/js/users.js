@@ -38,9 +38,11 @@ function setupEventListeners() {
     document.querySelector('#userModal .modal-overlay').addEventListener('click', closeModal);
     
     // Actions
-    document.getElementById('toggleBanBtn').addEventListener('click', toggleBan);
-    document.getElementById('toggleVerifyBtn').addEventListener('click', toggleVerify);
-    document.getElementById('resetPasswordBtn').addEventListener('click', resetUserPassword);
+    document.getElementById('toggleBanBtn').addEventListener('click', () => {
+        if (currentUserId) toggleUserBan(currentUserId);
+    });
+
+    // Edit user logic
     document.getElementById('editUserBtn').addEventListener('click', toggleEditMode);
 }
 
@@ -236,7 +238,6 @@ function filterUsers() {
                 case 'online': return effectiveOnline === true;
                 case 'offline': return effectiveOnline !== true;
                 case 'banned': return user.isBanned === true;
-                case 'verified': return user.isVerified === true;
                 default: return true;
             }
         });
@@ -330,6 +331,7 @@ function openUserModal(userId) {
     const editBtn = document.getElementById('editUserBtn');
     if (editBtn) {
         editBtn.innerHTML = '<i class="fas fa-edit"></i> <span>Chỉnh sửa</span>';
+        editBtn.title = '';
         editBtn.classList.remove('btn-success');
         editBtn.classList.add('btn-secondary');
     }
@@ -348,26 +350,17 @@ function openUserModal(userId) {
  */
 function updateActionButtons(user) {
     const banBtn = document.getElementById('toggleBanBtn');
-    const verifyBtn = document.getElementById('toggleVerifyBtn');
     
     if (user.isBanned) {
         banBtn.innerHTML = '<i class="fas fa-unlock"></i> <span>Mở khóa</span>';
+        banBtn.title = '';
         banBtn.classList.remove('btn-warning');
         banBtn.classList.add('btn-success');
     } else {
         banBtn.innerHTML = '<i class="fas fa-ban"></i> <span>Khóa User</span>';
+        banBtn.title = '';
         banBtn.classList.remove('btn-success');
         banBtn.classList.add('btn-warning');
-    }
-    
-    if (user.isVerified) {
-        verifyBtn.innerHTML = '<i class="fas fa-times-circle"></i> <span>Bỏ xác minh</span>';
-        verifyBtn.classList.remove('btn-primary');
-        verifyBtn.classList.add('btn-secondary');
-    } else {
-        verifyBtn.innerHTML = '<i class="fas fa-check-circle"></i> <span>Xác minh</span>';
-        verifyBtn.classList.remove('btn-secondary');
-        verifyBtn.classList.add('btn-primary');
     }
 }
 
@@ -401,32 +394,6 @@ async function toggleBan() {
         
     } catch (error) {
         console.error('Error toggling ban:', error);
-        alert('Lỗi: ' + error.message);
-    }
-}
-
-/**
- * Toggle verify status
- */
-async function toggleVerify() {
-    if (!currentUserId) return;
-    
-    const user = users.find(u => u.id === currentUserId);
-    if (!user) return;
-    
-    try {
-        await db.collection('users').doc(currentUserId).update({
-            isVerified: !user.isVerified,
-            verifiedAt: user.isVerified ? null : Date.now()
-        });
-        
-        // Update local state
-        user.isVerified = !user.isVerified;
-        updateActionButtons(user);
-        renderUsers(users);
-        
-    } catch (error) {
-        console.error('Error toggling verify:', error);
         alert('Lỗi: ' + error.message);
     }
 }
@@ -474,6 +441,7 @@ function toggleEditMode() {
         // Switch to edit mode
         isEditMode = true;
         editBtn.innerHTML = '<i class="fas fa-save"></i> <span>Lưu</span>';
+        editBtn.title = '';
         editBtn.classList.remove('btn-secondary');
         editBtn.classList.add('btn-success');
         
@@ -481,6 +449,7 @@ function toggleEditMode() {
         const cancelBtn = document.createElement('button');
         cancelBtn.className = 'btn btn-secondary';
         cancelBtn.id = 'cancelEditBtn';
+        cancelBtn.title = '';
         cancelBtn.innerHTML = '<i class="fas fa-times"></i> <span>Hủy</span>';
         cancelBtn.onclick = () => {
             isEditMode = false;
