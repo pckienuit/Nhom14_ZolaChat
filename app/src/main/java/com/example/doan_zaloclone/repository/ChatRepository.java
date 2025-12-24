@@ -4,6 +4,8 @@ import com.example.doan_zaloclone.api.ApiService;
 import com.example.doan_zaloclone.api.RetrofitClient;
 import com.example.doan_zaloclone.api.models.ApiResponse;
 import com.example.doan_zaloclone.api.models.SendMessageRequest;
+import com.example.doan_zaloclone.api.models.MessageListResponse;
+import com.example.doan_zaloclone.websocket.SocketManager;
 import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.models.Message;
 import com.example.doan_zaloclone.services.FirestoreManager;
@@ -43,12 +45,18 @@ public class ChatRepository {
     private final FirebaseFirestore firestore;
     private final FirestoreManager firestoreManager;
     private final ApiService apiService;
+    private final SocketManager socketManager;
     private ListenerRegistration messagesListener;
+    
+    // Track current conversation for WebSocket
+    private String currentConversationId;
+    private List<Message> cachedMessages = new ArrayList<>();
 
     public ChatRepository() {
         this.firestore = FirebaseFirestore.getInstance();
         this.firestoreManager = FirestoreManager.getInstance();
         this.apiService = RetrofitClient.getApiService();
+        this.socketManager = SocketManager.getInstance();
     }
 
     /**
@@ -165,31 +173,130 @@ public class ChatRepository {
 
     /**
      * Listen to messages in a conversation (callback version - for backward compatibility)
+     * MIGRATED: Uses API for initial load + WebSocket for real-time updates
      * @param conversationId ID of the conversation
      * @param listener Listener for message updates
      * @return ListenerRegistration for cleanup
      */
     public ListenerRegistration listenToMessages(String conversationId, MessagesListener listener) {
-        return firestore
-                .collection("conversations")
-                .document(conversationId)
-                .collection("messages")
-                .orderBy("timestamp", Query.Direction.ASCENDING)
-                .addSnapshotListener((querySnapshot, error) -> {
-                    if (error != null) {
-                        listener.onError(error.getMessage() != null ? error.getMessage() : "Failed to load messages");
-                        return;
+        // Update current conversation
+        currentConversationId = conversationId;
+        cachedMessages.clear();
+        
+        // 1. Load initial messages via API
+        Call<MessageListResponse> call = apiService.getMessages(conversationId, 100, null);
+        call.enqueue(new Callback<MessageListResponse>() {
+            @Override
+            public void onResponse(Call<MessageListResponse> call, Response<MessageListResponse> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    List<Message> messages = response.body().getMessages();
+                    if (messages != null) {
+                        cachedMessages.clear();
+                        cachedMessages.addAll(messages);
+                        listener.onMessagesChanged(new ArrayList<>(cachedMessages));
                     }
-
-                    if (querySnapshot != null) {
-                        List<Message> messages = new ArrayList<>();
-                        querySnapshot.forEach(document -> {
-                            Message message = document.toObject(Message.class);
-                            messages.add(message);
-                        });
-                        listener.onMessagesChanged(messages);
+                } else {
+                    listener.onError("Failed to load messages: HTTP " + response.code());
+                    return;
+                }
+                
+                // 2. Setup WebSocket listener for new messages
+                socketManager.setMessageListener(messageData -> {
+                    try {
+                        // Parse JSON to Message object
+                        Message newMessage = parseMessageFromJson(messageData);
+                        
+                        // Only add if from current conversation
+                        String msgConvId = messageData.optString("conversationId");
+                        if (!conversationId.equals(msgConvId)) {
+                            return; // Not for this conversation
+                        }
+                        
+                        // Check if message already exists (avoid duplicates)
+                        boolean exists = false;
+                        for (Message msg : cachedMessages) {
+                            if (msg.getId() != null && msg.getId().equals(newMessage.getId())) {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        
+                        if (!exists) {
+                            cachedMessages.add(newMessage);
+                            listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                        }
+                    } catch (Exception e) {
+                        Log.e("ChatRepository", "Error parsing WebSocket message", e);
                     }
                 });
+                
+                // 3. Join conversation room
+                socketManager.joinConversation(conversationId);
+            }
+            
+            @Override
+            public void onFailure(Call<MessageListResponse> call, Throwable t) {
+                listener.onError("Network error: " + (t.getMessage() != null ? t.getMessage() : "Unknown"));
+            }
+        });
+        
+        // 4. Return custom ListenerRegistration for cleanup
+        return new ListenerRegistration() {
+            @Override
+            public void remove() {
+                // Leave WebSocket room
+                if (conversationId.equals(currentConversationId)) {
+                    socketManager.leaveConversation(conversationId);
+                    currentConversationId = null;
+                    cachedMessages.clear();
+                }
+            }
+        };
+    }
+    
+    /**
+     * Helper: Parse Message from WebSocket JSON data
+     */
+    private Message parseMessageFromJson(org.json.JSONObject messageData) {
+        Message message = new Message();
+        message.setId(messageData.optString("id", null));
+        message.setSenderId(messageData.optString("senderId", null));
+        message.setContent(messageData.optString("content", ""));
+        message.setType(messageData.optString("type", Message.TYPE_TEXT));
+        message.setTimestamp(messageData.optLong("timestamp", System.currentTimeMillis()));
+        
+        // Optional fields
+        if (messageData.has("senderName")) {
+            message.setSenderName(messageData.optString("senderName"));
+        }
+        
+        // File metadata
+        if (messageData.has("fileName")) {
+            message.setFileName(messageData.optString("fileName"));
+        }
+        if (messageData.has("fileSize")) {
+            message.setFileSize(messageData.optLong("fileSize", 0));
+        }
+        if (messageData.has("fileMimeType")) {
+            message.setFileMimeType(messageData.optString("fileMimeType"));
+        }
+        
+        // Reply fields
+        if (messageData.has("replyToId")) {
+            message.setReplyToId(messageData.optString("replyToId"));
+            message.setReplyToContent(messageData.optString("replyToContent"));
+            message.setReplyToSenderId(messageData.optString("replyToSenderId"));
+            message.setReplyToSenderName(messageData.optString("replyToSenderName"));
+        }
+        
+        // Forward fields
+        if (messageData.has("isForwarded") && messageData.optBoolean("isForwarded", false)) {
+            message.setForwarded(true);
+            message.setOriginalSenderId(messageData.optString("originalSenderId"));
+            message.setOriginalSenderName(messageData.optString("originalSenderName"));
+        }
+        
+        return message;
     }
 
     /**
