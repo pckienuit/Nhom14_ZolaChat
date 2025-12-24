@@ -149,6 +149,22 @@ public interface ApiService {
     @DELETE("conversations/{conversationId}")
     Call<ApiResponse<Void>> deleteConversation(@Path("conversationId") String conversationId);
     
+    // Group member management
+    @POST("conversations/{conversationId}/members")
+    Call<ApiResponse<Void>> addGroupMember(
+        @Path("conversationId") String conversationId,
+        @Body Map<String, String> memberData  // {userId, userName}
+    );
+    
+    @HTTP(method = "DELETE", path = "conversations/{conversationId}/members/{userId}", hasBody = false)
+    Call<ApiResponse<Void>> removeGroupMember(
+        @Path("conversationId") String conversationId,
+        @Path("userId") String userId
+    );
+    
+    @POST("conversations/{conversationId}/leave")
+    Call<ApiResponse<Void>> leaveGroup(@Path("conversationId") String conversationId);
+    
     // ========== Calls ==========
     
     @GET("calls")

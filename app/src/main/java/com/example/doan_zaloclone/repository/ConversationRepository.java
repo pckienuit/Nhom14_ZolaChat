@@ -10,6 +10,7 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.example.doan_zaloclone.api.ApiService;
 import com.example.doan_zaloclone.api.RetrofitClient;
+import com.example.doan_zaloclone.api.models.ApiResponse;
 import com.example.doan_zaloclone.api.models.ConversationListResponse;
 import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.services.FirestoreManager;
@@ -316,6 +317,166 @@ public class ConversationRepository {
                     result.setValue(Resource.error(errorMessage));
                 }
             });
+        
+        return result;
+    }
+    
+    /**
+     * Update group conversation (rename, change avatar, etc.) via REST API
+     * @param conversationId ID of the conversation
+     * @param updates Map of fields to update (name, groupAvatar, etc.)
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Void>> updateGroupInfo(@NonNull String conversationId,
+                                                     @NonNull Map<String, Object> updates) {
+        MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        Log.d(TAG, "Updating group " + conversationId + " - fields: " + updates.keySet());
+        
+        Call<ApiResponse<Void>> call = apiService.updateConversation(conversationId, updates);
+        
+        call.enqueue(new Callback<ApiResponse<Void>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
+                    Log.d(TAG, "✅ Updated group info");
+                    result.setValue(Resource.success(null));
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e(TAG, "Failed to update group: " + error);
+                    result.setValue(Resource.error(error));
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e(TAG, "Network error updating group", t);
+                result.setValue(Resource.error(error));
+            }
+        });
+        
+        return result;
+    }
+    
+    /**
+     * Add member to group via REST API
+     * @param conversationId ID of the group conversation
+     * @param userId ID of the user to add
+     * @param userName Name of the user to add
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Void>> addGroupMember(@NonNull String conversationId,
+                                                    @NonNull String userId,
+                                                    @NonNull String userName) {
+        MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        Log.d(TAG, "Adding member " + userId + " to group " + conversationId);
+        
+        Map<String, String> memberData = new HashMap<>();
+        memberData.put("userId", userId);
+        memberData.put("userName", userName);
+        
+        Call<ApiResponse<Void>> call = apiService.addGroupMember(conversationId, memberData);
+        
+        call.enqueue(new Callback<ApiResponse<Void>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
+                    Log.d(TAG, "✅ Added member to group");
+                    result.setValue(Resource.success(null));
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e(TAG, "Failed to add member: " + error);
+                    result.setValue(Resource.error(error));
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e(TAG, "Network error adding member", t);
+                result.setValue(Resource.error(error));
+            }
+        });
+        
+        return result;
+    }
+    
+    /**
+     * Remove member from group via REST API
+     * @param conversationId ID of the group conversation
+     * @param userId ID of the user to remove
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Void>> removeGroupMember(@NonNull String conversationId,
+                                                       @NonNull String userId) {
+        MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        Log.d(TAG, "Removing member " + userId + " from group " + conversationId);
+        
+        Call<ApiResponse<Void>> call = apiService.removeGroupMember(conversationId, userId);
+        
+        call.enqueue(new Callback<ApiResponse<Void>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
+                    Log.d(TAG, "✅ Removed member from group");
+                    result.setValue(Resource.success(null));
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e(TAG, "Failed to remove member: " + error);
+                    result.setValue(Resource.error(error));
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e(TAG, "Network error removing member", t);
+                result.setValue(Resource.error(error));
+            }
+        });
+        
+        return result;
+    }
+    
+    /**
+     * Leave group conversation via REST API
+     * @param conversationId ID of the group conversation
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Void>> leaveGroup(@NonNull String conversationId) {
+        MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        Log.d(TAG, "Leaving group " + conversationId);
+        
+        Call<ApiResponse<Void>> call = apiService.leaveGroup(conversationId);
+        
+        call.enqueue(new Callback<ApiResponse<Void>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+                if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
+                    Log.d(TAG, "✅ Left group");
+                    result.setValue(Resource.success(null));
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e(TAG, "Failed to leave group: " + error);
+                    result.setValue(Resource.error(error));
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e(TAG, "Network error leaving group", t);
+                result.setValue(Resource.error(error));
+            }
+        });
         
         return result;
     }

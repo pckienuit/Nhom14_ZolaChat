@@ -95,4 +95,132 @@ router.post('/', authenticateUser, async (req, res) => {
   }
 });
 
+// Update conversation (rename group, change avatar, etc.)
+router.put('/:conversationId', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const updates = req.body; // Can include: name, groupAvatar, etc.
+    
+    console.log('📝 Updating conversation', conversationId, '- updates:', Object.keys(updates));
+    
+    // Remove fields that shouldn't be updated directly
+    delete updates.id;
+    delete updates.memberIds;
+    delete updates.participants;
+    delete updates.createdAt;
+    
+    await db.collection('conversations').doc(conversationId).update(updates);
+    
+    console.log('✅ Updated conversation', conversationId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error updating conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Add member to group
+router.post('/:conversationId/members', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId, userName } = req.body;
+    
+    console.log('➕ Adding member', userId, 'to conversation', conversationId);
+    
+    const convRef = db.collection('conversations').doc(conversationId);
+    const doc = await convRef.get();
+    
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    const data = doc.data();
+    
+    // Add to memberIds array
+    const memberIds = data.memberIds || [];
+    if (!memberIds.includes(userId)) {
+      memberIds.push(userId);
+    }
+    
+    // Add to memberNames map
+    const memberNames = data.memberNames || {};
+    memberNames[userId] = userName || 'Unknown';
+    
+    await convRef.update({ memberIds, memberNames });
+    
+    console.log('✅ Added member', userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error adding member:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Remove member from group
+router.delete('/:conversationId/members/:userId', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId, userId } = req.params;
+    
+    console.log('➖ Removing member', userId, 'from conversation', conversationId);
+    
+    const convRef = db.collection('conversations').doc(conversationId);
+    const doc = await convRef.get();
+    
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    const data = doc.data();
+    
+    // Remove from memberIds array
+    const memberIds = (data.memberIds || []).filter(id => id !== userId);
+    
+    // Remove from memberNames map
+    const memberNames = data.memberNames || {};
+    delete memberNames[userId];
+    
+    await convRef.update({ memberIds, memberNames });
+    
+    console.log('✅ Removed member', userId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error removing member:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Leave group
+router.post('/:conversationId/leave', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const userId = req.user.uid;
+    
+    console.log('🚪 User', userId, 'leaving conversation', conversationId);
+    
+    const convRef = db.collection('conversations').doc(conversationId);
+    const doc = await convRef.get();
+    
+    if (!doc.exists) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    const data = doc.data();
+    
+    // Remove self from memberIds
+    const memberIds = (data.memberIds || []).filter(id => id !== userId);
+    
+    // Remove self from memberNames
+    const memberNames = data.memberNames || {};
+    delete memberNames[userId];
+    
+    await convRef.update({ memberIds, memberNames });
+    
+    console.log('✅ User left conversation');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error leaving conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
