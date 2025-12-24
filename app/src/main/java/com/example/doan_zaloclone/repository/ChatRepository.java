@@ -17,6 +17,8 @@ import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -33,8 +35,13 @@ import com.cloudinary.android.callback.UploadCallback;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 /**
  * Repository class for handling chat/messaging operations with Firestore
@@ -46,17 +53,30 @@ public class ChatRepository {
     private final FirestoreManager firestoreManager;
     private final ApiService apiService;
     private final SocketManager socketManager;
+    private final Handler mainHandler;
     private ListenerRegistration messagesListener;
     
     // Track current conversation for WebSocket
     private String currentConversationId;
     private List<Message> cachedMessages = new ArrayList<>();
+    
+    // For notifying UI after send
+    private MessagesListener activeMessagesListener;
+    private MutableLiveData<Resource<List<Message>>> activeMessagesLiveData;
+    
+    // Track pending sent messages to prevent WebSocket duplicates
+    private final Set<String> pendingSentMessageIds = new HashSet<>();
 
     public ChatRepository() {
         this.firestore = FirebaseFirestore.getInstance();
         this.firestoreManager = FirestoreManager.getInstance();
         this.apiService = RetrofitClient.getApiService();
         this.socketManager = SocketManager.getInstance();
+        this.mainHandler = new Handler(Looper.getMainLooper());
+        
+        // Connect WebSocket for real-time updates
+        Log.d("ChatRepository", "Initializing WebSocket connection");
+        socketManager.connect();
     }
 
     /**
@@ -109,7 +129,23 @@ public class ChatRepository {
                     if (apiResponse.isSuccess() && apiResponse.getData() != null) {
                         // Update local message with server-generated ID
                         Message savedMessage = apiResponse.getData();
-                        message.setId(savedMessage.getId());
+                        String messageId = savedMessage.getId();
+                        message.setId(messageId);
+                        
+                        Log.d("ChatRepository", "Message sent successfully - ID: " + messageId);
+                        
+                        // Add to pending set - WebSocket will add to cache
+                        // Remove after 5 seconds to handle cases where WebSocket fails
+                        synchronized (pendingSentMessageIds) {
+                            pendingSentMessageIds.add(messageId);
+                        }
+                        
+                        mainHandler.postDelayed(() -> {
+                            synchronized (pendingSentMessageIds) {
+                                pendingSentMessageIds.remove(messageId);
+                                Log.d("ChatRepository", "Removed message from pending: " + messageId);
+                            }
+                        }, 5000);
                         
                         // Backend has already:
                         // - Saved message to Firestore
@@ -150,13 +186,16 @@ public class ChatRepository {
         MutableLiveData<Resource<List<Message>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
         
+        // Store reference for notification after send
+        activeMessagesLiveData = result;
+        
         // Remove previous listener if exists
         if (messagesListener != null) {
             messagesListener.remove();
         }
         
-        // Set up real-time listener
-        messagesListener = listenToMessages(conversationId, new MessagesListener() {
+        // Create listener that will be reused
+        activeMessagesListener = new MessagesListener() {
             @Override
             public void onMessagesChanged(List<Message> messages) {
                 result.setValue(Resource.success(messages));
@@ -166,7 +205,10 @@ public class ChatRepository {
             public void onError(String error) {
                 result.setValue(Resource.error(error));
             }
-        });
+        };
+        
+        // Set up real-time listener
+        messagesListener = listenToMessages(conversationId, activeMessagesListener);
         
         return result;
     }
@@ -188,14 +230,21 @@ public class ChatRepository {
         call.enqueue(new Callback<MessageListResponse>() {
             @Override
             public void onResponse(Call<MessageListResponse> call, Response<MessageListResponse> response) {
+                Log.d("ChatRepository", "GET messages response: " + response.code());
                 if (response.isSuccessful() && response.body() != null) {
                     List<Message> messages = response.body().getMessages();
+                    Log.d("ChatRepository", "Messages count from API: " + (messages != null ? messages.size() : "NULL"));
                     if (messages != null) {
                         cachedMessages.clear();
                         cachedMessages.addAll(messages);
+                        Log.d("ChatRepository", "Calling listener.onMessagesChanged with " + cachedMessages.size() + " messages");
                         listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                    } else {
+                        Log.e("ChatRepository", "Messages list is NULL!");
+                        listener.onMessagesChanged(new ArrayList<>());
                     }
                 } else {
+                    Log.e("ChatRepository", "API error: HTTP " + response.code());
                     listener.onError("Failed to load messages: HTTP " + response.code());
                     return;
                 }
@@ -212,25 +261,44 @@ public class ChatRepository {
                             return; // Not for this conversation
                         }
                         
+                        String messageId = newMessage.getId();
+                        Log.d("ChatRepository", "WebSocket message received - ID: " + messageId);
+                        
+                        // Remove from pending if it was sent by us
+                        boolean wasPending = false;
+                        synchronized (pendingSentMessageIds) {
+                            wasPending = pendingSentMessageIds.remove(messageId);
+                        }
+                        if (wasPending) {
+                            Log.d("ChatRepository", "Message was pending, removed from set: " + messageId);
+                        }
+                        
                         // Check if message already exists (avoid duplicates)
                         boolean exists = false;
                         for (Message msg : cachedMessages) {
-                            if (msg.getId() != null && msg.getId().equals(newMessage.getId())) {
+                            if (msg.getId() != null && msg.getId().equals(messageId)) {
                                 exists = true;
+                                Log.d("ChatRepository", "Duplicate detected! Skipping message: " + messageId);
                                 break;
                             }
                         }
                         
                         if (!exists) {
+                            Log.d("ChatRepository", "Adding new message from WebSocket: " + messageId);
                             cachedMessages.add(newMessage);
-                            listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                            
+                            // CRITICAL: Post to main thread for UI update
+                            mainHandler.post(() -> {
+                                listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                            });
                         }
                     } catch (Exception e) {
                         Log.e("ChatRepository", "Error parsing WebSocket message", e);
                     }
                 });
                 
-                // 3. Join conversation room
+                // 3. Join conversation room for real-time updates
+                Log.d("ChatRepository", "Joining WebSocket room: " + conversationId);
                 socketManager.joinConversation(conversationId);
             }
             

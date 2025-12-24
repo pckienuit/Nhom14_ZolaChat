@@ -11,6 +11,8 @@ router.get('/:conversationId/messages', authenticateUser, async (req, res) => {
       .orderBy('timestamp', 'desc').limit(parseInt(limit)).get();
     const messages = [];
     snapshot.forEach(doc => messages.push({ id: doc.id, ...doc.data() }));
+    // Reverse to ascending order (oldest first) for chat UI
+    messages.reverse();
     res.json({ messages });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -20,22 +22,111 @@ router.get('/:conversationId/messages', authenticateUser, async (req, res) => {
 router.post('/:conversationId/messages', authenticateUser, async (req, res) => {
   try {
     const { conversationId } = req.params;
-    const { content, type, mediaUrl, metadata } = req.body;
+    const { 
+      content, 
+      type = 'TEXT',
+      senderId, 
+      senderName,
+      // File metadata
+      fileName,
+      fileSize,
+      fileMimeType,
+      // Reply fields
+      replyToId,
+      replyToContent,
+      replyToSenderId,
+      replyToSenderName,
+      // Forward fields
+      isForwarded,
+      originalSenderId,
+      originalSenderName,
+      // Contact
+      contactUserId,
+      // Location
+      latitude,
+      longitude,
+      locationName,
+      locationAddress,
+      // Live location
+      liveLocationSessionId,
+      // Sticker
+      stickerId,
+      stickerPackId,
+      stickerUrl,
+      isStickerAnimated
+    } = req.body;
+    
+    // Build message object with only defined fields (no undefined!)
     const message = {
-      content, type, mediaUrl, metadata,
-      senderId: req.user.uid,
+      content: content || '',
+      type: type,
+      senderId: senderId || req.user.uid,
       timestamp: Date.now(),
       isRead: false
     };
+    
+    // Add optional fields only if they exist
+    if (senderName) message.senderName = senderName;
+    
+    // File metadata
+    if (fileName) message.fileName = fileName;
+    if (fileSize) message.fileSize = fileSize;
+    if (fileMimeType) message.fileMimeType = fileMimeType;
+    
+    // Reply fields
+    if (replyToId) {
+      message.replyToId = replyToId;
+      if (replyToContent) message.replyToContent = replyToContent;
+      if (replyToSenderId) message.replyToSenderId = replyToSenderId;
+      if (replyToSenderName) message.replyToSenderName = replyToSenderName;
+    }
+    
+    // Forward fields
+    if (isForwarded) {
+      message.isForwarded = true;
+      if (originalSenderId) message.originalSenderId = originalSenderId;
+      if (originalSenderName) message.originalSenderName = originalSenderName;
+    }
+    
+    // Contact
+    if (contactUserId) message.contactUserId = contactUserId;
+    
+    // Location
+    if (latitude !== undefined && longitude !== undefined) {
+      message.latitude = latitude;
+      message.longitude = longitude;
+      if (locationName) message.locationName = locationName;
+      if (locationAddress) message.locationAddress = locationAddress;
+    }
+    
+    // Live location
+    if (liveLocationSessionId) message.liveLocationSessionId = liveLocationSessionId;
+    
+    // Sticker
+    if (stickerId) {
+      message.stickerId = stickerId;
+      if (stickerPackId) message.stickerPackId = stickerPackId;
+      if (stickerUrl) message.stickerUrl = stickerUrl;
+      if (isStickerAnimated !== undefined) message.isStickerAnimated = isStickerAnimated;
+    }
+    
     const messageRef = await db.collection('conversations').doc(conversationId)
       .collection('messages').add(message);
+    
     await db.collection('conversations').doc(conversationId).update({
       lastMessage: content || `[${type}]`,
       lastMessageTime: message.timestamp
     });
+    
     const fullMessage = { id: messageRef.id, ...message };
+    fullMessage.conversationId = conversationId; // Add for WebSocket filtering
+    
     if (global.io) broadcastMessage(global.io, conversationId, fullMessage);
-    res.json({ success: true, messageId: messageRef.id, message: fullMessage });
+    
+    res.json({ 
+      success: true, 
+      data: fullMessage 
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
