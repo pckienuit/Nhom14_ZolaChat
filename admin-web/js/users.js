@@ -6,6 +6,7 @@
 // Global state
 let users = [];
 let currentUserId = null;
+let unsubscribeUsers = null; // Store unsubscribe function for cleanup
 
 // DOM Elements
 const usersTableBody = document.getElementById('usersTableBody');
@@ -39,10 +40,12 @@ function setupEventListeners() {
     // Actions
     document.getElementById('toggleBanBtn').addEventListener('click', toggleBan);
     document.getElementById('toggleVerifyBtn').addEventListener('click', toggleVerify);
+    document.getElementById('resetPasswordBtn').addEventListener('click', resetUserPassword);
+    document.getElementById('editUserBtn').addEventListener('click', toggleEditMode);
 }
 
 /**
- * Load users from Firestore
+ * Load and subscribe to users from Firestore (Real-time)
  */
 async function loadUsers() {
     usersTableBody.innerHTML = `
@@ -54,20 +57,35 @@ async function loadUsers() {
     `;
     
     try {
-        const snapshot = await db.collection('users')
+        // Unsubscribe from previous listener if exists
+        if (unsubscribeUsers) {
+            unsubscribeUsers();
+        }
+        
+        // Subscribe to real-time updates
+        unsubscribeUsers = db.collection('users')
             .orderBy('createdAt', 'desc')
             .limit(100)
-            .get();
-        
-        users = [];
-        snapshot.forEach(doc => {
-            users.push({ id: doc.id, ...doc.data() });
-        });
-        
-        renderUsers(users);
+            .onSnapshot((snapshot) => {
+                users = [];
+                snapshot.forEach(doc => {
+                    users.push({ id: doc.id, ...doc.data() });
+                });
+                
+                renderUsers(users);
+            }, (error) => {
+                console.error('Error loading users:', error);
+                usersTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="loading-cell text-danger">
+                            Lỗi: ${error.message}
+                        </td>
+                    </tr>
+                `;
+            });
         
     } catch (error) {
-        console.error('Error loading users:', error);
+        console.error('Error setting up user listener:', error);
         usersTableBody.innerHTML = `
             <tr>
                 <td colspan="6" class="loading-cell text-danger">
@@ -195,6 +213,9 @@ function openUserModal(userId) {
     
     if (!user) return;
     
+    // Reset edit mode
+    isEditMode = false;
+    
     const detail = document.getElementById('userDetail');
     detail.innerHTML = `
         <div class="user-detail-grid">
@@ -231,6 +252,20 @@ function openUserModal(userId) {
     
     // Update button states
     updateActionButtons(user);
+    
+    // Reset edit button
+    const editBtn = document.getElementById('editUserBtn');
+    if (editBtn) {
+        editBtn.innerHTML = '<i class="fas fa-edit"></i> <span>Chỉnh sửa</span>';
+        editBtn.classList.remove('btn-success');
+        editBtn.classList.add('btn-secondary');
+    }
+    
+    // Remove cancel button if exists
+    const cancelBtn = document.getElementById('cancelEditBtn');
+    if (cancelBtn) {
+        cancelBtn.remove();
+    }
     
     userModal.classList.add('active');
 }
@@ -319,6 +354,141 @@ async function toggleVerify() {
         
     } catch (error) {
         console.error('Error toggling verify:', error);
+        alert('Lỗi: ' + error.message);
+    }
+}
+
+/**
+ * Reset user password via email
+ */
+async function resetUserPassword() {
+    if (!currentUserId) return;
+    
+    const user = users.find(u => u.id === currentUserId);
+    if (!user || !user.email) {
+        alert('Không thể reset password: user không có email');
+        return;
+    }
+    
+    if (!confirm(`Gửi email reset password đến ${user.email}?`)) {
+        return;
+    }
+    
+    try {
+        await auth.sendPasswordResetEmail(user.email);
+        alert(`✅ Đã gửi email reset password đến ${user.email}`);
+    } catch (error) {
+        console.error('Error sending password reset email:', error);
+        alert('Lỗi: ' + error.message);
+    }
+}
+
+/**
+ * Toggle edit mode for user details
+ */
+let isEditMode = false;
+
+function toggleEditMode() {
+    if (!currentUserId) return;
+    
+    const user = users.find(u => u.id === currentUserId);
+    if (!user) return;
+    
+    const editBtn = document.getElementById('editUserBtn');
+    const detailDiv = document.getElementById('userDetail');
+    
+    if (!isEditMode) {
+        // Switch to edit mode
+        isEditMode = true;
+        editBtn.innerHTML = '<i class="fas fa-save"></i> <span>Lưu</span>';
+        editBtn.classList.remove('btn-secondary');
+        editBtn.classList.add('btn-success');
+        
+        // Add cancel button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.className = 'btn btn-secondary';
+        cancelBtn.id = 'cancelEditBtn';
+        cancelBtn.innerHTML = '<i class="fas fa-times"></i> <span>Hủy</span>';
+        cancelBtn.onclick = () => {
+            isEditMode = false;
+            openUserModal(currentUserId); // Reload modal
+        };
+        editBtn.parentNode.insertBefore(cancelBtn, editBtn);
+        
+        // Replace detail view with inputs
+        detailDiv.innerHTML = `
+            <div class="user-detail-grid">
+                <div class="detail-row">
+                    <span class="detail-label">ID</span>
+                    <span class="detail-value">${user.id}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Tên</span>
+                    <input type="text" id="editName" class="edit-input" value="${escapeHtml(user.name || '')}" placeholder="Nhập tên">
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Email</span>
+                    <span class="detail-value">${escapeHtml(user.email || 'N/A')}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Số điện thoại</span>
+                    <input type="text" id="editPhone" class="edit-input" value="${escapeHtml(user.phone || '')}" placeholder="Nhập SĐT">
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Trạng thái</span>
+                    <span class="detail-value">${getStatusBadge(user)}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Ngày tham gia</span>
+                    <span class="detail-value">${user.createdAt ? new Date(user.createdAt).toLocaleString('vi-VN') : 'N/A'}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Hoạt động cuối</span>
+                    <span class="detail-value">${user.lastSeen ? new Date(user.lastSeen).toLocaleString('vi-VN') : 'N/A'}</span>
+                </div>
+            </div>
+        `;
+    } else {
+        // Save changes
+        saveUserChanges();
+    }
+}
+
+/**
+ * Save user changes to Firestore
+ */
+async function saveUserChanges() {
+    if (!currentUserId) return;
+    
+    const user = users.find(u => u.id === currentUserId);
+    if (!user) return;
+    
+    const newName = document.getElementById('editName').value.trim();
+    const newPhone = document.getElementById('editPhone').value.trim();
+    
+    if (!newName) {
+        alert('Tên không được để trống');
+        return;
+    }
+    
+    try {
+        await db.collection('users').doc(currentUserId).update({
+            name: newName,
+            phone: newPhone || null
+        });
+        
+        // Update local state
+        user.name = newName;
+        user.phone = newPhone;
+        
+        // Exit edit mode and reload modal
+        isEditMode = false;
+        openUserModal(currentUserId);
+        
+        alert('✅ Đã cập nhật thông tin user');
+        
+    } catch (error) {
+        console.error('Error saving user changes:', error);
         alert('Lỗi: ' + error.message);
     }
 }

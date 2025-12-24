@@ -140,6 +140,12 @@
             </div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" id="closeUserBtn">Đóng</button>
+                <button class="btn btn-info" id="resetPasswordBtn">
+                    <i class="fas fa-key"></i> <span>Reset Password</span>
+                </button>
+                <button class="btn btn-secondary" id="editUserBtn">
+                    <i class="fas fa-edit"></i> <span>Chỉnh sửa</span>
+                </button>
                 <button class="btn btn-warning" id="toggleBanBtn">
                     <i class="fas fa-ban"></i> <span>Ban User</span>
                 </button>
@@ -291,6 +297,39 @@
 
         .detail-value {
             font-weight: 500;
+        }
+
+        .edit-input {
+            flex: 1;
+            padding: 0.5rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .edit-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .btn-info {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #2563eb;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
         }
     </style>
 </body>
