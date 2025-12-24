@@ -42,8 +42,8 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 # VPS Configuration
-VPS_UPLOAD_URL = "http://163.61.182.20/api/stickers/upload"
-VPS_BASE_URL = "http://163.61.182.20/stickers"
+VPS_UPLOAD_URL = "https://zolachat.site/api/stickers/upload"
+VPS_BASE_URL = "https://zolachat.site/stickers"
 
 # Firebase
 FIREBASE_CRED_PATH = "service-account-key.json"

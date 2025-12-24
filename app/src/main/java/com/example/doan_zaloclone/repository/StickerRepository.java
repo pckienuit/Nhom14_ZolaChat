@@ -90,7 +90,14 @@ public class StickerRepository {
                 .orderBy("createdAt", Query.Direction.DESCENDING)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
-                    List<StickerPack> packs = querySnapshot.toObjects(StickerPack.class);
+                    List<StickerPack> packs = new ArrayList<>();
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        StickerPack pack = doc.toObject(StickerPack.class);
+                        if (pack != null) {
+                            pack.setId(doc.getId());  // Set document ID
+                            packs.add(pack);
+                        }
+                    }
                     result.setValue(Resource.success(packs));
                 })
                 .addOnFailureListener(e -> {
@@ -123,12 +130,19 @@ public class StickerRepository {
                         return;
                     }
                     
-                    // Fetch pack details
+                    // Fetch pack details using document IDs
                     db.collection(COLLECTION_STICKER_PACKS)
-                            .whereIn("id", packIds)
+                            .whereIn(com.google.firebase.firestore.FieldPath.documentId(), packIds)
                             .get()
                             .addOnSuccessListener(packsSnapshot -> {
-                                List<StickerPack> packs = packsSnapshot.toObjects(StickerPack.class);
+                                List<StickerPack> packs = new ArrayList<>();
+                                for (DocumentSnapshot doc : packsSnapshot.getDocuments()) {
+                                    StickerPack pack = doc.toObject(StickerPack.class);
+                                    if (pack != null) {
+                                        pack.setId(doc.getId());
+                                        packs.add(pack);
+                                    }
+                                }
                                 result.setValue(Resource.success(packs));
                             })
                             .addOnFailureListener(e -> {
@@ -157,7 +171,32 @@ public class StickerRepository {
                 .orderBy("createdAt", Query.Direction.ASCENDING)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
-                    List<Sticker> stickers = querySnapshot.toObjects(Sticker.class);
+                    List<Sticker> stickers = new ArrayList<>();
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        Sticker sticker = doc.toObject(Sticker.class);
+                        if (sticker != null) {
+                            sticker.setId(doc.getId());
+                            sticker.setPackId(packId);
+                            
+                            // Fallback: if imageUrl is null, try 'url' field (old data format)
+                            if (sticker.getImageUrl() == null || sticker.getImageUrl().isEmpty()) {
+                                String urlFallback = doc.getString("url");
+                                if (urlFallback != null && !urlFallback.isEmpty()) {
+                                    sticker.setImageUrl(urlFallback);
+                                    Log.d(TAG, "Using fallback 'url' field: " + urlFallback);
+                                }
+                            }
+                            
+                            Log.d(TAG, "Loaded sticker from pack: " + doc.getId() + ", URL: " + sticker.getImageUrl());
+                            
+                            // Filter out invalid stickers (must have ID and URL)
+                            if (sticker.getId() != null && sticker.getImageUrl() != null && !sticker.getImageUrl().isEmpty()) {
+                                stickers.add(sticker);
+                            } else {
+                                Log.w(TAG, "Skipping invalid sticker in pack: ID=" + sticker.getId() + ", URL=" + sticker.getImageUrl());
+                            }
+                        }
+                    }
                     result.setValue(Resource.success(stickers));
                 })
                 .addOnFailureListener(e -> {
@@ -213,7 +252,30 @@ public class StickerRepository {
                 .limit(20)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
-                    List<Sticker> stickers = querySnapshot.toObjects(Sticker.class);
+                    List<Sticker> stickers = new ArrayList<>();
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        Sticker sticker = doc.toObject(Sticker.class);
+                        if (sticker != null) {
+                            // Fix ID mapping: ensure ID is set from the document ID
+                            sticker.setId(doc.getId());
+                            
+                            // Fallback: if imageUrl is null, try 'url' field (old data format)
+                            if (sticker.getImageUrl() == null || sticker.getImageUrl().isEmpty()) {
+                                String urlFallback = doc.getString("url");
+                                if (urlFallback != null && !urlFallback.isEmpty()) {
+                                    sticker.setImageUrl(urlFallback);
+                                }
+                            }
+                            Log.d(TAG, "Loaded recent sticker: " + doc.getId() + ", URL: " + sticker.getImageUrl());
+                            
+                            // Filter out invalid stickers
+                            if (sticker.getId() != null && sticker.getImageUrl() != null && !sticker.getImageUrl().isEmpty()) {
+                                stickers.add(sticker);
+                            } else {
+                                Log.w(TAG, "Skipping invalid recent sticker: ID=" + sticker.getId() + ", URL=" + sticker.getImageUrl());
+                            }
+                        }
+                    }
                     result.setValue(Resource.success(stickers));
                 })
                 .addOnFailureListener(e -> {
@@ -228,8 +290,15 @@ public class StickerRepository {
      * Add sticker to recent stickers
      */
     public void addToRecentStickers(@NonNull String userId, @NonNull Sticker sticker) {
+        // Skip if sticker ID is null
+        String stickerId = sticker.getId();
+        if (stickerId == null || stickerId.isEmpty()) {
+            stickerId = db.collection(COLLECTION_USERS).document().getId();
+            Log.w(TAG, "Sticker ID was null, generated: " + stickerId);
+        }
+        
         Map<String, Object> data = new HashMap<>();
-        data.put("stickerId", sticker.getId());
+        data.put("id", stickerId); // Match model field name 'id'
         data.put("packId", sticker.getPackId());
         data.put("imageUrl", sticker.getImageUrl());
         data.put("thumbnailUrl", sticker.getThumbnailUrl());
@@ -240,7 +309,7 @@ public class StickerRepository {
         db.collection(COLLECTION_USERS)
                 .document(userId)
                 .collection(COLLECTION_RECENT_STICKERS)
-                .document(sticker.getId())
+                .document(stickerId)
                 .set(data)
                 .addOnFailureListener(e -> Log.e(TAG, "Error adding to recent stickers", e));
     }
@@ -385,7 +454,14 @@ public class StickerRepository {
                 .limit(10)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
-                    List<StickerPack> packs = querySnapshot.toObjects(StickerPack.class);
+                    List<StickerPack> packs = new ArrayList<>();
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        StickerPack pack = doc.toObject(StickerPack.class);
+                        if (pack != null) {
+                            pack.setId(doc.getId());
+                            packs.add(pack);
+                        }
+                    }
                     result.setValue(Resource.success(packs));
                 })
                 .addOnFailureListener(e -> {
@@ -409,7 +485,14 @@ public class StickerRepository {
                 .limit(20)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
-                    List<StickerPack> packs = querySnapshot.toObjects(StickerPack.class);
+                    List<StickerPack> packs = new ArrayList<>();
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        StickerPack pack = doc.toObject(StickerPack.class);
+                        if (pack != null) {
+                            pack.setId(doc.getId());
+                            packs.add(pack);
+                        }
+                    }
                     result.setValue(Resource.success(packs));
                 })
                 .addOnFailureListener(e -> {
@@ -433,7 +516,14 @@ public class StickerRepository {
                 .limit(20)
                 .get()
                 .addOnSuccessListener(querySnapshot -> {
-                    List<StickerPack> packs = querySnapshot.toObjects(StickerPack.class);
+                    List<StickerPack> packs = new ArrayList<>();
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        StickerPack pack = doc.toObject(StickerPack.class);
+                        if (pack != null) {
+                            pack.setId(doc.getId());
+                            packs.add(pack);
+                        }
+                    }
                     result.setValue(Resource.success(packs));
                 })
                 .addOnFailureListener(e -> {

@@ -157,6 +157,20 @@ public class ChatRepository {
                 messageData.put("liveLocationSessionId", message.getLiveLocationSessionId());
             }
         }
+        
+        // Add sticker data if this is a sticker message
+        if (Message.TYPE_STICKER.equals(message.getType())) {
+            if (message.getStickerId() != null) {
+                messageData.put("stickerId", message.getStickerId());
+            }
+            if (message.getStickerPackId() != null) {
+                messageData.put("stickerPackId", message.getStickerPackId());
+            }
+            if (message.getStickerUrl() != null) {
+                messageData.put("stickerUrl", message.getStickerUrl());
+            }
+            messageData.put("isStickerAnimated", message.isStickerAnimated());
+        }
 
         // Save message to Firestore
         messageRef.set(messageData)

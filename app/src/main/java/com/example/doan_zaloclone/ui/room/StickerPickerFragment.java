@@ -264,6 +264,13 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
         stickerPacks = packs;
         packTabAdapter.setPacks(packs);
         stickerPagerAdapter.setPacks(packs);
+        
+        // Load stickers for all packs
+        for (StickerPack pack : packs) {
+            if (pack.getId() != null) {
+                loadStickersForPack(pack.getId());
+            }
+        }
     }
 
     private void onStickerSelected(Sticker sticker) {
@@ -291,6 +298,15 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
             BottomSheetBehavior<View> behavior = BottomSheetBehavior.from(parent);
             behavior.setState(BottomSheetBehavior.STATE_EXPANDED);
             behavior.setSkipCollapsed(true);
+        }
+    }
+    
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Reload saved packs when returning from store
+        if (currentUserId != null) {
+            loadUserSavedPacks();
         }
     }
 }

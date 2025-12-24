@@ -23,6 +23,7 @@ import com.example.doan_zaloclone.viewmodel.MainViewModel;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 
 public class MainActivity extends AppCompatActivity {
@@ -40,11 +41,18 @@ public class MainActivity extends AppCompatActivity {
     private CallRepository callRepository;
     private ListenerRegistration incomingCallListener;
     private String lastHandledCallId = null;  // Track last handled call to avoid duplicates
+    
+    // Force logout listener
+    private ListenerRegistration forceLogoutListener;
+    private long loginTimestamp = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        
+        // Record login timestamp for force logout comparison
+        loginTimestamp = System.currentTimeMillis();
 
         // Initialize ViewModel
         mainViewModel = new ViewModelProvider(this).get(MainViewModel.class);
@@ -66,6 +74,63 @@ public class MainActivity extends AppCompatActivity {
         
         // Start listening for incoming calls
         setupIncomingCallListener();
+        
+        // Start listening for force logout / ban
+        setupForceLogoutListener();
+    }
+    
+    /**
+     * Listen for force logout or ban status changes
+     */
+    private void setupForceLogoutListener() {
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null) return;
+        
+        forceLogoutListener = FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(currentUser.getUid())
+            .addSnapshotListener((snapshot, error) -> {
+                if (error != null || snapshot == null || !snapshot.exists()) return;
+                
+                // Check if user is banned
+                Boolean isBanned = snapshot.getBoolean("isBanned");
+                if (isBanned != null && isBanned) {
+                    performForceLogout("Tài khoản của bạn đã bị khóa.");
+                    return;
+                }
+                
+                // Check for force logout timestamp
+                Long forceLogoutAt = snapshot.getLong("forceLogoutAt");
+                if (forceLogoutAt != null && forceLogoutAt > loginTimestamp) {
+                    performForceLogout("Bạn đã bị đăng xuất bởi quản trị viên.");
+                }
+            });
+    }
+    
+    /**
+     * Force logout and redirect to login screen
+     */
+    private void performForceLogout(String message) {
+        // Remove listener first to prevent loop
+        if (forceLogoutListener != null) {
+            forceLogoutListener.remove();
+            forceLogoutListener = null;
+        }
+        if (incomingCallListener != null) {
+            incomingCallListener.remove();
+            incomingCallListener = null;
+        }
+        
+        // Sign out
+        FirebaseAuth.getInstance().signOut();
+        
+        // Show message and redirect
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+        
+        Intent intent = new Intent(this, LoginActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
+        finish();
     }
     
     private void setupIncomingCallListener() {
@@ -300,6 +365,10 @@ public class MainActivity extends AppCompatActivity {
         // Clean up incoming call listener
         if (incomingCallListener != null) {
             incomingCallListener.remove();
+        }
+        // Clean up force logout listener
+        if (forceLogoutListener != null) {
+            forceLogoutListener.remove();
         }
     }
 }

@@ -1,7 +1,12 @@
 package com.example.doan_zaloclone;
 
 import android.app.Application;
+
+import androidx.lifecycle.ProcessLifecycleOwner;
+
 import com.cloudinary.android.MediaManager;
+import com.example.doan_zaloclone.utils.AppLifecycleObserver;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -18,5 +23,9 @@ public class ZaloApplication extends Application {
         config.put("api_secret", "9hnWcqIA7en-XduIpo1f3C1CdIg");
         
         MediaManager.init(this, config);
+        
+        // Register lifecycle observer for real-time presence tracking
+        ProcessLifecycleOwner.get().getLifecycle()
+                .addObserver(new AppLifecycleObserver());
     }
 }

@@ -1,0 +1,282 @@
+================================================================================
+API UPLOAD STICKERS (Sticker Upload API)
+================================================================================
+
+NGÀY TẠO: 23/12/2025
+LOẠI: API
+MÔ TẢ: Tài liệu API upload stickers lên VPS server
+
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+VPS chạy Node.js service để xử lý upload stickers.
+Service listen trên port 3001, được proxy qua Apache.
+
+Server: 163.61.182.20
+Base URL: http://163.61.182.20/api/stickers
+
+
+================================================================================
+2. ENDPOINTS
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Method │ Endpoint            │ Mô tả                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ GET    │ /health             │ Health check                                │
+│ POST   │ /upload             │ Upload single sticker                       │
+│ POST   │ /packs              │ Create sticker pack với icon                │
+│ GET    │ /disk-usage         │ Kiểm tra disk usage                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+3. CHI TIẾT API
+================================================================================
+
+3.1. HEALTH CHECK
+-----------------
+
+GET /api/stickers/health
+
+Response:
+{
+    "status": "ok",
+    "timestamp": "2025-12-23T12:00:00.000Z"
+}
+
+
+3.2. UPLOAD STICKER
+-------------------
+
+POST /api/stickers/upload
+Content-Type: multipart/form-data
+
+Request Body:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Field      │ Type    │ Required │ Mô tả                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ sticker    │ file    │ Yes      │ File ảnh (WebP, GIF, PNG, JPG, APNG)     │
+│ userId     │ string  │ Yes      │ UID của user đang upload                 │
+│ packId     │ string  │ No       │ ID của pack (nếu upload vào pack cụ thể) │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Supported Formats:
+- image/webp
+- image/gif
+- image/png
+- image/jpeg
+- image/apng
+- application/json (Lottie)
+
+Max File Size: 2MB
+
+Response (Success):
+{
+    "success": true,
+    "sticker": {
+        "id": "uuid",
+        "url": "http://163.61.182.20/user/{userId}/custom_stickers/{id}.webp",
+        "thumbnailUrl": "http://163.61.182.20/thumbnails/{userId}/{id}_thumb.webp",
+        "width": 512,
+        "height": 512,
+        "isAnimated": false,
+        "format": "webp"
+    }
+}
+
+Response (Error):
+{
+    "error": "userId is required"
+}
+
+
+3.3. CREATE STICKER PACK
+------------------------
+
+POST /api/stickers/packs
+Content-Type: multipart/form-data
+
+Request Body:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Field      │ Type    │ Required │ Mô tả                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ icon       │ file    │ No       │ File icon cho pack (sẽ resize 96x96)     │
+│ userId     │ string  │ Yes      │ UID của user tạo pack                    │
+│ packName   │ string  │ Yes      │ Tên pack                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Response:
+{
+    "success": true,
+    "pack": {
+        "id": "uuid",
+        "name": "Pack Name",
+        "iconUrl": "http://163.61.182.20/user/{userId}/pack_{id}/icon.webp",
+        "path": "/user/{userId}/pack_{id}"
+    }
+}
+
+
+3.4. DISK USAGE
+---------------
+
+GET /api/stickers/disk-usage
+
+Response:
+{
+    "stickerDirSize": "256M",
+    "path": "/var/www/stickers"
+}
+
+
+================================================================================
+4. CẤU TRÚC THƯ MỤC TRÊN VPS
+================================================================================
+
+/var/www/stickers/
+├── temp/                       # Upload tạm
+├── thumbnails/
+│   └── {userId}/
+│       └── {stickerId}_thumb.webp
+├── user/
+│   └── {userId}/
+│       ├── custom_stickers/    # Stickers không thuộc pack
+│       │   └── {stickerId}.webp
+│       └── pack_{packId}/      # Stickers trong pack
+│           ├── icon.webp
+│           └── {stickerId}.webp
+└── official/                   # Official sticker packs
+    └── {packName}/
+        └── *.webp
+
+
+================================================================================
+5. XỬ LÝ ẢNH
+================================================================================
+
+5.1. THUMBNAIL
+--------------
+- Resize: 128x128
+- Format: WebP
+- Quality: 80
+- Fit: contain (preserve aspect ratio)
+- Background: transparent
+
+5.2. ORIGINAL FILE
+------------------
+- Giữ nguyên định dạng
+- Di chuyển từ temp sang thư mục đích
+
+5.3. LOTTIE JSON
+----------------
+- Không xử lý thumbnail
+- Giữ nguyên file JSON
+
+
+================================================================================
+6. SERVICE CONFIGURATION
+================================================================================
+
+6.1. SYSTEMD SERVICE
+--------------------
+File: /etc/systemd/system/sticker-upload.service
+
+[Unit]
+Description=Sticker Upload Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/sticker-upload-service
+ExecStart=/usr/bin/node server.js
+Restart=on-failure
+Environment=PORT=3001
+Environment=SERVER_URL=http://163.61.182.20
+
+[Install]
+WantedBy=multi-user.target
+
+
+6.2. APACHE PROXY CONFIG
+------------------------
+File: /etc/apache2/sites-available/stickers.conf
+
+<Location "/api/stickers">
+    ProxyPass http://127.0.0.1:3001/api/stickers
+    ProxyPassReverse http://127.0.0.1:3001/api/stickers
+</Location>
+
+
+================================================================================
+7. COMMANDS QUẢN LÝ
+================================================================================
+
+# Xem status
+systemctl status sticker-upload
+
+# Restart service
+systemctl restart sticker-upload
+
+# Xem logs
+journalctl -u sticker-upload -f
+
+# Reload Apache (sau khi sửa config)
+systemctl reload apache2
+
+
+================================================================================
+8. ERROR CODES
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ HTTP Code │ Error Message                │ Nguyên nhân                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 400       │ userId is required           │ Thiếu userId trong request      │
+│ 400       │ No file uploaded             │ Không có file trong request     │
+│ 400       │ Unsupported file format      │ File không phải format hỗ trợ   │
+│ 400       │ userId and packName required │ Thiếu thông tin tạo pack        │
+│ 500       │ Internal server error        │ Lỗi server (xem logs)           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+9. GỌI API TỪ JAVASCRIPT
+================================================================================
+
+// Upload single sticker
+async function uploadSticker(file, userId) {
+    const formData = new FormData();
+    formData.append('sticker', file);
+    formData.append('userId', userId);
+    
+    const response = await fetch('http://163.61.182.20/api/stickers/upload', {
+        method: 'POST',
+        body: formData
+    });
+    
+    return await response.json();
+}
+
+// Create pack with icon
+async function createPack(iconFile, userId, packName) {
+    const formData = new FormData();
+    if (iconFile) formData.append('icon', iconFile);
+    formData.append('userId', userId);
+    formData.append('packName', packName);
+    
+    const response = await fetch('http://163.61.182.20/api/stickers/packs', {
+        method: 'POST',
+        body: formData
+    });
+    
+    return await response.json();
+}
+
+
+CẬP NHẬT
+--------
+Ngày tạo: 23/12/2025

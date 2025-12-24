@@ -50,6 +50,10 @@ dependencies {
     implementation(libs.navigation.ui)
     implementation(libs.lifecycle.viewmodel)
     implementation(libs.lifecycle.livedata)
+    
+    // Lifecycle process for app-level presence tracking
+    implementation("androidx.lifecycle:lifecycle-process:2.7.0")
+    
     implementation(libs.recyclerview)
     implementation(libs.cardview)
     implementation(libs.glide)
