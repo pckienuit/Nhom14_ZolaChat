@@ -25,6 +25,7 @@ import com.example.doan_zaloclone.models.User;
 import com.example.doan_zaloclone.ui.room.RoomActivity;
 import com.example.doan_zaloclone.services.FirestoreManager;
 import com.example.doan_zaloclone.viewmodel.ContactViewModel;
+import com.example.doan_zaloclone.websocket.SocketManager;
 import com.google.firebase.auth.FirebaseAuth;
 
 import java.util.ArrayList;
@@ -48,6 +49,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     private ContactViewModel contactViewModel;
     private FirebaseAuth firebaseAuth;
     private FirestoreManager firestoreManager; // Still needed for some legacy operations
+    private SocketManager socketManager;
 
     @Nullable
     @Override
@@ -60,15 +62,21 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         contactViewModel = new ViewModelProvider(this).get(ContactViewModel.class);
         firebaseAuth = FirebaseAuth.getInstance();
         firestoreManager = FirestoreManager.getInstance(); // For legacy operations
+        socketManager = SocketManager.getInstance();
         
         initViews(view);
         setupRecyclerViews();
         setupSearchListener();
         observeViewModel();
         loadFriendRequests();
+        // Friend event listener is now handled in MainActivity globally
+        // setupFriendEventListener(); - removed to prevent duplicate events
         
         return view;
     }
+    
+    // Friend event listener is now handled globally in MainActivity
+    // See MainActivity.setupFriendEventListener()
     
     @Override
     public void onResume() {
@@ -501,6 +509,8 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 if (resource.isSuccess()) {
                     Toast.makeText(getContext(), "Friend removed successfully", 
                         Toast.LENGTH_SHORT).show();
+                    // Reload friends list after removing
+                    reloadFriendData();
                 } else if (resource.isError()) {
                     Toast.makeText(getContext(), "Error: " + resource.getMessage(), 
                         Toast.LENGTH_SHORT).show();
@@ -511,5 +521,37 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     private void loadFriendRequests() {
         // Friend requests are automatically loaded via ViewModel observer
         // The observer in observeViewModel() handles the real-time updates
+    }
+    
+    /**
+     * Called from MainActivity when friend events are received via WebSocket
+     * @param eventType ACCEPTED, REJECTED, ADDED, or REMOVED
+     * @param userId The user ID involved in the event
+     */
+    public void onFriendEventReceived(String eventType, String userId) {
+        Log.e("ContactFragment", "🔔 onFriendEventReceived: " + eventType + " for user: " + userId);
+        
+        switch (eventType) {
+            case "REQUEST_RECEIVED":
+                // New friend request arrived - reload friend requests list
+                Log.e("ContactFragment", "Reloading friend requests...");
+                reloadFriendData();
+                break;
+            case "ACCEPTED":
+                // Update search result to show "Friends" status
+                Log.e("ContactFragment", "Updating status to ACCEPTED for: " + userId);
+                userAdapter.updateFriendRequestStatus(userId, "ACCEPTED");
+                reloadFriendData();
+                break;
+            case "REJECTED":
+                // Update search result to show Add Friend button again
+                Log.e("ContactFragment", "Updating status to REJECTED for: " + userId);
+                userAdapter.updateFriendRequestStatus(userId, "REJECTED");
+                break;
+            case "ADDED":
+            case "REMOVED":
+                reloadFriendData();
+                break;
+        }
     }
 }

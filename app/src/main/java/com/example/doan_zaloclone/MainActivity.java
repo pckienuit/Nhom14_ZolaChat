@@ -78,8 +78,84 @@ public class MainActivity extends AppCompatActivity {
         // Start listening for force logout / ban
         setupForceLogoutListener();
         
+        // Setup friend events via WebSocket
+        setupFriendEventListener();
+        
         // TEMPORARY: API Test Button - Only in DEBUG builds
         addApiTestButton();
+    }
+    
+    /**
+     * Setup WebSocket listener for friend events
+     * This persists across fragment changes
+     */
+    private void setupFriendEventListener() {
+        com.example.doan_zaloclone.websocket.SocketManager socketManager = 
+            com.example.doan_zaloclone.websocket.SocketManager.getInstance();
+        
+        // Ensure socket is connected
+        if (!socketManager.isConnected()) {
+            socketManager.connect();
+        }
+        
+        socketManager.setFriendEventListener(new com.example.doan_zaloclone.websocket.SocketManager.OnFriendEventListener() {
+            @Override
+            public void onFriendRequestReceived(String senderId, String senderName) {
+                runOnUiThread(() -> {
+                    android.util.Log.d("MainActivity", "New friend request from: " + senderName);
+                    Toast.makeText(MainActivity.this, senderName + " sent you a friend request!", Toast.LENGTH_SHORT).show();
+                    // Notify fragment to reload friend requests if active
+                    if (contactFragment != null && contactFragment.isAdded()) {
+                        contactFragment.onFriendEventReceived("REQUEST_RECEIVED", senderId);
+                    }
+                });
+            }
+            
+            @Override
+            public void onFriendRequestAccepted(String userId) {
+                runOnUiThread(() -> {
+                    android.util.Log.d("MainActivity", "Friend request accepted by: " + userId);
+                    Toast.makeText(MainActivity.this, "Friend request accepted!", Toast.LENGTH_SHORT).show();
+                    // Notify fragment to reload if active
+                    if (contactFragment != null && contactFragment.isAdded()) {
+                        contactFragment.onFriendEventReceived("ACCEPTED", userId);
+                    }
+                });
+            }
+            
+            @Override
+            public void onFriendRequestRejected(String userId) {
+                runOnUiThread(() -> {
+                    android.util.Log.d("MainActivity", "Friend request rejected by: " + userId);
+                    Toast.makeText(MainActivity.this, "Friend request was rejected", Toast.LENGTH_SHORT).show();
+                    // Notify fragment to update search results
+                    if (contactFragment != null && contactFragment.isAdded()) {
+                        contactFragment.onFriendEventReceived("REJECTED", userId);
+                    }
+                });
+            }
+            
+            @Override
+            public void onFriendAdded(String userId) {
+                runOnUiThread(() -> {
+                    android.util.Log.d("MainActivity", "New friend added: " + userId);
+                    if (contactFragment != null && contactFragment.isAdded()) {
+                        contactFragment.onFriendEventReceived("ADDED", userId);
+                    }
+                });
+            }
+            
+            @Override
+            public void onFriendRemoved(String userId) {
+                runOnUiThread(() -> {
+                    android.util.Log.d("MainActivity", "Friend removed: " + userId);
+                    Toast.makeText(MainActivity.this, "Friend removed", Toast.LENGTH_SHORT).show();
+                    if (contactFragment != null && contactFragment.isAdded()) {
+                        contactFragment.onFriendEventReceived("REMOVED", userId);
+                    }
+                });
+            }
+        });
     }
     
     /**

@@ -29,6 +29,29 @@ router.post('/requests', authenticateUser, async (req, res) => {
   try {
     const { receiverId, senderName, senderEmail } = req.body;
     
+    // Check for existing pending request
+    const existingPending = await db.collection('friendRequests')
+      .where('senderId', '==', req.user.uid)
+      .where('receiverId', '==', receiverId)
+      .where('status', '==', 'pending')
+      .get();
+    
+    if (!existingPending.empty) {
+      return res.status(400).json({ error: 'Friend request already pending' });
+    }
+    
+    // Delete any old rejected requests between these users
+    const existingRejected = await db.collection('friendRequests')
+      .where('senderId', '==', req.user.uid)
+      .where('receiverId', '==', receiverId)
+      .where('status', '==', 'rejected')
+      .get();
+    
+    const batch = db.batch();
+    existingRejected.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    
     // Fetch sender info if not provided
     let fromUserName = senderName;
     let fromUserEmail = senderEmail;
@@ -51,7 +74,22 @@ router.post('/requests', authenticateUser, async (req, res) => {
       createdAt: Date.now()
     };
     
-    const requestRef = await db.collection('friendRequests').add(request);
+    const requestRef = db.collection('friendRequests').doc();
+    batch.set(requestRef, request);
+    
+    await batch.commit();
+    
+    // Notify receiver via WebSocket that they have a new friend request
+    const io = req.app.get('io');
+    if (io) {
+      console.log(`📤 Emitting friend_request_received to user:${receiverId}`);
+      io.to(`user:${receiverId}`).emit('friend_request_received', {
+        requestId: requestRef.id,
+        senderId: req.user.uid,
+        senderName: fromUserName,
+        senderEmail: fromUserEmail
+      });
+    }
     
     console.log(`📤 Friend request sent from ${fromUserName} to ${receiverId}`);
     res.json({ success: true, requestId: requestRef.id });
@@ -98,10 +136,14 @@ router.put('/requests/:requestId', authenticateUser, async (req, res) => {
       
       // Notify sender of rejection
       if (io) {
+        console.log(`📤 Emitting friend_request_rejected to user:${requestData.senderId}`);
         io.to(`user:${requestData.senderId}`).emit('friend_request_rejected', {
           userId: requestData.receiverId,
           requestId
         });
+        console.log('✅ Notified sender of friend request rejection');
+      } else {
+        console.log('❌ io is null, cannot emit friend_request_rejected');
       }
     }
     res.json({ success: true });
