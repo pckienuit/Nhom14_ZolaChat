@@ -62,9 +62,9 @@ public interface ApiService {
     );
     
     @POST("chats/{conversationId}/messages")
-    Call<Map<String, Object>> sendMessage(
+    Call<ApiResponse<Message>> sendMessage(
         @Path("conversationId") String conversationId,
-        @Body Message message
+        @Body SendMessageRequest messageRequest
     );
     
     @PUT("chats/messages/{messageId}")
