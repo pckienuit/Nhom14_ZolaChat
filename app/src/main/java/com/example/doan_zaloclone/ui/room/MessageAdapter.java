@@ -56,6 +56,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public static final int VIEW_TYPE_LOCATION_RECEIVED = 15;
     public static final int VIEW_TYPE_LIVE_LOCATION_SENT = 16;
     public static final int VIEW_TYPE_LIVE_LOCATION_RECEIVED = 17;
+    public static final int VIEW_TYPE_STICKER_SENT = 18;
+    public static final int VIEW_TYPE_STICKER_RECEIVED = 19;
     
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT = 
@@ -226,6 +228,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             return isSent ? VIEW_TYPE_LIVE_LOCATION_SENT : VIEW_TYPE_LIVE_LOCATION_RECEIVED;
         }
         
+        // Sticker messages
+        if (Message.TYPE_STICKER.equals(message.getType())) {
+            return isSent ? VIEW_TYPE_STICKER_SENT : VIEW_TYPE_STICKER_RECEIVED;
+        }
+        
         if (isSent) {
             if (isFile) return VIEW_TYPE_FILE_SENT;
             return isImage ? VIEW_TYPE_IMAGE_SENT : VIEW_TYPE_SENT;
@@ -308,6 +315,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_live_location_received, parent, false);
                 return new LiveLocationMessageViewHolder(view, false);
+            case VIEW_TYPE_STICKER_SENT:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_sticker_sent, parent, false);
+                return new StickerMessageViewHolder(view, true);
+            case VIEW_TYPE_STICKER_RECEIVED:
+                view = LayoutInflater.from(parent.getContext())
+                    .inflate(R.layout.item_message_sticker_received, parent, false);
+                return new StickerMessageViewHolder(view, false);
             default:
                 view = LayoutInflater.from(parent.getContext())
                     .inflate(R.layout.item_message_sent, parent, false);
@@ -343,6 +358,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((ContactMessageViewHolder) holder).bind(message, currentUserId);
         } else if (holder instanceof LocationMessageViewHolder) {
             ((LocationMessageViewHolder) holder).bind(message);
+        } else if (holder instanceof StickerMessageViewHolder) {
+            ((StickerMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof RecalledMessageViewHolder) {
             // Recalled messages just display static text, no binding needed
         }
@@ -2479,4 +2496,80 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             cleanupTimer();
         }
     }
+    
+    /**
+     * ViewHolder for sticker messages (both sent and received)
+     */
+    static class StickerMessageViewHolder extends RecyclerView.ViewHolder {
+        private ImageView stickerImageView;
+        private TextView timestampTextView;
+        private TextView senderNameTextView; // For group chats (received only)
+        private boolean isSent;
+        
+        public StickerMessageViewHolder(@NonNull View itemView, boolean isSent) {
+            super(itemView);
+            this.isSent = isSent;
+            stickerImageView = itemView.findViewById(R.id.stickerImageView);
+            timestampTextView = itemView.findViewById(R.id.timestampTextView);
+            senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
+        }
+        
+        public void bind(Message message, boolean isGroupChat,
+                        OnMessageLongClickListener longClickListener,
+                        OnMessageReplyListener replyListener,
+                        OnReplyPreviewClickListener replyPreviewClickListener,
+                        OnMessageRecallListener recallListener,
+                        OnMessageForwardListener forwardListener,
+                        String currentUserId,
+                        boolean isPinned,
+                        boolean isHighlighted,
+                        OnMessageReactionListener reactionListener) {
+            
+            // Bind timestamp
+            if (timestampTextView != null) {
+                timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            }
+            
+            // Show sender name in group chats (for received messages only)
+            if (!isSent && isGroupChat && senderNameTextView != null) {
+                String senderName = message.getSenderName();
+                if (senderName != null && !senderName.isEmpty()) {
+                    senderNameTextView.setText(senderName);
+                    senderNameTextView.setVisibility(View.VISIBLE);
+                } else {
+                    senderNameTextView.setVisibility(View.GONE);
+                }
+            }
+            
+            // Load sticker image
+            if (stickerImageView != null) {
+                String stickerUrl = message.getStickerUrl();
+                android.util.Log.d("StickerMessage", "Binding sticker - messageId: " + message.getId()
+                    + ", stickerUrl: " + stickerUrl
+                    + ", stickerId: " + message.getStickerId());
+                    
+                if (stickerUrl != null && !stickerUrl.isEmpty()) {
+                    Glide.with(itemView.getContext())
+                            .load(stickerUrl)
+                            .placeholder(R.drawable.ic_sticker)
+                            .error(R.drawable.ic_sticker)
+                            .fitCenter()
+                            .into(stickerImageView);
+                } else {
+                    stickerImageView.setImageResource(R.drawable.ic_sticker);
+                }
+            }
+            
+            // Apply pin and highlight effects
+            applyPinAndHighlight(itemView, isPinned, isHighlighted);
+            
+            // Long click for context menu
+            itemView.setOnLongClickListener(v -> {
+                showMessageContextMenu(v, message, longClickListener, replyListener, 
+                        recallListener, forwardListener, isPinned, currentUserId);
+                return true;
+            });
+        }
+    }
 }
+

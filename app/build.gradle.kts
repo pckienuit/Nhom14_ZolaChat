@@ -50,6 +50,10 @@ dependencies {
     implementation(libs.navigation.ui)
     implementation(libs.lifecycle.viewmodel)
     implementation(libs.lifecycle.livedata)
+    
+    // Lifecycle process for app-level presence tracking
+    implementation("androidx.lifecycle:lifecycle-process:2.7.0")
+    
     implementation(libs.recyclerview)
     implementation(libs.cardview)
     implementation(libs.glide)
@@ -79,6 +83,12 @@ dependencies {
     
     // Location services (FREE)
     implementation("com.google.android.gms:play-services-location:21.0.1")
+    
+    // OkHttp for HTTP requests (background removal API)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    
+    // UCrop for image cropping in sticker creation
+    implementation("com.github.yalantis:ucrop:2.2.8")
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)

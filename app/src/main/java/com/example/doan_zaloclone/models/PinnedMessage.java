@@ -102,6 +102,8 @@ public class PinnedMessage {
                 return "📎 " + fileName;
             case Message.TYPE_CALL:
                 return "📞 Cuộc gọi";
+            case Message.TYPE_STICKER:
+                return "😊 Sticker";
             case Message.TYPE_TEXT:
             default:
                 return content != null ? content : "";

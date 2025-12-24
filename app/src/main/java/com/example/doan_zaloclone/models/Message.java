@@ -12,6 +12,7 @@ public class Message {
     public static final String TYPE_CONTACT = "CONTACT"; // Business card message
     public static final String TYPE_LOCATION = "LOCATION"; // Location message
     public static final String TYPE_LIVE_LOCATION = "LIVE_LOCATION"; // Live location message
+    public static final String TYPE_STICKER = "STICKER"; // Sticker message
 
     private String id;
     private String senderId;
@@ -60,6 +61,12 @@ public class Message {
     
     // Live Location data (only used for TYPE_LIVE_LOCATION messages)
     private String liveLocationSessionId; // Session ID for live location tracking
+    
+    // Sticker data (only used for TYPE_STICKER messages)
+    private String stickerId;           // Sticker ID
+    private String stickerPackId;       // Sticker pack ID
+    private String stickerUrl;          // Direct URL for display
+    private boolean isStickerAnimated;  // true if animated sticker
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Message() {
@@ -445,5 +452,52 @@ public class Message {
     
     public void setLiveLocationSessionId(String liveLocationSessionId) {
         this.liveLocationSessionId = liveLocationSessionId;
+    }
+    
+    // Sticker getters and setters
+    public String getStickerId() {
+        return stickerId;
+    }
+    
+    public void setStickerId(String stickerId) {
+        this.stickerId = stickerId;
+    }
+    
+    public String getStickerPackId() {
+        return stickerPackId;
+    }
+    
+    public void setStickerPackId(String stickerPackId) {
+        this.stickerPackId = stickerPackId;
+    }
+    
+    public String getStickerUrl() {
+        return stickerUrl;
+    }
+    
+    public void setStickerUrl(String stickerUrl) {
+        this.stickerUrl = stickerUrl;
+    }
+    
+    public boolean isStickerAnimated() {
+        return isStickerAnimated;
+    }
+    
+    // Alias for Firestore
+    public boolean getIsStickerAnimated() {
+        return isStickerAnimated;
+    }
+    
+    public void setStickerAnimated(boolean stickerAnimated) {
+        isStickerAnimated = stickerAnimated;
+    }
+    
+    // Alias for Firestore
+    public void setIsStickerAnimated(boolean isStickerAnimated) {
+        this.isStickerAnimated = isStickerAnimated;
+    }
+    
+    public boolean isStickerMessage() {
+        return TYPE_STICKER.equals(this.type);
     }
 }

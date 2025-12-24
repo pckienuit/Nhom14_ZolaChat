@@ -1,0 +1,223 @@
+================================================================================
+QUẢN LÝ STICKER PACKS (Sticker Management Feature)
+================================================================================
+
+NGÀY TẠO: 23/12/2025
+LOẠI: Feature
+MÔ TẢ: Tính năng quản lý Sticker Packs trong Admin Web
+
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Tính năng cho phép Admin quản lý các sticker packs:
+- Xem danh sách tất cả sticker packs
+- Thêm pack mới
+- Chỉnh sửa pack
+- Xóa pack
+- Toggle trạng thái publish/unpublish
+- Upload stickers trực tiếp
+
+
+================================================================================
+2. GIAO DIỆN
+================================================================================
+
+2.1. LAYOUT CHÍNH
+-----------------
+- Sidebar navigation (bên trái)
+- Action bar (search, filter, add button)
+- Grid hiển thị sticker packs
+- Modals cho add/edit/delete
+
+
+2.2. STICKER PACK CARD
+----------------------
+Mỗi pack hiển thị:
+- Icon/thumbnail (hoặc emoji nếu chưa có)
+- Tên pack
+- Mô tả ngắn
+- Badges: Official/User/Trending, Featured, Free/Paid, Hidden
+- Stats: số stickers, số downloads
+- Actions: toggle visibility, edit, delete
+
+
+2.3. BADGES
+-----------
+┌───────────────────────────────────────────────────────────────────────────┐
+│ Badge         │ Màu             │ Điều kiện                              │
+├───────────────────────────────────────────────────────────────────────────┤
+│ Official      │ Primary (blue)  │ type === 'official'                    │
+│ Trending      │ Orange          │ type === 'trending'                    │
+│ User          │ Gray            │ type === 'user'                        │
+│ Nổi bật       │ Yellow/Gold     │ isFeatured === true                    │
+│ Ẩn            │ Dark gray       │ isPublished === false                  │
+│ Miễn phí      │ Green           │ isFree === true                        │
+│ {price}đ      │ Blue            │ isFree === false                       │
+└───────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+3. CHỨC NĂNG
+================================================================================
+
+3.1. TÌM KIẾM VÀ LỌC
+--------------------
+- Search box: tìm theo tên hoặc mô tả
+- Filter dropdown: All / Official / User / Trending
+- Kết quả cập nhật realtime (debounce 300ms)
+
+
+3.2. THÊM PACK MỚI
+------------------
+Click "Thêm Pack mới" → Modal form:
+
+Fields:
+- Tên Pack *       (required)
+- Mô tả            (textarea)
+- Loại Pack        (Official / User / Trending)
+- Giá              (number, disabled nếu miễn phí)
+- Icon Pack        (URL hoặc upload file)
+- Checkbox: Đã xuất bản, Nổi bật, Miễn phí
+
+Stickers Upload:
+- Drag & drop zone
+- Click để chọn files
+- Preview grid với nút xóa
+- Progress bar khi upload
+
+
+3.3. CHỈNH SỬA PACK
+-------------------
+Click icon Edit → Modal form với dữ liệu hiện tại
+Cập nhật các fields và save
+
+
+3.4. XÓA PACK
+-------------
+Click icon Delete → Confirm modal
+- Xóa tất cả stickers trong pack (batch delete)
+- Xóa document pack
+
+
+3.5. TOGGLE PUBLISH
+-------------------
+Click icon Eye → Toggle isPublished
+- Published: Pack hiển thị cho users
+- Unpublished: Pack bị ẩn
+
+
+================================================================================
+4. DATA MODEL
+================================================================================
+
+FIRESTORE COLLECTION: stickerPacks
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Field           │ Type      │ Mô tả                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ name            │ string    │ Tên sticker pack                             │
+│ description     │ string    │ Mô tả                                        │
+│ type            │ string    │ 'official' | 'user' | 'trending'             │
+│ iconUrl         │ string    │ URL icon của pack                            │
+│ price           │ number    │ Giá (VND), 0 nếu miễn phí                    │
+│ isPublished     │ boolean   │ Trạng thái publish                           │
+│ isFeatured      │ boolean   │ Có phải pack nổi bật không                   │
+│ isFree          │ boolean   │ Miễn phí hay trả phí                         │
+│ stickerCount    │ number    │ Số lượng stickers trong pack                 │
+│ downloadCount   │ number    │ Số lượt tải                                  │
+│ creatorId       │ string    │ UID của người tạo                            │
+│ createdAt       │ number    │ Timestamp tạo                                │
+│ updatedAt       │ number    │ Timestamp cập nhật                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+SUBCOLLECTION: stickerPacks/{packId}/stickers
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Field           │ Type      │ Mô tả                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ url             │ string    │ URL sticker (trên VPS)                       │
+│ thumbnailUrl    │ string    │ URL thumbnail                                │
+│ width           │ number    │ Chiều rộng                                   │
+│ height          │ number    │ Chiều cao                                    │
+│ isAnimated      │ boolean   │ Có phải sticker động không                   │
+│ format          │ string    │ 'webp' | 'gif' | 'png' | 'jpg'               │
+│ order           │ number    │ Thứ tự trong pack                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+5. UPLOAD STICKERS
+================================================================================
+
+5.1. UI COMPONENTS
+------------------
+- Upload zone (border dashed, drag & drop)
+- File input (hidden, triggered by zone click)
+- Preview grid (hiển thị stickers đã upload)
+- Progress bar (hiển thị tiến trình upload)
+
+
+5.2. UPLOAD FLOW
+----------------
+1. User chọn/kéo thả files
+2. Validate: image type, size <= 2MB
+3. Tạo preview item (local blob URL)
+4. Upload file lên VPS API
+5. Nhận URL từ response
+6. Lưu vào array uploadedStickers
+7. Update preview (remove loading state)
+
+
+5.3. VPS UPLOAD API
+-------------------
+Endpoint: POST http://163.61.182.20/api/stickers/upload
+
+Request:
+- Content-Type: multipart/form-data
+- Body: sticker (file), userId (string)
+
+Response:
+{
+    "success": true,
+    "sticker": {
+        "id": "uuid",
+        "url": "http://163.61.182.20/user/{userId}/...",
+        "thumbnailUrl": "...",
+        "width": 512,
+        "height": 512,
+        "isAnimated": false,
+        "format": "webp"
+    }
+}
+
+
+================================================================================
+6. FILES LIÊN QUAN
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ File                      │ Chức năng                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ stickers.html             │ Trang quản lý stickers                         │
+│ js/stickers.js            │ Logic CRUD, upload, filtering                  │
+│ css/components.css        │ Styles cho cards, modals, upload zone          │
+│ css/dashboard.css         │ Layout chung (sidebar, content)                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+7. LƯU Ý
+================================================================================
+
+- Stickers được upload lên VPS, không phải Firebase Storage
+- URL stickers trả về là absolute URL từ VPS
+- Khi xóa pack, cần xóa cả stickers subcollection
+- Preview sử dụng local blob URL, sau upload đổi thành VPS URL
+
+
+CẬP NHẬT
+--------
+Ngày tạo: 23/12/2025
