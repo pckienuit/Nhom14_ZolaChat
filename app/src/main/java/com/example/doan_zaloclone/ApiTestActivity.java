@@ -1,5 +1,6 @@
 package com.example.doan_zaloclone;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
@@ -59,6 +60,13 @@ public class ApiTestActivity extends AppCompatActivity {
         btnClear.setOnClickListener(v -> {
             tvResults.setText("");
             appendLog("Logs cleared\n");
+        });
+        
+        // WebSocket Test button
+        Button btnWebSocketTest = findViewById(R.id.btnWebSocketTest);
+        btnWebSocketTest.setOnClickListener(v -> {
+            Intent intent = new Intent(this, WebSocketTestActivity.class);
+            startActivity(intent);
         });
         
         // Display initial info

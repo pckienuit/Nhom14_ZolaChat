@@ -150,6 +150,13 @@
             android:parentActivityName=".MainActivity"
             android:label="API Test" />
             
+        <!-- WebSocket Test Activity -->
+        <activity
+            android:name=".WebSocketTestActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:label="WebSocket Test" />
+            
         <!-- Call Activity -->
         <activity
             android:name=".ui.call.CallActivity"
