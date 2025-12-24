@@ -178,6 +178,121 @@ public class ChatRepository {
     }
 
     /**
+     * Recall a message (set isRecalled flag and change content)
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to recall
+     * @param callback Callback for success/error
+     */
+    public void recallMessage(String conversationId, String messageId, SendMessageCallback callback) {
+        Call<ApiResponse<Message>> call = apiService.recallMessage(conversationId, messageId);
+        
+        call.enqueue(new Callback<ApiResponse<Message>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Message>> call, Response<ApiResponse<Message>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    ApiResponse<Message> apiResponse = response.body();
+                    
+                    if (apiResponse.isSuccess()) {
+                        Log.d("ChatRepository", "Message recalled successfully - ID: " + messageId);
+                        // Backend broadcasts update via WebSocket
+                        callback.onSuccess();
+                    } else {
+                        String error = apiResponse.getMessage() != null 
+                            ? apiResponse.getMessage() 
+                            : "Failed to recall message";
+                        callback.onError(error);
+                    }
+                } else {
+                    callback.onError("HTTP " + response.code());
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Message>> call, Throwable t) {
+                callback.onError(t.getMessage() != null ? t.getMessage() : "Network error");
+            }
+        });
+    }
+    
+    /**
+     * Update message content
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to update
+     * @param newContent New content for the message
+     * @param callback Callback for success/error
+     */
+    public void updateMessage(String conversationId, String messageId, String newContent, SendMessageCallback callback) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("content", newContent);
+        
+        Call<ApiResponse<Message>> call = apiService.updateMessage(conversationId, messageId, updates);
+        
+        call.enqueue(new Callback<ApiResponse<Message>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Message>> call, Response<ApiResponse<Message>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    ApiResponse<Message> apiResponse = response.body();
+                    
+                    if (apiResponse.isSuccess()) {
+                        Log.d("ChatRepository", "Message updated successfully - ID: " + messageId);
+                        // Backend broadcasts update via WebSocket
+                        callback.onSuccess();
+                    } else {
+                        String error = apiResponse.getMessage() != null 
+                            ? apiResponse.getMessage() 
+                            : "Failed to update message";
+                        callback.onError(error);
+                    }
+                } else {
+                    callback.onError("HTTP " + response.code());
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Message>> call, Throwable t) {
+                callback.onError(t.getMessage() != null ? t.getMessage() : "Network error");
+            }
+        });
+    }
+    
+    /**
+     * Delete a message permanently
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to delete
+     * @param callback Callback for success/error
+     */
+    public void deleteMessage(String conversationId, String messageId, SendMessageCallback callback) {
+        Call<ApiResponse<Void>> call = apiService.deleteMessage(conversationId, messageId);
+        
+        call.enqueue(new Callback<ApiResponse<Void>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    ApiResponse<Void> apiResponse = response.body();
+                    
+                    if (apiResponse.isSuccess()) {
+                        Log.d("ChatRepository", "Message deleted successfully - ID: " + messageId);
+                        // Backend broadcasts delete via WebSocket
+                        callback.onSuccess();
+                    } else {
+                        String error = apiResponse.getMessage() != null 
+                            ? apiResponse.getMessage() 
+                            : "Failed to delete message";
+                        callback.onError(error);
+                    }
+                } else {
+                    callback.onError("HTTP " + response.code());
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+                callback.onError(t.getMessage() != null ? t.getMessage() : "Network error");
+            }
+        });
+    }
+    
+    /**
      * Listen to messages in a conversation with real-time updates (LiveData version)
      * @param conversationId ID of the conversation
      * @return LiveData containing Resource with list of messages
@@ -249,51 +364,133 @@ public class ChatRepository {
                     return;
                 }
                 
-                // 2. Setup WebSocket listener for new messages
-                socketManager.setMessageListener(messageData -> {
-                    try {
-                        // Parse JSON to Message object
-                        Message newMessage = parseMessageFromJson(messageData);
-                        
-                        // Only add if from current conversation
-                        String msgConvId = messageData.optString("conversationId");
-                        if (!conversationId.equals(msgConvId)) {
-                            return; // Not for this conversation
-                        }
-                        
-                        String messageId = newMessage.getId();
-                        Log.d("ChatRepository", "WebSocket message received - ID: " + messageId);
-                        
-                        // Remove from pending if it was sent by us
-                        boolean wasPending = false;
-                        synchronized (pendingSentMessageIds) {
-                            wasPending = pendingSentMessageIds.remove(messageId);
-                        }
-                        if (wasPending) {
-                            Log.d("ChatRepository", "Message was pending, removed from set: " + messageId);
-                        }
-                        
-                        // Check if message already exists (avoid duplicates)
-                        boolean exists = false;
-                        for (Message msg : cachedMessages) {
-                            if (msg.getId() != null && msg.getId().equals(messageId)) {
-                                exists = true;
-                                Log.d("ChatRepository", "Duplicate detected! Skipping message: " + messageId);
-                                break;
-                            }
-                        }
-                        
-                        if (!exists) {
-                            Log.d("ChatRepository", "Adding new message from WebSocket: " + messageId);
-                            cachedMessages.add(newMessage);
+                // 2. Setup WebSocket listener for real-time message updates
+                socketManager.setMessageListener(new SocketManager.OnMessageListener() {
+                    @Override
+                    public void onMessageReceived(JSONObject messageData) {
+                        try {
+                            // Parse JSON to Message object
+                            Message newMessage = parseMessageFromJson(messageData);
                             
-                            // CRITICAL: Post to main thread for UI update
-                            mainHandler.post(() -> {
-                                listener.onMessagesChanged(new ArrayList<>(cachedMessages));
-                            });
+                            // Only add if from current conversation
+                            String msgConvId = messageData.optString("conversationId");
+                            if (!conversationId.equals(msgConvId)) {
+                                return; // Not for this conversation
+                            }
+                            
+                            String messageId = newMessage.getId();
+                            Log.d("ChatRepository", "WebSocket message received - ID: " + messageId);
+                            
+                            // Remove from pending if it was sent by us
+                            boolean wasPending = false;
+                            synchronized (pendingSentMessageIds) {
+                                wasPending = pendingSentMessageIds.remove(messageId);
+                            }
+                            if (wasPending) {
+                                Log.d("ChatRepository", "Message was pending, removed from set: " + messageId);
+                            }
+                            
+                            // Check if message already exists (avoid duplicates)
+                            boolean exists = false;
+                            for (Message msg : cachedMessages) {
+                                if (msg.getId() != null && msg.getId().equals(messageId)) {
+                                    exists = true;
+                                    Log.d("ChatRepository", "Duplicate detected! Skipping message: " + messageId);
+                                    break;
+                                }
+                            }
+                            
+                            if (!exists) {
+                                Log.d("ChatRepository", "Adding new message from WebSocket: " + messageId);
+                                cachedMessages.add(newMessage);
+                                
+                                // CRITICAL: Post to main thread for UI update
+                                mainHandler.post(() -> {
+                                    listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                                });
+                            }
+                        } catch (Exception e) {
+                            Log.e("ChatRepository", "Error parsing WebSocket message", e);
                         }
-                    } catch (Exception e) {
-                        Log.e("ChatRepository", "Error parsing WebSocket message", e);
+                    }
+                    
+                    @Override
+                    public void onMessageUpdated(JSONObject messageData) {
+                        try {
+                            String msgConvId = messageData.optString("conversationId");
+                            if (!conversationId.equals(msgConvId)) {
+                                return; // Not for this conversation
+                            }
+                            
+                            String messageId = messageData.optString("id");
+                            Log.d("ChatRepository", "Message updated via WebSocket - ID: " + messageId);
+                            
+                            // Find and update message in cache
+                            boolean found = false;
+                            for (int i = 0; i < cachedMessages.size(); i++) {
+                                Message msg = cachedMessages.get(i);
+                                if (msg.getId() != null && msg.getId().equals(messageId)) {
+                                    // Parse updated message
+                                    Message updatedMessage = parseMessageFromJson(messageData);
+                                    
+                                    // Replace in cache
+                                    cachedMessages.set(i, updatedMessage);
+                                    found = true;
+                                    
+                                    Log.d("ChatRepository", "Message updated in cache - isRecalled: " + 
+                                        updatedMessage.isRecalled() + ", content: " + updatedMessage.getContent());
+                                    
+                                    // Notify UI
+                                    mainHandler.post(() -> {
+                                        listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                                    });
+                                    break;
+                                }
+                            }
+                            
+                            if (!found) {
+                                Log.w("ChatRepository", "Updated message not found in cache: " + messageId);
+                            }
+                        } catch (Exception e) {
+                            Log.e("ChatRepository", "Error handling message update", e);
+                        }
+                    }
+                    
+                    @Override
+                    public void onMessageDeleted(JSONObject messageData) {
+                        try {
+                            String msgConvId = messageData.optString("conversationId");
+                            if (!conversationId.equals(msgConvId)) {
+                                return; // Not for this conversation
+                            }
+                            
+                            String messageId = messageData.optString("messageId");
+                            Log.d("ChatRepository", "Message deleted via WebSocket - ID: " + messageId);
+                            
+                            // Remove message from cache
+                            boolean removed = false;
+                            for (int i = 0; i < cachedMessages.size(); i++) {
+                                Message msg = cachedMessages.get(i);
+                                if (msg.getId() != null && msg.getId().equals(messageId)) {
+                                    cachedMessages.remove(i);
+                                    removed = true;
+                                    
+                                    Log.d("ChatRepository", "Message removed from cache");
+                                    
+                                    // Notify UI
+                                    mainHandler.post(() -> {
+                                        listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                                    });
+                                    break;
+                                }
+                            }
+                            
+                            if (!removed) {
+                                Log.w("ChatRepository", "Deleted message not found in cache: " + messageId);
+                            }
+                        } catch (Exception e) {
+                            Log.e("ChatRepository", "Error handling message deletion", e);
+                        }
                     }
                 });
                 
@@ -331,7 +528,29 @@ public class ChatRepository {
         message.setSenderId(messageData.optString("senderId", null));
         message.setContent(messageData.optString("content", ""));
         message.setType(messageData.optString("type", Message.TYPE_TEXT));
-        message.setTimestamp(messageData.optLong("timestamp", System.currentTimeMillis()));
+        
+        // Parse timestamp - handle both number and Firestore Timestamp object
+        if (messageData.has("timestamp")) {
+            Object tsObj = messageData.opt("timestamp");
+            if (tsObj instanceof Number) {
+                message.setTimestamp(((Number) tsObj).longValue());
+            } else if (tsObj instanceof org.json.JSONObject) {
+                // Firestore Timestamp format: {_seconds: xxx, _nanoseconds: xxx}
+                org.json.JSONObject tsJson = (org.json.JSONObject) tsObj;
+                long seconds = tsJson.optLong("_seconds", 0);
+                message.setTimestamp(seconds * 1000);
+            } else {
+                message.setTimestamp(System.currentTimeMillis());
+            }
+        } else {
+            message.setTimestamp(System.currentTimeMillis());
+        }
+        
+        // Recalled flag
+        if (messageData.has("isRecalled")) {
+            message.setRecalled(messageData.optBoolean("isRecalled", false));
+            Log.d("ChatRepository", "parseMessageFromJson - isRecalled: " + message.isRecalled());
+        }
         
         // Optional fields
         if (messageData.has("senderName")) {

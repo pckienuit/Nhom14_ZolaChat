@@ -133,6 +133,38 @@ public class SocketManager {
             }
         });
         
+        // Message updated event (for recall and edit)
+        socket.on("message_updated", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject messageData = (JSONObject) args[0];
+                    Log.d(TAG, "✏️ Message updated: " + messageData.toString());
+                    
+                    if (messageListener != null) {
+                        messageListener.onMessageUpdated(messageData);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing updated message", e);
+                }
+            }
+        });
+        
+        // Message deleted event
+        socket.on("message_deleted", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject messageData = (JSONObject) args[0];
+                    Log.d(TAG, "🗑️ Message deleted: " + messageData.toString());
+                    
+                    if (messageListener != null) {
+                        messageListener.onMessageDeleted(messageData);
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "Error parsing deleted message", e);
+                }
+            }
+        });
+        
         // Typing indicator event
         socket.on("user_typing", args -> {
             if (args.length > 0) {
@@ -237,6 +269,8 @@ public class SocketManager {
     
     public interface OnMessageListener {
         void onMessageReceived(JSONObject messageData);
+        void onMessageUpdated(JSONObject messageData);
+        void onMessageDeleted(JSONObject messageData);
     }
     
     public interface OnTypingListener {

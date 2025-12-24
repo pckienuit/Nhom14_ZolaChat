@@ -103,19 +103,50 @@ public class WebSocketTestActivity extends AppCompatActivity {
             }
         });
         
-        // Message listener
-        socketManager.setMessageListener(messageData -> {
-            runOnUiThread(() -> {
-                try {
-                    appendLog("📨 NEW MESSAGE:\n");
-                    appendLog("  Content: " + messageData.optString("content", "N/A") + "\n");
-                    appendLog("  From: " + messageData.optString("senderId", "N/A") + "\n");
-                    appendLog("  Type: " + messageData.optString("type", "N/A") + "\n");
-                    appendLog("  Raw: " + messageData.toString() + "\n\n");
-                } catch (Exception e) {
-                    appendLog("Error parsing message: " + e.getMessage() + "\n");
-                }
-            });
+        // Message listener - now implements all 3 methods
+        socketManager.setMessageListener(new SocketManager.OnMessageListener() {
+            @Override
+            public void onMessageReceived(JSONObject messageData) {
+                runOnUiThread(() -> {
+                    try {
+                        appendLog("📨 NEW MESSAGE:\n");
+                        appendLog("  Content: " + messageData.optString("content", "N/A") + "\n");
+                        appendLog("  From: " + messageData.optString("senderId", "N/A") + "\n");
+                        appendLog("  Type: " + messageData.optString("type", "N/A") + "\n");
+                        appendLog("  Raw: " + messageData.toString() + "\n\n");
+                    } catch (Exception e) {
+                        appendLog("Error parsing message: " + e.getMessage() + "\n");
+                    }
+                });
+            }
+            
+            @Override
+            public void onMessageUpdated(JSONObject messageData) {
+                runOnUiThread(() -> {
+                    try {
+                        appendLog("✏️ MESSAGE UPDATED:\n");
+                        appendLog("  ID: " + messageData.optString("id", "N/A") + "\n");
+                        appendLog("  New Content: " + messageData.optString("content", "N/A") + "\n");
+                        appendLog("  Is Recalled: " + messageData.optBoolean("isRecalled", false) + "\n");
+                        appendLog("  Raw: " + messageData.toString() + "\n\n");
+                    } catch (Exception e) {
+                        appendLog("Error parsing updated message: " + e.getMessage() + "\n");
+                    }
+                });
+            }
+            
+            @Override
+            public void onMessageDeleted(JSONObject messageData) {
+                runOnUiThread(() -> {
+                    try {
+                        appendLog("🗑️ MESSAGE DELETED:\n");
+                        appendLog("  ID: " + messageData.optString("messageId", "N/A") + "\n");
+                        appendLog("  Raw: " + messageData.toString() + "\n\n");
+                    } catch (Exception e) {
+                        appendLog("Error parsing deleted message: " + e.getMessage() + "\n");
+                    }
+                });
+            }
         });
         
         // Typing listener

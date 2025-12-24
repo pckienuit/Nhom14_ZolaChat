@@ -98,6 +98,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         void onReactionStatsClick(Message message);
     }
     
+    public interface OnMessageEditListener {
+        void onEditMessage(Message message);
+    }
+    
+    public interface OnMessageDeleteListener {
+        void onDeleteMessage(Message message);
+    }
+    
     public interface OnPollInteractionListener {
         void onVotePoll(Message message, String optionId);
         void onClosePoll(Message message);
@@ -109,6 +117,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     private OnMessageRecallListener recallListener;
     private OnMessageForwardListener forwardListener;
     private OnMessageReactionListener reactionListener;
+    private OnMessageEditListener editListener;
+    private OnMessageDeleteListener deleteListener;
     private OnPollInteractionListener pollInteractionListener;
 
     public MessageAdapter(List<Message> messages, String currentUserId) {
@@ -154,6 +164,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     
     public void setOnPollInteractionListener(OnPollInteractionListener listener) {
         this.pollInteractionListener = listener;
+    }
+    
+    public void setOnMessageEditListener(OnMessageEditListener listener) {
+        this.editListener = listener;
+    }
+    
+    public void setOnMessageDeleteListener(OnMessageDeleteListener listener) {
+        this.deleteListener = listener;
     }
     
     public void setPinnedMessageIds(java.util.List<String> pinnedIds) {
@@ -337,19 +355,19 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         boolean isHighlighted = message.getId() != null && message.getId().equals(highlightedMessageId);
         
         if (holder instanceof SentMessageViewHolder) {
-            ((SentMessageViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
+            ((SentMessageViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof ReceivedMessageViewHolder) {
-            ((ReceivedMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
+            ((ReceivedMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof ImageSentViewHolder) {
-            ((ImageSentViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
+            ((ImageSentViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof LiveLocationMessageViewHolder) {
             ((LiveLocationMessageViewHolder) holder).bind(message, currentUserId);
         } else if (holder instanceof ImageReceivedViewHolder) {
-            ((ImageReceivedViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
+            ((ImageReceivedViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof FileMessageSentViewHolder) {
-            ((FileMessageSentViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
+            ((FileMessageSentViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof FileMessageReceivedViewHolder) {
-            ((FileMessageReceivedViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
+            ((FileMessageReceivedViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof CallHistoryViewHolder) {
             ((CallHistoryViewHolder) holder).bind(message);
         } else if (holder instanceof PollMessageViewHolder) {
@@ -359,7 +377,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         } else if (holder instanceof LocationMessageViewHolder) {
             ((LocationMessageViewHolder) holder).bind(message);
         } else if (holder instanceof StickerMessageViewHolder) {
-            ((StickerMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, currentUserId, isPinned, isHighlighted, reactionListener);
+            ((StickerMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof RecalledMessageViewHolder) {
             // Recalled messages just display static text, no binding needed
         }
@@ -386,16 +404,56 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
         }
         
-        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new MessageDiffCallback(this.messages, filteredMessages));
+        // Save old list for DiffUtil comparison
+        List<Message> oldMessages = new java.util.ArrayList<>(this.messages);
+        
+        // Check if any message has changed isRecalled status (ViewType change requires full rebind)
+        boolean hasRecalledChange = false;
+        for (int i = 0; i < oldMessages.size() && i < filteredMessages.size(); i++) {
+            Message oldMsg = oldMessages.get(i);
+            Message newMsg = filteredMessages.get(i);
+            if (oldMsg.getId() != null && newMsg.getId() != null && oldMsg.getId().equals(newMsg.getId())) {
+                if (oldMsg.isRecalled() != newMsg.isRecalled()) {
+                    hasRecalledChange = true;
+                    android.util.Log.d("MessageAdapter", "Detected recall change for message: " + oldMsg.getId());
+                    break;
+                }
+            }
+        }
+        
+        // Update the messages list
         this.messages = filteredMessages;
-        diffResult.dispatchUpdatesTo(this);
+        
+        try {
+            if (hasRecalledChange) {
+                // ViewType changed - need full rebind to avoid inconsistency
+                android.util.Log.d("MessageAdapter", "Using notifyDataSetChanged due to recall status change");
+                notifyDataSetChanged();
+            } else {
+                // Normal diff update
+                DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new MessageDiffCallback(oldMessages, filteredMessages));
+                diffResult.dispatchUpdatesTo(this);
+            }
+        } catch (Exception e) {
+            // Fallback to notifyDataSetChanged if DiffUtil fails
+            android.util.Log.e("MessageAdapter", "DiffUtil error, using notifyDataSetChanged", e);
+            notifyDataSetChanged();
+        }
     }
 
     public List<Message> getMessages() {
         return messages;
     }
     
-    private static void showMessageContextMenu(View view, Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, boolean isPinned, String currentUserId) {
+    private static void showMessageContextMenu(View view, Message message, 
+                                               OnMessageLongClickListener listener, 
+                                               OnMessageReplyListener replyListener, 
+                                               OnMessageRecallListener recallListener, 
+                                               OnMessageForwardListener forwardListener,
+                                               OnMessageEditListener editListener,
+                                               OnMessageDeleteListener deleteListener,
+                                               boolean isPinned, 
+                                               String currentUserId) {
         // Don't show context menu for recalled messages
         if (message.isRecalled()) {
             return;
@@ -416,7 +474,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             popup.getMenu().add(0, 1, 0, "📌 Ghim tin nhắn");
         }
         
-        // Add recall option (if message can be recalled)
+        // Add recall option (if message can be recalled - only for sender)
         if (message.canBeRecalled(currentUserId)) {
             popup.getMenu().add(0, 4, 0, "🔄 Thu hồi");
         }
@@ -711,7 +769,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             replyToContent = itemView.findViewById(R.id.replyToContent);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, OnMessageEditListener editListener, OnMessageDeleteListener deleteListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
             this.listener = listener;
             this.replyListener = replyListener;
             this.recallListener = recallListener;
@@ -759,7 +817,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             bindReactionIndicator(itemView, message, currentUserId, reactionListener);
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, isPinned, currentUserId);
+                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, editListener, deleteListener, isPinned, currentUserId);
                 return true;
             });
         }
@@ -789,7 +847,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             replyToContent = itemView.findViewById(R.id.replyToContent);
         }
 
-        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
+        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, OnMessageEditListener editListener, OnMessageDeleteListener deleteListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
             this.listener = listener;
             this.replyListener = replyListener;
             this.recallListener = recallListener;
@@ -865,7 +923,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             bindReactionIndicator(itemView, message, currentUserId, reactionListener);
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, isPinned, currentUserId);
+                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, editListener, deleteListener, isPinned, currentUserId);
                 return true;
             });
         }
@@ -886,7 +944,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             forwardedIndicator = itemView.findViewById(R.id.forwardedIndicator);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, OnMessageEditListener editListener, OnMessageDeleteListener deleteListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
             this.listener = listener;
             this.recallListener = recallListener;
             this.currentUserId = currentUserId;
@@ -908,7 +966,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             bindReactionIndicator(itemView, message, currentUserId, reactionListener);
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, isPinned, currentUserId);
+                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, editListener, deleteListener, isPinned, currentUserId);
                 return true;
             });
         }
@@ -931,7 +989,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             forwardedIndicator = itemView.findViewById(R.id.forwardedIndicator);
         }
 
-        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
+        public void bind(Message message, boolean isGroupChat, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, OnMessageEditListener editListener, OnMessageDeleteListener deleteListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
             this.listener = listener;
             this.recallListener = recallListener;
             this.currentUserId = currentUserId;
@@ -987,7 +1045,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             bindReactionIndicator(itemView, message, currentUserId, reactionListener);
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, isPinned, currentUserId);
+                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, editListener, deleteListener, isPinned, currentUserId);
                 return true;
             });
         }
@@ -1012,7 +1070,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             forwardedIndicator = itemView.findViewById(R.id.forwardedIndicator);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, OnMessageEditListener editListener, OnMessageDeleteListener deleteListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
             this.listener = listener;
             this.recallListener = recallListener;
             this.currentUserId = currentUserId;
@@ -1047,7 +1105,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             itemView.setOnClickListener(v -> openFile(message));
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, isPinned, currentUserId);
+                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, null, null, isPinned, currentUserId);
                 return true;
             });
         }
@@ -1136,7 +1194,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             forwardedIndicator = itemView.findViewById(R.id.forwardedIndicator);
         }
 
-        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
+        public void bind(Message message, OnMessageLongClickListener listener, OnMessageReplyListener replyListener, OnReplyPreviewClickListener previewClickListener, OnMessageRecallListener recallListener, OnMessageForwardListener forwardListener, OnMessageEditListener editListener, OnMessageDeleteListener deleteListener, String currentUserId, boolean isPinned, boolean isHighlighted, OnMessageReactionListener reactionListener) {
             this.listener = listener;
             this.recallListener = recallListener;
             this.currentUserId = currentUserId;
@@ -1171,7 +1229,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             itemView.setOnClickListener(v -> openFile(message));
             
             itemView.setOnLongClickListener(v -> {
-                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, isPinned, currentUserId);
+                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, editListener, deleteListener, isPinned, currentUserId);
                 return true;
             });
         }
@@ -1311,6 +1369,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
             Message oldMessage = oldList.get(oldItemPosition);
             Message newMessage = newList.get(newItemPosition);
+            
+            // CRITICAL: Check recalled status first - this triggers UI update for recall
+            if (oldMessage.isRecalled() != newMessage.isRecalled()) {
+                return false;
+            }
             
             // Safe null comparison for content (poll messages may have null content)
             String oldContent = oldMessage.getContent();
@@ -2520,6 +2583,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                         OnReplyPreviewClickListener replyPreviewClickListener,
                         OnMessageRecallListener recallListener,
                         OnMessageForwardListener forwardListener,
+                        OnMessageEditListener editListener,
+                        OnMessageDeleteListener deleteListener,
                         String currentUserId,
                         boolean isPinned,
                         boolean isHighlighted,
@@ -2566,7 +2631,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             // Long click for context menu
             itemView.setOnLongClickListener(v -> {
                 showMessageContextMenu(v, message, longClickListener, replyListener, 
-                        recallListener, forwardListener, isPinned, currentUserId);
+                        recallListener, forwardListener, editListener, deleteListener, isPinned, currentUserId);
                 return true;
             });
         }

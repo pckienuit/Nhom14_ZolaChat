@@ -10,6 +10,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
@@ -1704,7 +1705,7 @@ public class RoomActivity extends AppCompatActivity {
     }
     
     /**
-     * Recall a message via ChatRepository
+     * Recall a message via ChatRepository (using REST API)
      */
     private void recallMessage(Message message) {
         if (chatRepository == null || conversationId == null) {
@@ -1712,10 +1713,31 @@ public class RoomActivity extends AppCompatActivity {
             return;
         }
         
-        chatRepository.recallMessage(conversationId, message.getId(), new ChatRepository.RecallMessageCallback() {
+        // Use the API-based recall method
+        chatRepository.recallMessage(conversationId, message.getId(), new ChatRepository.SendMessageCallback() {
             @Override
             public void onSuccess() {
                 Toast.makeText(RoomActivity.this, "Đã thu hồi tin nhắn", Toast.LENGTH_SHORT).show();
+                
+                // Update UI immediately without waiting for WebSocket
+                // Find and update the message in local list
+                if (messages != null) {
+                    for (int i = 0; i < messages.size(); i++) {
+                        Message msg = messages.get(i);
+                        if (msg.getId() != null && msg.getId().equals(message.getId())) {
+                            // Create updated message with recalled state
+                            msg.setRecalled(true);
+                            msg.setContent("Tin nhắn đã bị thu hồi");
+                            
+                            // Update adapter
+                            List<Message> updatedMessages = new java.util.ArrayList<>(messages);
+                            messageAdapter.updateMessages(updatedMessages);
+                            
+                            android.util.Log.d("RoomActivity", "UI updated after recall - message: " + message.getId());
+                            break;
+                        }
+                    }
+                }
             }
             
             @Override

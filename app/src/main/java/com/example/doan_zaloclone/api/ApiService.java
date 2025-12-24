@@ -67,8 +67,27 @@ public interface ApiService {
         @Body SendMessageRequest messageRequest
     );
     
+    @POST("chats/{conversationId}/messages/{messageId}/recall")
+    Call<ApiResponse<Message>> recallMessage(
+        @Path("conversationId") String conversationId,
+        @Path("messageId") String messageId
+    );
+    
+    @PUT("chats/{conversationId}/messages/{messageId}")
+    Call<ApiResponse<Message>> updateMessage(
+        @Path("conversationId") String conversationId,
+        @Path("messageId") String messageId,
+        @Body Map<String, Object> updates
+    );
+    
+    @DELETE("chats/{conversationId}/messages/{messageId}")
+    Call<ApiResponse<Void>> deleteMessage(
+        @Path("conversationId") String conversationId,
+        @Path("messageId") String messageId
+    );
+    
     @PUT("chats/messages/{messageId}")
-    Call<ApiResponse<Void>> updateMessage(
+    Call<ApiResponse<Void>> updateMessageOld(
         @Path("messageId") String messageId,
         @Body Map<String, Object> updates
     );
@@ -80,7 +99,7 @@ public interface ApiService {
     );
     
     @DELETE("chats/messages/{messageId}")
-    Call<ApiResponse<Void>> deleteMessage(
+    Call<ApiResponse<Void>> deleteMessageOld(
         @Path("messageId") String messageId,
         @Query("conversationId") String conversationId
     );

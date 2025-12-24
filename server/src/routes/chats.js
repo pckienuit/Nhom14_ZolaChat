@@ -132,4 +132,43 @@ router.post('/:conversationId/messages', authenticateUser, async (req, res) => {
   }
 });
 
+// Recall a message
+router.post('/:conversationId/messages/:messageId/recall', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId, messageId } = req.params;
+    
+    const messageRef = db.collection('conversations').doc(conversationId)
+      .collection('messages').doc(messageId);
+    
+    const messageDoc = await messageRef.get();
+    if (!messageDoc.exists) {
+      return res.status(404).json({ success: false, message: 'Message not found' });
+    }
+    
+    // Update message to recalled state
+    await messageRef.update({
+      isRecalled: true,
+      content: 'Tin nhắn đã bị thu hồi'
+    });
+    
+    // Get updated message
+    const updatedDoc = await messageRef.get();
+    const updatedMessage = { id: updatedDoc.id, ...updatedDoc.data(), conversationId };
+    
+    // Broadcast update via WebSocket
+    if (global.io) {
+      console.log('Broadcasting message_updated for recall:', updatedMessage.id, 'to room:', `conversation:${conversationId}`);
+      global.io.to(`conversation:${conversationId}`).emit('message_updated', updatedMessage);
+    }
+    
+    res.json({ 
+      success: true, 
+      data: updatedMessage 
+    });
+  } catch (error) {
+    console.error('Recall error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 module.exports = router;
