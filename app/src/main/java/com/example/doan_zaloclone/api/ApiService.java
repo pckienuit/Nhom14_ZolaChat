@@ -52,7 +52,14 @@ public interface ApiService {
         @Body Map<String, Boolean> banData
     );
     
+    @POST("users/search")
+    Call<Map<String, Object>> searchUsers(@Body Map<String, String> searchQuery);
+    
+    @POST("users/batch")
+    Call<Map<String, Object>> getUsersBatch(@Body Map<String, java.util.List<String>> userIds);
+    
     // ========== Messages ==========
+
     
     @GET("chats/{conversationId}/messages")
     Call<MessageListResponse> getMessages(

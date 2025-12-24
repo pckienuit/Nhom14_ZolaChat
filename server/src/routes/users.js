@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateUser, requireAdmin, db } = require('../middleware/auth');
+const { authenticateUser, requireAdmin, db, admin } = require('../middleware/auth');
 
 router.get('/:userId', authenticateUser, async (req, res) => {
   try {
@@ -73,6 +73,90 @@ router.post('/:userId/ban', authenticateUser, requireAdmin, async (req, res) => 
     await db.collection('users').doc(userId).update(updateData);
     res.json({ success: true });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Search users by name or email
+router.post('/search', authenticateUser, async (req, res) => {
+  try {
+    const { query } = req.body;
+    if (!query || query.length < 2) {
+      return res.json({ users: [] });
+    }
+    
+    const queryLower = query.toLowerCase();
+    
+    // Search by name (case-insensitive)
+    const nameSnapshot = await db.collection('users')
+      .orderBy('nameLowerCase')
+      .startAt(queryLower)
+      .endAt(queryLower + '\uf8ff')
+      .limit(20)
+      .get();
+    
+    // Search by email
+    const emailSnapshot = await db.collection('users')
+      .where('email', '>=', queryLower)
+      .where('email', '<=', queryLower + '\uf8ff')
+      .limit(20)
+      .get();
+    
+    // Merge results and remove duplicates
+    const usersMap = new Map();
+    nameSnapshot.forEach(doc => {
+      usersMap.set(doc.id, { id: doc.id, ...doc.data() });
+    });
+    emailSnapshot.forEach(doc => {
+      if (!usersMap.has(doc.id)) {
+        usersMap.set(doc.id, { id: doc.id, ...doc.data() });
+      }
+    });
+    
+    const users = Array.from(usersMap.values());
+    
+    console.log(`🔍 Search query: "${query}" - Found ${users.length} users`);
+    res.json({ users });
+  } catch (error) {
+    console.error('Search error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get multiple users by IDs (batch)
+router.post('/batch', authenticateUser, async (req, res) => {
+  try {
+    const { userIds } = req.body;
+    
+    if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
+      return res.json({ users: [] });
+    }
+    
+    // Firestore 'in' query limit is 10, so we need to batch
+    const batchSize = 10;
+    const batches = [];
+    
+    for (let i = 0; i < userIds.length; i += batchSize) {
+      const batch = userIds.slice(i, i + batchSize);
+      batches.push(
+        db.collection('users')
+          .where(admin.firestore.FieldPath.documentId(), 'in', batch)
+          .get()
+      );
+    }
+    
+    const snapshots = await Promise.all(batches);
+    const users = [];
+    
+    snapshots.forEach(snapshot => {
+      snapshot.forEach(doc => {
+        users.push({ id: doc.id, ...doc.data() });
+      });
+    });
+    
+    res.json({ users });
+  } catch (error) {
+    console.error('Batch get users error:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -27,14 +27,33 @@ router.get('/requests', authenticateUser, async (req, res) => {
 
 router.post('/requests', authenticateUser, async (req, res) => {
   try {
-    const { receiverId } = req.body;
+    const { receiverId, senderName, senderEmail } = req.body;
+    
+    // Fetch sender info if not provided
+    let fromUserName = senderName;
+    let fromUserEmail = senderEmail;
+    
+    if (!fromUserName || !fromUserEmail) {
+      const senderDoc = await db.collection('users').doc(req.user.uid).get();
+      if (senderDoc.exists) {
+        const senderData = senderDoc.data();
+        fromUserName = fromUserName || senderData.name;
+        fromUserEmail = fromUserEmail || senderData.email;
+      }
+    }
+    
     const request = {
       senderId: req.user.uid,
       receiverId,
+      fromUserName: fromUserName || 'Unknown User',
+      fromUserEmail: fromUserEmail || '',
       status: 'pending',
       createdAt: Date.now()
     };
+    
     const requestRef = await db.collection('friendRequests').add(request);
+    
+    console.log(`📤 Friend request sent from ${fromUserName} to ${receiverId}`);
     res.json({ success: true, requestId: requestRef.id });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -49,6 +68,8 @@ router.put('/requests/:requestId', authenticateUser, async (req, res) => {
     if (!requestDoc.exists) return res.status(404).json({ error: 'Not found' });
     
     const requestData = requestDoc.data();
+    const io = req.app.get('io');
+    
     if (action === 'accept') {
       const batch = db.batch();
       batch.update(db.collection('users').doc(requestData.senderId), {
@@ -59,11 +80,68 @@ router.put('/requests/:requestId', authenticateUser, async (req, res) => {
       });
       batch.update(db.collection('friendRequests').doc(requestId), { status: 'accepted' });
       await batch.commit();
+      
+      // Notify both users via WebSocket
+      if (io) {
+        io.to(`user:${requestData.senderId}`).emit('friend_request_accepted', {
+          userId: requestData.receiverId,
+          requestId
+        });
+        io.to(`user:${requestData.receiverId}`).emit('friend_added', {
+          userId: requestData.senderId,
+          requestId
+        });
+        console.log('✅ Notified users of friend request acceptance');
+      }
     } else {
       await db.collection('friendRequests').doc(requestId).update({ status: 'rejected' });
+      
+      // Notify sender of rejection
+      if (io) {
+        io.to(`user:${requestData.senderId}`).emit('friend_request_rejected', {
+          userId: requestData.receiverId,
+          requestId
+        });
+      }
     }
     res.json({ success: true });
   } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Remove/unfriend a user
+router.delete('/:friendId', authenticateUser, async (req, res) => {
+  try {
+    const { friendId } = req.params;
+    const userId = req.user.uid;
+    
+    console.log('👋 Removing friendship between', userId, 'and', friendId);
+    
+    const batch = db.batch();
+    
+    // Remove from both users' friends arrays
+    batch.update(db.collection('users').doc(userId), {
+      friends: admin.firestore.FieldValue.arrayRemove(friendId)
+    });
+    batch.update(db.collection('users').doc(friendId), {
+      friends: admin.firestore.FieldValue.arrayRemove(userId)
+    });
+    
+    await batch.commit();
+    
+    // Notify both users via WebSocket
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`user:${userId}`).emit('friend_removed', { userId: friendId });
+      io.to(`user:${friendId}`).emit('friend_removed', { userId });
+      console.log('✅ Notified users of friendship removal');
+    }
+    
+    console.log('✅ Friendship removed');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Error removing friend:', error);
     res.status(500).json({ error: error.message });
   }
 });
