@@ -14,6 +14,7 @@ const conversationRoutes = require('./routes/conversations');
 const callRoutes = require('./routes/calls');
 const friendRoutes = require('./routes/friends');
 const stickerRoutes = require('./routes/stickers');
+const messageRoutes = require('./routes/messages');
 
 const app = express();
 const server = http.createServer(app);
@@ -72,6 +73,8 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/stickers', stickerRoutes);
+app.use('/api/messages', messageRoutes);
+
 
 // 404 handler
 app.use((req, res) => {

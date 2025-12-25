@@ -98,8 +98,29 @@ public interface ApiService {
     Call<ApiResponse<Message>> addReaction(
         @Path("conversationId") String conversationId,
         @Path("messageId") String messageId,
-        @Body Map<String, String> reactionData
+        @Body Map<String, String> reaction
     );
+    
+    // ========== Messages API (Phase 3C-1) ==========
+    
+    // Send message (new API)
+    @POST("messages")
+    Call<Map<String, Object>> sendMessageV2(@Body Map<String, Object> message);
+    
+    // Delete message (new API)
+    @DELETE("messages/{messageId}")
+    Call<Map<String, Object>> deleteMessageV2(
+        @Path("messageId") String messageId,
+        @Query("conversationId") String conversationId
+    );
+    
+    // Update message - edit or recall (new API)
+    @PUT("messages/{messageId}")
+    Call<Map<String, Object>> updateMessageV2(
+        @Path("messageId") String messageId,
+        @Body Map<String, Object> updates
+    );
+
     
     // Remove reaction
     @HTTP(method = "DELETE", path = "chats/{conversationId}/messages/{messageId}/react", hasBody = false)
