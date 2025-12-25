@@ -73,7 +73,15 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
 
     private void initViews(View view) {
         friendsRecyclerView = view.findViewById(R.id.friendsRecyclerView);
-        // Header buttons and rows can be bound here if needed
+        
+        // Find and set click listener for Friend Invitations row
+        View friendRequestsRow = view.findViewById(R.id.clickable_friend_requests);
+        if (friendRequestsRow != null) {
+            friendRequestsRow.setOnClickListener(v -> {
+                Intent intent = new Intent(getActivity(), com.example.doan_zaloclone.ui.contact.FriendRequestActivity.class);
+                startActivity(intent);
+            });
+        }
     }
 
     private void setupRecyclerViews() {
