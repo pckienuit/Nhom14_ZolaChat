@@ -1,5 +1,6 @@
 package com.example.doan_zaloclone.ui.contact;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.widget.ImageView;
 
@@ -24,14 +25,17 @@ public class FriendRequestActivity extends AppCompatActivity {
         setContentView(R.layout.activity_friend_request);
 
         ImageView btnBack = findViewById(R.id.btnBack);
-        ImageView btnSettings = findViewById(R.id.btnSettings);
+        ImageView btnAddFriend = findViewById(R.id.btnAddFriend);
         TabLayout tabLayout = findViewById(R.id.tabLayout);
         ViewPager2 viewPager = findViewById(R.id.viewPager);
 
         btnBack.setOnClickListener(v -> finish());
         
-        // Settings click - maybe show friend settings or privacy
-        // btnSettings.setOnClickListener(v -> ...);
+        // Navigate to Add Friend activity
+        btnAddFriend.setOnClickListener(v -> {
+            Intent intent = new Intent(this, AddFriendActivity.class);
+            startActivity(intent);
+        });
 
         FriendRequestsPagerAdapter adapter = new FriendRequestsPagerAdapter(this);
         viewPager.setAdapter(adapter);
