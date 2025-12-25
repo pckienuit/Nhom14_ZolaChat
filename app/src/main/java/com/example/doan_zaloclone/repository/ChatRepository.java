@@ -122,7 +122,14 @@ public void sendMessage(String conversationId, Message message, SendMessageCallb
     messageData.put("type", message.getType());
     messageData.put("content", message.getContent());
     
-    // Note: Media fields will be added in Phase 3C-2
+    // Add file metadata if present (for FILE, IMAGE, VIDEO, AUDIO types)
+    if (message.getFileName() != null && !message.getFileName().isEmpty()) {
+        messageData.put("fileName", message.getFileName());
+        messageData.put("fileSize", message.getFileSize());
+        if (message.getFileMimeType() != null) {
+            messageData.put("fileMimeType", message.getFileMimeType());
+        }
+    }
     
     Log.d("ChatRepository", "Sending message via new API: " + message.getType());
     

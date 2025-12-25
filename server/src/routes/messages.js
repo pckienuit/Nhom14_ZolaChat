@@ -7,7 +7,7 @@ const { authenticateUser, db, admin } = require('../middleware/auth');
  */
 router.post('/', authenticateUser, async (req, res) => {
   try {
-    const { conversationId, type, content } = req.body;
+    const { conversationId, type, content, fileName, fileSize, fileMimeType } = req.body;
     
     // Validate required fields
     if (!conversationId || !type) {
@@ -26,7 +26,16 @@ router.post('/', authenticateUser, async (req, res) => {
       reactionCounts: {}
     };
     
-    console.log(`📤 Sending message in conversation ${conversationId} from ${req.user.uid}`);
+    // Add file metadata if present (for IMAGE, VIDEO, AUDIO, FILE types)
+    if (fileName) {
+      message.fileName = fileName;
+      message.fileSize = fileSize || 0;
+      if (fileMimeType) {
+        message.fileMimeType = fileMimeType;
+      }
+    }
+    
+    console.log(`📤 Sending ${type} message in conversation ${conversationId} from ${req.user.uid}`);
     
     // Save to Firestore
     const messageRef = await db.collection('conversations')
