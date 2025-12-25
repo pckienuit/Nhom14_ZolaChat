@@ -42,11 +42,17 @@ service cloud.firestore {
     match /conversations/{conversationId} {
        // Allow read if user is a member
        allow read: if request.auth != null && 
-                   (request.auth.uid in resource.data.memberIds || 
+                   (resource.data.memberIds[request.auth.uid] != null || 
+                    request.auth.uid in resource.data.memberIds || 
                     request.auth.uid in resource.data.participantIds);
        
-       // DENY Writes (Must use API)
-       allow create, update, delete: if false;
+       // TEMPORARY: Allow update for Pin/Tags features (not migrated yet)
+       allow update: if request.auth != null && 
+                   (request.auth.uid in resource.data.memberIds || 
+                    request.auth.uid in resource.data.participantIds);
+
+       // DENY Create/Delete (Must use API)
+       allow create, delete: if false;
     }
     
     match /conversations/{conversationId}/messages/{messageId} {
