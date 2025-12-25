@@ -8,10 +8,10 @@ import java.util.List;
  * Represents a collection of stickers
  */
 public class StickerPack {
-    // Pack types
-    public static final String TYPE_OFFICIAL = "OFFICIAL";
-    public static final String TYPE_USER = "USER";
-    public static final String TYPE_TRENDING = "TRENDING";
+    // Pack types - must match admin-web values (lowercase)
+    public static final String TYPE_OFFICIAL = "official";
+    public static final String TYPE_USER = "user";
+    public static final String TYPE_TRENDING = "trending";
 
     private String id;
     private String name;
@@ -192,7 +192,7 @@ public class StickerPack {
      * Check if this is an official pack
      */
     public boolean isOfficial() {
-        return TYPE_OFFICIAL.equals(type) || creatorId == null || creatorId.isEmpty();
+        return TYPE_OFFICIAL.equalsIgnoreCase(type) || creatorId == null || creatorId.isEmpty();
     }
 
     /**
