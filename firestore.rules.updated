@@ -67,10 +67,12 @@ service cloud.firestore {
     // =================================================================
     // 4. FRIEND REQUESTS (API DRIVEN - BLOCK CLIENT WRITES)
     // =================================================================
+    // Server uses: senderId, receiverId (not fromUserId, toUserId)
     match /friendRequests/{requestId} {
+       // Allow read if user is sender or receiver
        allow read: if request.auth != null && 
-                   (resource.data.fromUserId == request.auth.uid || 
-                    resource.data.toUserId == request.auth.uid);
+                   (resource.data.senderId == request.auth.uid || 
+                    resource.data.receiverId == request.auth.uid);
                     
        // DENY Writes (Must use API)
        allow create, update, delete: if false; 
