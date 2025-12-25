@@ -115,7 +115,8 @@ router.post('/:conversationId/messages', authenticateUser, async (req, res) => {
     
     await db.collection('conversations').doc(conversationId).update({
       lastMessage: content || `[${type}]`,
-      lastMessageTime: message.timestamp
+      lastMessageTime: message.timestamp,
+      timestamp: message.timestamp // Update timestamp for sorting
     });
     
     const fullMessage = { id: messageRef.id, ...message };
