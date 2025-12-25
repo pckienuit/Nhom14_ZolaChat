@@ -182,20 +182,20 @@ public interface ApiService {
     @POST("conversations")
     Call<Map<String, Object>> createConversation(@Body Map<String, Object> conversationData);
     
+    // Old methods (backward compatibility)
     @PUT("conversations/{conversationId}")
-    Call<ApiResponse<Void>> updateConversation(
+    Call<ApiResponse<Void>> updateConversationOld(
         @Path("conversationId") String conversationId,
         @Body Map<String, Object> updates
     );
     
     @DELETE("conversations/{conversationId}")
-    Call<ApiResponse<Void>> deleteConversation(@Path("conversationId") String conversationId);
+    Call<ApiResponse<Void>> deleteConversationOld(@Path("conversationId") String conversationId);
     
-    // Group member management
     @POST("conversations/{conversationId}/members")
     Call<ApiResponse<Void>> addGroupMember(
         @Path("conversationId") String conversationId,
-        @Body Map<String, String> memberData  // {userId, userName}
+        @Body Map<String, String> memberData
     );
     
     @HTTP(method = "DELETE", path = "conversations/{conversationId}/members/{userId}", hasBody = false)
@@ -205,7 +205,7 @@ public interface ApiService {
     );
     
     @POST("conversations/{conversationId}/leave")
-    Call<ApiResponse<Void>> leaveGroup(@Path("conversationId") String conversationId);
+    Call<ApiResponse<Void>> leaveGroupOld(@Path("conversationId") String conversationId);
     
     // ========== Calls ==========
     

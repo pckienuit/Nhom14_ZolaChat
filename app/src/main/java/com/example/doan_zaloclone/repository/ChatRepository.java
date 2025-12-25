@@ -1262,7 +1262,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
 
         Log.d(TAG, "Deleting group via API: " + conversationId);
         
-        Call<ApiResponse<Void>> call = apiService.deleteConversation(conversationId);
+        Call<ApiResponse<Void>> call = apiService.deleteConversationOld(conversationId);
         
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override

@@ -433,7 +433,7 @@ public class ConversationRepository {
         
         Log.d(TAG, "Updating group " + conversationId + " - fields: " + updates.keySet());
         
-        Call<ApiResponse<Void>> call = apiService.updateConversation(conversationId, updates);
+        Call<ApiResponse<Void>> call = apiService.updateConversationOld(conversationId, updates);
         
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override
@@ -554,7 +554,7 @@ public class ConversationRepository {
         
         Log.d(TAG, "Leaving group " + conversationId);
         
-        Call<ApiResponse<Void>> call = apiService.leaveGroup(conversationId);
+        Call<ApiResponse<Void>> call = apiService.leaveGroupOld(conversationId);
         
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override
@@ -591,7 +591,7 @@ public class ConversationRepository {
         
         Log.d(TAG, "Deleting conversation " + conversationId);
         
-        Call<ApiResponse<Void>> call = apiService.deleteConversation(conversationId);
+        Call<ApiResponse<Void>> call = apiService.deleteConversationOld(conversationId);
         
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override
