@@ -21,6 +21,11 @@ public class SendContactAction implements QuickAction {
     }
 
     @Override
+    public int getBackgroundColor() {
+        return android.graphics.Color.parseColor("#00BCD4"); // Cyan
+    }
+
+    @Override
     public void execute(Context context, QuickActionCallback callback) {
         // Trigger UI to show contact selection dialog
         callback.onShowUI();

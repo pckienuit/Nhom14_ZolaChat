@@ -20,6 +20,11 @@ public class SendPollAction implements QuickAction {
     }
 
     @Override
+    public int getBackgroundColor() {
+        return android.graphics.Color.parseColor("#009688"); // Teal
+    }
+
+    @Override
     public void execute(Context context, QuickActionCallback callback) {
         // Trigger UI to show poll creation screen
         callback.onShowUI();

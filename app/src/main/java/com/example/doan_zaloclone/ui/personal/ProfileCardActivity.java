@@ -48,15 +48,15 @@ public class ProfileCardActivity extends AppCompatActivity {
     private boolean areFriends = false;
 
     // Views
-    private Toolbar toolbar;
+    private ImageView btnBack; 
     private ImageView coverImage;
     private ImageView avatarImage;
-    private ImageButton btnEditCover;
-    private ImageButton btnEditAvatar;
+    private View btnEditCover; 
+    private View btnEditAvatar;
     private TextView txtDisplayName;
     private TextView txtBio;
-    private LinearLayout nameContainer;
-    private LinearLayout bioContainer;
+    private View nameContainer;
+    private View bioContainer;
     private MaterialButton btnAddFriend;
 
     // Image pickers
@@ -144,47 +144,48 @@ public class ProfileCardActivity extends AppCompatActivity {
                 }
         );
     }
+    
+    // ...
 
     private void initializeViews() {
-        toolbar = findViewById(R.id.toolbar);
+        // Toolbar Views
+        btnBack = findViewById(R.id.btnBack);
+        
         coverImage = findViewById(R.id.coverImage);
         avatarImage = findViewById(R.id.avatarImage);
-        btnEditCover = findViewById(R.id.btnEditCover);
+        
+        // These are invisible in new layout but kept for compatibility or repurposed
+        btnEditCover = findViewById(R.id.btnEditCover); 
         btnEditAvatar = findViewById(R.id.btnEditAvatar);
+        
         txtDisplayName = findViewById(R.id.txtDisplayName);
         txtBio = findViewById(R.id.txtBio);
         nameContainer = findViewById(R.id.nameContainer);
         bioContainer = findViewById(R.id.bioContainer);
         btnAddFriend = findViewById(R.id.btnAddFriend);
-
-        // Hide edit buttons if not editable
-        if (!isEditable) {
-            btnEditCover.setVisibility(View.GONE);
-            btnEditAvatar.setVisibility(View.GONE);
-            nameContainer.setClickable(false);
-            bioContainer.setClickable(false);
-        }
     }
 
     private void setupToolbar() {
-        setSupportActionBar(toolbar);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setTitle("Trang cá nhân");
-        }
-        toolbar.setNavigationOnClickListener(v -> finish());
+         if (btnBack != null) {
+             btnBack.setOnClickListener(v -> finish());
+         }
     }
 
     private void setupClickListeners() {
         if (isEditable) {
-            nameContainer.setOnClickListener(v -> showEditNameDialog());
+            // Allow clicking on name/bio to edit
+            txtDisplayName.setOnClickListener(v -> showEditNameDialog());
             bioContainer.setOnClickListener(v -> showEditBioDialog());
-            btnEditAvatar.setOnClickListener(v -> pickAvatarImage());
-            btnEditCover.setOnClickListener(v -> pickCoverImage());
+            
+            // Allow clicking images to edit
+            avatarImage.setOnClickListener(v -> pickAvatarImage());
+            coverImage.setOnClickListener(v -> pickCoverImage());
         }
 
         // Add friend button click listener
-        btnAddFriend.setOnClickListener(v -> sendFriendRequest());
+        if (btnAddFriend != null) {
+             btnAddFriend.setOnClickListener(v -> sendFriendRequest());
+        }
     }
 
     private void observeViewModel() {

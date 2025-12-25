@@ -19,15 +19,24 @@ import com.example.doan_zaloclone.ui.home.HomeFragment;
 import com.example.doan_zaloclone.ui.login.LoginActivity;
 import com.example.doan_zaloclone.ui.personal.PersonalFragment;
 import com.example.doan_zaloclone.viewmodel.MainViewModel;
-import com.google.android.material.bottomnavigation.BottomNavigationView;
+import android.view.View;
+import android.widget.ImageView;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+import android.graphics.Color;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 
+import androidx.core.view.WindowCompat;
+
 public class MainActivity extends AppCompatActivity {
 
-    private BottomNavigationView bottomNavigationView;
+    private RelativeLayout navMessages, navContact, navGrid, navTimeline, navPersonal;
+    private ImageView iconMessages, iconContact, iconGrid, iconTimeline, iconPersonal;
+    private TextView textMessages, textContact, textGrid, textTimeline, textPersonal;
     private Toolbar toolbar;
     private MainViewModel mainViewModel;
 
@@ -48,6 +57,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Enable Edge-to-Edge
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        
         setContentView(R.layout.activity_main);
 
         // Record login timestamp for force logout comparison
@@ -61,15 +75,28 @@ public class MainActivity extends AppCompatActivity {
             setSupportActionBar(toolbar);
         }
 
-        bottomNavigationView = findViewById(R.id.bottomNavigationView);
+        // Initialize Custom Navigation
+        initCustomBottomNav();
 
         if (savedInstanceState == null) {
             // Show home fragment on first launch
             showFragment(0);
         }
 
-        setupBottomNavigation();
-        observeViewModel();
+        // Setup friend events via WebSocket
+        setupFriendEventListener();
+
+        // Apply window insets for Edge-to-Edge Navigation Bar
+        View bottomNav = findViewById(R.id.bottom_navigation_container);
+        if (bottomNav != null) {
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(bottomNav, (v, windowInsets) -> {
+                androidx.core.graphics.Insets insets = windowInsets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+                // Apply bottom padding = system nav bar height
+                // Keep existing horizontal padding if any (likely 0)
+                v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), insets.bottom);
+                return androidx.core.view.WindowInsetsCompat.CONSUMED;
+            });
+        }
 
         // Start listening for incoming calls
         setupIncomingCallListener();
@@ -81,7 +108,7 @@ public class MainActivity extends AppCompatActivity {
         setupFriendEventListener();
 
         // TEMPORARY: API Test Button - Only in DEBUG builds
-        addApiTestButton();
+        // addApiTestButton();
     }
 
     /**
@@ -397,22 +424,80 @@ public class MainActivity extends AppCompatActivity {
         mainViewModel.logout();
     }
 
-    private void setupBottomNavigation() {
-        bottomNavigationView.setOnItemSelectedListener(item -> {
-            int itemId = item.getItemId();
+    private void initCustomBottomNav() {
+        navMessages = findViewById(R.id.nav_messages);
+        navContact = findViewById(R.id.nav_contact);
+        navGrid = findViewById(R.id.nav_grid);
+        navTimeline = findViewById(R.id.nav_timeline);
+        navPersonal = findViewById(R.id.nav_personal);
 
-            if (itemId == R.id.nav_home) {
-                showFragment(0);
-                return true;
-            } else if (itemId == R.id.nav_contact) {
-                showFragment(1);
-                return true;
-            } else if (itemId == R.id.nav_personal) {
-                showFragment(2);
-                return true;
-            }
-            return false;
-        });
+        iconMessages = findViewById(R.id.icon_messages);
+        iconContact = findViewById(R.id.icon_contact);
+        iconGrid = findViewById(R.id.icon_grid);
+        iconTimeline = findViewById(R.id.icon_timeline);
+        iconPersonal = findViewById(R.id.icon_personal);
+
+        textMessages = findViewById(R.id.text_messages);
+        textContact = findViewById(R.id.text_contact);
+        textGrid = findViewById(R.id.text_grid);
+        textTimeline = findViewById(R.id.text_timeline);
+        textPersonal = findViewById(R.id.text_personal);
+
+        navMessages.setOnClickListener(v -> showFragment(0));
+        navContact.setOnClickListener(v -> showFragment(1));
+        navGrid.setOnClickListener(v -> showFragment(2));
+        navTimeline.setOnClickListener(v -> showFragment(3));
+        navPersonal.setOnClickListener(v -> showFragment(4));
+    }
+
+    private void updateBottomNavUI(int position) {
+        // Reset all to inactive
+        int inactiveColor = Color.parseColor("#757575");
+        int activeColor = Color.parseColor("#0068FF");
+
+        // Messages
+        iconMessages.setColorFilter(inactiveColor);
+        textMessages.setVisibility(View.GONE);
+
+        // Contact
+        iconContact.setColorFilter(inactiveColor);
+        textContact.setVisibility(View.GONE);
+
+        // Grid
+        iconGrid.setColorFilter(inactiveColor);
+        textGrid.setVisibility(View.GONE);
+
+        // Timeline
+        iconTimeline.setColorFilter(inactiveColor);
+        textTimeline.setVisibility(View.GONE);
+
+        // Personal
+        iconPersonal.setColorFilter(inactiveColor);
+        textPersonal.setVisibility(View.GONE);
+
+        // Set active
+        switch (position) {
+            case 0:
+                iconMessages.setColorFilter(activeColor);
+                textMessages.setVisibility(View.VISIBLE);
+                break;
+            case 1:
+                iconContact.setColorFilter(activeColor);
+                textContact.setVisibility(View.VISIBLE);
+                break;
+            case 2:
+                iconGrid.setColorFilter(activeColor);
+                textGrid.setVisibility(View.VISIBLE);
+                break;
+            case 3:
+                iconTimeline.setColorFilter(activeColor);
+                textTimeline.setVisibility(View.VISIBLE);
+                break;
+            case 4:
+                iconPersonal.setColorFilter(activeColor);
+                textPersonal.setVisibility(View.VISIBLE);
+                break;
+        }
     }
 
     private void showFragment(int position) {
@@ -422,19 +507,16 @@ public class MainActivity extends AppCompatActivity {
         transaction.setCustomAnimations(0, 0);
 
         // Hide all fragments first
-        if (homeFragment != null) {
-            transaction.hide(homeFragment);
-        }
-        if (contactFragment != null) {
-            transaction.hide(contactFragment);
-        }
-        if (personalFragment != null) {
-            transaction.hide(personalFragment);
-        }
+        if (homeFragment != null) transaction.hide(homeFragment);
+        if (contactFragment != null) transaction.hide(contactFragment);
+        if (personalFragment != null) transaction.hide(personalFragment);
+        
+        // Update UI
+        updateBottomNavUI(position);
 
         // Show or create the selected fragment
         switch (position) {
-            case 0: // Home
+            case 0: // Home / Messages
                 if (homeFragment == null) {
                     homeFragment = new HomeFragment();
                     transaction.add(R.id.fragmentContainer, homeFragment, "HOME");
@@ -450,7 +532,16 @@ public class MainActivity extends AppCompatActivity {
                     transaction.show(contactFragment);
                 }
                 break;
-            case 2: // Personal
+            case 2: // Grid (Discovery) - Placeholder
+                // For now, reuse Home or show Toast
+                 Toast.makeText(this, "Discovery Coming Soon", Toast.LENGTH_SHORT).show();
+                 // To prevent empty screen, maybe show home? Or just nothing.
+                 // Ideally create a placeholder fragment.
+                break;
+            case 3: // Timeline - Placeholder
+                 Toast.makeText(this, "Timeline Coming Soon", Toast.LENGTH_SHORT).show();
+                break;
+            case 4: // Personal
                 if (personalFragment == null) {
                     personalFragment = new PersonalFragment();
                     transaction.add(R.id.fragmentContainer, personalFragment, "PERSONAL");

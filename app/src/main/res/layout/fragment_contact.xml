@@ -1,128 +1,265 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout 
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/white">
+    android:background="#FFFFFF">
 
-    <TextView
+    <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Contacts"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        android:padding="16dp"
-        android:background="@color/colorPrimary"
-        android:textColor="@color/white" />
+        android:background="#FFFFFF"
+        app:elevation="0dp">
 
-    <!-- Search Section -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="16dp"
-        android:background="@color/white"
-        android:elevation="4dp">
-
-        <EditText
-            android:id="@+id/searchEmailEditText"
-            android:layout_width="0dp"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:hint="Search by email..."
-            android:inputType="textEmailAddress"
-            android:padding="12dp"
-            android:background="@android:drawable/edit_text"
-            android:textSize="14sp" />
+            android:orientation="vertical">
 
-        <Button
-            android:id="@+id/searchButton"
-            android:layout_width="wrap_content"
+            <!-- Zalo-style Header (Blue Part) -->
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_gradient_blue"
+                android:paddingTop="50dp"
+                android:paddingBottom="12dp">
+
+                <!-- Search Bar -->
+                <ImageView
+                    android:id="@+id/btn_search"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_search"
+                    app:tint="#FFFFFF"
+                    android:padding="2dp"
+                    android:layout_marginStart="16dp"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintBottom_toBottomOf="parent"/>
+
+                <TextView
+                    android:id="@+id/tv_search_placeholder"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:text="Tìm kiếm"
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="16sp"
+                    android:layout_marginStart="16dp"
+                    app:layout_constraintStart_toEndOf="@+id/btn_search"
+                    app:layout_constraintTop_toTopOf="@+id/btn_search"
+                    app:layout_constraintBottom_toBottomOf="@+id/btn_search"
+                    app:layout_constraintEnd_toStartOf="@+id/btn_add_friend"/>
+
+                <!-- Add Friend Icon -->
+                <ImageView
+                    android:id="@+id/btn_add_friend"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/ic_add" 
+                    app:tint="#FFFFFF"
+                    android:padding="2dp"
+                    android:layout_marginEnd="16dp"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="@+id/btn_search"
+                    app:layout_constraintBottom_toBottomOf="@+id/btn_search"/>
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+
+            <!-- Tabs Container (White Background) -->
+            <LinearLayout
+                android:id="@+id/bottom_tabs_container"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:orientation="horizontal"
+                android:background="#FFFFFF">
+
+                <!-- Tab: Bạn bè -->
+                <RelativeLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:clickable="true"
+                    android:background="?selectableItemBackground">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Bạn bè"
+                        android:textColor="#000000"
+                        android:textStyle="bold"
+                        android:textSize="14sp"
+                        android:layout_centerInParent="true"/>
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="2dp"
+                        android:background="#0068FF"
+                        android:layout_alignParentBottom="true"
+                        android:layout_marginStart="16dp"
+                        android:layout_marginEnd="16dp"/>
+                </RelativeLayout>
+
+                <!-- Tab: Nhóm -->
+                <RelativeLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:clickable="true"
+                    android:background="?selectableItemBackground">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Nhóm"
+                        android:textColor="#757575"
+                        android:textSize="14sp"
+                        android:layout_centerInParent="true"/>
+                </RelativeLayout>
+
+                <!-- Tab: OA -->
+                <RelativeLayout
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:clickable="true"
+                    android:background="?selectableItemBackground">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="OA"
+                        android:textColor="#757575"
+                        android:textSize="14sp"
+                        android:layout_centerInParent="true"/>
+                </RelativeLayout>
+
+            </LinearLayout>
+        </LinearLayout>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <!-- Scrollable Content -->
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="Search"
-            android:textColor="@color/white"
-            android:backgroundTint="@color/colorPrimary" />
+            android:orientation="vertical"
+            android:paddingBottom="80dp">
 
-    </LinearLayout>
+            <!-- Feature Rows -->
+            <!-- 1. Friend Requests -->
+            <LinearLayout
+                android:id="@+id/clickable_friend_requests"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp"
+                android:background="?selectableItemBackground">
 
-    <!-- Search Results RecyclerView -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/searchResultsRecyclerView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
-        android:visibility="gone"
-        android:clipToPadding="false" />
+                <ImageView
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_friend_request_blue" />
 
-    <!-- Divider -->
-    <View
-        android:id="@+id/divider"
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@color/textSecondary"
-        android:layout_marginTop="8dp"
-        android:visibility="gone" />
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:text="Lời mời kết bạn (12)"
+                    android:textSize="16sp"
+                    android:textColor="#000000"/>
+            </LinearLayout>
 
-    <!-- Friend Requests Section Header -->
-    <TextView
-        android:id="@+id/friendRequestsHeader"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Friend Requests"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:padding="16dp"
-        android:textColor="#000000" />
+            <!-- 2. Birthdays -->
+            <LinearLayout
+                android:id="@+id/clickable_birthdays"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp"
+                android:background="?selectableItemBackground">
 
-    <!-- Friend Requests RecyclerView -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/friendRequestsRecyclerView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingTop="8dp"
-        android:paddingBottom="8dp"
-        android:clipToPadding="false" />
+                <ImageView
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_birthday_blue" />
 
-    <!-- Friends List Section (MOVED TO BOTTOM) -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:padding="16dp">
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:text="Sinh nhật"
+                    android:textSize="16sp"
+                    android:textColor="#000000"/>
+            </LinearLayout>
+            
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="8dp"
+                android:background="#F2F4F7"/>
 
-        <TextView
-            android:id="@+id/friendsLabel"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Bạn bè"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="#000000" />
+            <!-- Filter Chips -->
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:scrollbars="none"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:clipToPadding="false">
 
-        <Button
-            android:id="@+id/createGroupButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="+ Tạo nhóm"
-            android:textColor="@color/white"
-            android:backgroundTint="@color/primary"
-            android:textSize="14sp"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp" />
-    </LinearLayout>
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/friendsRecyclerView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingBottom="16dp"
-        android:clipToPadding="false" />
+                    <!-- Chip: Tất cả -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:text="Tất cả 198"
+                        android:background="@drawable/bg_chip_selected"
+                        android:textColor="#000000"
+                        android:textStyle="bold"
+                        android:textSize="13sp"
+                        android:gravity="center"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"
+                        android:layout_marginEnd="8dp"/>
 
-</LinearLayout>
+                    <!-- Chip: Mới truy cập -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:text="Mới truy cập 36"
+                        android:background="@drawable/bg_chip_unselected"
+                        android:textColor="#000000"
+                        android:textSize="13sp"
+                        android:gravity="center"
+                        android:paddingStart="12dp"
+                        android:paddingEnd="12dp"/>
 
+                </LinearLayout>
+            </HorizontalScrollView>
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#E0E0E0"/>
+
+            <!-- Contact List RecyclerView -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/friendsRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:overScrollMode="never"/>
+
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

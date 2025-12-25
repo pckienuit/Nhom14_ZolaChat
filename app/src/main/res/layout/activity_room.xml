@@ -4,14 +4,16 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/white"
-    android:fitsSystemWindows="true">
+    android:background="@color/zalo_background_gray">
 
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar"
         android:layout_width="0dp"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@color/colorPrimary"
+        android:layout_height="wrap_content"
+        android:minHeight="?attr/actionBarSize"
+        android:background="@drawable/bg_gradient_blue"
+        android:paddingTop="45dp"
+        android:paddingBottom="10dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -20,7 +22,7 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
@@ -29,39 +31,52 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Chat"
-                android:textSize="20sp"
+                android:text="Chat Name"
+                android:textSize="18sp"
                 android:textStyle="bold"
                 android:textColor="@color/white"
                 android:ellipsize="end"
                 android:maxLines="1" />
             
             <ImageButton
-                android:id="@+id/fileManagementButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/ic_file"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/white"
-                android:contentDescription="Quản lý file" />
-            
-            <ImageButton
-                android:id="@+id/videoCallButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/ic_videocam"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/white"
-                android:contentDescription="Video call" />
-            
-            <ImageButton
                 android:id="@+id/voiceCallButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/ic_call"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_phone_outline"
                 android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
                 android:tint="@color/white"
                 android:contentDescription="Voice call" />
+
+            <ImageButton
+                android:id="@+id/videoCallButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_video_call_outline"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
+                android:tint="@color/white"
+                android:contentDescription="Video call" />
+
+            <ImageButton
+                android:id="@+id/menuButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_menu_list" 
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
+                android:tint="@color/white"
+                android:contentDescription="Menu" />
+                
+            <!-- Hidden original buttons for compatibility logic -->
+            <ImageButton
+                 android:id="@+id/fileManagementButton"
+                 android:layout_width="0dp"
+                 android:layout_height="0dp"
+                 android:visibility="gone"/>
 
         </LinearLayout>
 
@@ -84,7 +99,8 @@
         android:id="@+id/messagesRecyclerView"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:padding="16dp"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
         android:clipToPadding="false"
         android:clipChildren="false"
         app:layout_constraintTop_toBottomOf="@id/pinnedMessagesContainer"
@@ -98,6 +114,8 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
+        android:background="@color/white"
+        android:elevation="4dp"
         app:layout_constraintBottom_toTopOf="@id/imagePickerContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -113,59 +131,80 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="8dp"
-            android:background="@color/white"
-            android:elevation="4dp"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="6dp"
             android:visibility="visible">
 
-            <ImageButton
-                android:id="@+id/moreActionsButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="8dp"
-                android:src="@drawable/ic_more_horiz"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/colorPrimary"
-                android:contentDescription="More actions" />
-
-            <ImageButton
-                android:id="@+id/attachImageButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="4dp"
-                android:src="@drawable/ic_image"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/colorPrimary"
-                android:contentDescription="Attach image" />
-
+            <!-- Sticker Button (Left) -->
             <ImageButton
                 android:id="@+id/stickerButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="8dp"
-                android:src="@drawable/ic_sticker"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_sticker_outline"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/colorPrimary"
+                android:tint="#666666"
                 android:contentDescription="Sticker" />
 
+            <!-- Input EditText -->
             <EditText
                 android:id="@+id/messageEditText"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:hint="Type a message..."
-                android:padding="12dp"
-                android:background="@drawable/message_input_background"
-                android:maxLines="4" />
+                android:layout_marginHorizontal="8dp"
+                android:hint="Tin nhắn"
+                android:paddingVertical="8dp"
+                android:paddingHorizontal="12dp"
+                android:background="@drawable/bg_message_input" 
+                android:textSize="16sp"
+                android:maxLines="5"
+                android:inputType="textMultiLine|textCapSentences" />
+            
+             <!-- Right Action Buttons -->
+             <LinearLayout
+                 android:layout_width="wrap_content"
+                 android:layout_height="wrap_content"
+                 android:orientation="horizontal"
+                 android:gravity="center_vertical">
+                 
+                 <ImageButton
+                    android:id="@+id/moreActionsButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_more_horiz"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:tint="#666666"
+                    android:contentDescription="More actions" />
 
-            <ImageButton
-                android:id="@+id/sendButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="8dp"
-                android:src="@drawable/ic_send"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/colorPrimary" />
+                 <ImageButton
+                    android:id="@+id/voiceRecordButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_microphone"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:tint="#666666"
+                    android:contentDescription="Voice record" />
+
+                <ImageButton
+                    android:id="@+id/attachImageButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_gallery_orange" 
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Attach image" />
+                
+                <!-- Send button (initially hidden or replaces mic when typing, but keeping for logic for now) -->
+               <ImageButton
+                    android:id="@+id/sendButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_send_blue"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:visibility="gone"
+                    android:contentDescription="Send" />
+
+             </LinearLayout>
 
         </LinearLayout>
 
@@ -176,8 +215,6 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:padding="8dp"
-            android:background="@color/white"
-            android:elevation="4dp"
             android:visibility="gone"
             android:gravity="center_vertical">
 

@@ -21,6 +21,11 @@ public class SendImageAction implements QuickAction {
     }
 
     @Override
+    public int getBackgroundColor() {
+        return android.graphics.Color.parseColor("#2196F3"); // Blue
+    }
+
+    @Override
     public void execute(Context context, QuickActionCallback callback) {
         // Trigger image picker
         if (context instanceof RoomActivity) {

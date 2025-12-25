@@ -23,6 +23,13 @@ public interface QuickAction {
     String getLabel();
 
     /**
+     * Get the background color resource ID for this action
+     *
+     * @return Color resource ID or HEX color as int
+     */
+    int getBackgroundColor();
+
+    /**
      * Execute this action
      *
      * @param context  Android context
