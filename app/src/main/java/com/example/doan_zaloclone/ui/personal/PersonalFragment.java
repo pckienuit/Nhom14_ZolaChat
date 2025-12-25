@@ -91,6 +91,29 @@ public class PersonalFragment extends Fragment {
                  Toast.makeText(getContext(), "Cài đặt & Quyền riêng tư", Toast.LENGTH_SHORT).show();
             });
         }
+
+        // Logout Button
+        View btnLogout = getView().findViewById(R.id.btnLogout);
+        if (btnLogout != null) {
+            btnLogout.setOnClickListener(v -> showLogoutConfirmation());
+        }
+    }
+
+    private void showLogoutConfirmation() {
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("Đăng xuất")
+                .setMessage("Bạn có chắc chắn muốn đăng xuất?")
+                .setPositiveButton("Đăng xuất", (dialog, which) -> performLogout())
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+
+    private void performLogout() {
+        com.google.firebase.auth.FirebaseAuth.getInstance().signOut();
+        
+        Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.login.LoginActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
     }
 
     private void setupMenuItems() {
