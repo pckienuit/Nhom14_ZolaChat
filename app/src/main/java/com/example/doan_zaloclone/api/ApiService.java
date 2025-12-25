@@ -221,6 +221,9 @@ public interface ApiService {
 
     @GET("friends/requests")
     Call<Map<String, Object>> getFriendRequests();
+    
+    @GET("friends/requests/sent")
+    Call<Map<String, Object>> getSentFriendRequests();
 
     @POST("friends/requests")
     Call<ApiResponse<Void>> sendFriendRequest(@Body Map<String, String> requestData);

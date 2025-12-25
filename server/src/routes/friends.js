@@ -12,6 +12,7 @@ router.get('/', authenticateUser, async (req, res) => {
   }
 });
 
+// GET requests received by user (incoming friend requests)
 router.get('/requests', authenticateUser, async (req, res) => {
   try {
     const snapshot = await db.collection('friendRequests')
@@ -19,6 +20,45 @@ router.get('/requests', authenticateUser, async (req, res) => {
       .where('status', '==', 'pending').get();
     const requests = [];
     snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
+    res.json({ requests });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET requests sent by user (outgoing friend requests)
+router.get('/requests/sent', authenticateUser, async (req, res) => {
+  try {
+    const snapshot = await db.collection('friendRequests')
+      .where('senderId', '==', req.user.uid)
+      .where('status', '==', 'pending').get();
+    
+    const requests = [];
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      
+      // Fetch receiver info for display
+      let receiverName = 'Unknown';
+      let receiverEmail = '';
+      try {
+        const receiverDoc = await db.collection('users').doc(data.receiverId).get();
+        if (receiverDoc.exists) {
+          const receiverData = receiverDoc.data();
+          receiverName = receiverData.name || 'Unknown';
+          receiverEmail = receiverData.email || '';
+        }
+      } catch (e) {
+        console.error('Error fetching receiver info:', e);
+      }
+      
+      requests.push({ 
+        id: doc.id, 
+        ...data,
+        toUserName: receiverName,
+        toUserEmail: receiverEmail
+      });
+    }
+    
     res.json({ requests });
   } catch (error) {
     res.status(500).json({ error: error.message });

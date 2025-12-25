@@ -67,20 +67,20 @@ public class FriendRequestSentAdapter extends RecyclerView.Adapter<FriendRequest
         }
 
         void bind(FriendRequest request) {
-            // For sent requests, we show "To User" name
-            // Assuming FriendRequest model stores it or we need to fetch it?
-            // Current FriendRequest model has 'toUserId' but maybe not 'toUserName'.
-            // Use 'name' field if it exists, or fallback.
+            // For sent requests, show recipient (toUser) info
+            String name = request.getToUserName();
+            if (name == null || name.isEmpty()) {
+                name = "Người dùng";
+            }
             
-            // Checking FriendRequest model from previous file viewing:
-            // request.setFromUserName(...)
-            // It parses from map. It doesn't seem to explicitly store 'toUserName'.
-            
-            String name = request.getName(); // Legacy logic often used 'name' for the counterparty
-            if (name == null || name.isEmpty()) name = "Người dùng (" + request.getToUserId() + ")";
+            String email = request.getToUserEmail();
             
             txtName.setText(name);
-            txtInfo.setText("Muốn kết bạn");
+            if (email != null && !email.isEmpty()) {
+                txtInfo.setText(email);
+            } else {
+                txtInfo.setText("Đang chờ phản hồi");
+            }
 
             btnRecall.setOnClickListener(v -> {
                 if (listener != null) listener.onRecall(request);

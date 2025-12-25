@@ -19,9 +19,9 @@ import com.example.doan_zaloclone.models.FriendRequest;
 import com.example.doan_zaloclone.ui.contact.FriendRequestSentAdapter;
 import com.example.doan_zaloclone.viewmodel.ContactViewModel;
 import com.example.doan_zaloclone.utils.Resource;
+import com.example.doan_zaloclone.websocket.SocketManager;
 import com.google.firebase.auth.FirebaseAuth;
 
-import java.util.ArrayList;
 import java.util.List;
 
 public class FriendRequestSentFragment extends Fragment implements FriendRequestSentAdapter.OnRequestActionListener {
@@ -31,6 +31,9 @@ public class FriendRequestSentFragment extends Fragment implements FriendRequest
     private FriendRequestSentAdapter adapter;
     private ContactViewModel viewModel;
     private String currentUserId;
+    
+    // WebSocket listener for friend events
+    private SocketManager.OnFriendEventListener friendEventListener;
 
     @Nullable
     @Override
@@ -52,30 +55,87 @@ public class FriendRequestSentFragment extends Fragment implements FriendRequest
         viewModel = new ViewModelProvider(this).get(ContactViewModel.class);
         currentUserId = FirebaseAuth.getInstance().getUid();
 
+        // Setup WebSocket listener for friend request updates
+        setupWebSocketListener();
+        
         loadRequests();
+    }
+    
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Refresh when fragment becomes visible (e.g., coming back from other tab/screen)
+        loadRequests();
+    }
+    
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        // Remove WebSocket listener
+        if (friendEventListener != null) {
+            SocketManager.getInstance().setFriendEventListener(null);
+            friendEventListener = null;
+        }
+    }
+    
+    /**
+     * Setup WebSocket listener for friend request events
+     * When a request is rejected/accepted, refresh the list
+     */
+    private void setupWebSocketListener() {
+        friendEventListener = new SocketManager.OnFriendEventListener() {
+            @Override
+            public void onFriendRequestReceived(String senderId, String senderName) {
+                // Not relevant for sent requests
+            }
+
+            @Override
+            public void onFriendRequestAccepted(String userId) {
+                // Request was accepted - reload to remove from pending list
+                android.util.Log.d("FriendRequestSent", "Request accepted, refreshing list");
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> loadRequests());
+                }
+            }
+
+            @Override
+            public void onFriendRequestRejected(String userId) {
+                // Request was rejected - reload to remove from list
+                android.util.Log.d("FriendRequestSent", "Request rejected by: " + userId + ", refreshing list");
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Lời mời kết bạn đã bị từ chối", Toast.LENGTH_SHORT).show();
+                        loadRequests();
+                    });
+                }
+            }
+
+            @Override
+            public void onFriendAdded(String userId) {
+                // Not directly relevant, but refresh anyway
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> loadRequests());
+                }
+            }
+
+            @Override
+            public void onFriendRemoved(String userId) {
+                // Not relevant for sent requests
+            }
+        };
+        
+        SocketManager.getInstance().setFriendEventListener(friendEventListener);
     }
 
     private void loadRequests() {
         if (currentUserId == null) return;
 
-        // Currently re-using getFriendRequests, hoping it returns sent requests too
-        // or uses a different endpoint in future.
-        // For now this might return empty for Sent requests if API doesn't support it.
-        viewModel.getFriendRequests(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+        // Use dedicated API for sent requests
+        viewModel.getSentFriendRequests(currentUserId).observe(getViewLifecycleOwner(), resource -> {
             if (resource.getStatus() == Resource.Status.SUCCESS) {
-                List<FriendRequest> allRequests = resource.getData();
-                List<FriendRequest> sentRequests = new ArrayList<>();
-                
-                if (allRequests != null) {
-                    for (FriendRequest req : allRequests) {
-                        // Filter for requests where I am the sender
-                        if (currentUserId.equals(req.getFromUserId())) {
-                            sentRequests.add(req);
-                        }
-                    }
-                }
+                List<FriendRequest> sentRequests = resource.getData();
 
-                if (!sentRequests.isEmpty()) {
+                if (sentRequests != null && !sentRequests.isEmpty()) {
                     adapter.setRequests(sentRequests);
                     emptyView.setVisibility(View.GONE);
                 } else {
@@ -83,6 +143,11 @@ public class FriendRequestSentFragment extends Fragment implements FriendRequest
                     emptyView.setVisibility(View.VISIBLE);
                     emptyView.setText("Chưa gửi lời mời nào");
                 }
+            } else if (resource.getStatus() == Resource.Status.ERROR) {
+                Toast.makeText(getContext(), "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                adapter.setRequests(null);
+                emptyView.setVisibility(View.VISIBLE);
+                emptyView.setText("Không thể tải danh sách");
             }
         });
     }

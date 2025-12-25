@@ -101,6 +101,15 @@ public class ContactViewModel extends BaseViewModel {
     }
 
     /**
+     * Get sent friend requests for a user (requests user has sent to others)
+     *
+     * @param userId ID of the user
+     */
+    public LiveData<Resource<List<FriendRequest>>> getSentFriendRequests(@NonNull String userId) {
+        return friendRepository.getSentFriendRequests(userId);
+    }
+
+    /**
      * Send a friend request
      *
      * @param fromUserId   Sender user ID

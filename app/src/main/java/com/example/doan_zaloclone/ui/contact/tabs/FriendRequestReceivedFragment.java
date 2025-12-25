@@ -19,6 +19,7 @@ import com.example.doan_zaloclone.models.FriendRequest;
 import com.example.doan_zaloclone.ui.contact.FriendRequestReceivedAdapter;
 import com.example.doan_zaloclone.viewmodel.ContactViewModel;
 import com.example.doan_zaloclone.utils.Resource;
+import com.example.doan_zaloclone.websocket.SocketManager;
 import com.google.firebase.auth.FirebaseAuth;
 
 import java.util.List;
@@ -30,6 +31,9 @@ public class FriendRequestReceivedFragment extends Fragment implements FriendReq
     private FriendRequestReceivedAdapter adapter;
     private ContactViewModel viewModel;
     private String currentUserId;
+    
+    // WebSocket listener for friend events
+    private SocketManager.OnFriendEventListener friendEventListener;
 
     @Nullable
     @Override
@@ -51,7 +55,71 @@ public class FriendRequestReceivedFragment extends Fragment implements FriendReq
         viewModel = new ViewModelProvider(this).get(ContactViewModel.class);
         currentUserId = FirebaseAuth.getInstance().getUid();
 
+        // Setup WebSocket listener for new friend requests
+        setupWebSocketListener();
+        
         loadRequests();
+    }
+    
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Refresh when fragment becomes visible
+        loadRequests();
+    }
+    
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        // Remove WebSocket listener
+        if (friendEventListener != null) {
+            SocketManager.getInstance().setFriendEventListener(null);
+            friendEventListener = null;
+        }
+    }
+    
+    /**
+     * Setup WebSocket listener for new friend request events
+     */
+    private void setupWebSocketListener() {
+        friendEventListener = new SocketManager.OnFriendEventListener() {
+            @Override
+            public void onFriendRequestReceived(String senderId, String senderName) {
+                // New request received - reload list
+                android.util.Log.d("FriendRequestReceived", "New request from: " + senderName);
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), senderName + " muốn kết bạn", Toast.LENGTH_SHORT).show();
+                        loadRequests();
+                    });
+                }
+            }
+
+            @Override
+            public void onFriendRequestAccepted(String userId) {
+                // Not relevant for received requests
+            }
+
+            @Override
+            public void onFriendRequestRejected(String userId) {
+                // Not relevant for received requests
+            }
+
+            @Override
+            public void onFriendAdded(String userId) {
+                // After accepting, refresh to remove from pending
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> loadRequests());
+                }
+            }
+
+            @Override
+            public void onFriendRemoved(String userId) {
+                // Not relevant for received requests
+            }
+        };
+        
+        SocketManager.getInstance().setFriendEventListener(friendEventListener);
     }
 
     private void loadRequests() {
