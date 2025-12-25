@@ -58,10 +58,31 @@ app.use((req, res, next) => {
 
 // Health check
 app.get('/health', (req, res) => {
+  const memUsage = process.memoryUsage();
+  
   res.json({ 
     status: 'ok', 
     timestamp: Date.now(),
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    memory: {
+      rss: Math.round(memUsage.rss / 1024 / 1024) + ' MB',
+      heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024) + ' MB',
+      heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024) + ' MB'
+    },
+    websocket: {
+      connected: io ? io.engine.clientsCount : 0
+    },
+    routes: {
+      auth: '/api/auth',
+      users: '/api/users',
+      chats: '/api/chats',
+      conversations: '/api/conversations',
+      calls: '/api/calls',
+      friends: '/api/friends',
+      stickers: '/api/stickers',
+      messages: '/api/messages'
+    },
+    version: process.env.npm_package_version || '1.0.0'
   });
 });
 
