@@ -133,6 +133,27 @@ public class ConversationRepository {
                 // Broadcast event to UI (same as group_left - removes from list)
                 mainHandler.post(() -> groupLeftEvent.setValue(conversationId));
             }
+            
+            @Override
+            public void onMemberAdded(String conversationId, String userId, String addedBy) {
+                Log.d(TAG, "➕ Member " + userId + " added to conversation: " + conversationId);
+                // Trigger refresh to update member list
+                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+            }
+            
+            @Override
+            public void onMemberRemoved(String conversationId, String userId, String removedBy) {
+                Log.d(TAG, "➖ Member " + userId + " removed from conversation: " + conversationId);
+                // Trigger refresh to update member list
+                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+            }
+            
+            @Override
+            public void onAdminUpdated(String conversationId, String userId, String action, String updatedBy) {
+                Log.d(TAG, "👑 Admin " + action + " for user " + userId + " in conversation: " + conversationId);
+                // Trigger refresh to update admin status
+                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+            }
         });
     }
     

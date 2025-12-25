@@ -437,6 +437,106 @@ public class SocketManager {
                 }
             }
         });
+        
+        // ========== Phase 4B: Group Management Events ==========
+        
+        // Conversation updated event (group name/avatar changed)
+        socket.on("conversation_updated", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String conversationId = data.getString("conversationId");
+                    
+                    Log.d(TAG, "🔄 Conversation updated: " + conversationId);
+                    
+                    if (groupEventListener != null) {
+                        groupEventListener.onConversationUpdated(conversationId);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing conversation_updated event", e);
+                }
+            }
+        });
+        
+        // Member added event
+        socket.on("member_added", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String conversationId = data.getString("conversationId");
+                    String userId = data.getString("userId");
+                    String addedBy = data.getString("addedBy");
+                    
+                    Log.d(TAG, "➕ Member added to " + conversationId + ": " + userId);
+                    
+                    if (groupEventListener != null) {
+                        groupEventListener.onMemberAdded(conversationId, userId, addedBy);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing member_added event", e);
+                }
+            }
+        });
+        
+        // Member removed event
+        socket.on("member_removed", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String conversationId = data.getString("conversationId");
+                    String userId = data.getString("userId");
+                    String removedBy = data.getString("removedBy");
+                    
+                    Log.d(TAG, "➖ Member removed from " + conversationId + ": " + userId);
+                    
+                    if (groupEventListener != null) {
+                        groupEventListener.onMemberRemoved(conversationId, userId, removedBy);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing member_removed event", e);
+                }
+            }
+        });
+        
+        // Member left event
+        socket.on("member_left", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String conversationId = data.getString("conversationId");
+                    String userId = data.getString("userId");
+                    
+                    Log.d(TAG, "🚪 Member left " + conversationId + ": " + userId);
+                    
+                    if (groupEventListener != null) {
+                        groupEventListener.onMemberLeft(conversationId, userId, "");
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing member_left event", e);
+                }
+            }
+        });
+        
+        // Admin updated event (promote/demote)
+        socket.on("admin_updated", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String conversationId = data.getString("conversationId");
+                    String userId = data.getString("userId");
+                    String action = data.getString("action"); // "add" or "remove"
+                    String updatedBy = data.getString("updatedBy");
+                    
+                    Log.d(TAG, "👑 Admin " + action + " in " + conversationId + ": " + userId);
+                    
+                    if (groupEventListener != null) {
+                        groupEventListener.onAdminUpdated(conversationId, userId, action, updatedBy);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing admin_updated event", e);
+                }
+            }
+        });
     }
     
     /**
@@ -589,6 +689,11 @@ public class SocketManager {
         void onConversationCreated(String conversationId);
         void onConversationUpdated(String conversationId);
         void onConversationDeleted(String conversationId);
+        
+        // Phase 4B: New methods for group management
+        void onMemberAdded(String conversationId, String userId, String addedBy);
+        void onMemberRemoved(String conversationId, String userId, String removedBy);
+        void onAdminUpdated(String conversationId, String userId, String action, String updatedBy);
     }
     
     public interface OnFriendEventListener {
