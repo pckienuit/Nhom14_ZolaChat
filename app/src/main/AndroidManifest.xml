@@ -163,6 +163,13 @@
             android:exported="false"
             android:parentActivityName=".MainActivity"
             android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+            
+        <!-- Add Friend Activity -->
+        <activity
+            android:name=".ui.contact.AddFriendActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
 
         <!-- Call Activity -->
         <activity

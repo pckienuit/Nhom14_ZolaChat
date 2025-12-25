@@ -82,6 +82,15 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 startActivity(intent);
             });
         }
+
+        // Add Friend Button
+        View btnAddFriend = view.findViewById(R.id.btn_add_friend);
+        if (btnAddFriend != null) {
+            btnAddFriend.setOnClickListener(v -> {
+                Intent intent = new Intent(getActivity(), com.example.doan_zaloclone.ui.contact.AddFriendActivity.class);
+                startActivity(intent);
+            });
+        }
     }
 
     private void setupRecyclerViews() {
