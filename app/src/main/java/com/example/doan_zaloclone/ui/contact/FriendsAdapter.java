@@ -117,17 +117,15 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
     class ViewHolder extends RecyclerView.ViewHolder {
         private final TextView friendAvatar;
         private final TextView friendName;
-        private final TextView friendEmail;
-        private final Button messageButton;
-        private final Button unfriendButton;
+        private final View btnCall;
+        private final View btnVideoCall;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             friendAvatar = itemView.findViewById(R.id.friendAvatar);
             friendName = itemView.findViewById(R.id.friendName);
-            friendEmail = itemView.findViewById(R.id.friendEmail);
-            messageButton = itemView.findViewById(R.id.messageButton);
-            unfriendButton = itemView.findViewById(R.id.unfriendButton);
+            btnCall = itemView.findViewById(R.id.btnCall);
+            btnVideoCall = itemView.findViewById(R.id.btnVideoCall);
 
             // Click avatar to view profile
             friendAvatar.setOnClickListener(v -> {
@@ -139,25 +137,40 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
                 }
             });
 
-            messageButton.setOnClickListener(v -> {
+            // Click item to chat (default behavior)
+            itemView.setOnClickListener(v -> {
                 int position = getAdapterPosition();
                 if (position != RecyclerView.NO_POSITION && listener != null) {
                     listener.onMessageClick(friends.get(position));
                 }
             });
 
-            unfriendButton.setOnClickListener(v -> {
-                int position = getAdapterPosition();
-                if (position != RecyclerView.NO_POSITION && listener != null) {
-                    listener.onUnfriendClick(friends.get(position));
-                }
-            });
+            // Call button
+            if (btnCall != null) {
+                btnCall.setOnClickListener(v -> {
+                    // TODO: Implement voice call
+                    int position = getAdapterPosition();
+                    if (position != RecyclerView.NO_POSITION && listener != null) {
+                        listener.onMessageClick(friends.get(position)); // Reusing message click for now as placeholder
+                    }
+                });
+            }
+            
+            // Video Call button
+            if (btnVideoCall != null) {
+                btnVideoCall.setOnClickListener(v -> {
+                    // TODO: Implement video call
+                     int position = getAdapterPosition();
+                    if (position != RecyclerView.NO_POSITION && listener != null) {
+                        listener.onMessageClick(friends.get(position)); 
+                    }
+                });
+            }
         }
 
         public void bind(User friend) {
             friendName.setText(friend.getName());
-            friendEmail.setText(friend.getEmail());
-
+            
             if (friend.getName() != null && !friend.getName().isEmpty()) {
                 friendAvatar.setText(String.valueOf(friend.getName().charAt(0)).toUpperCase());
             } else {

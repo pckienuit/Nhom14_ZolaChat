@@ -33,17 +33,7 @@ import java.util.List;
 
 public class ContactFragment extends Fragment implements UserAdapter.OnUserActionListener, FriendsAdapter.OnFriendClickListener {
 
-    private EditText searchEmailEditText;
-    private Button searchButton;
-    private Button createGroupButton;
-    private RecyclerView searchResultsRecyclerView;
-    private RecyclerView friendRequestsRecyclerView;
     private RecyclerView friendsRecyclerView;
-    private View divider;
-    private TextView friendRequestsHeader;
-
-    private UserAdapter userAdapter;
-    private FriendRequestAdapter friendRequestAdapter;
     private FriendsAdapter friendsAdapter;
 
     private ContactViewModel contactViewModel;
@@ -66,17 +56,12 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
 
         initViews(view);
         setupRecyclerViews();
-        setupSearchListener();
+        // setupSearchListener(); // Removed in redesign
         observeViewModel();
-        loadFriendRequests();
-        // Friend event listener is now handled in MainActivity globally
-        // setupFriendEventListener(); - removed to prevent duplicate events
+        // loadFriendRequests(); // Removed, handled by header row now (todo)
 
         return view;
     }
-
-    // Friend event listener is now handled globally in MainActivity
-    // See MainActivity.setupFriendEventListener()
 
     @Override
     public void onResume() {
@@ -87,14 +72,8 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     }
 
     private void initViews(View view) {
-        searchEmailEditText = view.findViewById(R.id.searchEmailEditText);
-        searchButton = view.findViewById(R.id.searchButton);
-        createGroupButton = view.findViewById(R.id.createGroupButton);
-        searchResultsRecyclerView = view.findViewById(R.id.searchResultsRecyclerView);
-        friendRequestsRecyclerView = view.findViewById(R.id.friendRequestsRecyclerView);
         friendsRecyclerView = view.findViewById(R.id.friendsRecyclerView);
-        divider = view.findViewById(R.id.divider);
-        friendRequestsHeader = view.findViewById(R.id.friendRequestsHeader);
+        // Header buttons and rows can be bound here if needed
     }
 
     private void setupRecyclerViews() {
@@ -103,69 +82,16 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         friendsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
         friendsRecyclerView.setAdapter(friendsAdapter);
 
-        // Setup search results RecyclerView
-        userAdapter = new UserAdapter(new ArrayList<>(), this);
-        searchResultsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        searchResultsRecyclerView.setHasFixedSize(true);
-        searchResultsRecyclerView.setAdapter(userAdapter);
-
-        // Setup friend requests RecyclerView
-        friendRequestAdapter = new FriendRequestAdapter(new ArrayList<>(),
-                new FriendRequestAdapter.FriendRequestListener() {
-                    @Override
-                    public void onAccept(FriendRequest request) {
-                        acceptFriendRequest(request);
-                    }
-
-                    @Override
-                    public void onReject(FriendRequest request) {
-                        rejectFriendRequest(request);
-                    }
-                });
-
-        friendRequestsRecyclerView.setLayoutManager(new LinearLayoutManager(getContext()));
-        friendRequestsRecyclerView.setAdapter(friendRequestAdapter);
+        // Search and Friend Request RecyclerViews are removed from this layout
     }
 
     private void observeViewModel() {
-        // Observe search results
+        // Search results logic commented out as UI elements are removed
+        /*
         contactViewModel.getSearchResults().observe(getViewLifecycleOwner(), resource -> {
-            if (resource == null || resource.getData() == null) {
-                searchResultsRecyclerView.setVisibility(View.GONE);
-                divider.setVisibility(View.GONE);
-                return;
-            }
-
-            if (resource.isSuccess()) {
-                List<User> users = resource.getData();
-                String currentUserId = firebaseAuth.getCurrentUser() != null
-                        ? firebaseAuth.getCurrentUser().getUid()
-                        : "";
-
-                // Filter out current user
-                List<User> filteredUsers = new ArrayList<>();
-                for (User user : users) {
-                    if (!currentUserId.equals(user.getId())) {
-                        filteredUsers.add(user);
-                    }
-                }
-
-                if (!filteredUsers.isEmpty()) {
-                    userAdapter.updateUsers(filteredUsers);
-                    searchResultsRecyclerView.setVisibility(View.VISIBLE);
-                    divider.setVisibility(View.VISIBLE);
-
-                    // Check friend request status for each user
-                    for (User user : filteredUsers) {
-                        checkFriendRequestStatus(currentUserId, user.getId());
-                    }
-                }
-            } else if (resource.isError()) {
-                if (getContext() != null) {
-                    Toast.makeText(getContext(), "Error: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
-                }
-            }
+            ...
         });
+        */
 
         // Observe friends list
         String currentUserId = firebaseAuth.getCurrentUser() != null
@@ -189,77 +115,27 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             }
         });
 
-        // Observe friend requests
+        // Friend requests logic commented out as UI elements are removed
+        /*
         contactViewModel.getFriendRequests(currentUserId).observe(getViewLifecycleOwner(), resource -> {
-            if (resource == null) return;
-
-            if (resource.isSuccess()) {
-                List<FriendRequest> requests = resource.getData();
-                if (requests != null) {
-                    Log.d("ContactFragment", "Friend requests loaded: " + requests.size());
-                    friendRequestAdapter.updateRequests(requests);
-                    friendRequestsRecyclerView.requestLayout();
-
-                    // Show/hide friend requests section based on count
-                    if (requests.isEmpty()) {
-                        friendRequestsHeader.setVisibility(View.GONE);
-                        friendRequestsRecyclerView.setVisibility(View.GONE);
-                    } else {
-                        friendRequestsHeader.setVisibility(View.VISIBLE);
-                        friendRequestsRecyclerView.setVisibility(View.VISIBLE);
-                    }
-                }
-            } else if (resource.isError()) {
-                if (getContext() != null) {
-                    Toast.makeText(getContext(), "Error loading friend requests: " + resource.getMessage(),
-                            Toast.LENGTH_SHORT).show();
-                }
-            }
+            ...
         });
+        */
     }
 
+    /*
     private void setupSearchListener() {
-        searchButton.setOnClickListener(v -> {
-            String query = searchEmailEditText.getText().toString().trim();
-            if (query.isEmpty()) {
-                Toast.makeText(getContext(), "Please enter name or email", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            searchUsers(query);
-        });
-
-        createGroupButton.setOnClickListener(v -> {
-            Intent intent = new Intent(getActivity(), com.example.doan_zaloclone.ui.group.CreateGroupActivity.class);
-            startActivity(intent);
-        });
+        ...
     }
 
     private void searchUsers(String query) {
-        if (firebaseAuth.getCurrentUser() == null) {
-            Toast.makeText(getContext(), "Please login first", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        searchButton.setEnabled(false);
-        searchButton.setText("Searching...");
-
-        // Use ViewModel to search
-        contactViewModel.searchUsers(query);
-
-        // Reset button state after a delay (search is asynchronous)
-        searchButton.postDelayed(() -> {
-            searchButton.setEnabled(true);
-            searchButton.setText("Search");
-        }, 1000);
+        ...
     }
 
     private void checkFriendRequestStatus(String fromUserId, String toUserId) {
-        contactViewModel.checkFriendRequestStatus(fromUserId, toUserId).observe(getViewLifecycleOwner(), resource -> {
-            if (resource != null && resource.isSuccess() && resource.getData() != null) {
-                userAdapter.updateFriendRequestStatus(toUserId, resource.getData());
-            }
-        });
+        ...
     }
+    */
 
     @Override
     public void onUserClick(User user) {
@@ -301,49 +177,12 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
 
     @Override
     public void onAddFriendClick(User user) {
-        if (firebaseAuth.getCurrentUser() == null) {
-            Toast.makeText(getContext(), "Please login first", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        String currentUserId = firebaseAuth.getCurrentUser().getUid();
-
-        // Fetch current user's name from Firestore
-        firestoreManager.getFirestore().collection("users").document(currentUserId)
-                .get()
-                .addOnSuccessListener(documentSnapshot -> {
-                    String currentUserName = "User";
-
-                    if (documentSnapshot.exists()) {
-                        User currentUser = documentSnapshot.toObject(User.class);
-                        if (currentUser != null && currentUser.getName() != null) {
-                            currentUserName = currentUser.getName();
-                        }
-                    }
-
-                    // Use ViewModel to send friend request
-                    String finalUserName = currentUserName;
-                    contactViewModel.sendFriendRequest(currentUserId, user.getId(), finalUserName)
-                            .observe(this, resource -> {
-                                if (resource == null) return;
-
-                                if (resource.isSuccess()) {
-                                    if (getActivity() != null) {
-                                        Toast.makeText(getContext(), "Friend request sent to " + user.getName(),
-                                                Toast.LENGTH_SHORT).show();
-                                        userAdapter.updateFriendRequestStatus(user.getId(), "PENDING");
-                                    }
-                                } else if (resource.isError()) {
-                                    if (getContext() != null) {
-                                        Toast.makeText(getContext(), "Error: " + resource.getMessage(),
-                                                Toast.LENGTH_SHORT).show();
-                                    }
-                                }
-                            });
-                })
-                .addOnFailureListener(e -> {
-                    Toast.makeText(getContext(), "Error fetching user info", Toast.LENGTH_SHORT).show();
-                });
+        // TODO: Re-implement add friend logic with new UI
+        /*
+        if (firebaseAuth.getCurrentUser() == null) return;
+        ...
+        */
+        Toast.makeText(getContext(), "Add Friend clicked (Not implemented in new UI)", Toast.LENGTH_SHORT).show();
     }
 
     private void acceptFriendRequest(FriendRequest request) {
@@ -428,7 +267,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         startActivity(intent);
 
         // Clear search
-        searchEmailEditText.setText("");
+        // searchEmailEditText.setText(""); // View removed
         contactViewModel.clearSearchResults();
     }
 
@@ -460,16 +299,12 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     private void reloadFriendData() {
         if (firebaseAuth.getCurrentUser() == null) return;
 
-        String currentUserId = firebaseAuth.getCurrentUser().getUid();
-
-        // Reload friend requests
+        // Reload friend requests (logic commented out for UI)
+        /*
         contactViewModel.getFriendRequests(currentUserId).observe(getViewLifecycleOwner(), resource -> {
-            if (resource != null && resource.isSuccess() && resource.getData() != null) {
-                friendRequestAdapter.updateRequests(resource.getData());
-                friendRequestsHeader.setVisibility(resource.getData().isEmpty() ? View.GONE : View.VISIBLE);
-                friendRequestsRecyclerView.setVisibility(resource.getData().isEmpty() ? View.GONE : View.VISIBLE);
-            }
+             ...
         });
+        */
 
         // Reload friends list
         loadFriends();
@@ -531,28 +366,15 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
      */
     public void onFriendEventReceived(String eventType, String userId) {
         Log.e("ContactFragment", "🔔 onFriendEventReceived: " + eventType + " for user: " + userId);
-
+        
+        // Simplified event handling for now
+        reloadFriendData();
+        
+        /*
         switch (eventType) {
             case "REQUEST_RECEIVED":
-                // New friend request arrived - reload friend requests list
-                Log.e("ContactFragment", "Reloading friend requests...");
-                reloadFriendData();
-                break;
-            case "ACCEPTED":
-                // Update search result to show "Friends" status
-                Log.e("ContactFragment", "Updating status to ACCEPTED for: " + userId);
-                userAdapter.updateFriendRequestStatus(userId, "ACCEPTED");
-                reloadFriendData();
-                break;
-            case "REJECTED":
-                // Update search result to show Add Friend button again
-                Log.e("ContactFragment", "Updating status to REJECTED for: " + userId);
-                userAdapter.updateFriendRequestStatus(userId, "REJECTED");
-                break;
-            case "ADDED":
-            case "REMOVED":
-                reloadFriendData();
-                break;
+                ...
         }
+        */
     }
 }

@@ -108,7 +108,7 @@ public class MainActivity extends AppCompatActivity {
         setupFriendEventListener();
 
         // TEMPORARY: API Test Button - Only in DEBUG builds
-        addApiTestButton();
+        // addApiTestButton();
     }
 
     /**
