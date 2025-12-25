@@ -24,7 +24,6 @@ import com.example.doan_zaloclone.viewmodel.ContactViewModel;
 import com.example.doan_zaloclone.viewmodel.GroupViewModel;
 import com.example.doan_zaloclone.viewmodel.RoomViewModel;
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,7 +35,6 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
     private RoomViewModel roomViewModel;
     private ContactViewModel contactViewModel;
     private GroupMemberAdapter memberAdapter;
-    private FirebaseFirestore firestore;
 
     private String conversationId;
     private String currentUserId;
@@ -49,8 +47,7 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
         binding = ActivityGroupInfoBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // Initialize Firebase and ViewModels
-        firestore = FirebaseFirestore.getInstance();
+        // Initialize ViewModels
         groupViewModel = new ViewModelProvider(this).get(GroupViewModel.class);
         roomViewModel = new ViewModelProvider(this).get(RoomViewModel.class);
         contactViewModel = new ViewModelProvider(this).get(ContactViewModel.class);
@@ -93,7 +90,7 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
     }
 
     private void loadGroupInfo() {
-        firestore.collection("conversations")
+        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations")
                 .document(conversationId)
                 .get()
                 .addOnSuccessListener(documentSnapshot -> {
@@ -158,7 +155,7 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
         int[] loadedCount = {0};
 
         for (String memberId : conversation.getMemberIds()) {
-            firestore.collection("users")
+            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users")
                     .document(memberId)
                     .get()
                     .addOnSuccessListener(documentSnapshot -> {
