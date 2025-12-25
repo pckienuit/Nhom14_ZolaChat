@@ -12,6 +12,7 @@ router.get('/', authenticateUser, async (req, res) => {
   }
 });
 
+// GET requests received by user (incoming friend requests)
 router.get('/requests', authenticateUser, async (req, res) => {
   try {
     const snapshot = await db.collection('friendRequests')
@@ -19,6 +20,45 @@ router.get('/requests', authenticateUser, async (req, res) => {
       .where('status', '==', 'pending').get();
     const requests = [];
     snapshot.forEach(doc => requests.push({ id: doc.id, ...doc.data() }));
+    res.json({ requests });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET requests sent by user (outgoing friend requests)
+router.get('/requests/sent', authenticateUser, async (req, res) => {
+  try {
+    const snapshot = await db.collection('friendRequests')
+      .where('senderId', '==', req.user.uid)
+      .where('status', '==', 'pending').get();
+    
+    const requests = [];
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+      
+      // Fetch receiver info for display
+      let receiverName = 'Unknown';
+      let receiverEmail = '';
+      try {
+        const receiverDoc = await db.collection('users').doc(data.receiverId).get();
+        if (receiverDoc.exists) {
+          const receiverData = receiverDoc.data();
+          receiverName = receiverData.name || 'Unknown';
+          receiverEmail = receiverData.email || '';
+        }
+      } catch (e) {
+        console.error('Error fetching receiver info:', e);
+      }
+      
+      requests.push({ 
+        id: doc.id, 
+        ...data,
+        toUserName: receiverName,
+        toUserEmail: receiverEmail
+      });
+    }
+    
     res.json({ requests });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -184,6 +224,52 @@ router.delete('/:friendId', authenticateUser, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('❌ Error removing friend:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /friends/requests/:requestId - Cancel/recall a sent friend request
+router.delete('/requests/:requestId', authenticateUser, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    
+    // Get the friend request
+    const requestDoc = await db.collection('friendRequests').doc(requestId).get();
+    
+    if (!requestDoc.exists) {
+      return res.status(404).json({ error: 'Friend request not found' });
+    }
+    
+    const requestData = requestDoc.data();
+    
+    // Verify the current user is the sender
+    if (requestData.senderId !== req.user.uid) {
+      return res.status(403).json({ error: 'You can only cancel your own friend requests' });
+    }
+    
+    // Verify status is still pending
+    if (requestData.status !== 'pending') {
+      return res.status(400).json({ error: 'Can only cancel pending requests' });
+    }
+    
+    // Delete the friend request
+    await db.collection('friendRequests').doc(requestId).delete();
+    
+    // Notify receiver via WebSocket that the request was cancelled
+    const io = req.app.get('io');
+    if (io) {
+      console.log(`🔔 Emitting friend_request_cancelled to user:${requestData.receiverId}`);
+      io.to(`user:${requestData.receiverId}`).emit('friend_request_cancelled', {
+        requestId: requestId,
+        senderId: req.user.uid
+      });
+    }
+    
+    console.log(`✅ Friend request cancelled: ${requestId}`);
+    res.json({ success: true, message: 'Friend request cancelled' });
+    
+  } catch (error) {
+    console.error('❌ Error cancelling friend request:', error);
     res.status(500).json({ error: error.message });
   }
 });

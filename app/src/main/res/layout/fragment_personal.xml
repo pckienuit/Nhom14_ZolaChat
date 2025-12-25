@@ -197,6 +197,24 @@
 
             </LinearLayout>
 
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="24dp"/>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLogout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:text="Đăng xuất"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:padding="12dp"
+                app:backgroundTint="#FF3B30"
+                app:cornerRadius="24dp"
+                android:layout_marginBottom="24dp"/>
+
         </LinearLayout>
 
     </androidx.core.widget.NestedScrollView>

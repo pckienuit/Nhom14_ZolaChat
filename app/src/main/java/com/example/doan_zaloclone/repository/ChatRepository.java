@@ -670,6 +670,42 @@ public class ChatRepository {
             message.setOriginalSenderName(messageData.optString("originalSenderName"));
         }
         
+        // Contact (business card) fields
+        if (messageData.has("contactUserId")) {
+            message.setContactUserId(messageData.optString("contactUserId"));
+        }
+        
+        // Location fields
+        if (messageData.has("latitude") && messageData.has("longitude")) {
+            message.setLatitude(messageData.optDouble("latitude", 0.0));
+            message.setLongitude(messageData.optDouble("longitude", 0.0));
+            if (messageData.has("locationName")) {
+                message.setLocationName(messageData.optString("locationName"));
+            }
+            if (messageData.has("locationAddress")) {
+                message.setLocationAddress(messageData.optString("locationAddress"));
+            }
+        }
+        
+        // Live location fields
+        if (messageData.has("liveLocationSessionId")) {
+            message.setLiveLocationSessionId(messageData.optString("liveLocationSessionId"));
+        }
+        
+        // Sticker fields
+        if (messageData.has("stickerId")) {
+            message.setStickerId(messageData.optString("stickerId"));
+            if (messageData.has("stickerPackId")) {
+                message.setStickerPackId(messageData.optString("stickerPackId"));
+            }
+            if (messageData.has("stickerUrl")) {
+                message.setStickerUrl(messageData.optString("stickerUrl"));
+            }
+            if (messageData.has("isStickerAnimated")) {
+                message.setStickerAnimated(messageData.optBoolean("isStickerAnimated", false));
+            }
+        }
+        
         return message;
     }
 

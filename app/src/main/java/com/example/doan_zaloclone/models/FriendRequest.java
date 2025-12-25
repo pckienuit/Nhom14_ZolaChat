@@ -6,6 +6,8 @@ public class FriendRequest {
     private String toUserId;
     private String fromUserName;
     private String fromUserEmail;
+    private String toUserName;      // For sent requests - recipient's name
+    private String toUserEmail;     // For sent requests - recipient's email
     private String status;
     private long timestamp;
 
@@ -66,6 +68,22 @@ public class FriendRequest {
 
     public void setFromUserEmail(String fromUserEmail) {
         this.fromUserEmail = fromUserEmail;
+    }
+
+    public String getToUserName() {
+        return toUserName;
+    }
+
+    public void setToUserName(String toUserName) {
+        this.toUserName = toUserName;
+    }
+
+    public String getToUserEmail() {
+        return toUserEmail;
+    }
+
+    public void setToUserEmail(String toUserEmail) {
+        this.toUserEmail = toUserEmail;
     }
 
     public String getStatus() {

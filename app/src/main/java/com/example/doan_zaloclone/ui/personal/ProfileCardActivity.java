@@ -169,6 +169,68 @@ public class ProfileCardActivity extends AppCompatActivity {
          if (btnBack != null) {
              btnBack.setOnClickListener(v -> finish());
          }
+         
+         View btnMore = findViewById(R.id.btnMore);
+         if (btnMore != null) {
+             btnMore.setOnClickListener(this::showMoreMenu);
+         }
+    }
+
+    private void showMoreMenu(View view) {
+        android.widget.PopupMenu popup = new android.widget.PopupMenu(this, view);
+        
+        // Add options
+        if (isEditable) {
+            // Self profile options
+            popup.getMenu().add("Cập nhật thông tin");
+        } else {
+            // Other user profile options
+            if (areFriends) {
+                 popup.getMenu().add("Xóa bạn bè");
+            }
+             popup.getMenu().add("Chặn người này");
+             popup.getMenu().add("Báo xấu");
+        }
+
+        popup.setOnMenuItemClickListener(item -> {
+            String title = item.getTitle().toString();
+            if (title.equals("Xóa bạn bè")) {
+                showDeleteFriendConfirmation();
+                return true;
+            } else if (title.equals("Cập nhật thông tin")) {
+                showEditNameDialog(); // Reuse existing dialog flow or create a new general one
+                return true;
+            }
+            Toast.makeText(this, "Tính năng " + title + " đang phát triển", Toast.LENGTH_SHORT).show();
+            return false;
+        });
+        
+        popup.show();
+    }
+
+    private void showDeleteFriendConfirmation() {
+        new AlertDialog.Builder(this)
+                .setTitle("Xóa bạn bè")
+                .setMessage("Bạn có chắc chắn muốn xóa người này khỏi danh sách bạn bè?")
+                .setPositiveButton("Xóa", (dialog, which) -> {
+                    if (currentUserId != null && userId != null) {
+                        friendRepository.removeFriend(currentUserId, userId).observe(this, resource -> {
+                            if (resource.isSuccess()) {
+                                Toast.makeText(this, "Đã xóa bạn bè", Toast.LENGTH_SHORT).show();
+                                areFriends = false;
+                                updateAddFriendButtonVisibility();
+                                setResult(RESULT_OK); // Notify caller to refresh
+                                
+                                // Notify via WebSocket if needed, though fragment should handle it.
+                                // Actually, socket event will trigger fragment refresh.
+                            } else {
+                                Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
     }
 
     private void setupClickListeners() {

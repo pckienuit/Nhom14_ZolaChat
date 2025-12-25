@@ -40,6 +40,9 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     private FirebaseAuth firebaseAuth;
     private FirestoreManager firestoreManager; // Still needed for some legacy operations
     private SocketManager socketManager;
+    
+    // WebSocket listener for friend events
+    private SocketManager.OnFriendEventListener friendEventListener;
 
     @Nullable
     @Override
@@ -59,8 +62,21 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         // setupSearchListener(); // Removed in redesign
         observeViewModel();
         // loadFriendRequests(); // Removed, handled by header row now (todo)
+        
+        // Setup WebSocket listener for friend events
+        setupFriendEventListener();
 
         return view;
+    }
+    
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        // Remove WebSocket listener to prevent memory leaks
+        if (friendEventListener != null) {
+            socketManager.removeFriendEventListener(friendEventListener);
+            friendEventListener = null;
+        }
     }
 
     @Override
@@ -70,10 +86,87 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         // Load friends when fragment becomes visible (critical for show/hide pattern)
         loadFriends();
     }
+    
+    /**
+     * Setup WebSocket listener for friend events (added/removed)
+     * This ensures friends list updates in real-time
+     */
+    private void setupFriendEventListener() {
+        friendEventListener = new SocketManager.OnFriendEventListener() {
+            @Override
+            public void onFriendRequestReceived(String senderId, String senderName) {
+                // Not relevant for friends list
+            }
+
+            @Override
+            public void onFriendRequestAccepted(String userId) {
+                // When someone accepts our request, we become friends - reload list
+                Log.d("ContactFragment", "Friend request accepted by: " + userId + ", reloading friends");
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Đã trở thành bạn bè!", Toast.LENGTH_SHORT).show();
+                        loadFriends();
+                    });
+                }
+            }
+
+            @Override
+            public void onFriendRequestRejected(String userId) {
+                // Not relevant for friends list
+            }
+            
+            @Override
+            public void onFriendRequestCancelled(String senderId) {
+                // Not relevant for friends list
+            }
+
+            @Override
+            public void onFriendAdded(String userId) {
+                // New friend added - reload list
+                Log.d("ContactFragment", "Friend added: " + userId + ", reloading friends");
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        loadFriends();
+                    });
+                }
+            }
+
+            @Override
+            public void onFriendRemoved(String userId) {
+                // Friend removed - reload list
+                Log.d("ContactFragment", "Friend removed: " + userId + ", reloading friends");
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Đã xóa bạn bè", Toast.LENGTH_SHORT).show();
+                        loadFriends();
+                    });
+                }
+            }
+        };
+        
+        socketManager.addFriendEventListener(friendEventListener);
+    }
 
     private void initViews(View view) {
         friendsRecyclerView = view.findViewById(R.id.friendsRecyclerView);
-        // Header buttons and rows can be bound here if needed
+        
+        // Find and set click listener for Friend Invitations row
+        View friendRequestsRow = view.findViewById(R.id.clickable_friend_requests);
+        if (friendRequestsRow != null) {
+            friendRequestsRow.setOnClickListener(v -> {
+                Intent intent = new Intent(getActivity(), com.example.doan_zaloclone.ui.contact.FriendRequestActivity.class);
+                startActivity(intent);
+            });
+        }
+
+        // Add Friend Button
+        View btnAddFriend = view.findViewById(R.id.btn_add_friend);
+        if (btnAddFriend != null) {
+            btnAddFriend.setOnClickListener(v -> {
+                Intent intent = new Intent(getActivity(), com.example.doan_zaloclone.ui.contact.AddFriendActivity.class);
+                startActivity(intent);
+            });
+        }
     }
 
     private void setupRecyclerViews() {
@@ -313,6 +406,24 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     @Override
     public void onMessageClick(User friend) {
         onUserClick(friend);
+    }
+
+    @Override
+    public void onFriendLongClick(View view, User friend) {
+        android.widget.PopupMenu popup = new android.widget.PopupMenu(getContext(), view);
+        popup.getMenu().add("Xóa bạn bè");
+        popup.getMenu().add("Chặn người này");
+        
+        popup.setOnMenuItemClickListener(item -> {
+            String title = item.getTitle().toString();
+            if (title.equals("Xóa bạn bè")) {
+                showUnfriendConfirmationDialog(friend);
+                return true;
+            }
+            Toast.makeText(getContext(), "Tính năng " + title + " đang phát triển", Toast.LENGTH_SHORT).show();
+            return false;
+        });
+        popup.show();
     }
 
     @Override
