@@ -596,7 +596,7 @@ public class HomeFragment extends Fragment {
         homeViewModel.getConversationRefreshNeeded().observe(getViewLifecycleOwner(), needsRefresh -> {
             if (needsRefresh != null && needsRefresh) {
                 // DEBUG TOAST
-                if (getContext() != null) android.widget.Toast.makeText(getContext(), "🔔 New message! Updating...", android.widget.Toast.LENGTH_SHORT).show();
+                // if (getContext() != null) android.widget.Toast.makeText(getContext(), "🔔 New message! Updating...", android.widget.Toast.LENGTH_SHORT).show();
 
                 // Get current user ID at the time of refresh
                 if (firebaseAuth.getCurrentUser() != null) {
