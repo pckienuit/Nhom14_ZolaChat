@@ -119,15 +119,7 @@
                          app:layout_constraintTop_toTopOf="parent"
                          app:layout_constraintBottom_toBottomOf="parent"/>
 
-                     <ImageView
-                         android:id="@+id/btnHistory"
-                         android:layout_width="24dp"
-                         android:layout_height="24dp"
-                         android:src="@drawable/ic_history_white"
-                         android:layout_marginEnd="20dp"
-                         app:layout_constraintEnd_toStartOf="@id/btnMore"
-                         app:layout_constraintTop_toTopOf="parent"
-                         app:layout_constraintBottom_toBottomOf="parent"/>
+
 
                 </androidx.constraintlayout.widget.ConstraintLayout>
 

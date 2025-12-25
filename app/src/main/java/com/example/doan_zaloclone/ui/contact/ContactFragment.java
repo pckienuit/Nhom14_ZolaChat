@@ -404,6 +404,24 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     }
 
     @Override
+    public void onFriendLongClick(View view, User friend) {
+        android.widget.PopupMenu popup = new android.widget.PopupMenu(getContext(), view);
+        popup.getMenu().add("Xóa bạn bè");
+        popup.getMenu().add("Chặn người này");
+        
+        popup.setOnMenuItemClickListener(item -> {
+            String title = item.getTitle().toString();
+            if (title.equals("Xóa bạn bè")) {
+                showUnfriendConfirmationDialog(friend);
+                return true;
+            }
+            Toast.makeText(getContext(), "Tính năng " + title + " đang phát triển", Toast.LENGTH_SHORT).show();
+            return false;
+        });
+        popup.show();
+    }
+
+    @Override
     public void onUnfriendClick(User friend) {
         showUnfriendConfirmationDialog(friend);
     }

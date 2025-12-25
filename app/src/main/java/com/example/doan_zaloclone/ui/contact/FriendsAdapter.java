@@ -62,6 +62,8 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
         void onMessageClick(User friend);
 
         void onUnfriendClick(User friend);
+        
+        void onFriendLongClick(View view, User friend);
     }
 
     // DiffUtil Callback for efficient list updates
@@ -143,6 +145,16 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
                 if (position != RecyclerView.NO_POSITION && listener != null) {
                     listener.onMessageClick(friends.get(position));
                 }
+            });
+
+            // Long click for context menu
+            itemView.setOnLongClickListener(v -> {
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION && listener != null) {
+                    listener.onFriendLongClick(v, friends.get(position));
+                    return true;
+                }
+                return false;
             });
 
             // Call button
