@@ -80,21 +80,33 @@ public class ApiCallbackHelper {
     }
 
     /**
-     * Format HTTP error message
+     * Format HTTP error message (user-friendly)
      */
     public static String formatHttpError(int code, String message) {
-        String error = "HTTP " + code;
-        if (message != null && !message.isEmpty()) {
-            error += ": " + message;
-        }
-        return error;
+        // Use user-friendly messages from ErrorMessages utility
+        return ErrorMessages.fromHttpCode(code);
     }
 
     /**
-     * Format network error message
+     * Format network error message (user-friendly)
      */
     public static String formatNetworkError(Throwable t) {
-        return t.getMessage() != null ? t.getMessage() : "Network error";
+        // Use user-friendly messages from ErrorMessages utility
+        return ErrorMessages.fromException(t);
+    }
+    
+    /**
+     * Check if error should trigger a retry
+     */
+    public static boolean shouldRetry(int httpCode) {
+        return ErrorMessages.isRetryableHttpError(httpCode);
+    }
+    
+    /**
+     * Check if exception should trigger a retry
+     */
+    public static boolean shouldRetry(Throwable t) {
+        return ErrorMessages.isRetryable(t);
     }
 
     /**
