@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/white"
+    android:background="@color/zalo_background_gray"
     android:fitsSystemWindows="true">
 
     <androidx.appcompat.widget.Toolbar

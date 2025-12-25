@@ -49,8 +49,8 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             app:cardCornerRadius="12dp"
-            app:cardElevation="2dp"
-            app:cardBackgroundColor="#D4EDFC">
+            app:cardElevation="0dp"
+            app:cardBackgroundColor="@color/zalo_bubble_friend">
 
             <LinearLayout
                 android:layout_width="wrap_content"
@@ -116,7 +116,7 @@
                     android:layout_height="wrap_content"
                     android:text="Message content"
                     android:textSize="16sp"
-                    android:textColor="@color/black"
+                    android:textColor="@color/zalo_text_primary"
                     android:padding="12dp" />
             </LinearLayout>
 
