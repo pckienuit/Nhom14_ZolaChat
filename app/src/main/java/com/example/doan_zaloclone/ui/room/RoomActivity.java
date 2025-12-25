@@ -125,7 +125,11 @@ public class RoomActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         setContentView(R.layout.activity_room);
+
+        // Set status bar to transparent to show gradient behind
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
 
         conversationId = getIntent().getStringExtra("conversationId");
         conversationName = getIntent().getStringExtra("conversationName");
@@ -277,6 +281,8 @@ public class RoomActivity extends AppCompatActivity {
         }
     }
 
+    private LinearLayout inputContainer;
+
     private void initViews() {
         toolbar = findViewById(R.id.toolbar);
         titleTextView = findViewById(R.id.titleTextView);
@@ -285,6 +291,9 @@ public class RoomActivity extends AppCompatActivity {
         sendButton = findViewById(R.id.sendButton);
         attachImageButton = findViewById(R.id.attachImageButton);
         stickerButton = findViewById(R.id.stickerButton);
+
+        // Input container
+        inputContainer = findViewById(R.id.inputContainer);
 
         // Image picker views
         imagePickerContainer = findViewById(R.id.imagePickerContainer);
@@ -305,15 +314,28 @@ public class RoomActivity extends AppCompatActivity {
         ImageButton fileManagementButton = findViewById(R.id.fileManagementButton);
 
         // Setup call button listeners
-        videoCallButton.setOnClickListener(v -> startCall(true));
-        voiceCallButton.setOnClickListener(v -> startCall(false));
-        fileManagementButton.setOnClickListener(v -> openFileManagement());
+        if (videoCallButton != null) videoCallButton.setOnClickListener(v -> startCall(true));
+        if (voiceCallButton != null) voiceCallButton.setOnClickListener(v -> startCall(false));
+         // Compatibility check for hidden buttons
+        if (fileManagementButton != null) fileManagementButton.setOnClickListener(v -> openFileManagement());
 
         // Initialize QuickActionManager
         quickActionManager = com.example.doan_zaloclone.ui.room.actions.QuickActionManager.getInstance();
 
         initPinnedMessagesViews();
         initReplyBarViews();
+        
+        setupInsets();
+    }
+
+    private void setupInsets() {
+        if (inputContainer != null) {
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(inputContainer, (v, windowInsets) -> {
+                androidx.core.graphics.Insets insets = windowInsets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+                v.setPadding(0, 0, 0, insets.bottom);
+                return androidx.core.view.WindowInsetsCompat.CONSUMED;
+            });
+        }
     }
 
     private void initReplyBarViews() {
@@ -448,11 +470,7 @@ public class RoomActivity extends AppCompatActivity {
     }
 
     private void setupToolbar() {
-        setSupportActionBar(toolbar);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setDisplayShowTitleEnabled(false);
-        }
+        // Do not use setSupportActionBar to avoid default overflow menu
         toolbar.setNavigationOnClickListener(v -> finish());
 
         // Set initial name
