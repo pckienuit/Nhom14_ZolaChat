@@ -961,4 +961,221 @@ router.get('/:conversationId/settings', authenticateUser, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/conversations/search - Search conversations by name
+ * Phase 3F: Search & Filter
+ */
+router.get('/search', authenticateUser, async (req, res) => {
+  try {
+    const { query, limit = 20 } = req.query;
+    
+    if (!query || query.trim().length < 2) {
+      return res.status(400).json({ error: 'Search query must be at least 2 characters' });
+    }
+    
+    console.log(`🔍 Searching conversations for: "${query}"`);
+    
+    // Get user's conversations first
+    const userConversations = await db.collection('conversations')
+      .where('memberIds', 'array-contains', req.user.uid)
+      .get();
+    
+    // Filter by name (case-insensitive)
+    const searchLower = query.toLowerCase();
+    const results = [];
+    
+    userConversations.forEach(doc => {
+      const data = doc.data();
+      
+      // Search in group name or member names (for private chats)
+      if (data.type === 'GROUP' && data.name) {
+        if (data.name.toLowerCase().includes(searchLower)) {
+          results.push({
+            id: doc.id,
+            ...data
+          });
+        }
+      }
+      // For private chats, we could search by other member's name
+      // (would need to fetch user data - skipping for now)
+    });
+    
+    // Sort by lastMessageAt and limit
+    results.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+    const limited = results.slice(0, parseInt(limit));
+    
+    console.log(`✅ Found ${limited.length} conversations`);
+    
+    res.json({
+      success: true,
+      results: limited,
+      total: results.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error searching conversations:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/conversations/:conversationId/messages/search - Search messages in conversation
+ * Phase 3F: Search & Filter
+ */
+router.get('/:conversationId/messages/search', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { query, limit = 50, offset = 0 } = req.query;
+    
+    if (!query || query.trim().length < 2) {
+      return res.status(400).json({ error: 'Search query must be at least 2 characters' });
+    }
+    
+    console.log(`🔍 Searching messages in ${conversationId} for: "${query}"`);
+    
+    // Verify user is member
+    const conversationDoc = await db.collection('conversations').doc(conversationId).get();
+    if (!conversationDoc.exists) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    const conversationData = conversationDoc.data();
+    if (!conversationData.memberIds || !conversationData.memberIds.includes(req.user.uid)) {
+      return res.status(403).json({ error: 'Not a member of this conversation' });
+    }
+    
+    // Get all messages (Firestore doesn't support full-text search natively)
+    const messagesSnapshot = await db.collection('conversations')
+      .doc(conversationId)
+      .collection('messages')
+      .orderBy('timestamp', 'desc')
+      .limit(1000) // Limit to prevent performance issues
+      .get();
+    
+    // Filter messages by content (case-insensitive)
+    const searchLower = query.toLowerCase();
+    const results = [];
+    
+    messagesSnapshot.forEach(doc => {
+      const data = doc.data();
+      
+      // Search in message content
+      if (data.content && data.content.toLowerCase().includes(searchLower)) {
+        results.push({
+          id: doc.id,
+          ...data
+        });
+      }
+    });
+    
+    // Apply offset and limit
+    const paginatedResults = results.slice(parseInt(offset), parseInt(offset) + parseInt(limit));
+    
+    console.log(`✅ Found ${results.length} messages, returning ${paginatedResults.length}`);
+    
+    res.json({
+      success: true,
+      results: paginatedResults,
+      total: results.length,
+      hasMore: results.length > parseInt(offset) + parseInt(limit)
+    });
+    
+  } catch (error) {
+    console.error('❌ Error searching messages:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/conversations/filter - Filter conversations by type/status
+ * Phase 3F: Search & Filter
+ */
+router.get('/filter', authenticateUser, async (req, res) => {
+  try {
+    const { type, archived, muted, pinned, limit = 50 } = req.query;
+    
+    console.log(`🔍 Filtering conversations - type: ${type}, archived: ${archived}, muted: ${muted}, pinned: ${pinned}`);
+    
+    // Get user's conversations
+    let query = db.collection('conversations')
+      .where('memberIds', 'array-contains', req.user.uid);
+    
+    // Filter by type if specified
+    if (type && ['GROUP', 'PRIVATE'].includes(type)) {
+      query = query.where('type', '==', type);
+    }
+    
+    const conversationsSnapshot = await query.limit(parseInt(limit) * 2).get(); // Get more to filter
+    
+    // Get user settings for all conversations (for archive/mute/pin filtering)
+    const conversations = [];
+    const settingsPromises = [];
+    
+    conversationsSnapshot.forEach(doc => {
+      conversations.push({ id: doc.id, ...doc.data() });
+      
+      // Only fetch settings if we're filtering by them
+      if (archived !== undefined || muted !== undefined || pinned !== undefined) {
+        settingsPromises.push(
+          db.collection('conversations')
+            .doc(doc.id)
+            .collection('userSettings')
+            .doc(req.user.uid)
+            .get()
+        );
+      }
+    });
+    
+    // Apply user-specific filters
+    let filtered = conversations;
+    
+    if (settingsPromises.length > 0) {
+      const settingsDocs = await Promise.all(settingsPromises);
+      
+      filtered = conversations.filter((conv, index) => {
+        const settings = settingsDocs[index].exists ? settingsDocs[index].data() : {};
+        
+        // Filter by archived status
+        if (archived !== undefined) {
+          const isArchived = settings.archived === true;
+          if (archived === 'true' && !isArchived) return false;
+          if (archived === 'false' && isArchived) return false;
+        }
+        
+        // Filter by muted status
+        if (muted !== undefined) {
+          const isMuted = settings.muted === true;
+          if (muted === 'true' && !isMuted) return false;
+          if (muted === 'false' && isMuted) return false;
+        }
+        
+        // Filter by pinned status
+        if (pinned !== undefined) {
+          const isPinned = settings.pinned === true;
+          if (pinned === 'true' && !isPinned) return false;
+          if (pinned === 'false' && isPinned) return false;
+        }
+        
+        return true;
+      });
+    }
+    
+    // Sort and limit
+    filtered.sort((a, b) => (b.lastMessageAt || 0) - (a.lastMessageAt || 0));
+    const limited = filtered.slice(0, parseInt(limit));
+    
+    console.log(`✅ Found ${limited.length} conversations after filtering`);
+    
+    res.json({
+      success: true,
+      conversations: limited,
+      total: filtered.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Error filtering conversations:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
