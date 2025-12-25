@@ -40,6 +40,9 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     private FirebaseAuth firebaseAuth;
     private FirestoreManager firestoreManager; // Still needed for some legacy operations
     private SocketManager socketManager;
+    
+    // WebSocket listener for friend events
+    private SocketManager.OnFriendEventListener friendEventListener;
 
     @Nullable
     @Override
@@ -59,8 +62,21 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         // setupSearchListener(); // Removed in redesign
         observeViewModel();
         // loadFriendRequests(); // Removed, handled by header row now (todo)
+        
+        // Setup WebSocket listener for friend events
+        setupFriendEventListener();
 
         return view;
+    }
+    
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        // Remove WebSocket listener to prevent memory leaks
+        if (friendEventListener != null) {
+            socketManager.removeFriendEventListener(friendEventListener);
+            friendEventListener = null;
+        }
     }
 
     @Override
@@ -69,6 +85,61 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         Log.d("ContactFragment", "onResume called - loading friends");
         // Load friends when fragment becomes visible (critical for show/hide pattern)
         loadFriends();
+    }
+    
+    /**
+     * Setup WebSocket listener for friend events (added/removed)
+     * This ensures friends list updates in real-time
+     */
+    private void setupFriendEventListener() {
+        friendEventListener = new SocketManager.OnFriendEventListener() {
+            @Override
+            public void onFriendRequestReceived(String senderId, String senderName) {
+                // Not relevant for friends list
+            }
+
+            @Override
+            public void onFriendRequestAccepted(String userId) {
+                // When someone accepts our request, we become friends - reload list
+                Log.d("ContactFragment", "Friend request accepted by: " + userId + ", reloading friends");
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Đã trở thành bạn bè!", Toast.LENGTH_SHORT).show();
+                        loadFriends();
+                    });
+                }
+            }
+
+            @Override
+            public void onFriendRequestRejected(String userId) {
+                // Not relevant for friends list
+            }
+
+            @Override
+            public void onFriendAdded(String userId) {
+                // New friend added - reload list
+                Log.d("ContactFragment", "Friend added: " + userId + ", reloading friends");
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        loadFriends();
+                    });
+                }
+            }
+
+            @Override
+            public void onFriendRemoved(String userId) {
+                // Friend removed - reload list
+                Log.d("ContactFragment", "Friend removed: " + userId + ", reloading friends");
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Đã xóa bạn bè", Toast.LENGTH_SHORT).show();
+                        loadFriends();
+                    });
+                }
+            }
+        };
+        
+        socketManager.addFriendEventListener(friendEventListener);
     }
 
     private void initViews(View view) {

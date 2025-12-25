@@ -73,7 +73,7 @@ public class FriendRequestSentFragment extends Fragment implements FriendRequest
         super.onDestroyView();
         // Remove WebSocket listener
         if (friendEventListener != null) {
-            SocketManager.getInstance().setFriendEventListener(null);
+            SocketManager.getInstance().removeFriendEventListener(friendEventListener);
             friendEventListener = null;
         }
     }
@@ -124,7 +124,7 @@ public class FriendRequestSentFragment extends Fragment implements FriendRequest
             }
         };
         
-        SocketManager.getInstance().setFriendEventListener(friendEventListener);
+        SocketManager.getInstance().addFriendEventListener(friendEventListener);
     }
 
     private void loadRequests() {
