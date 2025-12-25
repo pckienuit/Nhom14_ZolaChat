@@ -363,4 +363,602 @@ router.delete('/:conversationId', authenticateUser, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/conversations - Create new conversation (group or private)
+ * Phase 3D: Group Chat Management
+ */
+router.post('/', authenticateUser, async (req, res) => {
+  try {
+    const { type, name, memberIds, adminId } = req.body;
+    
+    // Validation
+    if (!type || !memberIds || !Array.isArray(memberIds)) {
+      return res.status(400).json({ error: 'Invalid request data' });
+    }
+    
+    if (type === 'GROUP') {
+      if (!name || name.trim() === '') {
+        return res.status(400).json({ error: 'Group name is required' });
+      }
+      if (!adminId) {
+        return res.status(400).json({ error: 'Admin ID is required for groups' });
+      }
+      if (memberIds.length < 2) {
+        return res.status(400).json({ error: 'Group must have at least 2 members' });
+      }
+      if (!memberIds.includes(adminId)) {
+        return res.status(400).json({ error: 'Admin must be a member' });
+      }
+    } else if (type === 'PRIVATE') {
+      if (memberIds.length !== 2) {
+        return res.status(400).json({ error: 'Private conversation must have exactly 2 members' });
+      }
+    }
+    
+    console.log(`📤 Creating ${type} conversation with ${memberIds.length} members`);
+    
+    // Create conversation document
+    const conversationData = {
+      type,
+      memberIds,
+      createdAt: Date.now(),
+      timestamp: Date.now(),
+      lastMessageAt: Date.now(),
+      lastMessage: null,
+      isActive: true
+    };
+    
+    if (type === 'GROUP') {
+      conversationData.name = name.trim();
+      conversationData.adminIds = [adminId];
+      conversationData.avatar = null;
+    }
+    
+    const conversationRef = await db.collection('conversations').add(conversationData);
+    const conversationId = conversationRef.id;
+    
+    console.log(`✅ Conversation created: ${conversationId}`);
+    
+    // Emit WebSocket event to all members
+    const io = req.app.get('io');
+    if (io) {
+      const eventData = {
+        conversationId,
+        type,
+        name: type === 'GROUP' ? name : null,
+        memberIds,
+        adminIds: type === 'GROUP' ? [adminId] : null,
+        createdBy: req.user.uid,
+        timestamp: Date.now()
+      };
+      
+      console.log(`📡 Emitting conversation_created to members`);
+      
+      // Emit to each member's room
+      memberIds.forEach(memberId => {
+        io.to(`user:${memberId}`).emit('conversation_created', eventData);
+      });
+    }
+    
+    res.json({
+      success: true,
+      conversationId,
+      conversation: {
+        id: conversationId,
+        ...conversationData
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error creating conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/conversations/:conversationId - Update conversation info
+ * Phase 3D: Update group name/avatar
+ */
+router.put('/:conversationId', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { name, avatar } = req.body;
+    
+    console.log(`📝 Updating conversation ${conversationId}`);
+    
+    const conversationRef = db.collection('conversations').doc(conversationId);
+    const conversationDoc = await conversationRef.get();
+    
+    if (!conversationDoc.exists) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    const conversationData = conversationDoc.data();
+    
+    // Only GROUP conversations can be updated
+    if (conversationData.type !== 'GROUP') {
+      return res.status(400).json({ error: 'Only group conversations can be updated' });
+    }
+    
+    // Check if user is admin
+    if (!conversationData.adminIds || !conversationData.adminIds.includes(req.user.uid)) {
+      return res.status(403).json({ error: 'Only admins can update group info' });
+    }
+    
+    const updates = {};
+    if (name !== undefined) updates.name = name.trim();
+    if (avatar !== undefined) updates.avatar = avatar;
+    
+    await conversationRef.update(updates);
+    
+    console.log(`✅ Conversation updated`);
+    
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    if (io) {
+      console.log(`📡 Emitting conversation_updated to conversation:${conversationId}`);
+      io.to(`conversation:${conversationId}`).emit('conversation_updated', {
+        conversationId,
+        updates,
+        updatedBy: req.user.uid,
+        timestamp: Date.now()
+      });
+    }
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('❌ Error updating conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/conversations/:conversationId/members - Add member to group
+ * Phase 3D: Member management
+ */
+router.post('/:conversationId/members', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+    
+    console.log(`➕ Adding member ${userId} to conversation ${conversationId}`);
+    
+    const conversationRef = db.collection('conversations').doc(conversationId);
+    const conversationDoc = await conversationRef.get();
+    
+    if (!conversationDoc.exists) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    const conversationData = conversationDoc.data();
+    
+    // Only GROUP conversations can add members
+    if (conversationData.type !== 'GROUP') {
+      return res.status(400).json({ error: 'Can only add members to groups' });
+    }
+    
+    // Check if user is admin
+    if (!conversationData.adminIds || !conversationData.adminIds.includes(req.user.uid)) {
+      return res.status(403).json({ error: 'Only admins can add members' });
+    }
+    
+    // Check if already a member
+    if (conversationData.memberIds && conversationData.memberIds.includes(userId)) {
+      return res.status(400).json({ error: 'User is already a member' });
+    }
+    
+    // Add member
+    await conversationRef.update({
+      memberIds: [...(conversationData.memberIds || []), userId]
+    });
+    
+    console.log(`✅ Member added successfully`);
+    
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    if (io) {
+      const eventData = {
+        conversationId,
+        userId,
+        addedBy: req.user.uid,
+        timestamp: Date.now()
+      };
+      
+      console.log(`📡 Emitting member_added to conversation:${conversationId}`);
+      io.to(`conversation:${conversationId}`).emit('member_added', eventData);
+      
+      // Also emit to new member
+      io.to(`user:${userId}`).emit('conversation_created', {
+        conversationId,
+        ...conversationData,
+        memberIds: [...(conversationData.memberIds || []), userId]
+      });
+    }
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('❌ Error adding member:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/conversations/:conversationId/members/:userId - Remove member from group
+ * Phase 3D: Member management
+ */
+router.delete('/:conversationId/members/:userId', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId, userId } = req.params;
+    
+    console.log(`➖ Removing member ${userId} from conversation ${conversationId}`);
+    
+    const conversationRef = db.collection('conversations').doc(conversationId);
+    const conversationDoc = await conversationRef.get();
+    
+    if (!conversationDoc.exists) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    const conversationData = conversationDoc.data();
+    
+    // Only GROUP conversations can remove members
+    if (conversationData.type !== 'GROUP') {
+      return res.status(400).json({ error: 'Can only remove members from groups' });
+    }
+    
+    // Check if user is admin
+    if (!conversationData.adminIds || !conversationData.adminIds.includes(req.user.uid)) {
+      return res.status(403).json({ error: 'Only admins can remove members' });
+    }
+    
+    // Cannot remove yourself (use leave endpoint)
+    if (userId === req.user.uid) {
+      return res.status(400).json({ error: 'Use leave endpoint to leave group' });
+    }
+    
+    // Remove member
+    const newMemberIds = (conversationData.memberIds || []).filter(id => id !== userId);
+    const newAdminIds = (conversationData.adminIds || []).filter(id => id !== userId);
+    
+    await conversationRef.update({
+      memberIds: newMemberIds,
+      adminIds: newAdminIds
+    });
+    
+    console.log(`✅ Member removed successfully`);
+    
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    if (io) {
+      console.log(`📡 Emitting member_removed to conversation:${conversationId}`);
+      io.to(`conversation:${conversationId}`).emit('member_removed', {
+        conversationId,
+        userId,
+        removedBy: req.user.uid,
+        timestamp: Date.now()
+      });
+    }
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('❌ Error removing member:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/conversations/:conversationId/leave - Leave group
+ * Phase 3D: Member management
+ */
+router.post('/:conversationId/leave', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    console.log(`🚪 User ${req.user.uid} leaving conversation ${conversationId}`);
+    
+    const conversationRef = db.collection('conversations').doc(conversationId);
+    const conversationDoc = await conversationRef.get();
+    
+    if (!conversationDoc.exists) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    const conversationData = conversationDoc.data();
+    
+    // Only GROUP conversations can be left
+    if (conversationData.type !== 'GROUP') {
+      return res.status(400).json({ error: 'Cannot leave private conversations' });
+    }
+    
+    // Check if user is a member
+    if (!conversationData.memberIds || !conversationData.memberIds.includes(req.user.uid)) {
+      return res.status(400).json({ error: 'You are not a member of this group' });
+    }
+    
+    // Check if last admin
+    const isAdmin = conversationData.adminIds && conversationData.adminIds.includes(req.user.uid);
+    if (isAdmin && conversationData.adminIds.length === 1) {
+      return res.status(400).json({ error: 'Cannot leave as last admin. Promote someone else first.' });
+    }
+    
+    // Remove user from members and admins
+    const newMemberIds = conversationData.memberIds.filter(id => id !== req.user.uid);
+    const newAdminIds = (conversationData.adminIds || []).filter(id => id !== req.user.uid);
+    
+    await conversationRef.update({
+      memberIds: newMemberIds,
+      adminIds: newAdminIds
+    });
+    
+    console.log(`✅ User left successfully`);
+    
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    if (io) {
+      console.log(`📡 Emitting member_left to conversation:${conversationId}`);
+      io.to(`conversation:${conversationId}`).emit('member_left', {
+        conversationId,
+        userId: req.user.uid,
+        timestamp: Date.now()
+      });
+    }
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('❌ Error leaving conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/conversations/:conversationId/admins - Promote/demote admin
+ * Phase 3D: Admin management
+ */
+router.put('/:conversationId/admins', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId, action } = req.body; // action: 'add' | 'remove'
+    
+    if (!userId || !action || !['add', 'remove'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid request' });
+    }
+    
+    console.log(`👑 ${action === 'add' ? 'Promoting' : 'Demoting'} admin ${userId} in conversation ${conversationId}`);
+    
+    const conversationRef = db.collection('conversations').doc(conversationId);
+    const conversationDoc = await conversationRef.get();
+    
+    if (!conversationDoc.exists) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    const conversationData = conversationDoc.data();
+    
+    // Only GROUP conversations have admins
+    if (conversationData.type !== 'GROUP') {
+      return res.status(400).json({ error: 'Only groups have admins' });
+    }
+    
+    // Check if requester is admin
+    if (!conversationData.adminIds || !conversationData.adminIds.includes(req.user.uid)) {
+      return res.status(403).json({ error: 'Only admins can manage admins' });
+    }
+    
+    // Check if user is a member
+    if (!conversationData.memberIds || !conversationData.memberIds.includes(userId)) {
+      return res.status(400).json({ error: 'User is not a member' });
+    }
+    
+    let newAdminIds = conversationData.adminIds || [];
+    
+    if (action === 'add') {
+      if (newAdminIds.includes(userId)) {
+        return res.status(400).json({ error: 'User is already an admin' });
+      }
+      newAdminIds.push(userId);
+    } else {
+      // Cannot demote last admin
+      if (newAdminIds.length === 1 && newAdminIds.includes(userId)) {
+        return res.status(400).json({ error: 'Cannot remove last admin' });
+      }
+      newAdminIds = newAdminIds.filter(id => id !== userId);
+    }
+    
+    await conversationRef.update({ adminIds: newAdminIds });
+    
+    console.log(`✅ Admin ${action === 'add' ? 'promoted' : 'demoted'} successfully`);
+    
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    if (io) {
+      console.log(`📡 Emitting admin_updated to conversation:${conversationId}`);
+      io.to(`conversation:${conversationId}`).emit('admin_updated', {
+        conversationId,
+        userId,
+        action,
+        updatedBy: req.user.uid,
+        timestamp: Date.now()
+      });
+    }
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('❌ Error updating admin:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/conversations/:conversationId/archive - Archive/unarchive conversation
+ * Phase 3E: Conversation operations
+ */
+router.put('/:conversationId/archive', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { archived } = req.body; // boolean
+    
+    console.log(`📁 ${archived ? 'Archiving' : 'Unarchiving'} conversation ${conversationId} for user ${req.user.uid}`);
+    
+    // Store archive status per user in subcollection
+    const userSettingsRef = db.collection('conversations')
+      .doc(conversationId)
+      .collection('userSettings')
+      .doc(req.user.uid);
+    
+    await userSettingsRef.set({
+      archived: archived === true,
+      updatedAt: Date.now()
+    }, { merge: true });
+    
+    console.log(`✅ Conversation ${archived ? 'archived' : 'unarchived'}`);
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('❌ Error archiving conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/conversations/:conversationId/mute - Mute/unmute conversation
+ * Phase 3E: Conversation operations
+ */
+router.put('/:conversationId/mute', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { muted, muteUntil } = req.body; // muted: boolean, muteUntil: timestamp (optional)
+    
+    console.log(`🔕 ${muted ? 'Muting' : 'Unmuting'} conversation ${conversationId} for user ${req.user.uid}`);
+    
+    // Store mute status per user in subcollection
+    const userSettingsRef = db.collection('conversations')
+      .doc(conversationId)
+      .collection('userSettings')
+      .doc(req.user.uid);
+    
+    const settings = {
+      muted: muted === true,
+      updatedAt: Date.now()
+    };
+    
+    if (muted && muteUntil) {
+      settings.muteUntil = muteUntil;
+    }
+    
+    await userSettingsRef.set(settings, { merge: true });
+    
+    console.log(`✅ Conversation ${muted ? 'muted' : 'unmuted'}`);
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('❌ Error muting conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/conversations/:conversationId/pin - Pin/unpin conversation
+ * Phase 3E: Conversation operations
+ */
+router.put('/:conversationId/pin', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { pinned } = req.body; // boolean
+    
+    console.log(`📌 ${pinned ? 'Pinning' : 'Unpinning'} conversation ${conversationId} for user ${req.user.uid}`);
+    
+    // Store pin status per user in subcollection
+    const userSettingsRef = db.collection('conversations')
+      .doc(conversationId)
+      .collection('userSettings')
+      .doc(req.user.uid);
+    
+    await userSettingsRef.set({
+      pinned: pinned === true,
+      pinnedAt: pinned ? Date.now() : null,
+      updatedAt: Date.now()
+    }, { merge: true });
+    
+    console.log(`✅ Conversation ${pinned ? 'pinned' : 'unpinned'}`);
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('❌ Error pinning conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/conversations/:conversationId - Delete conversation (soft delete for user)
+ * Phase 3E: Conversation operations
+ */
+router.delete('/:conversationId/user', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    console.log(`🗑️ Deleting conversation ${conversationId} for user ${req.user.uid}`);
+    
+    // Soft delete: mark as deleted for this user only
+    const userSettingsRef = db.collection('conversations')
+      .doc(conversationId)
+      .collection('userSettings')
+      .doc(req.user.uid);
+    
+    await userSettingsRef.set({
+      deleted: true,
+      deletedAt: Date.now(),
+      updatedAt: Date.now()
+    }, { merge: true });
+    
+    console.log(`✅ Conversation deleted for user`);
+    
+    res.json({ success: true });
+    
+  } catch (error) {
+    console.error('❌ Error deleting conversation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/conversations/:conversationId/settings - Get user's conversation settings
+ * Phase 3E: Helper endpoint to fetch user settings
+ */
+router.get('/:conversationId/settings', authenticateUser, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    const userSettingsDoc = await db.collection('conversations')
+      .doc(conversationId)
+      .collection('userSettings')
+      .doc(req.user.uid)
+      .get();
+    
+    const settings = userSettingsDoc.exists ? userSettingsDoc.data() : {
+      archived: false,
+      muted: false,
+      pinned: false,
+      deleted: false
+    };
+    
+    res.json({ success: true, settings });
+    
+  } catch (error) {
+    console.error('❌ Error fetching settings:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
