@@ -22,13 +22,9 @@ import java.util.Set;
  */
 public class SelectableFriendsAdapter extends RecyclerView.Adapter<SelectableFriendsAdapter.ViewHolder> {
 
+    private final Set<String> selectedFriendIds;
+    private final OnSelectionChangedListener listener;
     private List<User> friends;
-    private Set<String> selectedFriendIds;
-    private OnSelectionChangedListener listener;
-
-    public interface OnSelectionChangedListener {
-        void onSelectionChanged(int selectedCount);
-    }
 
     public SelectableFriendsAdapter(List<User> friends, OnSelectionChangedListener listener) {
         this.friends = friends;
@@ -69,10 +65,14 @@ public class SelectableFriendsAdapter extends RecyclerView.Adapter<SelectableFri
         notifyDataSetChanged();
     }
 
+    public interface OnSelectionChangedListener {
+        void onSelectionChanged(int selectedCount);
+    }
+
     class ViewHolder extends RecyclerView.ViewHolder {
-        private CheckBox friendCheckBox;
-        private TextView friendNameTextView;
-        private TextView friendEmailTextView;
+        private final CheckBox friendCheckBox;
+        private final TextView friendNameTextView;
+        private final TextView friendEmailTextView;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -96,7 +96,7 @@ public class SelectableFriendsAdapter extends RecyclerView.Adapter<SelectableFri
                 } else {
                     selectedFriendIds.remove(friend.getId());
                 }
-                
+
                 if (listener != null) {
                     listener.onSelectionChanged(selectedFriendIds.size());
                 }
@@ -105,13 +105,13 @@ public class SelectableFriendsAdapter extends RecyclerView.Adapter<SelectableFri
             // Handle item clicks (toggle checkbox)
             itemView.setOnClickListener(v -> {
                 friendCheckBox.setChecked(!friendCheckBox.isChecked());
-                
+
                 if (friendCheckBox.isChecked()) {
                     selectedFriendIds.add(friend.getId());
                 } else {
                     selectedFriendIds.remove(friend.getId());
                 }
-                
+
                 if (listener != null) {
                     listener.onSelectionChanged(selectedFriendIds.size());
                 }

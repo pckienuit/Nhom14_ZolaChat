@@ -40,6 +40,7 @@
     <application
         android:name=".ZaloApplication"
         android:allowBackup="true"
+        android:usesCleartextTraffic="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -108,6 +109,20 @@
             android:parentActivityName=".ui.room.RoomActivity"
             android:windowSoftInputMode="adjustResize" />
             
+        <!-- Create Sticker Activity -->
+        <activity
+            android:name=".ui.sticker.CreateStickerActivity"
+            android:exported="false"
+            android:hardwareAccelerated="true"
+            android:parentActivityName=".ui.room.RoomActivity"
+            android:windowSoftInputMode="adjustResize" />
+            
+        <!-- Sticker Store Activity -->
+        <activity
+            android:name=".ui.sticker.StickerStoreActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.room.RoomActivity" />
+            
                 <!-- Profile Card Activity -->
         <activity
             android:name=".ui.personal.ProfileCardActivity"
@@ -127,6 +142,20 @@
             android:exported="false"
             android:hardwareAccelerated="true"
             android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+            
+        <!-- API Test Activity -->
+        <activity
+            android:name=".ApiTestActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:label="API Test" />
+            
+        <!-- WebSocket Test Activity -->
+        <activity
+            android:name=".WebSocketTestActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:label="WebSocket Test" />
             
         <!-- Call Activity -->
         <activity

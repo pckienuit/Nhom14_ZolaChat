@@ -20,13 +20,8 @@ import java.util.List;
  */
 public class PinnedMessagesAdapter extends RecyclerView.Adapter<PinnedMessagesAdapter.PinnedMessageViewHolder> {
 
+    private final OnPinnedMessageClickListener listener;
     private List<Message> pinnedMessages = new ArrayList<>();
-    private OnPinnedMessageClickListener listener;
-
-    public interface OnPinnedMessageClickListener {
-        void onPinnedMessageClick(Message message);
-        void onUnpinClick(Message message);
-    }
 
     public PinnedMessagesAdapter(OnPinnedMessageClickListener listener) {
         this.listener = listener;
@@ -56,10 +51,16 @@ public class PinnedMessagesAdapter extends RecyclerView.Adapter<PinnedMessagesAd
         return pinnedMessages.size();
     }
 
+    public interface OnPinnedMessageClickListener {
+        void onPinnedMessageClick(Message message);
+
+        void onUnpinClick(Message message);
+    }
+
     static class PinnedMessageViewHolder extends RecyclerView.ViewHolder {
-        private TextView senderName;
-        private TextView messageContent;
-        private ImageButton unpinButton;
+        private final TextView senderName;
+        private final TextView messageContent;
+        private final ImageButton unpinButton;
 
         public PinnedMessageViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -72,33 +73,33 @@ public class PinnedMessagesAdapter extends RecyclerView.Adapter<PinnedMessagesAd
             // Try to get sender name from message first (optimized)
             String senderId = message.getSenderId();
             String cachedName = message.getSenderName();
-            
+
             if (cachedName != null && !cachedName.isEmpty()) {
                 // Use cached name from message
                 senderName.setText(cachedName);
             } else {
                 // Fallback: Fetch from Firestore for old messages without senderName
                 senderName.setText("Loading...");
-                
+
                 com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                    .collection("users")
-                    .document(senderId)
-                    .get()
-                    .addOnSuccessListener(documentSnapshot -> {
-                        if (documentSnapshot.exists()) {
-                            String name = documentSnapshot.getString("name");
-                            if (name != null && !name.isEmpty()) {
-                                senderName.setText(name);
+                        .collection("users")
+                        .document(senderId)
+                        .get()
+                        .addOnSuccessListener(documentSnapshot -> {
+                            if (documentSnapshot.exists()) {
+                                String name = documentSnapshot.getString("name");
+                                if (name != null && !name.isEmpty()) {
+                                    senderName.setText(name);
+                                } else {
+                                    senderName.setText("User");
+                                }
                             } else {
                                 senderName.setText("User");
                             }
-                        } else {
+                        })
+                        .addOnFailureListener(e -> {
                             senderName.setText("User");
-                        }
-                    })
-                    .addOnFailureListener(e -> {
-                        senderName.setText("User");
-                    });
+                        });
             }
 
             // Set message content based on type

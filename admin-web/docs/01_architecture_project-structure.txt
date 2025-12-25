@@ -1,0 +1,181 @@
+================================================================================
+CẤU TRÚC DỰ ÁN ADMIN WEB (Project Structure)
+================================================================================
+
+NGÀY TẠO: 23/12/2025
+LOẠI: Architecture
+MÔ TẢ: Tổng quan cấu trúc và kiến trúc Admin Web Management System
+
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Admin Web là hệ thống quản trị cho ứng dụng ZaloClone, được xây dựng bằng
+HTML, CSS và JavaScript thuần (Vanilla JS). Sử dụng Firebase Client SDK
+để xác thực và truy cập Firestore.
+
+CÔNG NGHỆ SỬ DỤNG:
+- HTML5
+- CSS3 (Dark theme, Responsive)
+- JavaScript ES6+
+- Firebase Auth (xác thực)
+- Firebase Firestore (database)
+- Font Awesome (icons)
+- Inter font (typography)
+
+
+================================================================================
+2. CẤU TRÚC THƯ MỤC
+================================================================================
+
+admin-web/
+├── index.html              # Trang đăng nhập
+├── dashboard.html          # Trang tổng quan
+├── stickers.html           # Quản lý Sticker Packs
+├── users.html              # Quản lý người dùng
+├── reports.html            # Báo cáo (chưa hoàn thiện)
+├── settings.html           # Cài đặt (chưa hoàn thiện)
+│
+├── css/
+│   ├── style.css           # Base styles, variables, login page
+│   ├── dashboard.css       # Layout dashboard, sidebar, topbar
+│   └── components.css      # Reusable components (modals, cards, forms)
+│
+├── js/
+│   ├── firebase-config.js  # Khởi tạo Firebase SDK
+│   ├── auth.js             # Authentication logic
+│   ├── dashboard.js        # Dashboard stats & charts
+│   ├── stickers.js         # CRUD sticker packs + upload
+│   └── users.js            # User management
+│
+└── docs/
+    ├── 00_NAMING_CONVENTION.txt
+    ├── 01_architecture_project-structure.txt
+    ├── 02_config_deployment-guide.txt
+    ├── 03_feature_authentication.txt
+    ├── 04_feature_sticker-management.txt
+    ├── 05_feature_user-management.txt
+    └── 06_api_sticker-upload.txt
+
+
+================================================================================
+3. KIẾN TRÚC TỔNG QUAN
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              ADMIN WEB                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
+│  │  index.html │  │ dashboard   │  │  stickers   │  │   users     │        │
+│  │   (Login)   │  │   .html     │  │   .html     │  │   .html     │        │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘        │
+│         │                │                │                │                │
+│         └────────────────┴────────────────┴────────────────┘                │
+│                                  │                                          │
+│                          ┌───────┴───────┐                                  │
+│                          │    auth.js    │                                  │
+│                          │ (shared auth) │                                  │
+│                          └───────┬───────┘                                  │
+│                                  │                                          │
+│         ┌────────────────────────┼────────────────────────┐                 │
+│         │                        │                        │                 │
+│  ┌──────┴──────┐  ┌──────────────┴──────────────┐  ┌──────┴──────┐         │
+│  │ Firebase    │  │      Firebase Firestore     │  │ VPS Sticker │         │
+│  │    Auth     │  │   (users, stickerPacks)     │  │   Server    │         │
+│  └─────────────┘  └─────────────────────────────┘  └─────────────┘         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+4. LUỒNG XỬ LÝ CHÍNH
+================================================================================
+
+4.1. AUTHENTICATION FLOW
+------------------------
+
+1. User mở trang (bất kỳ)
+2. auth.js kiểm tra Firebase auth state
+3. Nếu chưa đăng nhập → redirect đến index.html
+4. Nếu đã đăng nhập → kiểm tra quyền admin
+   - Check email whitelist (development)
+   - Check custom claims
+   - Check /admins collection
+   - Check user.isAdmin flag
+5. Nếu là admin → cho phép truy cập
+6. Nếu không phải admin → sign out + hiển thị lỗi
+
+
+4.2. DATA FLOW (Sticker Management)
+-----------------------------------
+
+1. User mở stickers.html
+2. stickers.js load danh sách từ Firestore collection 'stickerPacks'
+3. Hiển thị grid các sticker packs
+4. User có thể:
+   - Thêm pack mới (modal form)
+   - Sửa pack (modal form)
+   - Xóa pack (confirm modal)
+   - Toggle publish/unpublish
+   - Upload stickers (drag & drop / file picker)
+5. Upload stickers gửi đến VPS API /api/stickers/upload
+6. Sticker URLs được lưu vào Firestore
+
+
+================================================================================
+5. CSS DESIGN SYSTEM
+================================================================================
+
+5.1. COLOR VARIABLES
+--------------------
+
+--primary: #6366f1        (Indigo)
+--primary-dark: #4f46e5
+--secondary: #8b5cf6      (Violet)
+--success: #10b981        (Green)
+--danger: #ef4444         (Red)
+--warning: #f59e0b        (Amber)
+
+--gray-50 → --gray-950    (Gray scale)
+--bg-primary: #0f172a     (Dark background)
+--bg-secondary: #1e293b
+--text-primary: #f8fafc
+--text-secondary: #94a3b8
+
+
+5.2. RESPONSIVE BREAKPOINTS
+---------------------------
+
+- Mobile: < 768px (sidebar collapsed)
+- Tablet: 768px - 1024px
+- Desktop: > 1024px
+
+
+================================================================================
+6. FIREBASE COLLECTIONS SỬ DỤNG
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Collection          │ Mô tả                                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ users               │ Thông tin người dùng (từ Android app)                 │
+│ stickerPacks        │ Danh sách sticker packs                               │
+│ stickerPacks/{id}/stickers │ Stickers trong mỗi pack                        │
+│ admins              │ Danh sách admin users (optional)                      │
+│ conversations       │ Cuộc hội thoại (read-only từ Admin)                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+7. BẢO MẬT
+================================================================================
+
+- Admin được xác thực qua email whitelist trong auth.js
+- Firestore Rules có isAdmin() function kiểm tra quyền
+- Tất cả API calls đều yêu cầu Firebase auth token
+- VPS upload API yêu cầu userId từ authenticated user
+
+
+CẬP NHẬT
+--------
+Ngày tạo: 23/12/2025

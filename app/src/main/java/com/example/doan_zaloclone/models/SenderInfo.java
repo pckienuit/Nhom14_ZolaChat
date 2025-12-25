@@ -8,44 +8,44 @@ public class SenderInfo {
     private String senderName;
     private String senderAvatarUrl;
     private int fileCount;
-    
+
     public SenderInfo(String senderId, String senderName, String senderAvatarUrl, int fileCount) {
         this.senderId = senderId;
         this.senderName = senderName;
         this.senderAvatarUrl = senderAvatarUrl;
         this.fileCount = fileCount;
     }
-    
+
     // Getters
     public String getSenderId() {
         return senderId;
     }
-    
-    public String getSenderName() {
-        return senderName;
-    }
-    
-    public String getSenderAvatarUrl() {
-        return senderAvatarUrl;
-    }
-    
-    public int getFileCount() {
-        return fileCount;
-    }
-    
+
     // Setters
     public void setSenderId(String senderId) {
         this.senderId = senderId;
     }
-    
+
+    public String getSenderName() {
+        return senderName;
+    }
+
     public void setSenderName(String senderName) {
         this.senderName = senderName;
     }
-    
+
+    public String getSenderAvatarUrl() {
+        return senderAvatarUrl;
+    }
+
     public void setSenderAvatarUrl(String senderAvatarUrl) {
         this.senderAvatarUrl = senderAvatarUrl;
     }
-    
+
+    public int getFileCount() {
+        return fileCount;
+    }
+
     public void setFileCount(int fileCount) {
         this.fileCount = fileCount;
     }

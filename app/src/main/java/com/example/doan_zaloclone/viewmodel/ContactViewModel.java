@@ -18,48 +18,50 @@ import java.util.List;
  * Manages friend search, friend requests, and friends list
  */
 public class ContactViewModel extends BaseViewModel {
-    
+
     private final FriendRepository friendRepository;
     private final ConversationRepository conversationRepository;
-    
+
     private final MutableLiveData<Resource<List<User>>> searchResults = new MutableLiveData<>();
     private LiveData<Resource<List<User>>> friends;
     private LiveData<Resource<List<FriendRequest>>> friendRequests;
-    
+
     public ContactViewModel() {
         this.friendRepository = new FriendRepository();
-        this.conversationRepository = new ConversationRepository();
+        this.conversationRepository = ConversationRepository.getInstance();
     }
-    
+
     /**
      * Search users by query
+     *
      * @param query Search term (name or email)
      */
     public void searchUsers(@NonNull String query) {
         // Update search results LiveData
         LiveData<Resource<List<User>>> result = friendRepository.searchUsers(query);
         searchResults.setValue(result.getValue());
-        
+
         // Observe and forward the result
         result.observeForever(searchResults::setValue);
     }
-    
+
     /**
      * Get search results LiveData
      */
     public LiveData<Resource<List<User>>> getSearchResults() {
         return searchResults;
     }
-    
+
     /**
      * Clear search results
      */
     public void clearSearchResults() {
         searchResults.setValue(Resource.success(null));
     }
-    
+
     /**
      * Get friends list for a user
+     *
      * @param userId ID of the user
      */
     public LiveData<Resource<List<User>>> getFriends(@NonNull String userId) {
@@ -68,94 +70,102 @@ public class ContactViewModel extends BaseViewModel {
         }
         return friends;
     }
-    
+
     /**
      * Load friends list for a user (forces reload)
+     *
      * @param userId ID of the user
      */
     public void loadFriends(@NonNull String userId) {
         friends = friendRepository.getFriends(userId);
     }
-    
+
     /**
      * Get friends LiveData (for observing in activities)
+     *
      * @return LiveData of friends list
      */
     public LiveData<Resource<List<User>>> getFriendsLiveData() {
         return friends;
     }
-    
+
     /**
      * Get friend requests for a user
+     *
      * @param userId ID of the user
      */
     public LiveData<Resource<List<FriendRequest>>> getFriendRequests(@NonNull String userId) {
-        if (friendRequests == null) {
-            friendRequests = friendRepository.getFriendRequests(userId);
-        }
+        // Always fetch fresh data to ensure UI is up-to-date after accept/reject
+        friendRequests = friendRepository.getFriendRequests(userId);
         return friendRequests;
     }
-    
+
     /**
      * Send a friend request
-     * @param fromUserId Sender user ID
-     * @param toUserId Receiver user ID
+     *
+     * @param fromUserId   Sender user ID
+     * @param toUserId     Receiver user ID
      * @param fromUserName Sender user name
      */
     public LiveData<Resource<Boolean>> sendFriendRequest(@NonNull String fromUserId,
-                                                          @NonNull String toUserId,
-                                                          @NonNull String fromUserName) {
+                                                         @NonNull String toUserId,
+                                                         @NonNull String fromUserName) {
         return friendRepository.sendFriendRequest(fromUserId, toUserId, fromUserName);
     }
-    
+
     /**
      * Accept a friend request
+     *
      * @param request The request to accept
      */
     public LiveData<Resource<Boolean>> acceptFriendRequest(@NonNull FriendRequest request) {
         return friendRepository.acceptFriendRequest(request);
     }
-    
+
     /**
      * Reject a friend request
+     *
      * @param request The request to reject
      */
     public LiveData<Resource<Boolean>> rejectFriendRequest(@NonNull FriendRequest request) {
         return friendRepository.rejectFriendRequest(request);
     }
-    
+
     /**
      * Check friend request status between two users
+     *
      * @param fromUserId Sender ID
-     * @param toUserId Receiver ID
+     * @param toUserId   Receiver ID
      */
     public LiveData<Resource<String>> checkFriendRequestStatus(@NonNull String fromUserId,
-                                                                 @NonNull String toUserId) {
+                                                               @NonNull String toUserId) {
         return friendRepository.checkFriendRequestStatus(fromUserId, toUserId);
     }
-    
+
     /**
      * Find existing conversation between two users
+     *
      * @param currentUserId Current user ID
-     * @param otherUserId Other user ID
+     * @param otherUserId   Other user ID
      */
     public LiveData<Resource<Conversation>> findExistingConversation(@NonNull String currentUserId,
-                                                                      @NonNull String otherUserId) {
+                                                                     @NonNull String otherUserId) {
         return conversationRepository.findExistingConversation(currentUserId, otherUserId);
     }
-    
-    
+
+
     /**
      * Remove a friend (unfriend)
+     *
      * @param userId1 First user ID
      * @param userId2 Second user ID
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> removeFriend(@NonNull String userId1,
-                                                     @NonNull String userId2) {
+                                                    @NonNull String userId2) {
         return friendRepository.removeFriend(userId1, userId2);
     }
-    
+
     @Override
     protected void onCleared() {
         super.onCleared();

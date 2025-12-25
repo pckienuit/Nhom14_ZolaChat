@@ -16,14 +16,6 @@ public enum FileCategory {
         this.position = position;
     }
 
-    public String getDisplayName() {
-        return displayName;
-    }
-
-    public int getPosition() {
-        return position;
-    }
-
     public static FileCategory fromPosition(int position) {
         for (FileCategory category : values()) {
             if (category.position == position) {
@@ -31,5 +23,13 @@ public enum FileCategory {
             }
         }
         return MEDIA; // Default
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public int getPosition() {
+        return position;
     }
 }

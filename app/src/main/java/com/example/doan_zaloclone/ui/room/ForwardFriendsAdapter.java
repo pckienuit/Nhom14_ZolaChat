@@ -24,14 +24,10 @@ import java.util.Set;
  */
 public class ForwardFriendsAdapter extends RecyclerView.Adapter<ForwardFriendsAdapter.ViewHolder> {
 
+    private final Set<String> selectedFriendIds;
+    private final OnSelectionChangedListener listener;
     private List<User> allFriends;           // Original full list
     private List<User> filteredFriends;      // Filtered list for display
-    private Set<String> selectedFriendIds;
-    private OnSelectionChangedListener listener;
-
-    public interface OnSelectionChangedListener {
-        void onSelectionChanged(int selectedCount);
-    }
 
     public ForwardFriendsAdapter(List<User> friends, OnSelectionChangedListener listener) {
         this.allFriends = friends != null ? friends : new ArrayList<>();
@@ -76,11 +72,12 @@ public class ForwardFriendsAdapter extends RecyclerView.Adapter<ForwardFriendsAd
 
     /**
      * Filter friends by search query
+     *
      * @param query Search query (name or email)
      */
     public void filter(String query) {
         filteredFriends.clear();
-        
+
         if (query == null || query.trim().isEmpty()) {
             // No query - show all friends
             filteredFriends.addAll(allFriends);
@@ -88,24 +85,28 @@ public class ForwardFriendsAdapter extends RecyclerView.Adapter<ForwardFriendsAd
             // Filter by name or email (case-insensitive)
             String lowerCaseQuery = query.toLowerCase(Locale.getDefault());
             for (User friend : allFriends) {
-                boolean matchesName = friend.getName() != null && 
+                boolean matchesName = friend.getName() != null &&
                         friend.getName().toLowerCase(Locale.getDefault()).contains(lowerCaseQuery);
-                boolean matchesEmail = friend.getEmail() != null && 
+                boolean matchesEmail = friend.getEmail() != null &&
                         friend.getEmail().toLowerCase(Locale.getDefault()).contains(lowerCaseQuery);
-                
+
                 if (matchesName || matchesEmail) {
                     filteredFriends.add(friend);
                 }
             }
         }
-        
+
         notifyDataSetChanged();
     }
 
+    public interface OnSelectionChangedListener {
+        void onSelectionChanged(int selectedCount);
+    }
+
     class ViewHolder extends RecyclerView.ViewHolder {
-        private CheckBox friendCheckBox;
-        private TextView friendNameTextView;
-        private TextView friendEmailTextView;
+        private final CheckBox friendCheckBox;
+        private final TextView friendNameTextView;
+        private final TextView friendEmailTextView;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -129,7 +130,7 @@ public class ForwardFriendsAdapter extends RecyclerView.Adapter<ForwardFriendsAd
                 } else {
                     selectedFriendIds.remove(friend.getId());
                 }
-                
+
                 if (listener != null) {
                     listener.onSelectionChanged(selectedFriendIds.size());
                 }
@@ -138,13 +139,13 @@ public class ForwardFriendsAdapter extends RecyclerView.Adapter<ForwardFriendsAd
             // Handle item clicks (toggle checkbox)
             itemView.setOnClickListener(v -> {
                 friendCheckBox.setChecked(!friendCheckBox.isChecked());
-                
+
                 if (friendCheckBox.isChecked()) {
                     selectedFriendIds.add(friend.getId());
                 } else {
                     selectedFriendIds.remove(friend.getId());
                 }
-                
+
                 if (listener != null) {
                     listener.onSelectionChanged(selectedFriendIds.size());
                 }

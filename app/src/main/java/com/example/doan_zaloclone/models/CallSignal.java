@@ -1,6 +1,7 @@
 package com.example.doan_zaloclone.models;
 
 import com.google.firebase.firestore.Exclude;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -13,7 +14,7 @@ public class CallSignal {
     public static final String TYPE_OFFER = "OFFER";              // SDP offer from caller
     public static final String TYPE_ANSWER = "ANSWER";            // SDP answer from receiver
     public static final String TYPE_ICE_CANDIDATE = "ICE_CANDIDATE";  // ICE candidate
-    
+
     private String id;
     private String callId;         // Reference to the call this signal belongs to
     private String senderId;       // User ID who sent this signal
@@ -21,13 +22,13 @@ public class CallSignal {
     private String sdp;            // Session Description Protocol - for OFFER and ANSWER
     private Map<String, Object> iceCandidate;  // ICE candidate data - for ICE_CANDIDATE type
     private long timestamp;        // When signal was created
-    
+
     // Empty constructor required for Firestore serialization/deserialization
     public CallSignal() {
         this.timestamp = System.currentTimeMillis();
         this.iceCandidate = new HashMap<>();
     }
-    
+
     // Constructor for SDP signals (OFFER or ANSWER)
     public CallSignal(String id, String callId, String senderId, String type, String sdp) {
         this.id = id;
@@ -38,7 +39,7 @@ public class CallSignal {
         this.iceCandidate = new HashMap<>();
         this.timestamp = System.currentTimeMillis();
     }
-    
+
     // Constructor for ICE candidate signals
     public CallSignal(String id, String callId, String senderId, Map<String, Object> iceCandidate) {
         this.id = id;
@@ -49,10 +50,10 @@ public class CallSignal {
         this.sdp = null;
         this.timestamp = System.currentTimeMillis();
     }
-    
+
     // Full constructor
-    public CallSignal(String id, String callId, String senderId, String type, 
-                     String sdp, Map<String, Object> iceCandidate, long timestamp) {
+    public CallSignal(String id, String callId, String senderId, String type,
+                      String sdp, Map<String, Object> iceCandidate, long timestamp) {
         this.id = id;
         this.callId = callId;
         this.senderId = senderId;
@@ -61,67 +62,85 @@ public class CallSignal {
         this.iceCandidate = iceCandidate != null ? iceCandidate : new HashMap<>();
         this.timestamp = timestamp;
     }
-    
+
+    /**
+     * Helper to create ICE candidate map from WebRTC IceCandidate
+     *
+     * @param candidate     The candidate string
+     * @param sdpMid        The SDP media stream identification
+     * @param sdpMLineIndex The SDP m-line index
+     * @return Map suitable for Firestore storage
+     */
+    public static Map<String, Object> createIceCandidateMap(String candidate,
+                                                            String sdpMid,
+                                                            int sdpMLineIndex) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("candidate", candidate);
+        map.put("sdpMid", sdpMid);
+        map.put("sdpMLineIndex", sdpMLineIndex);
+        return map;
+    }
+
     // Getters
     public String getId() {
         return id;
     }
-    
-    public String getCallId() {
-        return callId;
-    }
-    
-    public String getSenderId() {
-        return senderId;
-    }
-    
-    public String getType() {
-        return type;
-    }
-    
-    public String getSdp() {
-        return sdp;
-    }
-    
-    public Map<String, Object> getIceCandidate() {
-        return iceCandidate;
-    }
-    
-    public long getTimestamp() {
-        return timestamp;
-    }
-    
+
     // Setters (required for Firestore)
     public void setId(String id) {
         this.id = id;
     }
-    
+
+    public String getCallId() {
+        return callId;
+    }
+
     public void setCallId(String callId) {
         this.callId = callId;
     }
-    
+
+    public String getSenderId() {
+        return senderId;
+    }
+
     public void setSenderId(String senderId) {
         this.senderId = senderId;
     }
-    
+
+    public String getType() {
+        return type;
+    }
+
     public void setType(String type) {
         this.type = type;
     }
-    
+
+    public String getSdp() {
+        return sdp;
+    }
+
     public void setSdp(String sdp) {
         this.sdp = sdp;
     }
-    
+
+    public Map<String, Object> getIceCandidate() {
+        return iceCandidate;
+    }
+
     public void setIceCandidate(Map<String, Object> iceCandidate) {
         this.iceCandidate = iceCandidate;
     }
-    
+
+    public long getTimestamp() {
+        return timestamp;
+    }
+
+    // Helper methods
+
     public void setTimestamp(long timestamp) {
         this.timestamp = timestamp;
     }
-    
-    // Helper methods
-    
+
     /**
      * Check if this is an OFFER signal
      */
@@ -129,6 +148,7 @@ public class CallSignal {
     public boolean isOfferSignal() {
         return TYPE_OFFER.equals(this.type);
     }
+
     /**
      * Check if this is an ANSWER signal
      */
@@ -136,6 +156,7 @@ public class CallSignal {
     public boolean isAnswerSignal() {
         return TYPE_ANSWER.equals(this.type);
     }
+
     /**
      * Check if this is an ICE candidate signal
      */
@@ -143,24 +164,7 @@ public class CallSignal {
     public boolean isIceCandidateSignal() {
         return TYPE_ICE_CANDIDATE.equals(this.type);
     }
-    
-    /**
-     * Helper to create ICE candidate map from WebRTC IceCandidate
-     * @param candidate The candidate string
-     * @param sdpMid The SDP media stream identification
-     * @param sdpMLineIndex The SDP m-line index
-     * @return Map suitable for Firestore storage
-     */
-    public static Map<String, Object> createIceCandidateMap(String candidate, 
-                                                             String sdpMid, 
-                                                             int sdpMLineIndex) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("candidate", candidate);
-        map.put("sdpMid", sdpMid);
-        map.put("sdpMLineIndex", sdpMLineIndex);
-        return map;
-    }
-    
+
     /**
      * Extract candidate string from ICE candidate map
      */
@@ -170,6 +174,7 @@ public class CallSignal {
         Object candidate = iceCandidate.get("candidate");
         return candidate != null ? candidate.toString() : null;
     }
+
     /**
      * Extract sdpMid from ICE candidate map
      */
@@ -179,6 +184,7 @@ public class CallSignal {
         Object sdpMid = iceCandidate.get("sdpMid");
         return sdpMid != null ? sdpMid.toString() : null;
     }
+
     /**
      * Extract sdpMLineIndex from ICE candidate map
      */
@@ -191,7 +197,7 @@ public class CallSignal {
         }
         return null;
     }
-    
+
     @Override
     public String toString() {
         return "CallSignal{" +

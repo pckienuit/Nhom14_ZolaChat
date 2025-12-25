@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Sticker - ZaloClone Admin</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">
+                <i class="fas fa-shield-halved"></i>
+                <span>ZaloClone</span>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <ul>
+                <li>
+                    <a href="dashboard.html">
+                        <i class="fas fa-chart-pie"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="api.html">
+                        <i class="fas fa-server"></i>
+                        <span>API Monitor</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="stickers.html" class="active">
+                        <i class="fas fa-face-smile"></i>
+                        <span>Sticker Packs</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="users.html">
+                        <i class="fas fa-users"></i>
+                        <span>Người dùng</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="reports.html">
+                        <i class="fas fa-flag"></i>
+                        <span>Báo cáo</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="settings.html">
+                        <i class="fas fa-cog"></i>
+                        <span>Cài đặt</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <div class="sidebar-footer">
+            <button id="logoutBtn" class="btn btn-logout">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Đăng xuất</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Top Bar -->
+        <header class="topbar">
+            <button class="menu-toggle" id="menuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h1 class="page-title">Quản lý Sticker Packs</h1>
+            <div class="user-info">
+                <span id="adminEmail">admin@example.com</span>
+                <div class="avatar">
+                    <i class="fas fa-user"></i>
+                </div>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <div class="content">
+            <!-- Action Bar -->
+            <div class="action-bar">
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchInput" placeholder="Tìm kiếm sticker pack...">
+                </div>
+                <div class="action-buttons">
+                    <select id="filterType" class="filter-select">
+                        <option value="all">Tất cả loại</option>
+                        <option value="official">Official</option>
+                        <option value="user">User Created</option>
+                        <option value="trending">Trending</option>
+                    </select>
+                    <button class="btn btn-primary" id="addPackBtn">
+                        <i class="fas fa-plus"></i>
+                        <span>Thêm Pack mới</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Sticker Packs Grid -->
+            <div class="sticker-packs-grid" id="stickerPacksGrid">
+                <div class="loading-placeholder">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Đang tải sticker packs...</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add/Edit Pack Modal -->
+    <div class="modal" id="packModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Thêm Sticker Pack mới</h2>
+                <button class="modal-close" id="closeModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <form id="packForm" class="modal-form">
+                <input type="hidden" id="packId">
+
+                <div class="form-group">
+                    <label for="packName">Tên Pack <span class="required">*</span></label>
+                    <input type="text" id="packName" placeholder="VD: Cute Animals" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="packDescription">Mô tả</label>
+                    <textarea id="packDescription" placeholder="Mô tả về sticker pack..." rows="3"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="packType">Loại Pack</label>
+                        <select id="packType">
+                            <option value="official">Official</option>
+                            <option value="user">User Created</option>
+                            <option value="trending">Trending</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="packPrice">Giá (VND)</label>
+                        <input type="number" id="packPrice" value="0" min="0">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="packIcon">Icon Pack</label>
+                    <div style="display: flex; gap: 0.75rem; align-items: end;">
+                        <div style="flex: 1;">
+                            <input type="url" id="packIcon" placeholder="https://example.com/icon.png hoặc chọn file">
+                        </div>
+                        <label for="iconFileInput" class="btn btn-secondary" style="margin: 0; cursor: pointer;">
+                            <i class="fas fa-upload"></i> Chọn file
+                        </label>
+                        <input type="file" id="iconFileInput" accept="image/*" style="display: none;">
+                    </div>
+                    <small class="text-muted" style="font-size: 0.75rem;">Tải file lên VPS hoặc nhập URL trực
+                        tiếp</small>
+                </div>
+
+                <div class="form-row checkboxes">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="isPublished" checked>
+                        <span>Đã xuất bản</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="isFeatured">
+                        <span>Nổi bật</span>
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="isFree" checked>
+                        <span>Miễn phí</span>
+                    </label>
+                </div>
+
+                <!-- Stickers Upload Section -->
+                <div class="form-group">
+                    <label>Stickers <small class="text-muted">(Có thể thêm sau)</small></label>
+                    <div class="sticker-upload-zone" id="stickerUploadZone">
+                        <input type="file" id="stickerFilesInput" accept=".png,.jpg,.jpeg,.webp,.gif" multiple
+                            style="display: none;">
+                        <div class="upload-placeholder" id="uploadPlaceholder">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <p>Kéo thả ảnh vào đây hoặc <span class="text-primary" style="cursor:pointer;">chọn
+                                    files</span></p>
+                            <small>Hỗ trợ: PNG, JPG, WebP, GIF (Tối đa 2MB/file)</small>
+                        </div>
+                        <div class="sticker-preview-grid" id="stickerPreviewGrid"></div>
+                    </div>
+                    <div class="upload-progress hidden" id="uploadProgress">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <span id="progressText">0%</span>
+                    </div>
+                </div>
+
+                <!-- Existing Stickers Section (only shown when editing) -->
+                <div class="form-group" id="existingStickersSection" style="display: none;">
+                    <label>Stickers hiện có <small class="text-muted" id="existingStickerCount">(0
+                            stickers)</small></label>
+                    <div class="existing-stickers-container">
+                        <div class="existing-stickers-grid" id="existingStickersGrid">
+                            <div class="loading-placeholder">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Đang tải stickers...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="formError" class="error-message hidden"></div>
+
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Hủy</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span class="btn-text">Lưu</span>
+                        <span class="btn-loader hidden"><i class="fas fa-spinner fa-spin"></i></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="deleteModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h2>Xác nhận xóa</h2>
+                <button class="modal-close" id="closeDeleteModal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p>Bạn có chắc chắn muốn xóa pack "<span id="deletePackName"></span>"?</p>
+                <p class="text-muted">Hành động này không thể hoàn tác.</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="cancelDeleteBtn">Hủy</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn">
+                    <i class="fas fa-trash"></i> Xóa
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <script src="js/firebase-config.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/stickers.js"></script>
+
+    <style>
+        .sticker-upload-zone {
+            border: 2px dashed var(--gray-600);
+            border-radius: var(--radius-lg);
+            padding: 1.5rem;
+            text-align: center;
+            transition: all 0.2s;
+            min-height: 120px;
+        }
+
+        .sticker-upload-zone:hover,
+        .sticker-upload-zone.dragover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .upload-placeholder i {
+            font-size: 2.5rem;
+            color: var(--gray-500);
+            margin-bottom: 0.5rem;
+        }
+
+        .upload-placeholder p {
+            margin: 0.5rem 0;
+            color: var(--text-secondary);
+        }
+
+        .sticker-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .sticker-preview-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: var(--radius);
+            overflow: hidden;
+            background: var(--gray-700);
+        }
+
+        .sticker-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .sticker-preview-item .remove-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--danger);
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 0.6rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sticker-preview-item.uploading::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-progress {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background: var(--gray-700);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
+</body>
+
+</html>

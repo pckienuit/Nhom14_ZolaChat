@@ -19,14 +19,9 @@ import java.util.Map;
 
 public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder> {
 
+    private final OnUserActionListener listener;
+    private final Map<String, String> friendRequestStatus = new HashMap<>();
     private List<User> users;
-    private OnUserActionListener listener;
-    private Map<String, String> friendRequestStatus = new HashMap<>();
-
-    public interface OnUserActionListener {
-        void onUserClick(User user);
-        void onAddFriendClick(User user);
-    }
 
     public UserAdapter(List<User> users, OnUserActionListener listener) {
         this.users = users;
@@ -72,12 +67,54 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
         }
     }
 
+    public interface OnUserActionListener {
+        void onUserClick(User user);
+
+        void onAddFriendClick(User user);
+    }
+
+    // DiffUtil Callback for efficient list updates
+    private static class UserDiffCallback extends DiffUtil.Callback {
+        private final List<User> oldList;
+        private final List<User> newList;
+
+        public UserDiffCallback(List<User> oldList, List<User> newList) {
+            this.oldList = oldList;
+            this.newList = newList;
+        }
+
+        @Override
+        public int getOldListSize() {
+            return oldList.size();
+        }
+
+        @Override
+        public int getNewListSize() {
+            return newList.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            return oldList.get(oldItemPosition).getId().equals(
+                    newList.get(newItemPosition).getId());
+        }
+
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            User oldUser = oldList.get(oldItemPosition);
+            User newUser = newList.get(newItemPosition);
+
+            return oldUser.getName().equals(newUser.getName()) &&
+                    oldUser.getEmail().equals(newUser.getEmail());
+        }
+    }
+
     class UserViewHolder extends RecyclerView.ViewHolder {
-        private TextView userAvatar;
-        private TextView userName;
-        private TextView userEmail;
-        private Button addFriendButton;
-        private TextView statusBadge;
+        private final TextView userAvatar;
+        private final TextView userName;
+        private final TextView userEmail;
+        private final Button addFriendButton;
+        private final TextView statusBadge;
 
         public UserViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -105,7 +142,7 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
         public void bind(User user, String status) {
             userName.setText(user.getName());
             userEmail.setText(user.getEmail());
-            
+
             // Set avatar
             if (user.getName() != null && !user.getName().isEmpty()) {
                 userAvatar.setText(String.valueOf(user.getName().charAt(0)).toUpperCase());
@@ -130,42 +167,6 @@ public class UserAdapter extends RecyclerView.Adapter<UserAdapter.UserViewHolder
                 statusBadge.setVisibility(View.VISIBLE);
                 statusBadge.setText("Friends");
             }
-        }
-    }
-    
-    // DiffUtil Callback for efficient list updates
-    private static class UserDiffCallback extends DiffUtil.Callback {
-        private final List<User> oldList;
-        private final List<User> newList;
-        
-        public UserDiffCallback(List<User> oldList, List<User> newList) {
-            this.oldList = oldList;
-            this.newList = newList;
-        }
-        
-        @Override
-        public int getOldListSize() {
-            return oldList.size();
-        }
-        
-        @Override
-        public int getNewListSize() {
-            return newList.size();
-        }
-        
-        @Override
-        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-            return oldList.get(oldItemPosition).getId().equals(
-                    newList.get(newItemPosition).getId());
-        }
-        
-        @Override
-        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-            User oldUser = oldList.get(oldItemPosition);
-            User newUser = newList.get(newItemPosition);
-            
-            return oldUser.getName().equals(newUser.getName()) &&
-                   oldUser.getEmail().equals(newUser.getEmail());
         }
     }
 }

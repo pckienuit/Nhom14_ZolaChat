@@ -24,21 +24,8 @@ import java.util.Calendar;
  */
 public class TimeFilterDialog extends DialogFragment {
 
-    public enum TimeFilterPreset {
-        NONE,
-        YESTERDAY,
-        LAST_WEEK,
-        LAST_MONTH,
-        CUSTOM
-    }
-
-    public interface TimeFilterListener {
-        void onTimeFilterApplied(TimeFilterPreset preset, Long startDate, Long endDate);
-    }
-
     private TimeFilterListener listener;
     private TimeFilterPreset currentPreset = TimeFilterPreset.NONE;
-    
     // UI Components
     private ChipGroup presetChipGroup;
     private Chip chipYesterday;
@@ -46,7 +33,6 @@ public class TimeFilterDialog extends DialogFragment {
     private Chip chipLastMonth;
     private Chip chipCustom;
     private LinearLayout customDateLayout;
-    
     // Date pickers
     private NumberPicker startDayPicker;
     private NumberPicker startMonthPicker;
@@ -86,7 +72,7 @@ public class TimeFilterDialog extends DialogFragment {
         chipLastMonth = view.findViewById(R.id.chipLastMonth);
         chipCustom = view.findViewById(R.id.chipCustom);
         customDateLayout = view.findViewById(R.id.customDateLayout);
-        
+
         startDayPicker = view.findViewById(R.id.startDayPicker);
         startMonthPicker = view.findViewById(R.id.startMonthPicker);
         startYearPicker = view.findViewById(R.id.startYearPicker);
@@ -102,7 +88,7 @@ public class TimeFilterDialog extends DialogFragment {
                 currentPreset = TimeFilterPreset.CUSTOM;
             } else {
                 customDateLayout.setVisibility(View.GONE);
-                
+
                 if (checkedId == R.id.chipYesterday) {
                     currentPreset = TimeFilterPreset.YESTERDAY;
                 } else if (checkedId == R.id.chipLastWeek) {
@@ -159,7 +145,7 @@ public class TimeFilterDialog extends DialogFragment {
         Button applyButton = view.findViewById(R.id.applyButton);
 
         cancelButton.setOnClickListener(v -> dismiss());
-        
+
         applyButton.setOnClickListener(v -> {
             if (listener != null) {
                 if (currentPreset == TimeFilterPreset.CUSTOM) {
@@ -178,13 +164,13 @@ public class TimeFilterDialog extends DialogFragment {
         });
     }
 
-    private Long getDateFromPickers(NumberPicker dayPicker, NumberPicker monthPicker, 
-                                     NumberPicker yearPicker, boolean isStartOfDay) {
+    private Long getDateFromPickers(NumberPicker dayPicker, NumberPicker monthPicker,
+                                    NumberPicker yearPicker, boolean isStartOfDay) {
         Calendar calendar = Calendar.getInstance();
         calendar.set(Calendar.YEAR, yearPicker.getValue());
         calendar.set(Calendar.MONTH, monthPicker.getValue() - 1); // 0-based
         calendar.set(Calendar.DAY_OF_MONTH, dayPicker.getValue());
-        
+
         if (isStartOfDay) {
             calendar.set(Calendar.HOUR_OF_DAY, 0);
             calendar.set(Calendar.MINUTE, 0);
@@ -195,7 +181,7 @@ public class TimeFilterDialog extends DialogFragment {
             calendar.set(Calendar.SECOND, 59);
         }
         calendar.set(Calendar.MILLISECOND, 0);
-        
+
         return calendar.getTimeInMillis();
     }
 
@@ -205,9 +191,9 @@ public class TimeFilterDialog extends DialogFragment {
         endCal.set(Calendar.MINUTE, 59);
         endCal.set(Calendar.SECOND, 59);
         endCal.set(Calendar.MILLISECOND, 0);
-        
+
         Calendar startCal = (Calendar) endCal.clone();
-        
+
         switch (preset) {
             case YESTERDAY:
                 // Yesterday: from 00:00:00 yesterday to 23:59:59 yesterday
@@ -217,7 +203,7 @@ public class TimeFilterDialog extends DialogFragment {
                 startCal.set(Calendar.SECOND, 0);
                 endCal.add(Calendar.DAY_OF_MONTH, -1);
                 break;
-                
+
             case LAST_WEEK:
                 // Last 7 days: from 00:00:00 7 days ago to now
                 startCal.add(Calendar.DAY_OF_MONTH, -7);
@@ -226,7 +212,7 @@ public class TimeFilterDialog extends DialogFragment {
                 startCal.set(Calendar.SECOND, 0);
                 endCal = Calendar.getInstance(); // Current time
                 break;
-                
+
             case LAST_MONTH:
                 // Last 30 days: from 00:00:00 30 days ago to now
                 startCal.add(Calendar.DAY_OF_MONTH, -30);
@@ -236,8 +222,20 @@ public class TimeFilterDialog extends DialogFragment {
                 endCal = Calendar.getInstance(); // Current time
                 break;
         }
-        
+
         return new DateRange(startCal.getTimeInMillis(), endCal.getTimeInMillis());
+    }
+
+    public enum TimeFilterPreset {
+        NONE,
+        YESTERDAY,
+        LAST_WEEK,
+        LAST_MONTH,
+        CUSTOM
+    }
+
+    public interface TimeFilterListener {
+        void onTimeFilterApplied(TimeFilterPreset preset, Long startDate, Long endDate);
     }
 
     private static class DateRange {
