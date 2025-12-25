@@ -275,6 +275,34 @@ public class CallRepository {
     }
 
     /**
+     * Update call status with timestamp (callback version)
+     *
+     * @param callId      ID of the call
+     * @param status      New status
+     * @param connectedAt Timestamp when call connected
+     * @param callback    Callback for success/error
+     */
+    public void updateCallStatusWithTimestamp(@NonNull String callId, @NonNull String status, long connectedAt, @NonNull OnCallUpdatedListener callback) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("status", status);
+        if (connectedAt > 0) {
+            updates.put("connectedAt", connectedAt);
+        }
+
+        db.collection(COLLECTION_CALLS)
+                .document(callId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Call status updated: " + callId + " -> " + status + ", connectedAt: " + connectedAt);
+                    callback.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error updating call status", e);
+                    callback.onError(e.getMessage());
+                });
+    }
+
+    /**
      * End a call (callback version)
      *
      * @param callId   ID of the call

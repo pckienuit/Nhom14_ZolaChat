@@ -28,7 +28,8 @@ public class Call {
     private long startTime;        // Timestamp when call was initiated
     private long endTime;          // Timestamp when call ended (0 if ongoing)
     private long duration;         // Duration in seconds (0 if not ended)
-
+    private long connectedAt;      // Timestamp when call was connected (accepted)
+    
     // Empty constructor required for Firestore serialization/deserialization
     public Call() {
         this.type = TYPE_VOICE;
@@ -36,6 +37,7 @@ public class Call {
         this.startTime = System.currentTimeMillis();
         this.endTime = 0;
         this.duration = 0;
+        this.connectedAt = 0;
     }
 
     // Constructor for creating a new call
@@ -49,11 +51,12 @@ public class Call {
         this.startTime = System.currentTimeMillis();
         this.endTime = 0;
         this.duration = 0;
+        this.connectedAt = 0;
     }
 
     // Full constructor
     public Call(String id, String conversationId, String callerId, String receiverId,
-                String type, String status, long startTime, long endTime, long duration) {
+                String type, String status, long startTime, long endTime, long duration, long connectedAt) {
         this.id = id;
         this.conversationId = conversationId;
         this.callerId = callerId;
@@ -63,6 +66,7 @@ public class Call {
         this.startTime = startTime;
         this.endTime = endTime;
         this.duration = duration;
+        this.connectedAt = connectedAt;
     }
 
     // Getters
@@ -137,6 +141,14 @@ public class Call {
 
     public void setDuration(long duration) {
         this.duration = duration;
+    }
+
+    public long getConnectedAt() {
+        return connectedAt;
+    }
+
+    public void setConnectedAt(long connectedAt) {
+        this.connectedAt = connectedAt;
     }
 
     // Helper methods

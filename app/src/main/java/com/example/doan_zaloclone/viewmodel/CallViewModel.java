@@ -91,7 +91,11 @@ public class CallViewModel extends AndroidViewModel {
 
                 // Update call status in Firestore
                 if (currentCallId != null) {
-                    callRepository.updateCallStatus(currentCallId, Call.STATUS_ONGOING,
+                    Call call = currentCall.getValue() != null ? currentCall.getValue().getData() : null;
+                    boolean hasTimestamp = call != null && call.getConnectedAt() > 0;
+                    
+                    if (hasTimestamp) {
+                         callRepository.updateCallStatus(currentCallId, Call.STATUS_ONGOING,
                             new CallRepository.OnCallUpdatedListener() {
                                 @Override
                                 public void onSuccess() {
@@ -103,6 +107,22 @@ public class CallViewModel extends AndroidViewModel {
                                     Log.e(TAG, "Failed to update call status: " + errorMsg);
                                 }
                             });
+                    } else {
+                        // First connection sets the start time
+                        long timestamp = System.currentTimeMillis();
+                        callRepository.updateCallStatusWithTimestamp(currentCallId, Call.STATUS_ONGOING, timestamp,
+                            new CallRepository.OnCallUpdatedListener() {
+                                @Override
+                                public void onSuccess() {
+                                    Log.d(TAG, "Call status updated to ONGOING with timestamp: " + timestamp);
+                                }
+
+                                @Override
+                                public void onError(String errorMsg) {
+                                    Log.e(TAG, "Failed to update call status: " + errorMsg);
+                                }
+                            });
+                    }
                 }
             }
 

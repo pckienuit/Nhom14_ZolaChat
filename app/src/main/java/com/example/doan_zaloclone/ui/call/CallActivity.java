@@ -412,12 +412,19 @@ public class CallActivity extends AppCompatActivity {
 
     private void setupObservers() {
         // Observe current call
+        // Observe current call
         callViewModel.getCurrentCall().observe(this, resource -> {
             if (resource.isLoading()) {
                 Log.d(TAG, "Loading call...");
             } else if (resource.isSuccess()) {
                 Call call = resource.getData();
                 if (call != null) {
+                    // Sync call start time from server to ensure consistent duration across devices
+                    if (call.getConnectedAt() > 0 && callStartTime != call.getConnectedAt()) {
+                        Log.d(TAG, "Syncing call start time from server: " + call.getConnectedAt());
+                        callStartTime = call.getConnectedAt();
+                    }
+                    
                     updateUIForCallStatus(call.getStatus());
                 }
             } else if (resource.isError()) {
@@ -882,7 +889,20 @@ public class CallActivity extends AppCompatActivity {
     }
 
     private void startDurationTimer() {
-        callStartTime = System.currentTimeMillis();
+        // Initialize start time if not set
+        if (callStartTime == 0) {
+            long connectedAt = 0;
+            if (callViewModel.getCurrentCall().getValue() != null && 
+                callViewModel.getCurrentCall().getValue().getData() != null) {
+                connectedAt = callViewModel.getCurrentCall().getValue().getData().getConnectedAt();
+            }
+            
+            if (connectedAt > 0) {
+                callStartTime = connectedAt;
+            } else {
+                callStartTime = System.currentTimeMillis();
+            }
+        }
         durationHandler = new Handler(Looper.getMainLooper());
         durationRunnable = new Runnable() {
             @Override
