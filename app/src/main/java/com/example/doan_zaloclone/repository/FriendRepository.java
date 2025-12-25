@@ -27,31 +27,32 @@ import retrofit2.Response;
  * Migrated to use REST API + WebSocket for real-time updates
  */
 public class FriendRepository {
-    
+
     private static final String TAG = "FriendRepository";
     private final ApiService apiService;
-    
+
     public FriendRepository() {
         this.apiService = RetrofitClient.getApiService();
     }
-    
+
     /**
      * Search users by name or email via API
+     *
      * @param query Search query (partial match supported)
      * @return LiveData containing Resource with list of users
      */
     public LiveData<Resource<List<User>>> searchUsers(@NonNull String query) {
         MutableLiveData<Resource<List<User>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         if (query.length() < 2) {
             result.setValue(Resource.success(new ArrayList<>()));
             return result;
         }
-        
+
         Map<String, String> searchQuery = new HashMap<>();
         searchQuery.put("query", query);
-        
+
         Call<Map<String, Object>> call = apiService.searchUsers(searchQuery);
         call.enqueue(new Callback<Map<String, Object>>() {
             @Override
@@ -59,42 +60,43 @@ public class FriendRepository {
                 if (response.isSuccessful() && response.body() != null) {
                     List<Map<String, Object>> usersData = (List<Map<String, Object>>) response.body().get("users");
                     List<User> users = parseUsersFromData(usersData);
-                    
+
                     Log.d(TAG, "✅ Search found " + users.size() + " users");
                     result.setValue(Resource.success(users));
                 } else {
                     result.setValue(Resource.error("HTTP " + response.code()));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 Log.e(TAG, "Search failed", t);
                 result.setValue(Resource.error(t.getMessage()));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Send a friend request via API
-     * @param fromUserId ID of user sending the request
-     * @param toUserId ID of user receiving the request
+     *
+     * @param fromUserId   ID of user sending the request
+     * @param toUserId     ID of user receiving the request
      * @param fromUserName Name of user sending (for notification)
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> sendFriendRequest(@NonNull String fromUserId,
-                                                          @NonNull String toUserId,
-                                                          @NonNull String fromUserName) {
+                                                         @NonNull String toUserId,
+                                                         @NonNull String fromUserName) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Map<String, String> requestData = new HashMap<>();
         requestData.put("senderId", fromUserId);
         requestData.put("receiverId", toUserId);
         requestData.put("senderName", fromUserName);
-        
+
         Call<ApiResponse<Void>> call = apiService.sendFriendRequest(requestData);
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override
@@ -107,29 +109,30 @@ public class FriendRepository {
                     result.setValue(Resource.error("HTTP " + response.code()));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
                 Log.e(TAG, "Network error", t);
                 result.setValue(Resource.error(t.getMessage()));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Accept a friend request via API
+     *
      * @param request The friend request to accept
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> acceptFriendRequest(@NonNull FriendRequest request) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Map<String, String> response = new HashMap<>();
         response.put("action", "accept");
-        
+
         Call<ApiResponse<Void>> call = apiService.respondToFriendRequest(request.getId(), response);
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override
@@ -141,29 +144,30 @@ public class FriendRepository {
                     result.setValue(Resource.error("HTTP " + resp.code()));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
                 Log.e(TAG, "Accept failed", t);
                 result.setValue(Resource.error(t.getMessage()));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Reject a friend request via API
+     *
      * @param request The friend request to reject
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> rejectFriendRequest(@NonNull FriendRequest request) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Map<String, String> response = new HashMap<>();
         response.put("action", "reject");
-        
+
         Call<ApiResponse<Void>> call = apiService.respondToFriendRequest(request.getId(), response);
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override
@@ -175,26 +179,27 @@ public class FriendRepository {
                     result.setValue(Resource.error("HTTP " + resp.code()));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
                 Log.e(TAG, "Reject failed", t);
                 result.setValue(Resource.error(t.getMessage()));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Get list of friends via API (returns full User objects)
+     *
      * @param userId ID of the user
      * @return LiveData containing Resource with list of friend User objects
      */
     public LiveData<Resource<List<User>>> getFriends(@NonNull String userId) {
         MutableLiveData<Resource<List<User>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         // First get friend IDs
         Call<Map<String, Object>> call = apiService.getFriends();
         call.enqueue(new Callback<Map<String, Object>>() {
@@ -206,11 +211,11 @@ public class FriendRepository {
                         result.setValue(Resource.success(new ArrayList<>()));
                         return;
                     }
-                    
+
                     // Batch fetch friend user data
                     Map<String, List<String>> batchRequest = new HashMap<>();
                     batchRequest.put("userIds", friendIds);
-                    
+
                     Call<Map<String, Object>> batchCall = apiService.getUsersBatch(batchRequest);
                     batchCall.enqueue(new Callback<Map<String, Object>>() {
                         @Override
@@ -218,14 +223,14 @@ public class FriendRepository {
                             if (batchResponse.isSuccessful() && batchResponse.body() != null) {
                                 List<Map<String, Object>> usersData = (List<Map<String, Object>>) batchResponse.body().get("users");
                                 List<User> friends = parseUsersFromData(usersData);
-                                
+
                                 Log.d(TAG, "✅ Friends loaded: " + friends.size());
                                 result.setValue(Resource.success(friends));
                             } else {
                                 result.setValue(Resource.error("HTTP " + batchResponse.code()));
                             }
                         }
-                        
+
                         @Override
                         public void onFailure(Call<Map<String, Object>> batchCall, Throwable t) {
                             Log.e(TAG, "Failed to batch load friend data", t);
@@ -236,26 +241,27 @@ public class FriendRepository {
                     result.setValue(Resource.error("HTTP " + response.code()));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 Log.e(TAG, "Failed to load friends", t);
                 result.setValue(Resource.error(t.getMessage()));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Get friend requests via API
+     *
      * @param userId ID of the user
      * @return LiveData containing Resource with list of friend requests
      */
     public LiveData<Resource<List<FriendRequest>>> getFriendRequests(@NonNull String userId) {
         MutableLiveData<Resource<List<FriendRequest>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Call<Map<String, Object>> call = apiService.getFriendRequests();
         call.enqueue(new Callback<Map<String, Object>>() {
             @Override
@@ -263,35 +269,36 @@ public class FriendRepository {
                 if (response.isSuccessful() && response.body() != null) {
                     List<Map<String, Object>> requestsData = (List<Map<String, Object>>) response.body().get("requests");
                     List<FriendRequest> requests = parseFriendRequestsFromData(requestsData);
-                    
+
                     Log.d(TAG, "✅ Friend requests loaded: " + requests.size());
                     result.setValue(Resource.success(requests));
                 } else {
                     result.setValue(Resource.error("HTTP " + response.code()));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 Log.e(TAG, "Failed to load requests", t);
                 result.setValue(Resource.error(t.getMessage()));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Remove a friend via API
+     *
      * @param userId1 Current user ID
      * @param userId2 Friend's user ID
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> removeFriend(@NonNull String userId1,
-                                                     @NonNull String userId2) {
+                                                    @NonNull String userId2) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Call<ApiResponse<Void>> call = apiService.unfriend(userId2);
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override
@@ -303,28 +310,29 @@ public class FriendRepository {
                     result.setValue(Resource.error("HTTP " + response.code()));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
                 Log.e(TAG, "Failed to remove friend", t);
                 result.setValue(Resource.error(t.getMessage()));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Check if two users are friends
+     *
      * @param userId1 First user ID
      * @param userId2 Second user ID
      * @return LiveData containing Resource with friendship status
      */
-    public LiveData<Resource<Boolean>> checkFriendship(@NonNull String userId1, 
-                                                        @NonNull String userId2) {
+    public LiveData<Resource<Boolean>> checkFriendship(@NonNull String userId1,
+                                                       @NonNull String userId2) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         // Get friends list and check if userId2 is in it
         LiveData<Resource<List<User>>> friendsLiveData = getFriends(userId1);
         friendsLiveData.observeForever(friendsResource -> {
@@ -343,21 +351,22 @@ public class FriendRepository {
                 }
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Check friend request status between two users
+     *
      * @param fromUserId Sender ID
-     * @param toUserId Receiver ID
+     * @param toUserId   Receiver ID
      * @return LiveData containing Resource with status string
      */
     public LiveData<Resource<String>> checkFriendRequestStatus(@NonNull String fromUserId,
-                                                                @NonNull String toUserId) {
+                                                               @NonNull String toUserId) {
         MutableLiveData<Resource<String>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         // Get friend requests and check status
         LiveData<Resource<List<FriendRequest>>> requestsLiveData = getFriendRequests(toUserId);
         requestsLiveData.observeForever(requestsResource -> {
@@ -376,12 +385,12 @@ public class FriendRepository {
                 }
             }
         });
-        
+
         return result;
     }
-    
+
     // ========== Helper methods ==========
-    
+
     private List<User> parseUsersFromData(List<Map<String, Object>> usersData) {
         List<User> users = new ArrayList<>();
         if (usersData != null) {
@@ -394,7 +403,7 @@ public class FriendRepository {
         }
         return users;
     }
-    
+
     private User parseUserFromMap(Map<String, Object> userData) {
         try {
             User user = new User();
@@ -403,17 +412,17 @@ public class FriendRepository {
             user.setEmail((String) userData.get("email"));
             user.setAvatarUrl((String) userData.get("avatarUrl"));
             user.setBio((String) userData.get("bio"));
-            
+
             // Note: User model doesn't have isOnline field in Android
             // Online status is handled separately via presence system
-            
+
             return user;
         } catch (Exception e) {
             Log.e(TAG, "Error parsing user", e);
             return null;
         }
     }
-    
+
     private List<FriendRequest> parseFriendRequestsFromData(List<Map<String, Object>> requestsData) {
         List<FriendRequest> requests = new ArrayList<>();
         if (requestsData != null) {
@@ -426,7 +435,7 @@ public class FriendRepository {
         }
         return requests;
     }
-    
+
     private FriendRequest parseFriendRequestFromMap(Map<String, Object> requestData) {
         try {
             FriendRequest request = new FriendRequest();
@@ -436,21 +445,21 @@ public class FriendRepository {
             request.setFromUserName((String) requestData.get("fromUserName"));
             request.setFromUserEmail((String) requestData.get("fromUserEmail"));
             request.setStatus((String) requestData.get("status"));
-            
+
             Object timestampObj = requestData.get("createdAt");
             if (timestampObj instanceof Number) {
                 request.setTimestamp(((Number) timestampObj).longValue());
             }
-            
+
             Log.d(TAG, "Parsed friend request: " + request.getFromUserName() + " (" + request.getFromUserId() + ")");
-            
+
             return request;
         } catch (Exception e) {
             Log.e(TAG, "Error parsing friend request", e);
             return null;
         }
     }
-    
+
     /**
      * Cleanup method (needed if we add WebSocket listeners in future)
      */

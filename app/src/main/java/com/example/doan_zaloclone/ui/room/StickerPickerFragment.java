@@ -13,7 +13,6 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.lifecycle.Observer;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.viewpager2.widget.ViewPager2;
@@ -22,7 +21,6 @@ import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Sticker;
 import com.example.doan_zaloclone.models.StickerPack;
 import com.example.doan_zaloclone.repository.StickerRepository;
-import com.example.doan_zaloclone.utils.Resource;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.firebase.auth.FirebaseAuth;
@@ -57,10 +55,6 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
     // Callback
     private OnStickerSelectedListener stickerSelectedListener;
 
-    public interface OnStickerSelectedListener {
-        void onStickerSelected(Sticker sticker);
-    }
-
     public void setOnStickerSelectedListener(OnStickerSelectedListener listener) {
         this.stickerSelectedListener = listener;
     }
@@ -69,7 +63,7 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         stickerRepository = StickerRepository.getInstance();
-        
+
         if (FirebaseAuth.getInstance().getCurrentUser() != null) {
             currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
         }
@@ -85,7 +79,7 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        
+
         initViews(view);
         setupAdapters();
         setupListeners();
@@ -111,7 +105,7 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
         // Sticker pager adapter
         stickerPagerAdapter = new StickerPagerAdapter();
         stickerPager.setAdapter(stickerPagerAdapter);
-        
+
         // Set sticker click listener
         stickerPagerAdapter.setOnStickerClickListener(new StickerGridAdapter.OnStickerClickListener() {
             @Override
@@ -146,7 +140,7 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
                     // Pack tab selected
                     packTabAdapter.setSelectedPosition(position - 1);
                     highlightRecentTab(false);
-                    
+
                     // Load stickers for this pack if not loaded
                     StickerPack pack = stickerPagerAdapter.getPackAtPosition(position);
                     if (pack != null) {
@@ -185,8 +179,8 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
 
     private void highlightRecentTab(boolean highlight) {
         // Change background of recent tab based on selection
-        tabRecent.setBackgroundColor(highlight ? 
-                getResources().getColor(R.color.colorPrimaryLight, null) : 
+        tabRecent.setBackgroundColor(highlight ?
+                getResources().getColor(R.color.colorPrimaryLight, null) :
                 getResources().getColor(android.R.color.transparent, null));
     }
 
@@ -196,7 +190,7 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
             loadUserSavedPacks();
             loadRecentStickers();
         }
-        
+
         // Load official packs
         loadOfficialPacks();
     }
@@ -206,7 +200,7 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
             if (resource.isSuccess() && resource.getData() != null) {
                 // Add user packs to the beginning
                 List<StickerPack> allPacks = new ArrayList<>(resource.getData());
-                
+
                 // Merge with official packs
                 for (StickerPack pack : stickerPacks) {
                     boolean exists = false;
@@ -220,7 +214,7 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
                         allPacks.add(pack);
                     }
                 }
-                
+
                 updatePacksUI(allPacks);
             }
         });
@@ -231,7 +225,7 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
             if (resource.isSuccess() && resource.getData() != null) {
                 stickerPacks = resource.getData();
                 updatePacksUI(stickerPacks);
-                
+
                 // Load stickers for the first pack
                 if (!stickerPacks.isEmpty()) {
                     loadStickersForPack(stickerPacks.get(0).getId());
@@ -264,7 +258,7 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
         stickerPacks = packs;
         packTabAdapter.setPacks(packs);
         stickerPagerAdapter.setPacks(packs);
-        
+
         // Load stickers for all packs
         for (StickerPack pack : packs) {
             if (pack.getId() != null) {
@@ -300,7 +294,7 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
             behavior.setSkipCollapsed(true);
         }
     }
-    
+
     @Override
     public void onResume() {
         super.onResume();
@@ -308,5 +302,9 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
         if (currentUserId != null) {
             loadUserSavedPacks();
         }
+    }
+
+    public interface OnStickerSelectedListener {
+        void onStickerSelected(Sticker sticker);
     }
 }

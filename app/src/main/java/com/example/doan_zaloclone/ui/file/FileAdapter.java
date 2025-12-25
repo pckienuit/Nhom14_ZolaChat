@@ -14,7 +14,6 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.FileCategory;
 import com.example.doan_zaloclone.models.FileItem;
-import com.example.doan_zaloclone.models.Message;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,20 +23,20 @@ import java.util.List;
  * Supports grid layout for media and list layout for files/links
  */
 public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
-    
+
     private final FileCategory category;
     private List<FileItem> fileItems = new ArrayList<>();
     private OnItemClickListener clickListener;
-    
+
     public FileAdapter(FileCategory category) {
         this.category = category;
     }
-    
+
     @NonNull
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
         LayoutInflater inflater = LayoutInflater.from(parent.getContext());
-        
+
         switch (category) {
             case MEDIA:
                 View mediaView = inflater.inflate(R.layout.item_file_media, parent, false);
@@ -52,11 +51,11 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 throw new IllegalArgumentException("Unknown category: " + category);
         }
     }
-    
+
     @Override
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         FileItem item = fileItems.get(position);
-        
+
         if (holder instanceof MediaViewHolder) {
             ((MediaViewHolder) holder).bind(item, clickListener);
         } else if (holder instanceof DocumentViewHolder) {
@@ -65,12 +64,12 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             ((LinkViewHolder) holder).bind(item, clickListener);
         }
     }
-    
+
     @Override
     public int getItemCount() {
         return fileItems.size();
     }
-    
+
     /**
      * Update the entire list of files
      */
@@ -78,27 +77,31 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         this.fileItems = newFiles != null ? new ArrayList<>(newFiles) : new ArrayList<>();
         notifyDataSetChanged();
     }
-    
+
     /**
      * Append more files for pagination
      */
     public void appendFiles(List<FileItem> moreFiles) {
         if (moreFiles == null || moreFiles.isEmpty()) return;
-        
+
         int startPosition = fileItems.size();
         fileItems.addAll(moreFiles);
         notifyItemRangeInserted(startPosition, moreFiles.size());
     }
-    
+
     /**
      * Set click listener for file items
      */
     public void setOnItemClickListener(OnItemClickListener listener) {
         this.clickListener = listener;
     }
-    
+
     // ========== ViewHolders ==========
-    
+
+    public interface OnItemClickListener {
+        void onItemClick(FileItem item, int position);
+    }
+
     /**
      * ViewHolder for media items (images/videos) in grid layout
      */
@@ -107,7 +110,7 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         TextView videoDurationTextView;
         TextView senderNameTextView;
         TextView dateTextView;
-        
+
         MediaViewHolder(@NonNull View itemView) {
             super(itemView);
             thumbnailImageView = itemView.findViewById(R.id.thumbnailImageView);
@@ -115,7 +118,7 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
             dateTextView = itemView.findViewById(R.id.dateTextView);
         }
-        
+
         void bind(FileItem item, OnItemClickListener clickListener) {
             // Load thumbnail
             String imageUrl = item.getFileUrl();
@@ -131,7 +134,7 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             } else {
                 thumbnailImageView.setImageResource(R.drawable.ic_file);
             }
-            
+
             // Show video duration if video
             if (item.isVideo()) {
                 videoDurationTextView.setVisibility(View.VISIBLE);
@@ -140,14 +143,14 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             } else {
                 videoDurationTextView.setVisibility(View.GONE);
             }
-            
+
             // Sender name
             String senderName = item.getSenderName();
             senderNameTextView.setText(senderName != null ? senderName : "User");
-            
+
             // Date
             dateTextView.setText(item.getFormattedDate());
-            
+
             // Click listener
             itemView.setOnClickListener(v -> {
                 if (clickListener != null) {
@@ -156,7 +159,7 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             });
         }
     }
-    
+
     /**
      * ViewHolder for document files in list layout
      */
@@ -166,7 +169,7 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         TextView fileInfoTextView;
         TextView senderNameTextView;
         TextView dateTextView;
-        
+
         DocumentViewHolder(@NonNull View itemView) {
             super(itemView);
             fileIconImageView = itemView.findViewById(R.id.fileIconImageView);
@@ -175,27 +178,27 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
             dateTextView = itemView.findViewById(R.id.dateTextView);
         }
-        
+
         void bind(FileItem item, OnItemClickListener clickListener) {
             // File name
             fileNameTextView.setText(item.getDisplayName());
-            
+
             // File info (type and size)
             String fileType = item.getFileTypeLabel();
             String fileSize = item.getFormattedFileSize();
             fileInfoTextView.setText(fileType + " • " + fileSize);
-            
+
             // File icon based on type
             int iconRes = getFileIcon(item);
             fileIconImageView.setImageResource(iconRes);
-            
+
             // Sender name
             String senderName = item.getSenderName();
             senderNameTextView.setText(senderName != null ? senderName : "User");
-            
+
             // Date
             dateTextView.setText(item.getFormattedDate());
-            
+
             // Click listener
             itemView.setOnClickListener(v -> {
                 if (clickListener != null) {
@@ -203,10 +206,10 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 }
             });
         }
-        
+
         private int getFileIcon(FileItem item) {
             String fileType = item.getFileTypeLabel().toLowerCase();
-            
+
             if (fileType.contains("pdf")) {
                 return R.drawable.ic_file_pdf;
             } else if (fileType.contains("doc")) {
@@ -223,7 +226,9 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             }
         }
     }
-    
+
+    // ========== Click Listener Interface ==========
+
     /**
      * ViewHolder for link items in list layout
      */
@@ -233,7 +238,7 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         TextView linkUrlTextView;
         TextView senderNameTextView;
         TextView dateTextView;
-        
+
         LinkViewHolder(@NonNull View itemView) {
             super(itemView);
             linkIconImageView = itemView.findViewById(R.id.linkIconImageView);
@@ -242,22 +247,22 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             senderNameTextView = itemView.findViewById(R.id.senderNameTextView);
             dateTextView = itemView.findViewById(R.id.dateTextView);
         }
-        
+
         void bind(FileItem item, OnItemClickListener clickListener) {
             // Link title (domain)
             linkTitleTextView.setText(item.getDisplayName());
-            
+
             // Full URL
             String url = item.getExtractedUrl();
             linkUrlTextView.setText(url != null ? url : "");
-            
+
             // Sender name
             String senderName = item.getSenderName();
             senderNameTextView.setText(senderName != null ? senderName : "User");
-            
+
             // Date
             dateTextView.setText(item.getFormattedDate());
-            
+
             // Click listener
             itemView.setOnClickListener(v -> {
                 if (clickListener != null) {
@@ -265,11 +270,5 @@ public class FileAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 }
             });
         }
-    }
-    
-    // ========== Click Listener Interface ==========
-    
-    public interface OnItemClickListener {
-        void onItemClick(FileItem item, int position);
     }
 }

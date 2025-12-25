@@ -42,85 +42,85 @@ public class Sticker {
         return id;
     }
 
-    public String getPackId() {
-        return packId;
-    }
-
-    public String getImageUrl() {
-        return imageUrl;
-    }
-
-    public String getThumbnailUrl() {
-        return thumbnailUrl;
-    }
-
-    public boolean isAnimated() {
-        return isAnimated;
-    }
-
-    public int getWidth() {
-        return width;
-    }
-
-    public int getHeight() {
-        return height;
-    }
-
-    public String getCreatorId() {
-        return creatorId;
-    }
-
-    public long getCreatedAt() {
-        return createdAt;
-    }
-
-    public String[] getTags() {
-        return tags;
-    }
-
-    public String getFormat() {
-        return format;
-    }
-
     // Setters (for Firestore)
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getPackId() {
+        return packId;
     }
 
     public void setPackId(String packId) {
         this.packId = packId;
     }
 
+    public String getImageUrl() {
+        return imageUrl;
+    }
+
     public void setImageUrl(String imageUrl) {
         this.imageUrl = imageUrl;
+    }
+
+    public String getThumbnailUrl() {
+        return thumbnailUrl;
     }
 
     public void setThumbnailUrl(String thumbnailUrl) {
         this.thumbnailUrl = thumbnailUrl;
     }
 
+    public boolean isAnimated() {
+        return isAnimated;
+    }
+
     public void setAnimated(boolean animated) {
         isAnimated = animated;
+    }
+
+    public int getWidth() {
+        return width;
     }
 
     public void setWidth(int width) {
         this.width = width;
     }
 
+    public int getHeight() {
+        return height;
+    }
+
     public void setHeight(int height) {
         this.height = height;
+    }
+
+    public String getCreatorId() {
+        return creatorId;
     }
 
     public void setCreatorId(String creatorId) {
         this.creatorId = creatorId;
     }
 
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
     public void setCreatedAt(long createdAt) {
         this.createdAt = createdAt;
     }
 
+    public String[] getTags() {
+        return tags;
+    }
+
     public void setTags(String[] tags) {
         this.tags = tags;
+    }
+
+    public String getFormat() {
+        return format;
     }
 
     public void setFormat(String format) {

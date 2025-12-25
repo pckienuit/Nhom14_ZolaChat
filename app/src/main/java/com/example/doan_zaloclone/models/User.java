@@ -12,10 +12,10 @@ public class User {
     private String coverUrl; // Cover image URL
     private String phoneNumber; // Phone number (optional, for business card and future phone login)
     private Map<String, Boolean> devices; // Map<deviceToken, true> để hỗ trợ đa thiết bị
-    
+
     // Custom tags - map of tag name to boolean (for Firestore compatibility)
     private Map<String, Boolean> customTags;
-    
+
     // Custom tag colors - map of tag name to color integer
     private Map<String, Integer> customTagColors;
 
@@ -47,61 +47,61 @@ public class User {
         return id;
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public String getAvatarUrl() {
-        return avatarUrl;
-    }
-
-    public String getBio() {
-        return bio;
-    }
-
-    public String getCoverUrl() {
-        return coverUrl;
-    }
-
-    public String getPhoneNumber() {
-        return phoneNumber;
-    }
-
-    public Map<String, Boolean> getDevices() {
-        return devices;
-    }
-
     // Setters (cần cho Firestore)
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getName() {
+        return name;
     }
 
     public void setName(String name) {
         this.name = name;
     }
 
+    public String getEmail() {
+        return email;
+    }
+
     public void setEmail(String email) {
         this.email = email;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
     }
 
     public void setAvatarUrl(String avatarUrl) {
         this.avatarUrl = avatarUrl;
     }
 
+    public String getBio() {
+        return bio;
+    }
+
     public void setBio(String bio) {
         this.bio = bio;
+    }
+
+    public String getCoverUrl() {
+        return coverUrl;
     }
 
     public void setCoverUrl(String coverUrl) {
         this.coverUrl = coverUrl;
     }
 
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+    }
+
+    public Map<String, Boolean> getDevices() {
+        return devices;
     }
 
     public void setDevices(Map<String, Boolean> devices) {
@@ -125,29 +125,29 @@ public class User {
     public boolean hasDevice(String deviceToken) {
         return this.devices != null && this.devices.containsKey(deviceToken);
     }
-    
+
     // Custom tags getters/setters
     public java.util.List<String> getCustomTags() {
         if (customTags == null) return new java.util.ArrayList<>();
         return new java.util.ArrayList<>(customTags.keySet());
     }
-    
-    public Map<String, Boolean> getCustomTagsMap() {
-        return customTags != null ? customTags : new HashMap<>();
-    }
-    
+
     public void setCustomTags(Map<String, Boolean> customTags) {
         this.customTags = customTags;
     }
-    
+
+    public Map<String, Boolean> getCustomTagsMap() {
+        return customTags != null ? customTags : new HashMap<>();
+    }
+
     public Map<String, Integer> getCustomTagColors() {
         return customTagColors != null ? customTagColors : new HashMap<>();
     }
-    
+
     public void setCustomTagColors(Map<String, Integer> customTagColors) {
         this.customTagColors = customTagColors;
     }
-    
+
     // Custom tags helper methods
     public void addCustomTag(String tagName, int color) {
         if (this.customTags == null) {
@@ -156,11 +156,11 @@ public class User {
         if (this.customTagColors == null) {
             this.customTagColors = new HashMap<>();
         }
-        
+
         this.customTags.put(tagName, true);
         this.customTagColors.put(tagName, color);
     }
-    
+
     public void removeCustomTag(String tagName) {
         if (this.customTags != null) {
             this.customTags.remove(tagName);
@@ -169,29 +169,29 @@ public class User {
             this.customTagColors.remove(tagName);
         }
     }
-    
+
     public boolean hasCustomTag(String tagName) {
         return this.customTags != null && this.customTags.containsKey(tagName);
     }
-    
+
     public Integer getCustomTagColor(String tagName) {
         if (this.customTagColors != null && this.customTagColors.containsKey(tagName)) {
             return this.customTagColors.get(tagName);
         }
         return null;
     }
-    
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         User user = (User) o;
         return java.util.Objects.equals(id, user.id) &&
-               java.util.Objects.equals(name, user.name) &&
-               java.util.Objects.equals(email, user.email) &&
-               java.util.Objects.equals(avatarUrl, user.avatarUrl);
+                java.util.Objects.equals(name, user.name) &&
+                java.util.Objects.equals(email, user.email) &&
+                java.util.Objects.equals(avatarUrl, user.avatarUrl);
     }
-    
+
     @Override
     public int hashCode() {
         return java.util.Objects.hash(id, name, email, avatarUrl);

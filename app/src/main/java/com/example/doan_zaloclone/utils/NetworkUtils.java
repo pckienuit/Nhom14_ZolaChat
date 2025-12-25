@@ -11,39 +11,40 @@ import android.util.Log;
  * Utility class to check network connectivity
  */
 public class NetworkUtils {
-    
+
     private static final String TAG = "NetworkUtils";
-    
+
     /**
      * Check if device has active internet connection
+     *
      * @param context Application context
      * @return true if connected, false otherwise
      */
     public static boolean isNetworkAvailable(Context context) {
-        ConnectivityManager connectivityManager = 
+        ConnectivityManager connectivityManager =
                 (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        
+
         if (connectivityManager == null) {
             Log.e(TAG, "ConnectivityManager is null");
             return false;
         }
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             android.net.Network network = connectivityManager.getActiveNetwork();
             if (network == null) {
                 Log.w(TAG, "No active network");
                 return false;
             }
-            
+
             NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(network);
             if (capabilities == null) {
                 Log.w(TAG, "Network capabilities is null");
                 return false;
             }
-            
+
             boolean hasInternet = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
                     capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
-            
+
             Log.d(TAG, "Network available: " + hasInternet);
             return hasInternet;
         } else {
@@ -53,29 +54,29 @@ public class NetworkUtils {
             return connected;
         }
     }
-    
+
     /**
      * Get network type as string for debugging
      */
     public static String getNetworkType(Context context) {
-        ConnectivityManager connectivityManager = 
+        ConnectivityManager connectivityManager =
                 (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        
+
         if (connectivityManager == null) {
             return "Unknown (null ConnectivityManager)";
         }
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             android.net.Network network = connectivityManager.getActiveNetwork();
             if (network == null) {
                 return "No active network";
             }
-            
+
             NetworkCapabilities capabilities = connectivityManager.getNetworkCapabilities(network);
             if (capabilities == null) {
                 return "Unknown (null capabilities)";
             }
-            
+
             if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
                 return "WiFi";
             } else if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {

@@ -21,24 +21,19 @@ import java.util.List;
  * Adapter for displaying sticker packs in the store
  */
 public class StickerPackStoreAdapter extends RecyclerView.Adapter<StickerPackStoreAdapter.ViewHolder> {
-    
+
+    private final OnPackActionListener listener;
     private List<StickerPack> packs = new ArrayList<>();
-    private OnPackActionListener listener;
-    
-    public interface OnPackActionListener {
-        void onDownloadPack(StickerPack pack);
-        void onPackClick(StickerPack pack);
-    }
-    
+
     public StickerPackStoreAdapter(OnPackActionListener listener) {
         this.listener = listener;
     }
-    
+
     public void setPacks(List<StickerPack> packs) {
         this.packs = packs != null ? packs : new ArrayList<>();
         notifyDataSetChanged();
     }
-    
+
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -46,24 +41,30 @@ public class StickerPackStoreAdapter extends RecyclerView.Adapter<StickerPackSto
                 .inflate(R.layout.item_store_sticker_pack, parent, false);
         return new ViewHolder(view);
     }
-    
+
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         holder.bind(packs.get(position));
     }
-    
+
     @Override
     public int getItemCount() {
         return packs.size();
     }
-    
+
+    public interface OnPackActionListener {
+        void onDownloadPack(StickerPack pack);
+
+        void onPackClick(StickerPack pack);
+    }
+
     class ViewHolder extends RecyclerView.ViewHolder {
-        private ImageView packIcon;
-        private TextView packName;
-        private TextView stickerCount;
-        private TextView downloadCount;
-        private MaterialButton btnDownload;
-        
+        private final ImageView packIcon;
+        private final TextView packName;
+        private final TextView stickerCount;
+        private final TextView downloadCount;
+        private final MaterialButton btnDownload;
+
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             packIcon = itemView.findViewById(R.id.packIcon);
@@ -72,11 +73,11 @@ public class StickerPackStoreAdapter extends RecyclerView.Adapter<StickerPackSto
             downloadCount = itemView.findViewById(R.id.downloadCount);
             btnDownload = itemView.findViewById(R.id.btnDownload);
         }
-        
+
         public void bind(StickerPack pack) {
             packName.setText(pack.getName());
             stickerCount.setText(pack.getStickerCount() + " stickers");
-            
+
             // Format download count
             long downloads = pack.getDownloadCount();
             String downloadText;
@@ -86,7 +87,7 @@ public class StickerPackStoreAdapter extends RecyclerView.Adapter<StickerPackSto
                 downloadText = "↓ " + downloads;
             }
             downloadCount.setText(downloadText);
-            
+
             // Load pack icon
             if (pack.getIconUrl() != null && !pack.getIconUrl().isEmpty()) {
                 Glide.with(itemView.getContext())
@@ -98,14 +99,14 @@ public class StickerPackStoreAdapter extends RecyclerView.Adapter<StickerPackSto
             } else {
                 packIcon.setImageResource(R.drawable.ic_sticker);
             }
-            
+
             // Download button
             btnDownload.setOnClickListener(v -> {
                 if (listener != null) {
                     listener.onDownloadPack(pack);
                 }
             });
-            
+
             // Pack click
             itemView.setOnClickListener(v -> {
                 if (listener != null) {

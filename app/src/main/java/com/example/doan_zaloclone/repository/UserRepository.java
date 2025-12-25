@@ -26,23 +26,24 @@ import retrofit2.Response;
  * Migrated to use REST API instead of direct Firestore access
  */
 public class UserRepository {
-    
+
     private static final String TAG = "UserRepository";
     private final ApiService apiService;
-    
+
     public UserRepository() {
         this.apiService = RetrofitClient.getApiService();
     }
-    
+
     /**
      * Get user by ID via REST API
+     *
      * @param userId ID of the user to fetch
      * @return LiveData containing Resource with User data
      */
     public LiveData<Resource<User>> getUser(@NonNull String userId) {
         MutableLiveData<Resource<User>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Call<User> call = apiService.getUser(userId);
         call.enqueue(new Callback<User>() {
             @Override
@@ -57,7 +58,7 @@ public class UserRepository {
                     result.setValue(Resource.error(error));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<User> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -65,19 +66,20 @@ public class UserRepository {
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Get username by user ID
+     *
      * @param userId ID of the user
      * @return LiveData containing Resource with username string
      */
     public LiveData<Resource<String>> getUserName(@NonNull String userId) {
         MutableLiveData<Resource<String>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Call<User> call = apiService.getUser(userId);
         call.enqueue(new Callback<User>() {
             @Override
@@ -90,27 +92,28 @@ public class UserRepository {
                     result.setValue(Resource.success("User")); // Default on error
                 }
             }
-            
+
             @Override
             public void onFailure(Call<User> call, Throwable t) {
                 result.setValue(Resource.success("User")); // Default on error
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Update user information via REST API
-     * @param userId ID of the user to update
+     *
+     * @param userId  ID of the user to update
      * @param updates Map of field updates
      * @return LiveData containing Resource with update success status
      */
-    public LiveData<Resource<Boolean>> updateUser(@NonNull String userId, 
-                                                   @NonNull Map<String, Object> updates) {
+    public LiveData<Resource<Boolean>> updateUser(@NonNull String userId,
+                                                  @NonNull Map<String, Object> updates) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Call<ApiResponse<Void>> call = apiService.updateUser(userId, updates);
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override
@@ -124,7 +127,7 @@ public class UserRepository {
                     result.setValue(Resource.error(error));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -132,27 +135,28 @@ public class UserRepository {
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Search users by name or email via REST API
+     *
      * @param query Search query string
      * @return LiveData containing Resource with list of users
      */
     public LiveData<Resource<List<User>>> searchUsers(@NonNull String query) {
         MutableLiveData<Resource<List<User>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         if (query.length() < 2) {
             result.setValue(Resource.success(new ArrayList<>()));
             return result;
         }
-        
+
         Map<String, String> searchQuery = new HashMap<>();
         searchQuery.put("query", query);
-        
+
         Call<Map<String, Object>> call = apiService.searchUsers(searchQuery);
         call.enqueue(new Callback<Map<String, Object>>() {
             @Override
@@ -160,7 +164,7 @@ public class UserRepository {
                 if (response.isSuccessful() && response.body() != null) {
                     List<Map<String, Object>> usersData = (List<Map<String, Object>>) response.body().get("users");
                     List<User> users = new ArrayList<>();
-                    
+
                     if (usersData != null) {
                         for (Map<String, Object> userData : usersData) {
                             User user = parseUserFromMap(userData);
@@ -169,41 +173,42 @@ public class UserRepository {
                             }
                         }
                     }
-                    
+
                     Log.d(TAG, "✅ Found " + users.size() + " users for query: " + query);
                     result.setValue(Resource.success(users));
                 } else {
                     result.setValue(Resource.error("HTTP " + response.code()));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 Log.e(TAG, "Search error", t);
                 result.setValue(Resource.error(t.getMessage()));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Get multiple users by list of IDs (batch operation)
+     *
      * @param userIds List of user IDs
      * @return LiveData containing Resource with list of users
      */
     public LiveData<Resource<List<User>>> getUsersByIds(@NonNull List<String> userIds) {
         MutableLiveData<Resource<List<User>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         if (userIds.isEmpty()) {
             result.setValue(Resource.success(new ArrayList<>()));
             return result;
         }
-        
+
         Map<String, List<String>> requestBody = new HashMap<>();
         requestBody.put("userIds", userIds);
-        
+
         Call<Map<String, Object>> call = apiService.getUsersBatch(requestBody);
         call.enqueue(new Callback<Map<String, Object>>() {
             @Override
@@ -211,7 +216,7 @@ public class UserRepository {
                 if (response.isSuccessful() && response.body() != null) {
                     List<Map<String, Object>> usersData = (List<Map<String, Object>>) response.body().get("users");
                     List<User> users = new ArrayList<>();
-                    
+
                     if (usersData != null) {
                         for (Map<String, Object> userData : usersData) {
                             User user = parseUserFromMap(userData);
@@ -220,36 +225,26 @@ public class UserRepository {
                             }
                         }
                     }
-                    
+
                     Log.d(TAG, "✅ Batch fetched " + users.size() + " users");
                     result.setValue(Resource.success(users));
                 } else {
                     result.setValue(Resource.error("HTTP " + response.code()));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 Log.e(TAG, "Batch fetch error", t);
                 result.setValue(Resource.error(t.getMessage()));
             }
         });
-        
+
         return result;
     }
-    
+
     // ========== Callback-based methods for backward compatibility ==========
-    
-    public interface OnUserLoadedListener {
-        void onUserLoaded(User user);
-        void onError(String error);
-    }
-    
-    public interface OnUpdateListener {
-        void onSuccess();
-        void onError(String error);
-    }
-    
+
     /**
      * Get user by ID with callback (backward compatible)
      */
@@ -265,15 +260,15 @@ public class UserRepository {
             }
         });
     }
-    
+
     /**
      * Update user name
      */
-    public void updateUserName(@NonNull String userId, @NonNull String newName, 
+    public void updateUserName(@NonNull String userId, @NonNull String newName,
                                @NonNull OnUpdateListener listener) {
         Map<String, Object> updates = new HashMap<>();
         updates.put("name", newName);
-        
+
         LiveData<Resource<Boolean>> liveData = updateUser(userId, updates);
         liveData.observeForever(resource -> {
             if (resource != null) {
@@ -285,15 +280,15 @@ public class UserRepository {
             }
         });
     }
-    
+
     /**
      * Update user bio
      */
-    public void updateUserBio(@NonNull String userId, @NonNull String newBio, 
+    public void updateUserBio(@NonNull String userId, @NonNull String newBio,
                               @NonNull OnUpdateListener listener) {
         Map<String, Object> updates = new HashMap<>();
         updates.put("bio", newBio);
-        
+
         LiveData<Resource<Boolean>> liveData = updateUser(userId, updates);
         liveData.observeForever(resource -> {
             if (resource != null) {
@@ -305,15 +300,15 @@ public class UserRepository {
             }
         });
     }
-    
+
     /**
      * Update user avatar URL
      */
-    public void updateUserAvatar(@NonNull String userId, @NonNull String avatarUrl, 
+    public void updateUserAvatar(@NonNull String userId, @NonNull String avatarUrl,
                                  @NonNull OnUpdateListener listener) {
         Map<String, Object> updates = new HashMap<>();
         updates.put("avatarUrl", avatarUrl);
-        
+
         LiveData<Resource<Boolean>> liveData = updateUser(userId, updates);
         liveData.observeForever(resource -> {
             if (resource != null) {
@@ -325,15 +320,15 @@ public class UserRepository {
             }
         });
     }
-    
+
     /**
      * Update user cover URL
      */
-    public void updateUserCover(@NonNull String userId, @NonNull String coverUrl, 
+    public void updateUserCover(@NonNull String userId, @NonNull String coverUrl,
                                 @NonNull OnUpdateListener listener) {
         Map<String, Object> updates = new HashMap<>();
         updates.put("coverUrl", coverUrl);
-        
+
         LiveData<Resource<Boolean>> liveData = updateUser(userId, updates);
         liveData.observeForever(resource -> {
             if (resource != null) {
@@ -345,18 +340,19 @@ public class UserRepository {
             }
         });
     }
-    
+
     /**
      * Update user online status and lastSeen timestamp via REST API
-     * @param userId ID of the user
+     *
+     * @param userId   ID of the user
      * @param isOnline true if user is online, false if offline
      * @param listener Callback for result
      */
-    public void updateUserStatus(@NonNull String userId, boolean isOnline, 
+    public void updateUserStatus(@NonNull String userId, boolean isOnline,
                                  @NonNull OnUpdateListener listener) {
         Map<String, Boolean> status = new HashMap<>();
         status.put("isOnline", isOnline);
-        
+
         Call<ApiResponse<Void>> call = apiService.updateUserStatus(userId, status);
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override
@@ -369,7 +365,7 @@ public class UserRepository {
                     listener.onError("HTTP " + response.code());
                 }
             }
-            
+
             @Override
             public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
                 Log.e(TAG, "Network error updating status", t);
@@ -377,9 +373,7 @@ public class UserRepository {
             }
         });
     }
-    
-    // ========== Helper methods ==========
-    
+
     /**
      * Parse User object from Map data (from API response)
      */
@@ -392,14 +386,28 @@ public class UserRepository {
             user.setAvatarUrl((String) userData.get("avatarUrl"));
             user.setBio((String) userData.get("bio"));
             user.setPhoneNumber((String) userData.get("phone"));
-            
+
             // Note: User model doesn't have isOnline and lastSeen fields in Android
             // Online status is handled separately via presence system
-            
+
             return user;
         } catch (Exception e) {
             Log.e(TAG, "Error parsing user from map", e);
             return null;
         }
+    }
+
+    public interface OnUserLoadedListener {
+        void onUserLoaded(User user);
+
+        void onError(String error);
+    }
+
+    // ========== Helper methods ==========
+
+    public interface OnUpdateListener {
+        void onSuccess();
+
+        void onError(String error);
     }
 }

@@ -25,10 +25,6 @@ public class StickerPackTabAdapter extends RecyclerView.Adapter<StickerPackTabAd
     private int selectedPosition = 0;
     private OnPackSelectedListener listener;
 
-    public interface OnPackSelectedListener {
-        void onPackSelected(StickerPack pack, int position);
-    }
-
     public void setOnPackSelectedListener(OnPackSelectedListener listener) {
         this.listener = listener;
     }
@@ -57,7 +53,7 @@ public class StickerPackTabAdapter extends RecyclerView.Adapter<StickerPackTabAd
     public void onBindViewHolder(@NonNull PackTabViewHolder holder, int position) {
         StickerPack pack = packs.get(position);
         holder.bind(pack, position == selectedPosition);
-        
+
         holder.itemView.setOnClickListener(v -> {
             int adapterPosition = holder.getAdapterPosition();
             if (adapterPosition != RecyclerView.NO_POSITION) {
@@ -72,6 +68,10 @@ public class StickerPackTabAdapter extends RecyclerView.Adapter<StickerPackTabAd
     @Override
     public int getItemCount() {
         return packs.size();
+    }
+
+    public interface OnPackSelectedListener {
+        void onPackSelected(StickerPack pack, int position);
     }
 
     static class PackTabViewHolder extends RecyclerView.ViewHolder {

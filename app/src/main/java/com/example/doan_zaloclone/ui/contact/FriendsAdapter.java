@@ -18,13 +18,8 @@ import java.util.List;
 
 public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHolder> {
 
+    private final OnFriendClickListener listener;
     private List<User> friends;
-    private OnFriendClickListener listener;
-
-    public interface OnFriendClickListener {
-        void onMessageClick(User friend);
-        void onUnfriendClick(User friend);
-    }
 
     public FriendsAdapter(List<User> friends, OnFriendClickListener listener) {
         this.friends = friends != null ? friends : new ArrayList<>();
@@ -51,24 +46,80 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
 
     public void updateFriends(List<User> newFriends) {
         if (newFriends == null) newFriends = new ArrayList<>();
-        
-        android.util.Log.d("FriendsAdapter", "updateFriends - Old size: " + this.friends.size() + 
-                          ", New size: " + newFriends.size());
-        
+
+        android.util.Log.d("FriendsAdapter", "updateFriends - Old size: " + this.friends.size() +
+                ", New size: " + newFriends.size());
+
         DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(
                 new FriendsDiffCallback(this.friends, newFriends));
         this.friends = new ArrayList<>(newFriends); // Create new copy
         diffResult.dispatchUpdatesTo(this);
-        
+
         android.util.Log.d("FriendsAdapter", "updateFriends completed - Current size: " + this.friends.size());
     }
 
+    public interface OnFriendClickListener {
+        void onMessageClick(User friend);
+
+        void onUnfriendClick(User friend);
+    }
+
+    // DiffUtil Callback for efficient list updates
+    private static class FriendsDiffCallback extends DiffUtil.Callback {
+        private final List<User> oldList;
+        private final List<User> newList;
+
+        public FriendsDiffCallback(List<User> oldList, List<User> newList) {
+            this.oldList = oldList;
+            this.newList = newList;
+        }
+
+        @Override
+        public int getOldListSize() {
+            return oldList.size();
+        }
+
+        @Override
+        public int getNewListSize() {
+            return newList.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            User oldUser = oldList.get(oldItemPosition);
+            User newUser = newList.get(newItemPosition);
+
+            // Null safety check
+            if (oldUser == null || newUser == null) {
+                return false;
+            }
+            if (oldUser.getId() == null || newUser.getId() == null) {
+                return false;
+            }
+
+            return oldUser.getId().equals(newUser.getId());
+        }
+
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            User oldUser = oldList.get(oldItemPosition);
+            User newUser = newList.get(newItemPosition);
+
+            // Null safety check
+            if (oldUser == null || newUser == null) {
+                return false;
+            }
+
+            return oldUser.equals(newUser);
+        }
+    }
+
     class ViewHolder extends RecyclerView.ViewHolder {
-        private TextView friendAvatar;
-        private TextView friendName;
-        private TextView friendEmail;
-        private Button messageButton;
-        private Button unfriendButton;
+        private final TextView friendAvatar;
+        private final TextView friendName;
+        private final TextView friendEmail;
+        private final Button messageButton;
+        private final Button unfriendButton;
 
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -84,7 +135,7 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
                 if (position != RecyclerView.NO_POSITION) {
                     User friend = friends.get(position);
                     com.example.doan_zaloclone.utils.ProfileNavigator.openUserProfile(
-                        itemView.getContext(), friend.getId());
+                            itemView.getContext(), friend.getId());
                 }
             });
 
@@ -94,7 +145,7 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
                     listener.onMessageClick(friends.get(position));
                 }
             });
-            
+
             unfriendButton.setOnClickListener(v -> {
                 int position = getAdapterPosition();
                 if (position != RecyclerView.NO_POSITION && listener != null) {
@@ -106,62 +157,12 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
         public void bind(User friend) {
             friendName.setText(friend.getName());
             friendEmail.setText(friend.getEmail());
-            
+
             if (friend.getName() != null && !friend.getName().isEmpty()) {
                 friendAvatar.setText(String.valueOf(friend.getName().charAt(0)).toUpperCase());
             } else {
                 friendAvatar.setText("F");
             }
-        }
-    }
-    
-    // DiffUtil Callback for efficient list updates
-    private static class FriendsDiffCallback extends DiffUtil.Callback {
-        private final List<User> oldList;
-        private final List<User> newList;
-        
-        public FriendsDiffCallback(List<User> oldList, List<User> newList) {
-            this.oldList = oldList;
-            this.newList = newList;
-        }
-        
-        @Override
-        public int getOldListSize() {
-            return oldList.size();
-        }
-        
-        @Override
-        public int getNewListSize() {
-            return newList.size();
-        }
-        
-        @Override
-        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-            User oldUser = oldList.get(oldItemPosition);
-            User newUser = newList.get(newItemPosition);
-            
-            // Null safety check
-            if (oldUser == null || newUser == null) {
-                return false;
-            }
-            if (oldUser.getId() == null || newUser.getId() == null) {
-                return false;
-            }
-            
-            return oldUser.getId().equals(newUser.getId());
-        }
-        
-        @Override
-        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-            User oldUser = oldList.get(oldItemPosition);
-            User newUser = newList.get(newItemPosition);
-            
-            // Null safety check
-            if (oldUser == null || newUser == null) {
-                return false;
-            }
-            
-            return oldUser.equals(newUser);
         }
     }
 }

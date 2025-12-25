@@ -16,7 +16,6 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.Query;
-import com.google.firebase.firestore.QuerySnapshot;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -42,48 +41,46 @@ import okhttp3.Response;
  */
 public class StickerRepository {
     private static final String TAG = "StickerRepository";
-    
+
     // VPS Configuration
     private static final String VPS_BASE_URL = "http://163.61.182.20";
     private static final String VPS_UPLOAD_URL = VPS_BASE_URL + "/api/stickers/upload";
     private static final String VPS_CREATE_PACK_URL = VPS_BASE_URL + "/api/stickers/packs";
-    
+
     // Firestore collections
     private static final String COLLECTION_STICKER_PACKS = "stickerPacks";
     private static final String COLLECTION_STICKERS = "stickers";
     private static final String COLLECTION_SAVED_PACKS = "savedStickerPacks";
     private static final String COLLECTION_RECENT_STICKERS = "recentStickers";
     private static final String COLLECTION_USERS = "users";
-    
+    // Singleton instance
+    private static StickerRepository instance;
     private final FirebaseFirestore db;
     private final FirebaseAuth auth;
     private final OkHttpClient httpClient;
-    
-    // Singleton instance
-    private static StickerRepository instance;
-    
+
     private StickerRepository() {
         this.db = FirebaseFirestore.getInstance();
         this.auth = FirebaseAuth.getInstance();
         this.httpClient = new OkHttpClient();
     }
-    
+
     public static synchronized StickerRepository getInstance() {
         if (instance == null) {
             instance = new StickerRepository();
         }
         return instance;
     }
-    
+
     // ========== Sticker Pack Operations ==========
-    
+
     /**
      * Get all official sticker packs
      */
     public LiveData<Resource<List<StickerPack>>> getOfficialPacks() {
         MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         db.collection(COLLECTION_STICKER_PACKS)
                 .whereEqualTo("type", StickerPack.TYPE_OFFICIAL)
                 .whereEqualTo("isPublished", true)
@@ -104,17 +101,17 @@ public class StickerRepository {
                     Log.e(TAG, "Error getting official packs", e);
                     result.setValue(Resource.error("Không thể tải sticker packs: " + e.getMessage()));
                 });
-        
+
         return result;
     }
-    
+
     /**
      * Get user's saved sticker packs
      */
     public LiveData<Resource<List<StickerPack>>> getUserSavedPacks(@NonNull String userId) {
         MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         db.collection(COLLECTION_USERS)
                 .document(userId)
                 .collection(COLLECTION_SAVED_PACKS)
@@ -124,12 +121,12 @@ public class StickerRepository {
                     for (DocumentSnapshot doc : savedPacksSnapshot.getDocuments()) {
                         packIds.add(doc.getId());
                     }
-                    
+
                     if (packIds.isEmpty()) {
                         result.setValue(Resource.success(new ArrayList<>()));
                         return;
                     }
-                    
+
                     // Fetch pack details using document IDs
                     db.collection(COLLECTION_STICKER_PACKS)
                             .whereIn(com.google.firebase.firestore.FieldPath.documentId(), packIds)
@@ -154,17 +151,17 @@ public class StickerRepository {
                     Log.e(TAG, "Error getting user saved packs", e);
                     result.setValue(Resource.error("Không thể tải saved packs: " + e.getMessage()));
                 });
-        
+
         return result;
     }
-    
+
     /**
      * Get stickers in a pack
      */
     public LiveData<Resource<List<Sticker>>> getStickersInPack(@NonNull String packId) {
         MutableLiveData<Resource<List<Sticker>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         db.collection(COLLECTION_STICKER_PACKS)
                 .document(packId)
                 .collection(COLLECTION_STICKERS)
@@ -177,7 +174,7 @@ public class StickerRepository {
                         if (sticker != null) {
                             sticker.setId(doc.getId());
                             sticker.setPackId(packId);
-                            
+
                             // Fallback: if imageUrl is null, try 'url' field (old data format)
                             if (sticker.getImageUrl() == null || sticker.getImageUrl().isEmpty()) {
                                 String urlFallback = doc.getString("url");
@@ -186,9 +183,9 @@ public class StickerRepository {
                                     Log.d(TAG, "Using fallback 'url' field: " + urlFallback);
                                 }
                             }
-                            
+
                             Log.d(TAG, "Loaded sticker from pack: " + doc.getId() + ", URL: " + sticker.getImageUrl());
-                            
+
                             // Filter out invalid stickers (must have ID and URL)
                             if (sticker.getId() != null && sticker.getImageUrl() != null && !sticker.getImageUrl().isEmpty()) {
                                 stickers.add(sticker);
@@ -203,17 +200,17 @@ public class StickerRepository {
                     Log.e(TAG, "Error getting stickers in pack", e);
                     result.setValue(Resource.error("Không thể tải stickers: " + e.getMessage()));
                 });
-        
+
         return result;
     }
-    
+
     /**
      * Add pack to user's collection
      */
     public Task<Void> addPackToUser(@NonNull String userId, @NonNull String packId) {
         Map<String, Object> data = new HashMap<>();
         data.put("addedAt", System.currentTimeMillis());
-        
+
         return db.collection(COLLECTION_USERS)
                 .document(userId)
                 .collection(COLLECTION_SAVED_PACKS)
@@ -226,7 +223,7 @@ public class StickerRepository {
                             .update("downloadCount", com.google.firebase.firestore.FieldValue.increment(1));
                 });
     }
-    
+
     /**
      * Remove pack from user's collection
      */
@@ -237,14 +234,14 @@ public class StickerRepository {
                 .document(packId)
                 .delete();
     }
-    
+
     /**
      * Get recently used stickers
      */
     public LiveData<Resource<List<Sticker>>> getRecentStickers(@NonNull String userId) {
         MutableLiveData<Resource<List<Sticker>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         db.collection(COLLECTION_USERS)
                 .document(userId)
                 .collection(COLLECTION_RECENT_STICKERS)
@@ -258,7 +255,7 @@ public class StickerRepository {
                         if (sticker != null) {
                             // Fix ID mapping: ensure ID is set from the document ID
                             sticker.setId(doc.getId());
-                            
+
                             // Fallback: if imageUrl is null, try 'url' field (old data format)
                             if (sticker.getImageUrl() == null || sticker.getImageUrl().isEmpty()) {
                                 String urlFallback = doc.getString("url");
@@ -267,7 +264,7 @@ public class StickerRepository {
                                 }
                             }
                             Log.d(TAG, "Loaded recent sticker: " + doc.getId() + ", URL: " + sticker.getImageUrl());
-                            
+
                             // Filter out invalid stickers
                             if (sticker.getId() != null && sticker.getImageUrl() != null && !sticker.getImageUrl().isEmpty()) {
                                 stickers.add(sticker);
@@ -282,10 +279,10 @@ public class StickerRepository {
                     Log.e(TAG, "Error getting recent stickers", e);
                     result.setValue(Resource.error("Lỗi tải recent stickers: " + e.getMessage()));
                 });
-        
+
         return result;
     }
-    
+
     /**
      * Add sticker to recent stickers
      */
@@ -296,7 +293,7 @@ public class StickerRepository {
             stickerId = db.collection(COLLECTION_USERS).document().getId();
             Log.w(TAG, "Sticker ID was null, generated: " + stickerId);
         }
-        
+
         Map<String, Object> data = new HashMap<>();
         data.put("id", stickerId); // Match model field name 'id'
         data.put("packId", sticker.getPackId());
@@ -305,7 +302,7 @@ public class StickerRepository {
         data.put("isAnimated", sticker.isAnimated());
         data.put("format", sticker.getFormat());
         data.put("lastUsedAt", System.currentTimeMillis());
-        
+
         db.collection(COLLECTION_USERS)
                 .document(userId)
                 .collection(COLLECTION_RECENT_STICKERS)
@@ -313,51 +310,51 @@ public class StickerRepository {
                 .set(data)
                 .addOnFailureListener(e -> Log.e(TAG, "Error adding to recent stickers", e));
     }
-    
+
     /**
      * Search stickers by tag
      */
     public LiveData<Resource<List<Sticker>>> searchStickers(@NonNull String query) {
         MutableLiveData<Resource<List<Sticker>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         // TODO: Implement search across all sticker packs
         // For now, return empty list
         result.setValue(Resource.success(new ArrayList<>()));
-        
+
         return result;
     }
-    
+
     // ========== Custom Sticker Upload ==========
-    
+
     /**
      * Upload custom sticker to VPS
      */
-    public LiveData<Resource<Sticker>> uploadCustomSticker(@NonNull Uri imageUri, 
-                                                            @NonNull String userId,
-                                                            @NonNull Context context) {
+    public LiveData<Resource<Sticker>> uploadCustomSticker(@NonNull Uri imageUri,
+                                                           @NonNull String userId,
+                                                           @NonNull Context context) {
         MutableLiveData<Resource<Sticker>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         try {
             File imageFile = uriToFile(imageUri, context);
             if (imageFile == null) {
                 result.setValue(Resource.error("Không thể đọc file ảnh"));
                 return result;
             }
-            
+
             RequestBody requestBody = new MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
                     .addFormDataPart("sticker", imageFile.getName(),
                             RequestBody.create(imageFile, MediaType.parse("image/*")))
                     .addFormDataPart("userId", userId)
                     .build();
-            
+
             Request request = new Request.Builder()
                     .url(VPS_UPLOAD_URL)
                     .post(requestBody)
                     .build();
-            
+
             httpClient.newCall(request).enqueue(new Callback() {
                 @Override
                 public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
@@ -368,40 +365,40 @@ public class StickerRepository {
                         sticker.setId(generateStickerId());
                         sticker.setCreatorId(userId);
                         sticker.setCreatedAt(System.currentTimeMillis());
-                        
+
                         result.postValue(Resource.success(sticker));
                     } else {
                         result.postValue(Resource.error("Upload failed: " + response.code()));
                     }
                     response.close();
                 }
-                
+
                 @Override
                 public void onFailure(@NonNull Call call, @NonNull IOException e) {
                     Log.e(TAG, "Upload failed", e);
                     result.postValue(Resource.error("Không thể upload: " + e.getMessage()));
                 }
             });
-            
+
         } catch (Exception e) {
             Log.e(TAG, "Error preparing upload", e);
             result.setValue(Resource.error("Lỗi chuẩn bị upload: " + e.getMessage()));
         }
-        
+
         return result;
     }
-    
+
     /**
      * Create custom sticker pack
      */
-    public LiveData<Resource<StickerPack>> createCustomPack(@NonNull String userId, 
-                                                             @NonNull String name,
-                                                             @NonNull String description) {
+    public LiveData<Resource<StickerPack>> createCustomPack(@NonNull String userId,
+                                                            @NonNull String name,
+                                                            @NonNull String description) {
         MutableLiveData<Resource<StickerPack>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         String packId = db.collection(COLLECTION_STICKER_PACKS).document().getId();
-        
+
         StickerPack pack = new StickerPack();
         pack.setId(packId);
         pack.setName(name);
@@ -414,7 +411,7 @@ public class StickerRepository {
         pack.setFree(true);
         pack.setStickerCount(0);
         pack.setDownloadCount(0);
-        
+
         db.collection(COLLECTION_STICKER_PACKS)
                 .document(packId)
                 .set(pack)
@@ -425,10 +422,10 @@ public class StickerRepository {
                     Log.e(TAG, "Error creating pack", e);
                     result.setValue(Resource.error("Không thể tạo pack: " + e.getMessage()));
                 });
-        
+
         return result;
     }
-    
+
     /**
      * Publish custom pack to store
      */
@@ -437,16 +434,16 @@ public class StickerRepository {
                 .document(packId)
                 .update("isPublished", true, "updatedAt", System.currentTimeMillis());
     }
-    
+
     // ========== Store Operations ==========
-    
+
     /**
      * Get featured packs
      */
     public LiveData<Resource<List<StickerPack>>> getFeaturedPacks() {
         MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         db.collection(COLLECTION_STICKER_PACKS)
                 .whereEqualTo("isPublished", true)
                 .whereEqualTo("type", StickerPack.TYPE_OFFICIAL)
@@ -468,17 +465,17 @@ public class StickerRepository {
                     Log.e(TAG, "Error getting featured packs", e);
                     result.setValue(Resource.error("Lỗi tải featured packs: " + e.getMessage()));
                 });
-        
+
         return result;
     }
-    
+
     /**
      * Get trending packs (by download count)
      */
     public LiveData<Resource<List<StickerPack>>> getTrendingPacks() {
         MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         db.collection(COLLECTION_STICKER_PACKS)
                 .whereEqualTo("isPublished", true)
                 .orderBy("downloadCount", Query.Direction.DESCENDING)
@@ -499,17 +496,17 @@ public class StickerRepository {
                     Log.e(TAG, "Error getting trending packs", e);
                     result.setValue(Resource.error("Lỗi tải trending packs: " + e.getMessage()));
                 });
-        
+
         return result;
     }
-    
+
     /**
      * Get new packs
      */
     public LiveData<Resource<List<StickerPack>>> getNewPacks() {
         MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         db.collection(COLLECTION_STICKER_PACKS)
                 .whereEqualTo("isPublished", true)
                 .orderBy("createdAt", Query.Direction.DESCENDING)
@@ -530,17 +527,17 @@ public class StickerRepository {
                     Log.e(TAG, "Error getting new packs", e);
                     result.setValue(Resource.error("Lỗi tải new packs: " + e.getMessage()));
                 });
-        
+
         return result;
     }
-    
+
     /**
      * Get packs by creator
      */
     public LiveData<Resource<List<StickerPack>>> getPacksByCreator(@NonNull String creatorId) {
         MutableLiveData<Resource<List<StickerPack>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         db.collection(COLLECTION_STICKER_PACKS)
                 .whereEqualTo("creatorId", creatorId)
                 .whereEqualTo("isPublished", true)
@@ -554,64 +551,47 @@ public class StickerRepository {
                     Log.e(TAG, "Error getting packs by creator", e);
                     result.setValue(Resource.error("Lỗi tải creator packs: " + e.getMessage()));
                 });
-        
+
         return result;
     }
-    
+
     // ========== Helper Methods ==========
-    
+
     private File uriToFile(Uri uri, Context context) {
         try {
             InputStream inputStream = context.getContentResolver().openInputStream(uri);
             if (inputStream == null) return null;
-            
+
             File tempFile = new File(context.getCacheDir(), "temp_sticker_" + System.currentTimeMillis() + ".jpg");
             FileOutputStream outputStream = new FileOutputStream(tempFile);
-            
+
             byte[] buffer = new byte[8192];
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
                 outputStream.write(buffer, 0, bytesRead);
             }
-            
+
             outputStream.close();
             inputStream.close();
-            
+
             return tempFile;
-            
+
         } catch (IOException e) {
             Log.e(TAG, "Error converting URI to File", e);
             return null;
         }
     }
-    
+
     private String generateStickerId() {
         return db.collection(COLLECTION_STICKER_PACKS).document().getId();
     }
-    
+
     // ========== Phase 5: User Sticker Creation Methods ==========
-    
-    /**
-     * Callback for upload progress
-     */
-    public interface UploadCallback {
-        void onProgress(int progress);
-        void onSuccess(String stickerUrl);
-        void onError(String error);
-    }
-    
-    /**
-     * Callback for pack operations
-     */
-    public interface PackCallback {
-        void onSuccess(String packId);
-        void onError(String error);
-    }
-    
+
     /**
      * Upload custom sticker to VPS with progress callback
      */
-    public void uploadCustomSticker(@NonNull Uri imageUri, 
+    public void uploadCustomSticker(@NonNull Uri imageUri,
                                     @NonNull String userId,
                                     @NonNull String fileName,
                                     @NonNull UploadCallback callback) {
@@ -619,23 +599,23 @@ public class StickerRepository {
             try {
                 // Convert URI to File (using content resolver)
                 File imageFile = new File(imageUri.getPath());
-                
+
                 RequestBody requestBody = new MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
                         .addFormDataPart("sticker", fileName,
                                 RequestBody.create(imageFile, MediaType.parse("image/*")))
                         .addFormDataPart("userId", userId)
                         .build();
-                
+
                 Request request = new Request.Builder()
                         .url(VPS_UPLOAD_URL)
                         .post(requestBody)
                         .build();
-                
+
                 callback.onProgress(50); // Simulated progress
-                
+
                 Response response = httpClient.newCall(request).execute();
-                
+
                 if (response.isSuccessful() && response.body() != null) {
                     String responseBody = response.body().string();
                     // Expected VPS response: {"success": true, "url": "http://..."}
@@ -647,14 +627,14 @@ public class StickerRepository {
                     callback.onError("Upload failed: " + response.code());
                 }
                 response.close();
-                
+
             } catch (Exception e) {
                 Log.e(TAG, "Upload error", e);
                 callback.onError("Upload failed: " + e.getMessage());
             }
         }).start();
     }
-    
+
     /**
      * Get or create "My Stickers" pack for user
      */
@@ -681,13 +661,13 @@ public class StickerRepository {
                     callback.onError("Error: " + e.getMessage());
                 });
     }
-    
+
     /**
      * Internal method to create "My Stickers" pack
      */
     private void createMyStickersPackInternal(@NonNull String userId, @NonNull PackCallback callback) {
         String packId = db.collection(COLLECTION_STICKER_PACKS).document().getId();
-        
+
         StickerPack pack = new StickerPack();
         pack.setId(packId);
         pack.setName("My Stickers");
@@ -700,7 +680,7 @@ public class StickerRepository {
         pack.setFree(true);
         pack.setStickerCount(0);
         pack.setDownloadCount(0);
-        
+
         db.collection(COLLECTION_STICKER_PACKS)
                 .document(packId)
                 .set(pack)
@@ -715,11 +695,11 @@ public class StickerRepository {
                     callback.onError("Error creating pack: " + e.getMessage());
                 });
     }
-    
+
     /**
      * Add sticker to pack
      */
-    public void addStickerToPack(@NonNull String packId, 
+    public void addStickerToPack(@NonNull String packId,
                                  @NonNull Sticker sticker,
                                  @NonNull Runnable onSuccess) {
         db.collection(COLLECTION_STICKER_PACKS)
@@ -732,10 +712,30 @@ public class StickerRepository {
                     db.collection(COLLECTION_STICKER_PACKS)
                             .document(packId)
                             .update("stickerCount", com.google.firebase.firestore.FieldValue.increment(1),
-                                   "updatedAt", System.currentTimeMillis())
+                                    "updatedAt", System.currentTimeMillis())
                             .addOnSuccessListener(v -> onSuccess.run())
                             .addOnFailureListener(e -> Log.e(TAG, "Error updating count", e));
                 })
                 .addOnFailureListener(e -> Log.e(TAG, "Error adding sticker to pack", e));
+    }
+
+    /**
+     * Callback for upload progress
+     */
+    public interface UploadCallback {
+        void onProgress(int progress);
+
+        void onSuccess(String stickerUrl);
+
+        void onError(String error);
+    }
+
+    /**
+     * Callback for pack operations
+     */
+    public interface PackCallback {
+        void onSuccess(String packId);
+
+        void onError(String error);
     }
 }

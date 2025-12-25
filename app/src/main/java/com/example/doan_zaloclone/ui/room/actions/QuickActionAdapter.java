@@ -19,12 +19,8 @@ import java.util.List;
  */
 public class QuickActionAdapter extends RecyclerView.Adapter<QuickActionAdapter.ActionViewHolder> {
 
+    private final OnActionClickListener listener;
     private List<QuickAction> actions;
-    private OnActionClickListener listener;
-
-    public interface OnActionClickListener {
-        void onActionClick(QuickAction action);
-    }
 
     public QuickActionAdapter(List<QuickAction> actions, OnActionClickListener listener) {
         this.actions = actions != null ? actions : new ArrayList<>();
@@ -53,6 +49,10 @@ public class QuickActionAdapter extends RecyclerView.Adapter<QuickActionAdapter.
     public void updateActions(List<QuickAction> newActions) {
         this.actions = newActions != null ? newActions : new ArrayList<>();
         notifyDataSetChanged();
+    }
+
+    public interface OnActionClickListener {
+        void onActionClick(QuickAction action);
     }
 
     class ActionViewHolder extends RecyclerView.ViewHolder {
