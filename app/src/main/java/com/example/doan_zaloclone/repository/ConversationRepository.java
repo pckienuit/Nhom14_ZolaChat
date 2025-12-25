@@ -454,12 +454,12 @@ public class ConversationRepository {
         
         Log.d(TAG, "Updating group " + conversationId + " - fields: " + updates.keySet());
         
-        Call<ApiResponse<Void>> call = apiService.updateConversationOld(conversationId, updates);
+        Call<Map<String, Object>> call = apiService.updateConversation(conversationId, updates);
         
-        call.enqueue(new Callback<ApiResponse<Void>>() {
+        call.enqueue(new Callback<Map<String, Object>>() {
             @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
-                if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
                     Log.d(TAG, "✅ Updated group info");
                     result.setValue(Resource.success(null));
                 } else {
@@ -470,7 +470,7 @@ public class ConversationRepository {
             }
             
             @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
                 Log.e(TAG, "Network error updating group", t);
                 result.setValue(Resource.error(error));
@@ -575,12 +575,12 @@ public class ConversationRepository {
         
         Log.d(TAG, "Leaving group " + conversationId);
         
-        Call<ApiResponse<Void>> call = apiService.leaveGroupOld(conversationId);
+        Call<Map<String, Object>> call = apiService.leaveGroup(conversationId);
         
-        call.enqueue(new Callback<ApiResponse<Void>>() {
+        call.enqueue(new Callback<Map<String, Object>>() {
             @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
-                if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
                     Log.d(TAG, "✅ Left group");
                     result.setValue(Resource.success(null));
                 } else {
@@ -591,7 +591,7 @@ public class ConversationRepository {
             }
             
             @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
                 Log.e(TAG, "Network error leaving group", t);
                 result.setValue(Resource.error(error));
@@ -612,11 +612,11 @@ public class ConversationRepository {
         
         Log.d(TAG, "Deleting conversation " + conversationId);
         
-        Call<ApiResponse<Void>> call = apiService.deleteConversationOld(conversationId);
+        Call<Map<String, Object>> call = apiService.deleteConversation(conversationId);
         
-        call.enqueue(new Callback<ApiResponse<Void>>() {
+        call.enqueue(new Callback<Map<String, Object>>() {
             @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (response.isSuccessful()) {
                     Log.d(TAG, "✅ Deleted conversation");
                     
@@ -634,7 +634,7 @@ public class ConversationRepository {
             }
             
             @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
                 Log.e(TAG, "Network error deleting conversation", t);
                 result.setValue(Resource.error(error));

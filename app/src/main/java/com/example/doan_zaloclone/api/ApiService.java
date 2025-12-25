@@ -182,16 +182,7 @@ public interface ApiService {
     @POST("conversations")
     Call<Map<String, Object>> createConversation(@Body Map<String, Object> conversationData);
     
-    // Old methods (backward compatibility)
-    @PUT("conversations/{conversationId}")
-    Call<ApiResponse<Void>> updateConversationOld(
-        @Path("conversationId") String conversationId,
-        @Body Map<String, Object> updates
-    );
-    
-    @DELETE("conversations/{conversationId}")
-    Call<ApiResponse<Void>> deleteConversationOld(@Path("conversationId") String conversationId);
-    
+    // Still using old signatures (used by addGroupMember/removeGroupMember)
     @POST("conversations/{conversationId}/members")
     Call<ApiResponse<Void>> addGroupMember(
         @Path("conversationId") String conversationId,
@@ -203,9 +194,6 @@ public interface ApiService {
         @Path("conversationId") String conversationId,
         @Path("userId") String userId
     );
-    
-    @POST("conversations/{conversationId}/leave")
-    Call<ApiResponse<Void>> leaveGroupOld(@Path("conversationId") String conversationId);
     
     // ========== Calls ==========
     

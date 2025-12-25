@@ -1262,11 +1262,11 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
 
         Log.d(TAG, "Deleting group via API: " + conversationId);
         
-        Call<ApiResponse<Void>> call = apiService.deleteConversationOld(conversationId);
+        Call<Map<String, Object>> call = apiService.deleteConversation(conversationId);
         
-        call.enqueue(new Callback<ApiResponse<Void>>() {
+        call.enqueue(new Callback<Map<String, Object>>() {
             @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (response.isSuccessful()) {
                     Log.d(TAG, "✅ Group deleted successfully");
                     result.setValue(Resource.success(true));
@@ -1278,7 +1278,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
             }
             
             @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
                 Log.e(TAG, "Network error deleting group", t);
                 result.setValue(Resource.error(error));
