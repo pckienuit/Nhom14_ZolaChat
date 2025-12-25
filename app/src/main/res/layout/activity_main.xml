@@ -25,18 +25,267 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         app:layout_constraintTop_toBottomOf="@id/toolbar"
-        app:layout_constraintBottom_toTopOf="@id/bottomNavigationView"
+        app:layout_constraintBottom_toTopOf="@id/bottom_navigation_container"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
-    <com.google.android.material.bottomnavigation.BottomNavigationView
-        android:id="@+id/bottomNavigationView"
+    <LinearLayout
+        android:id="@+id/bottom_navigation_container"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:background="@color/white"
-        app:menu="@menu/bottom_navigation_menu"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:background="#FFFFFF"
+        android:elevation="8dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- 1. Messages (Tin nhắn) -->
+        <RelativeLayout
+            android:id="@+id/nav_messages"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?selectableItemBackgroundBorderless">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_centerInParent="true">
+
+                <ImageView
+                    android:id="@+id/icon_messages"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_message"
+                    app:tint="#0068FF" />
+
+                <TextView
+                    android:id="@+id/text_messages"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Tin nhắn"
+                    android:textSize="11sp"
+                    android:layout_marginTop="2dp"
+                    android:textColor="#0068FF"
+                    android:textStyle="bold"
+                    android:visibility="visible"/>
+            </LinearLayout>
+
+            <!-- Badge 5+ -->
+            <TextView
+                android:id="@+id/badge_messages"
+                android:layout_width="wrap_content"
+                android:layout_height="16dp"
+                android:background="@drawable/bg_red_badge_pill"
+                android:text="5+"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:layout_alignParentTop="true"
+                android:layout_alignParentEnd="true"
+                android:layout_marginTop="4dp"
+                android:layout_marginEnd="16dp"/>
+        </RelativeLayout>
+
+        <!-- 2. Contacts (Danh bạ) -->
+        <RelativeLayout
+            android:id="@+id/nav_contact"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?selectableItemBackgroundBorderless">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_centerInParent="true">
+
+                <ImageView
+                    android:id="@+id/icon_contact"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_contacts"
+                    app:tint="#757575" />
+
+                <TextView
+                    android:id="@+id/text_contact"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Danh bạ"
+                    android:textSize="11sp"
+                    android:textColor="#0068FF"
+                    android:layout_marginTop="2dp"
+                    android:textStyle="bold"
+                    android:visibility="gone"/>
+            </LinearLayout>
+        </RelativeLayout>
+
+        <!-- 3. Grid/Apps (Khám phá) -->
+        <RelativeLayout
+            android:id="@+id/nav_grid"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?selectableItemBackgroundBorderless">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_centerInParent="true">
+
+                <ImageView
+                    android:id="@+id/icon_grid"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_grid"
+                    app:tint="#757575" />
+
+                <TextView
+                    android:id="@+id/text_grid"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Khám phá"
+                    android:textSize="11sp"
+                    android:textColor="#0068FF"
+                    android:layout_marginTop="2dp"
+                    android:textStyle="bold"
+                    android:visibility="gone"/>
+            </LinearLayout>
+
+            <!-- Red Dot Badge -->
+            <View
+                android:id="@+id/badge_grid"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:background="@drawable/bg_red_badge"
+                android:layout_alignTop="@+id/nav_grid"
+                android:layout_alignEnd="@+id/nav_grid"
+                android:layout_marginTop="10dp"
+                android:layout_marginEnd="22dp"/>
+        </RelativeLayout>
+
+        <!-- 4. Timeline (Nhật ký) -->
+        <RelativeLayout
+            android:id="@+id/nav_timeline"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?selectableItemBackgroundBorderless">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_centerInParent="true">
+
+                <ImageView
+                    android:id="@+id/icon_timeline"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_calendar"
+                    app:tint="#757575" />
+
+                <TextView
+                    android:id="@+id/text_timeline"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Nhật ký"
+                    android:textSize="11sp"
+                    android:textColor="#0068FF"
+                    android:layout_marginTop="2dp"
+                    android:textStyle="bold"
+                    android:visibility="gone"/>
+            </LinearLayout>
+
+            <!-- Badge N -->
+            <TextView
+                android:id="@+id/badge_timeline"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:background="@drawable/bg_red_badge"
+                android:text="N"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_alignTop="@+id/nav_timeline"
+                android:layout_alignEnd="@+id/nav_timeline"
+                android:layout_marginTop="6dp"
+                android:layout_marginEnd="18dp"/>
+        </RelativeLayout>
+
+        <!-- 5. Personal (Cá nhân) -->
+        <RelativeLayout
+            android:id="@+id/nav_personal"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?selectableItemBackgroundBorderless">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_centerInParent="true">
+
+                <ImageView
+                    android:id="@+id/icon_personal"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_person"
+                    app:tint="#757575" />
+
+                <TextView
+                    android:id="@+id/text_personal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Cá nhân"
+                    android:textSize="11sp"
+                    android:textColor="#0068FF"
+                    android:layout_marginTop="2dp"
+                    android:textStyle="bold"
+                    android:visibility="gone"/>
+            </LinearLayout>
+
+            <!-- Badge ! -->
+            <TextView
+                android:id="@+id/badge_personal"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:background="@drawable/bg_red_badge"
+                android:text="!"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_alignTop="@+id/nav_personal"
+                android:layout_alignEnd="@+id/nav_personal"
+                android:layout_marginTop="6dp"
+                android:layout_marginEnd="18dp"/>
+        </RelativeLayout>
+
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
