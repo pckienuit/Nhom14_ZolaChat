@@ -192,20 +192,6 @@ img {
     color: var(--text-muted);
 }
 
-.toggle-password {
-    position: absolute;
-    right: 1rem;
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 0.25rem;
-    transition: color var(--transition-fast);
-}
-
-.toggle-password:hover {
-    color: var(--text-secondary);
-}
 
 /* Buttons */
 .btn {
