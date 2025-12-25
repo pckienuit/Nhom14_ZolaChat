@@ -121,7 +121,30 @@ router.post('/:conversationId/messages', authenticateUser, async (req, res) => {
     const fullMessage = { id: messageRef.id, ...message };
     fullMessage.conversationId = conversationId; // Add for WebSocket filtering
     
-    if (global.io) broadcastMessage(global.io, conversationId, fullMessage);
+    if (global.io) {
+        broadcastMessage(global.io, conversationId, fullMessage);
+
+        // Notification for Home Screen Preview (emit to each user's room)
+         try {
+            // We need to fetch the conversation to get members if we don't have them handy
+            // Or we can query db.collection('conversations').doc(conversationId)
+            const conversationDoc = await db.collection('conversations').doc(conversationId).get();
+            if (conversationDoc.exists) {
+              const data = conversationDoc.data();
+              // Support multiple field names for legacy compatibility
+              const members = data.memberIds || data.participantIds || data.participants || [];
+              
+              console.log(`DEBUG_CHATS: Conversation ${conversationId} has members: ${JSON.stringify(members)}`);
+              
+              members.forEach(memberId => {
+                global.io.to(`user:${memberId}`).emit('new_message', fullMessage);
+                console.log(`DEBUG_CHATS: Emitted to user:${memberId}`);
+              });
+            }
+          } catch (err) {
+            console.error('Failed to send notifications to members in chats.js', err);
+          }
+    }
     
     res.json({ 
       success: true, 

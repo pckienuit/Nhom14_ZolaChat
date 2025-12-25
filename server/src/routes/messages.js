@@ -57,6 +57,30 @@ router.post('/', authenticateUser, async (req, res) => {
       const messageWithId = { ...message, id: messageRef.id };
       console.log(`📡 Emitting new_message to conversation:${conversationId}`);
       io.to(`conversation:${conversationId}`).emit('new_message', messageWithId);
+
+      // Notification for Home Screen Preview (emit to each user's room)
+      try {
+        const conversationDoc = await db.collection('conversations').doc(conversationId).get();
+        if (conversationDoc.exists) {
+          const data = conversationDoc.data();
+          // Support multiple field names for legacy compatibility
+          const members = data.memberIds || data.participantIds || data.participants || [];
+          
+          console.log(`DEBUG_V3: Conversation ${conversationId} has members: ${JSON.stringify(members)}`);
+          
+          members.forEach(memberId => {
+            // Avoid sending double to sender (optional, but sender already has it via API response)
+            // But sender might need it for Home screen update if they go back quickly?
+            // Let's send to everyone. Client handles duplicates.
+            io.to(`user:${memberId}`).emit('new_message', messageWithId);
+            console.log(`DEBUG_V3: Emitted to user:${memberId}`);
+          });
+        } else {
+            console.warn(`DEBUG_V3: Conversation ${conversationId} not found in Firestore`);
+        }
+      } catch (err) {
+        console.error('Failed to send notifications to members', err);
+      }
     } else {
       console.warn('⚠️ io is null, cannot emit new_message event');
     }

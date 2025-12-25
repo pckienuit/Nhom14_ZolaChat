@@ -131,9 +131,14 @@ public class SocketManager {
                 try {
                     JSONObject messageData = (JSONObject) args[0];
                     Log.d(TAG, "📨 New message received: " + messageData.toString());
-
-                    if (messageListener != null) {
-                        messageListener.onMessageReceived(messageData);
+                    
+                    // Notify all listeners
+                    for (OnMessageListener listener : messageListeners) {
+                        try {
+                            listener.onMessageReceived(messageData);
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error in listener", e);
+                        }
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Error parsing new message", e);
@@ -148,8 +153,12 @@ public class SocketManager {
                     JSONObject messageData = (JSONObject) args[0];
                     Log.d(TAG, "✏️ Message updated: " + messageData.toString());
 
-                    if (messageListener != null) {
-                        messageListener.onMessageUpdated(messageData);
+                    for (OnMessageListener listener : messageListeners) {
+                         try {
+                             listener.onMessageUpdated(messageData);
+                         } catch (Exception e) {
+                             Log.e(TAG, "Error in listener", e);
+                         }
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Error parsing updated message", e);
@@ -611,8 +620,29 @@ public class SocketManager {
 
     // ========== Listener Setters ==========
 
+    // List of listeners support
+    private final java.util.List<OnMessageListener> messageListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public void addMessageListener(OnMessageListener listener) {
+        if (listener != null && !messageListeners.contains(listener)) {
+            messageListeners.add(listener);
+        }
+    }
+
+    public void removeMessageListener(OnMessageListener listener) {
+        messageListeners.remove(listener);
+    }
+
+    /**
+     * @deprecated Use addMessageListener instead
+     */
+    @Deprecated
     public void setMessageListener(OnMessageListener listener) {
-        this.messageListener = listener;
+        // For Backward Compatibility: Clear others and add this one
+        // Warning: This behavior might affect other components!
+        // Better to migrate to add/remove pattern.
+        // But for now, let's treat it as "add" to avoid breaking existing code
+        addMessageListener(listener); 
     }
 
     public void setTypingListener(OnTypingListener listener) {

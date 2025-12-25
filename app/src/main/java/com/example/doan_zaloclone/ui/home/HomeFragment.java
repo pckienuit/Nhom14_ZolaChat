@@ -538,6 +538,19 @@ public class HomeFragment extends Fragment {
     }
 
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Check socket status
+        com.example.doan_zaloclone.websocket.SocketManager socketManager = 
+                com.example.doan_zaloclone.websocket.SocketManager.getInstance();
+        if (!socketManager.isConnected()) {
+             if (getContext() != null) 
+                 android.widget.Toast.makeText(getContext(), "⚠️ Reconnecting Socket...", android.widget.Toast.LENGTH_SHORT).show();
+             socketManager.connect();
+        }
+    }
+
     private void observeViewModel() {
         // Observe filtered conversations LiveData
         String currentUserId = firebaseAuth.getCurrentUser() != null
@@ -582,11 +595,18 @@ public class HomeFragment extends Fragment {
         // Observe conversation refresh events (new conversation, updates)
         homeViewModel.getConversationRefreshNeeded().observe(getViewLifecycleOwner(), needsRefresh -> {
             if (needsRefresh != null && needsRefresh) {
+                // DEBUG TOAST
+                if (getContext() != null) android.widget.Toast.makeText(getContext(), "🔔 New message! Updating...", android.widget.Toast.LENGTH_SHORT).show();
+
                 // Get current user ID at the time of refresh
                 if (firebaseAuth.getCurrentUser() != null) {
-                    String userId = firebaseAuth.getCurrentUser().getUid();
-                    android.util.Log.d("HomeFragment", "Refreshing conversations due to WebSocket event for user: " + userId);
-                    homeViewModel.refreshConversations(userId);
+                    final String userId = firebaseAuth.getCurrentUser().getUid();
+                    
+                    // Delay 1s to allow Firestore to index the new message
+                    new android.os.Handler().postDelayed(() -> {
+                        android.util.Log.d("HomeFragment", "Refreshing conversations due to WebSocket event for user: " + userId);
+                        homeViewModel.refreshConversations(userId);
+                    }, 1000);
                 } else {
                     android.util.Log.w("HomeFragment", "Cannot refresh - user not logged in");
                 }

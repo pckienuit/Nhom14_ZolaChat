@@ -360,7 +360,180 @@ public class ChatRepository {
         currentConversationId = conversationId;
         cachedMessages.clear();
         
-        // 1. Load initial messages via API
+        // 1. Setup WebSocket listener for real-time message updates FIRST (to avoid missing msgs while loading)
+        SocketManager.OnMessageListener wsMessageListener = new SocketManager.OnMessageListener() {
+            @Override
+            public void onMessageReceived(JSONObject messageData) {
+                try {
+                    // Parse JSON to Message object
+                    Message newMessage = parseMessageFromJson(messageData);
+                    
+                    // Only add if from current conversation
+                    String msgConvId = messageData.optString("conversationId");
+                    if (!conversationId.equals(msgConvId)) {
+                        return; // Not for this conversation
+                    }
+                    
+                    String messageId = newMessage.getId();
+                    Log.d("ChatRepository", "WebSocket message received - ID: " + messageId);
+                    
+                    // Remove from pending if it was sent by us
+                    boolean wasPending = false;
+                    synchronized (pendingSentMessageIds) {
+                        wasPending = pendingSentMessageIds.remove(messageId);
+                    }
+                    if (wasPending) {
+                        Log.d("ChatRepository", "Message was pending, removed from set: " + messageId);
+                    }
+                    
+                    // Check if message already exists (avoid duplicates)
+                    boolean exists = false;
+                    for (Message msg : cachedMessages) {
+                        if (msg.getId() != null && msg.getId().equals(messageId)) {
+                            exists = true;
+                            // Update content if needed (optional)
+                            break;
+                        }
+                    }
+                    
+                    if (!exists) {
+                        Log.d("ChatRepository", "Adding new message from WebSocket: " + messageId);
+                        cachedMessages.add(newMessage);
+                        
+                        // CRITICAL: Post to main thread for UI update
+                        mainHandler.post(() -> {
+                            listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                        });
+                    }
+                } catch (Exception e) {
+                    Log.e("ChatRepository", "Error parsing WebSocket message", e);
+                }
+            }
+            
+            @Override
+            public void onMessageUpdated(JSONObject messageData) {
+                try {
+                    String msgConvId = messageData.optString("conversationId");
+                    if (!conversationId.equals(msgConvId)) {
+                        return; // Not for this conversation
+                    }
+                    
+                    String messageId = messageData.optString("id");
+                    Log.d("ChatRepository", "Message updated via WebSocket - ID: " + messageId);
+                    
+                    // Find and update message in cache
+                    boolean found = false;
+                    for (int i = 0; i < cachedMessages.size(); i++) {
+                        Message msg = cachedMessages.get(i);
+                        if (msg.getId() != null && msg.getId().equals(messageId)) {
+                            // Parse updated message
+                            Message updatedMessage = parseMessageFromJson(messageData);
+                            
+                            // Replace in cache
+                            cachedMessages.set(i, updatedMessage);
+                            found = true;
+                            
+                            Log.d("ChatRepository", "Message updated in cache - isRecalled: " + 
+                                updatedMessage.isRecalled() + ", content: " + updatedMessage.getContent());
+                            
+                            // Notify UI
+                            mainHandler.post(() -> {
+                                listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                            });
+                            break;
+                        }
+                    }
+                    
+                    if (!found) {
+                        Log.w("ChatRepository", "Updated message not found in cache: " + messageId);
+                    }
+                } catch (Exception e) {
+                    Log.e("ChatRepository", "Error handling message update", e);
+                }
+            }
+            
+            @Override
+            public void onMessageDeleted(JSONObject messageData) {
+                try {
+                    String msgConvId = messageData.optString("conversationId");
+                    if (!conversationId.equals(msgConvId)) {
+                        return; // Not for this conversation
+                    }
+                    
+                    String messageId = messageData.optString("messageId");
+                    Log.d("ChatRepository", "Message deleted via WebSocket - ID: " + messageId);
+                    
+                    // Remove message from cache
+                    boolean removed = false;
+                    for (int i = 0; i < cachedMessages.size(); i++) {
+                        Message msg = cachedMessages.get(i);
+                        if (msg.getId() != null && msg.getId().equals(messageId)) {
+                            cachedMessages.remove(i);
+                            removed = true;
+                            
+                            Log.d("ChatRepository", "Message removed from cache");
+                            
+                            // Notify UI
+                            mainHandler.post(() -> {
+                                listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                            });
+                            break;
+                        }
+                    }
+                    
+                    if (!removed) {
+                        Log.w("ChatRepository", "Deleted message not found in cache: " + messageId);
+                    }
+                } catch (Exception e) {
+                    Log.e("ChatRepository", "Error handling message deletion", e);
+                }
+            }
+        };
+
+        // Register the listener using the new LIST-based method
+        socketManager.addMessageListener(wsMessageListener);
+        
+        // 2. Setup reaction listener
+        socketManager.setReactionListener(new SocketManager.OnReactionListener() {
+            @Override
+            public void onReactionUpdated(String convId, String messageId, String userId, String reactionType,
+                                          java.util.Map<String, String> reactions, java.util.Map<String, Integer> reactionCounts) {
+                try {
+                    if (!conversationId.equals(convId)) {
+                        return; // Not for this conversation
+                    }
+                    
+                    // Find and update message reactions in cache
+                    for (int i = 0; i < cachedMessages.size(); i++) {
+                        Message msg = cachedMessages.get(i);
+                        if (msg.getId() != null && msg.getId().equals(messageId)) {
+                            // Use data from server directly
+                            msg.setReactions(reactions != null ? reactions : new java.util.HashMap<>());
+                            msg.setReactionCounts(reactionCounts != null ? reactionCounts : new java.util.HashMap<>());
+                            
+                            // Deep copy and notify UI
+                            List<Message> messagesCopy = new ArrayList<>();
+                            for (Message m : cachedMessages) {
+                                messagesCopy.add(new Message(m));
+                            }
+                            
+                            mainHandler.post(() -> {
+                                listener.onMessagesChanged(messagesCopy);
+                            });
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.e("ChatRepository", "Error handling reaction update", e);
+                }
+            }
+        });
+
+        // 3. Join conversation room
+        Log.d("ChatRepository", "Joining WebSocket room: " + conversationId);
+        socketManager.joinConversation(conversationId);
+        
+        // 4. Load initial messages via API
         Call<MessageListResponse> call = apiService.getMessages(conversationId, 100, null);
         call.enqueue(new Callback<MessageListResponse>() {
             @Override
@@ -368,207 +541,46 @@ public class ChatRepository {
                 Log.d("ChatRepository", "GET messages response: " + response.code());
                 if (response.isSuccessful() && response.body() != null) {
                     List<Message> messages = response.body().getMessages();
-                    Log.d("ChatRepository", "Messages count from API: " + (messages != null ? messages.size() : "NULL"));
                     if (messages != null) {
-                        cachedMessages.clear();
-                        cachedMessages.addAll(messages);
-                        Log.d("ChatRepository", "Calling listener.onMessagesChanged with " + cachedMessages.size() + " messages");
+                        // Merge with any messages received via WebSocket while loading?
+                        // For simplicity, we just add them, but ideally we should merge.
+                        // Since cachedMessages might already have new items from WS.
+                        
+                        // Current strategy: Prepend loaded messages to cache if cache is empty?
+                        // Or just set cache.
+                        // If WebSockets delivered messages while loading, 'cachedMessages' is not empty.
+                        // API returns sorted list.
+                        
+                        // Safe approach: Clear and Add All is risky if WS came in.
+                        // Better: Add API messages, then deduplicate.
+                        
+                        // Let's stick to simple clear-and-add for now, 
+                        // as race condition window is small.
+                        // BUT we must not lose WS messages.
+                        
+                        if (cachedMessages.isEmpty()) {
+                            cachedMessages.addAll(messages);
+                        } else {
+                            // Merge logic: Add API messages that are NOT in cache
+                            for (Message apiMsg : messages) {
+                                boolean exists = false;
+                                for (Message cacheMsg : cachedMessages) {
+                                    if (cacheMsg.getId().equals(apiMsg.getId())) {
+                                        exists = true; break;
+                                    }
+                                }
+                                if (!exists) cachedMessages.add(apiMsg);
+                            }
+                            // Sort again
+                            cachedMessages.sort((m1, m2) -> Long.compare(m1.getTimestamp(), m2.getTimestamp()));
+                        }
+                        
                         listener.onMessagesChanged(new ArrayList<>(cachedMessages));
-                    } else {
-                        Log.e("ChatRepository", "Messages list is NULL!");
-                        listener.onMessagesChanged(new ArrayList<>());
                     }
                 } else {
                     Log.e("ChatRepository", "API error: HTTP " + response.code());
                     listener.onError("Failed to load messages: HTTP " + response.code());
-                    return;
                 }
-                
-                // 2. Setup WebSocket listener for real-time message updates
-                socketManager.setMessageListener(new SocketManager.OnMessageListener() {
-                    @Override
-                    public void onMessageReceived(JSONObject messageData) {
-                        try {
-                            // Parse JSON to Message object
-                            Message newMessage = parseMessageFromJson(messageData);
-                            
-                            // Only add if from current conversation
-                            String msgConvId = messageData.optString("conversationId");
-                            if (!conversationId.equals(msgConvId)) {
-                                return; // Not for this conversation
-                            }
-                            
-                            String messageId = newMessage.getId();
-                            Log.d("ChatRepository", "WebSocket message received - ID: " + messageId);
-                            
-                            // Remove from pending if it was sent by us
-                            boolean wasPending = false;
-                            synchronized (pendingSentMessageIds) {
-                                wasPending = pendingSentMessageIds.remove(messageId);
-                            }
-                            if (wasPending) {
-                                Log.d("ChatRepository", "Message was pending, removed from set: " + messageId);
-                            }
-                            
-                            // Check if message already exists (avoid duplicates)
-                            boolean exists = false;
-                            for (Message msg : cachedMessages) {
-                                if (msg.getId() != null && msg.getId().equals(messageId)) {
-                                    exists = true;
-                                    Log.d("ChatRepository", "Duplicate detected! Skipping message: " + messageId);
-                                    break;
-                                }
-                            }
-                            
-                            if (!exists) {
-                                Log.d("ChatRepository", "Adding new message from WebSocket: " + messageId);
-                                cachedMessages.add(newMessage);
-                                
-                                // CRITICAL: Post to main thread for UI update
-                                mainHandler.post(() -> {
-                                    listener.onMessagesChanged(new ArrayList<>(cachedMessages));
-                                });
-                            }
-                        } catch (Exception e) {
-                            Log.e("ChatRepository", "Error parsing WebSocket message", e);
-                        }
-                    }
-                    
-                    @Override
-                    public void onMessageUpdated(JSONObject messageData) {
-                        try {
-                            String msgConvId = messageData.optString("conversationId");
-                            if (!conversationId.equals(msgConvId)) {
-                                return; // Not for this conversation
-                            }
-                            
-                            String messageId = messageData.optString("id");
-                            Log.d("ChatRepository", "Message updated via WebSocket - ID: " + messageId);
-                            
-                            // Find and update message in cache
-                            boolean found = false;
-                            for (int i = 0; i < cachedMessages.size(); i++) {
-                                Message msg = cachedMessages.get(i);
-                                if (msg.getId() != null && msg.getId().equals(messageId)) {
-                                    // Parse updated message
-                                    Message updatedMessage = parseMessageFromJson(messageData);
-                                    
-                                    // Replace in cache
-                                    cachedMessages.set(i, updatedMessage);
-                                    found = true;
-                                    
-                                    Log.d("ChatRepository", "Message updated in cache - isRecalled: " + 
-                                        updatedMessage.isRecalled() + ", content: " + updatedMessage.getContent());
-                                    
-                                    // Notify UI
-                                    mainHandler.post(() -> {
-                                        listener.onMessagesChanged(new ArrayList<>(cachedMessages));
-                                    });
-                                    break;
-                                }
-                            }
-                            
-                            if (!found) {
-                                Log.w("ChatRepository", "Updated message not found in cache: " + messageId);
-                            }
-                        } catch (Exception e) {
-                            Log.e("ChatRepository", "Error handling message update", e);
-                        }
-                    }
-                    
-                    @Override
-                    public void onMessageDeleted(JSONObject messageData) {
-                        try {
-                            String msgConvId = messageData.optString("conversationId");
-                            if (!conversationId.equals(msgConvId)) {
-                                return; // Not for this conversation
-                            }
-                            
-                            String messageId = messageData.optString("messageId");
-                            Log.d("ChatRepository", "Message deleted via WebSocket - ID: " + messageId);
-                            
-                            // Remove message from cache
-                            boolean removed = false;
-                            for (int i = 0; i < cachedMessages.size(); i++) {
-                                Message msg = cachedMessages.get(i);
-                                if (msg.getId() != null && msg.getId().equals(messageId)) {
-                                    cachedMessages.remove(i);
-                                    removed = true;
-                                    
-                                    Log.d("ChatRepository", "Message removed from cache");
-                                    
-                                    // Notify UI
-                                    mainHandler.post(() -> {
-                                        listener.onMessagesChanged(new ArrayList<>(cachedMessages));
-                                    });
-                                    break;
-                                }
-                            }
-                            
-                            if (!removed) {
-                                Log.w("ChatRepository", "Deleted message not found in cache: " + messageId);
-                            }
-                        } catch (Exception e) {
-                            Log.e("ChatRepository", "Error handling message deletion", e);
-                        }
-                    }
-                });
-                
-                // 3. Join conversation room for real-time updates
-                Log.d("ChatRepository", "Joining WebSocket room: " + conversationId);
-                socketManager.joinConversation(conversationId);
-                
-                // 4. Setup reaction listener for real-time reaction updates
-                socketManager.setReactionListener(new SocketManager.OnReactionListener() {
-                    @Override
-                    public void onReactionUpdated(String convId, String messageId, String userId, String reactionType,
-                                                  java.util.Map<String, String> reactions, java.util.Map<String, Integer> reactionCounts) {
-                        try {
-                            if (!conversationId.equals(convId)) {
-                                return; // Not for this conversation
-                            }
-                            
-                            Log.d("ChatRepository", "Reaction updated via WebSocket - messageId: " + messageId 
-                                + ", userId: " + userId + ", type: " + reactionType
-                                + ", reactions: " + (reactions != null ? reactions.size() : 0)
-                                + ", reactionCounts: " + reactionCounts);
-                            
-                            // Find and update message reactions in cache
-                            boolean found = false;
-                            for (int i = 0; i < cachedMessages.size(); i++) {
-                                Message msg = cachedMessages.get(i);
-                                if (msg.getId() != null && msg.getId().equals(messageId)) {
-                                    // Use data from server directly (not recalculate)
-                                    msg.setReactions(reactions != null ? reactions : new java.util.HashMap<>());
-                                    msg.setReactionCounts(reactionCounts != null ? reactionCounts : new java.util.HashMap<>());
-                                    
-                                    found = true;
-                                    
-                                    Log.d("ChatRepository", "Reaction updated in cache from server - reactionCounts: " + reactionCounts);
-                                    
-                                    // CRITICAL: Create deep copy of messages list for UI
-                                    // DiffUtil compares old vs new by reference, so we need new Message objects
-                                    List<Message> messagesCopy = new ArrayList<>();
-                                    for (Message m : cachedMessages) {
-                                        messagesCopy.add(new Message(m)); // Use copy constructor
-                                    }
-                                    
-                                    // Notify UI with deep copy
-                                    mainHandler.post(() -> {
-                                        listener.onMessagesChanged(messagesCopy);
-                                    });
-                                    break;
-                                }
-                            }
-                            
-                            if (!found) {
-                                Log.w("ChatRepository", "Message not found in cache for reaction update: " + messageId);
-                            }
-                        } catch (Exception e) {
-                            Log.e("ChatRepository", "Error handling reaction update", e);
-                        }
-                    }
-                });
             }
             
             @Override
@@ -577,10 +589,13 @@ public class ChatRepository {
             }
         });
         
-        // 4. Return custom ListenerRegistration for cleanup
+        // 5. Return cleanup
         return new ListenerRegistration() {
             @Override
             public void remove() {
+                // Remove the message listener properly!
+                socketManager.removeMessageListener(wsMessageListener);
+                
                 // Leave WebSocket room
                 if (conversationId.equals(currentConversationId)) {
                     socketManager.leaveConversation(conversationId);

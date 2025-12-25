@@ -155,6 +155,25 @@ public class ConversationRepository {
                 mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
             }
         });
+
+        // Listen for new messages to update conversation preview
+        socketManager.addMessageListener(new SocketManager.OnMessageListener() {
+            @Override
+            public void onMessageReceived(org.json.JSONObject messageData) {
+                Log.d(TAG, "📨 ConversationRepo received new message, triggering refresh");
+                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+            }
+
+            @Override
+            public void onMessageUpdated(org.json.JSONObject messageData) {
+                 mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+            }
+
+            @Override
+            public void onMessageDeleted(org.json.JSONObject messageData) {
+                 mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+            }
+        });
     }
 
     /**
