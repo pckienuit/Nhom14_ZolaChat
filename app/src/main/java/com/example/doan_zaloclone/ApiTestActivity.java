@@ -94,7 +94,7 @@ public class ApiTestActivity extends AppCompatActivity {
 
     private String getBaseUrl() {
         // Extract from RetrofitClient (hardcoded for now)
-        return "http://10.0.2.2:3000/api/";
+        return "https://zolachat.site/api/";
     }
 
     private void testHealthEndpoint() {

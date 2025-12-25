@@ -58,7 +58,7 @@ public class WebSocketTestActivity extends AppCompatActivity {
     private void displayInitialInfo() {
         StringBuilder info = new StringBuilder();
         info.append("=== WebSocket Test Activity ===\n\n");
-        info.append("Server: http://10.0.2.2:3000\n");
+        info.append("Server: https://zolachat.site\n");
 
         FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
         if (user != null) {

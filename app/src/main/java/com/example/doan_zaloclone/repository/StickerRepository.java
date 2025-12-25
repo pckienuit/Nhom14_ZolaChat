@@ -43,7 +43,7 @@ public class StickerRepository {
     private static final String TAG = "StickerRepository";
 
     // VPS Configuration
-    private static final String VPS_BASE_URL = "http://163.61.182.20";
+    private static final String VPS_BASE_URL = "https://zolachat.site";
     private static final String VPS_UPLOAD_URL = VPS_BASE_URL + "/api/stickers/upload";
     private static final String VPS_CREATE_PACK_URL = VPS_BASE_URL + "/api/stickers/packs";
 
