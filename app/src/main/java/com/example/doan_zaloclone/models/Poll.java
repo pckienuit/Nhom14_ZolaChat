@@ -23,12 +23,12 @@ public class Poll implements Serializable {
     private boolean allowMultipleChoice;        // Chọn nhiều phương án
     private boolean allowAddOptions;            // Có thể thêm phương án
     private boolean isClosed;                   // Poll đã đóng
-    
+
     // Empty constructor for Firestore
     public Poll() {
         this.options = new ArrayList<>();
     }
-    
+
     public Poll(String id, String question, String creatorId) {
         this.id = id;
         this.question = question;
@@ -43,120 +43,120 @@ public class Poll implements Serializable {
         this.allowAddOptions = false;
         this.isClosed = false;
     }
-    
+
     // Getters
     public String getId() {
         return id;
     }
-    
-    public String getQuestion() {
-        return question;
-    }
-    
-    public List<PollOption> getOptions() {
-        return options != null ? options : new ArrayList<>();
-    }
-    
-    public String getCreatorId() {
-        return creatorId;
-    }
-    
-    public long getCreatedAt() {
-        return createdAt;
-    }
-    
-    public long getExpiresAt() {
-        return expiresAt;
-    }
-    
-    public boolean isPinned() {
-        return isPinned;
-    }
-    
-    public boolean isAnonymous() {
-        return isAnonymous;
-    }
-    
-    public boolean isHideResultsUntilVoted() {
-        return hideResultsUntilVoted;
-    }
-    
-    public boolean isAllowMultipleChoice() {
-        return allowMultipleChoice;
-    }
-    
-    public boolean isAllowAddOptions() {
-        return allowAddOptions;
-    }
-    
-    public boolean isClosed() {
-        return isClosed;
-    }
-    
+
     // Setters (for Firestore)
     public void setId(String id) {
         this.id = id;
     }
-    
+
+    public String getQuestion() {
+        return question;
+    }
+
     public void setQuestion(String question) {
         this.question = question;
     }
-    
+
+    public List<PollOption> getOptions() {
+        return options != null ? options : new ArrayList<>();
+    }
+
     public void setOptions(List<PollOption> options) {
         this.options = options;
     }
-    
+
+    public String getCreatorId() {
+        return creatorId;
+    }
+
     public void setCreatorId(String creatorId) {
         this.creatorId = creatorId;
     }
-    
+
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
     public void setCreatedAt(long createdAt) {
         this.createdAt = createdAt;
     }
-    
+
+    public long getExpiresAt() {
+        return expiresAt;
+    }
+
     public void setExpiresAt(long expiresAt) {
         this.expiresAt = expiresAt;
     }
-    
+
+    public boolean isPinned() {
+        return isPinned;
+    }
+
     public void setPinned(boolean pinned) {
         isPinned = pinned;
     }
-    
+
+    public boolean isAnonymous() {
+        return isAnonymous;
+    }
+
     public void setAnonymous(boolean anonymous) {
         isAnonymous = anonymous;
     }
-    
+
+    public boolean isHideResultsUntilVoted() {
+        return hideResultsUntilVoted;
+    }
+
     public void setHideResultsUntilVoted(boolean hideResultsUntilVoted) {
         this.hideResultsUntilVoted = hideResultsUntilVoted;
     }
-    
+
+    public boolean isAllowMultipleChoice() {
+        return allowMultipleChoice;
+    }
+
     public void setAllowMultipleChoice(boolean allowMultipleChoice) {
         this.allowMultipleChoice = allowMultipleChoice;
     }
-    
+
+    public boolean isAllowAddOptions() {
+        return allowAddOptions;
+    }
+
     public void setAllowAddOptions(boolean allowAddOptions) {
         this.allowAddOptions = allowAddOptions;
     }
-    
+
+    public boolean isClosed() {
+        return isClosed;
+    }
+
     public void setClosed(boolean closed) {
         isClosed = closed;
     }
-    
+
     // Firestore compatibility setters
     public void setIsPinned(boolean isPinned) {
         this.isPinned = isPinned;
     }
-    
+
     public void setIsAnonymous(boolean isAnonymous) {
         this.isAnonymous = isAnonymous;
     }
-    
+
     public void setIsClosed(boolean isClosed) {
         this.isClosed = isClosed;
     }
-    
+
     // Helper methods
-    
+
     /**
      * Check if poll has expired
      */
@@ -164,23 +164,24 @@ public class Poll implements Serializable {
         if (expiresAt == 0) return false; // No expiry
         return System.currentTimeMillis() > expiresAt;
     }
-    
+
     /**
      * Check if user can vote (poll not closed and not expired)
      */
     public boolean canVote() {
         return !isClosed && !hasExpired();
     }
-    
+
     /**
      * Check if a user can close this poll
-     * @param userId User ID to check
+     *
+     * @param userId       User ID to check
      * @param isGroupAdmin Whether the user is a group admin
      */
     public boolean canClosePoll(String userId, boolean isGroupAdmin) {
         return userId.equals(creatorId) || isGroupAdmin;
     }
-    
+
     /**
      * Get total number of unique voters
      */
@@ -193,7 +194,7 @@ public class Poll implements Serializable {
         }
         return uniqueVoters.size();
     }
-    
+
     /**
      * Get total number of votes (can be > voters if multiple choice)
      */
@@ -206,7 +207,7 @@ public class Poll implements Serializable {
         }
         return total;
     }
-    
+
     /**
      * Check if a user has voted
      */
@@ -219,7 +220,7 @@ public class Poll implements Serializable {
         }
         return false;
     }
-    
+
     /**
      * Get list of option indices that user has voted for
      */
@@ -234,7 +235,7 @@ public class Poll implements Serializable {
         }
         return votes;
     }
-    
+
     /**
      * Add an option to the poll
      */
@@ -244,7 +245,7 @@ public class Poll implements Serializable {
         }
         options.add(option);
     }
-    
+
     /**
      * Get option by ID
      */
@@ -257,7 +258,7 @@ public class Poll implements Serializable {
         }
         return null;
     }
-    
+
     /**
      * Get option by index
      */
@@ -267,7 +268,7 @@ public class Poll implements Serializable {
         }
         return options.get(index);
     }
-    
+
     /**
      * Get remaining time in milliseconds
      */
@@ -276,18 +277,18 @@ public class Poll implements Serializable {
         long remaining = expiresAt - System.currentTimeMillis();
         return Math.max(0, remaining);
     }
-    
+
     /**
      * Get formatted remaining time string
      */
     public String getFormattedRemainingTime() {
         if (expiresAt == 0) return "Không giới hạn";
         if (hasExpired()) return "Đã hết hạn";
-        
+
         long remaining = getRemainingTime();
         long hours = remaining / (1000 * 60 * 60);
         long minutes = (remaining % (1000 * 60 * 60)) / (1000 * 60);
-        
+
         if (hours > 24) {
             long days = hours / 24;
             return "Còn " + days + " ngày";

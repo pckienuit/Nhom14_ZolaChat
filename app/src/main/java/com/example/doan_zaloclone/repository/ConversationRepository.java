@@ -14,8 +14,8 @@ import com.example.doan_zaloclone.api.models.ApiResponse;
 import com.example.doan_zaloclone.api.models.ConversationListResponse;
 import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.services.FirestoreManager;
-import com.example.doan_zaloclone.websocket.SocketManager;
 import com.example.doan_zaloclone.utils.Resource;
+import com.example.doan_zaloclone.websocket.SocketManager;
 import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.ArrayList;
@@ -32,27 +32,42 @@ import retrofit2.Response;
  * Handles conversation fetching, creation, and real-time updates via REST API + WebSocket
  */
 public class ConversationRepository {
-    
+
     private static final String TAG = "ConversationRepo";
-    
+
     // Singleton instance
     private static ConversationRepository instance;
-    
+
     private final ApiService apiService;
     private final SocketManager socketManager;
     private final Handler mainHandler;
-    
+
     // Cache conversations locally
     private final List<Conversation> cachedConversations = new ArrayList<>();
-    
+
     // LiveData for real-time events
     private final MutableLiveData<String> groupLeftEvent = new MutableLiveData<>();
     private final MutableLiveData<Boolean> conversationRefreshNeeded = new MutableLiveData<>();
-    
+
     // Legacy Firestore (keep for now for features not migrated yet)
     private final FirestoreManager firestoreManager;
     private ListenerRegistration conversationsListener;
-    
+
+    /**
+     * Private constructor for singleton
+     */
+    private ConversationRepository() {
+        this.apiService = RetrofitClient.getApiService();
+        this.socketManager = SocketManager.getInstance();
+        this.mainHandler = new Handler(Looper.getMainLooper());
+        this.firestoreManager = FirestoreManager.getInstance();
+
+        setupSocketListeners();
+
+        // Connect SocketManager to receive real-time conversation events
+        socketManager.connect();
+    }
+
     /**
      * Get singleton instance
      */
@@ -62,22 +77,7 @@ public class ConversationRepository {
         }
         return instance;
     }
-    
-    /**
-     * Private constructor for singleton
-     */
-    private ConversationRepository() {
-        this.apiService = RetrofitClient.getApiService();
-        this.socketManager = SocketManager.getInstance();
-        this.mainHandler = new Handler(Looper.getMainLooper());
-        this.firestoreManager = FirestoreManager.getInstance();
-        
-        setupSocketListeners();
-        
-        // Connect SocketManager to receive real-time conversation events
-        socketManager.connect();
-    }
-    
+
     /**
      * Setup WebSocket listeners for real-time events
      */
@@ -87,23 +87,23 @@ public class ConversationRepository {
             @Override
             public void onGroupLeft(String conversationId) {
                 Log.d(TAG, "🚪 Received group_left event for conversation: " + conversationId);
-                
+
                 // Remove from cache
                 synchronized (cachedConversations) {
                     cachedConversations.removeIf(c -> c.getId().equals(conversationId));
                 }
-                
+
                 // Broadcast event to UI
                 mainHandler.post(() -> groupLeftEvent.setValue(conversationId));
             }
-            
+
             @Override
             public void onMemberLeft(String conversationId, String userId, String userName) {
                 Log.d(TAG, "👥 Member " + userName + " left conversation: " + conversationId);
                 // Trigger refresh to update member count
                 mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
             }
-            
+
             @Override
             public void onConversationCreated(String conversationId) {
                 Log.d(TAG, "➕ New conversation created: " + conversationId);
@@ -113,41 +113,41 @@ public class ConversationRepository {
                 }
                 mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
             }
-            
+
             @Override
             public void onConversationUpdated(String conversationId) {
                 Log.d(TAG, "🔄 Conversation updated: " + conversationId);
                 // Trigger refresh to get latest data
                 mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
             }
-            
+
             @Override
             public void onConversationDeleted(String conversationId) {
                 Log.d(TAG, "🗑️ Conversation deleted: " + conversationId);
-                
+
                 // Remove from cache
                 synchronized (cachedConversations) {
                     cachedConversations.removeIf(c -> c.getId().equals(conversationId));
                 }
-                
+
                 // Broadcast event to UI (same as group_left - removes from list)
                 mainHandler.post(() -> groupLeftEvent.setValue(conversationId));
             }
-            
+
             @Override
             public void onMemberAdded(String conversationId, String userId, String addedBy) {
                 Log.d(TAG, "➕ Member " + userId + " added to conversation: " + conversationId);
                 // Trigger refresh to update member list
                 mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
             }
-            
+
             @Override
             public void onMemberRemoved(String conversationId, String userId, String removedBy) {
                 Log.d(TAG, "➖ Member " + userId + " removed from conversation: " + conversationId);
                 // Trigger refresh to update member list
                 mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
             }
-            
+
             @Override
             public void onAdminUpdated(String conversationId, String userId, String action, String updatedBy) {
                 Log.d(TAG, "👑 Admin " + action + " for user " + userId + " in conversation: " + conversationId);
@@ -156,7 +156,7 @@ public class ConversationRepository {
             }
         });
     }
-    
+
     /**
      * Get LiveData for group_left events
      * UI can observe this to remove conversations from the list
@@ -164,7 +164,7 @@ public class ConversationRepository {
     public LiveData<String> getGroupLeftEvent() {
         return groupLeftEvent;
     }
-    
+
     /**
      * Get LiveData for conversation refresh events
      * UI should observe this to reload conversations list
@@ -172,33 +172,34 @@ public class ConversationRepository {
     public LiveData<Boolean> getConversationRefreshNeeded() {
         return conversationRefreshNeeded;
     }
-    
+
     /**
      * Get conversations for a user via REST API
+     *
      * @param userId ID of the user (for future use, currently server gets from auth token)
      * @return LiveData containing Resource with list of conversations
      */
     public LiveData<Resource<List<Conversation>>> getConversations(@NonNull String userId) {
         MutableLiveData<Resource<List<Conversation>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Log.d(TAG, "Fetching conversations from API...");
-        
+
         // Fetch conversations from API
         Call<ConversationListResponse> call = apiService.getConversations(50);
-        
+
         call.enqueue(new Callback<ConversationListResponse>() {
             @Override
             public void onResponse(Call<ConversationListResponse> call, Response<ConversationListResponse> response) {
                 Log.d(TAG, "API Response code: " + response.code());
-                
+
                 if (response.isSuccessful() && response.body() != null) {
                     ConversationListResponse responseBody = response.body();
                     List<Conversation> conversations = responseBody.getConversations();
-                    
+
                     Log.d(TAG, "Response body: " + (responseBody != null ? "exists" : "null"));
                     Log.d(TAG, "Conversations list: " + (conversations != null ? "size=" + conversations.size() : "null"));
-                    
+
                     // Update cache
                     synchronized (cachedConversations) {
                         cachedConversations.clear();
@@ -206,7 +207,7 @@ public class ConversationRepository {
                             cachedConversations.addAll(conversations);
                         }
                     }
-                    
+
                     Log.d(TAG, "✅ Fetched " + (conversations != null ? conversations.size() : 0) + " conversations");
                     result.setValue(Resource.success(conversations != null ? conversations : new ArrayList<>()));
                 } else {
@@ -220,7 +221,7 @@ public class ConversationRepository {
                     result.setValue(Resource.error(error));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<ConversationListResponse> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -228,58 +229,60 @@ public class ConversationRepository {
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Find existing conversation between two users
+     *
      * @param currentUserId ID of current user
-     * @param otherUserId ID of other user
+     * @param otherUserId   ID of other user
      * @return LiveData containing Resource with conversation (null if not found)
      */
     public LiveData<Resource<Conversation>> findExistingConversation(@NonNull String currentUserId,
-                                                                      @NonNull String otherUserId) {
+                                                                     @NonNull String otherUserId) {
         MutableLiveData<Resource<Conversation>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
-        firestoreManager.findExistingConversation(currentUserId, otherUserId, 
-            new FirestoreManager.OnConversationFoundListener() {
-                @Override
-                public void onFound(Conversation conversation) {
-                    result.setValue(Resource.success(conversation));
-                }
-                
-                @Override
-                public void onNotFound() {
-                    result.setValue(Resource.success(null));
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Failed to find conversation";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
-        
+
+        firestoreManager.findExistingConversation(currentUserId, otherUserId,
+                new FirestoreManager.OnConversationFoundListener() {
+                    @Override
+                    public void onFound(Conversation conversation) {
+                        result.setValue(Resource.success(conversation));
+                    }
+
+                    @Override
+                    public void onNotFound() {
+                        result.setValue(Resource.success(null));
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Failed to find conversation";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
+
         return result;
     }
-    
+
     /**
      * Create a new conversation (1-on-1 or group chat) via REST API
+     *
      * @param participants List of user IDs
-     * @param isGroup true for group chat, false for 1-on-1
-     * @param groupName Group name (for group chats only)
+     * @param isGroup      true for group chat, false for 1-on-1
+     * @param groupName    Group name (for group chats only)
      * @return LiveData containing Resource with success status and conversationId
      */
     public LiveData<Resource<String>> createConversation(@NonNull List<String> participants,
-                                                          boolean isGroup,
-                                                          String groupName) {
+                                                         boolean isGroup,
+                                                         String groupName) {
         MutableLiveData<Resource<String>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         // Prepare request body
         Map<String, Object> conversationData = new HashMap<>();
         conversationData.put("participants", participants);
@@ -287,17 +290,17 @@ public class ConversationRepository {
         if (isGroup && groupName != null) {
             conversationData.put("groupName", groupName);
         }
-        
+
         // Call API
         Call<Map<String, Object>> call = apiService.createConversation(conversationData);
-        
+
         call.enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     Map<String, Object> responseBody = response.body();
                     String conversationId = (String) responseBody.get("conversationId");
-                    
+
                     Log.d(TAG, "Created conversation: " + conversationId);
                     result.setValue(Resource.success(conversationId));
                 } else {
@@ -306,7 +309,7 @@ public class ConversationRepository {
                     result.setValue(Resource.error(error));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -314,148 +317,152 @@ public class ConversationRepository {
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Legacy: Create a new conversation between two users via Firestore
      * DEPRECATED: Use createConversation(List, boolean, String) instead
      */
     @Deprecated
     public LiveData<Resource<Conversation>> createConversation(@NonNull String currentUserId,
-                                                                @NonNull String currentUserName,
-                                                                @NonNull String otherUserId,
-                                                                @NonNull String otherUserName) {
+                                                               @NonNull String currentUserName,
+                                                               @NonNull String otherUserId,
+                                                               @NonNull String otherUserName) {
         MutableLiveData<Resource<Conversation>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
-        firestoreManager.createConversation(currentUserId, currentUserName, otherUserId, otherUserName, 
-            new FirestoreManager.OnConversationCreatedListener() {
-                @Override
-                public void onSuccess(Conversation conversation) {
-                    result.setValue(Resource.success(conversation));
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Failed to create conversation";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
-        
+
+        firestoreManager.createConversation(currentUserId, currentUserName, otherUserId, otherUserName,
+                new FirestoreManager.OnConversationCreatedListener() {
+                    @Override
+                    public void onSuccess(Conversation conversation) {
+                        result.setValue(Resource.success(conversation));
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Failed to create conversation";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
+
         return result;
     }
-    
+
     /**
      * Pin conversation for a user
+     *
      * @param conversationId ID of the conversation
-     * @param userId ID of the user pinning the conversation
+     * @param userId         ID of the user pinning the conversation
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Void>> pinConversation(@NonNull String conversationId,
-                                                     @NonNull String userId) {
+                                                    @NonNull String userId) {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
-        firestoreManager.pinConversation(conversationId, userId, 
-            new FirestoreManager.OnGroupUpdatedListener() {
-                @Override
-                public void onSuccess() {
-                    result.setValue(Resource.success(null));
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Failed to pin conversation";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
-        
+
+        firestoreManager.pinConversation(conversationId, userId,
+                new FirestoreManager.OnGroupUpdatedListener() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(null));
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Failed to pin conversation";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
+
         return result;
     }
-    
+
     /**
      * Unpin conversation for a user
+     *
      * @param conversationId ID of the conversation
-     * @param userId ID of the user unpinning the conversation
+     * @param userId         ID of the user unpinning the conversation
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Void>> unpinConversation(@NonNull String conversationId,
-                                                       @NonNull String userId) {
+                                                      @NonNull String userId) {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
-        firestoreManager.unpinConversation(conversationId, userId, 
-            new FirestoreManager.OnGroupUpdatedListener() {
-                @Override
-                public void onSuccess() {
-                    result.setValue(Resource.success(null));
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Failed to unpin conversation";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
-        
+
+        firestoreManager.unpinConversation(conversationId, userId,
+                new FirestoreManager.OnGroupUpdatedListener() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(null));
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Failed to unpin conversation";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
+
         return result;
     }
-    
+
     /**
      * Update tags for a conversation
+     *
      * @param conversationId ID of the conversation
-     * @param userId ID of the user
-     * @param tags List of tags to set
+     * @param userId         ID of the user
+     * @param tags           List of tags to set
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Void>> updateTags(@NonNull String conversationId,
-                                                @NonNull String userId,
-                                                @NonNull List<String> tags) {
+                                               @NonNull String userId,
+                                               @NonNull List<String> tags) {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         firestoreManager.updateConversationTags(conversationId, userId, tags,
-            new FirestoreManager.OnGroupUpdatedListener() {
-                @Override
-                public void onSuccess() {
-                    result.setValue(Resource.success(null));
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Failed to update tags";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
-        
+                new FirestoreManager.OnGroupUpdatedListener() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(null));
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Failed to update tags";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
+
         return result;
     }
-    
+
     /**
      * Update group conversation (rename, change avatar, etc.) via REST API
+     *
      * @param conversationId ID of the conversation
-     * @param updates Map of fields to update (name, groupAvatar, etc.)
+     * @param updates        Map of fields to update (name, groupAvatar, etc.)
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Void>> updateGroupInfo(@NonNull String conversationId,
-                                                     @NonNull Map<String, Object> updates) {
+                                                    @NonNull Map<String, Object> updates) {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Log.d(TAG, "Updating group " + conversationId + " - fields: " + updates.keySet());
-        
+
         Call<Map<String, Object>> call = apiService.updateConversation(conversationId, updates);
-        
+
         call.enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
@@ -468,7 +475,7 @@ public class ConversationRepository {
                     result.setValue(Resource.error(error));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -476,31 +483,32 @@ public class ConversationRepository {
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Add member to group via REST API
+     *
      * @param conversationId ID of the group conversation
-     * @param userId ID of the user to add
-     * @param userName Name of the user to add
+     * @param userId         ID of the user to add
+     * @param userName       Name of the user to add
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Void>> addGroupMember(@NonNull String conversationId,
-                                                    @NonNull String userId,
-                                                    @NonNull String userName) {
+                                                   @NonNull String userId,
+                                                   @NonNull String userName) {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Log.d(TAG, "Adding member " + userId + " to group " + conversationId);
-        
+
         Map<String, String> memberData = new HashMap<>();
         memberData.put("userId", userId);
         memberData.put("userName", userName);
-        
+
         Call<ApiResponse<Void>> call = apiService.addGroupMember(conversationId, memberData);
-        
+
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override
             public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
@@ -513,7 +521,7 @@ public class ConversationRepository {
                     result.setValue(Resource.error(error));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -521,25 +529,26 @@ public class ConversationRepository {
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Remove member from group via REST API
+     *
      * @param conversationId ID of the group conversation
-     * @param userId ID of the user to remove
+     * @param userId         ID of the user to remove
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Void>> removeGroupMember(@NonNull String conversationId,
-                                                       @NonNull String userId) {
+                                                      @NonNull String userId) {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Log.d(TAG, "Removing member " + userId + " from group " + conversationId);
-        
+
         Call<ApiResponse<Void>> call = apiService.removeGroupMember(conversationId, userId);
-        
+
         call.enqueue(new Callback<ApiResponse<Void>>() {
             @Override
             public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
@@ -552,7 +561,7 @@ public class ConversationRepository {
                     result.setValue(Resource.error(error));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -560,23 +569,24 @@ public class ConversationRepository {
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Leave group conversation via REST API
+     *
      * @param conversationId ID of the group conversation
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Void>> leaveGroup(@NonNull String conversationId) {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Log.d(TAG, "Leaving group " + conversationId);
-        
+
         Call<Map<String, Object>> call = apiService.leaveGroup(conversationId);
-        
+
         call.enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
@@ -589,7 +599,7 @@ public class ConversationRepository {
                     result.setValue(Resource.error(error));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -597,34 +607,35 @@ public class ConversationRepository {
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Delete/Dissolve group conversation via REST API
+     *
      * @param conversationId ID of the group conversation
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Void>> deleteConversation(@NonNull String conversationId) {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         Log.d(TAG, "Deleting conversation " + conversationId);
-        
+
         Call<Map<String, Object>> call = apiService.deleteConversation(conversationId);
-        
+
         call.enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (response.isSuccessful()) {
                     Log.d(TAG, "✅ Deleted conversation");
-                    
+
                     // Remove from cache
                     synchronized (cachedConversations) {
                         cachedConversations.removeIf(c -> c.getId().equals(conversationId));
                     }
-                    
+
                     result.setValue(Resource.success(null));
                 } else {
                     String error = "HTTP " + response.code();
@@ -632,7 +643,7 @@ public class ConversationRepository {
                     result.setValue(Resource.error(error));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -640,10 +651,10 @@ public class ConversationRepository {
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
      * Clean up listeners when repository is no longer needed
      */

@@ -23,13 +23,13 @@ import java.util.Set;
  * Adapter for sender selection dialog
  */
 public class SenderFilterAdapter extends RecyclerView.Adapter<SenderFilterAdapter.SenderViewHolder> {
-    
+
     private List<SenderInfo> senders = new ArrayList<>();
     private Set<String> selectedSenderIds = new HashSet<>();
-    
+
     public SenderFilterAdapter() {
     }
-    
+
     @NonNull
     @Override
     public SenderViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -37,38 +37,38 @@ public class SenderFilterAdapter extends RecyclerView.Adapter<SenderFilterAdapte
                 .inflate(R.layout.item_sender_filter, parent, false);
         return new SenderViewHolder(view);
     }
-    
+
     @Override
     public void onBindViewHolder(@NonNull SenderViewHolder holder, int position) {
         SenderInfo sender = senders.get(position);
         holder.bind(sender);
     }
-    
+
     @Override
     public int getItemCount() {
         return senders.size();
     }
-    
+
     public void setSenders(List<SenderInfo> senders) {
         this.senders = senders != null ? senders : new ArrayList<>();
         notifyDataSetChanged();
     }
-    
+
+    public Set<String> getSelectedSenders() {
+        return new HashSet<>(selectedSenderIds);
+    }
+
     public void setSelectedSenders(Set<String> selectedIds) {
         this.selectedSenderIds = selectedIds != null ? new HashSet<>(selectedIds) : new HashSet<>();
         notifyDataSetChanged();
     }
-    
-    public Set<String> getSelectedSenders() {
-        return new HashSet<>(selectedSenderIds);
-    }
-    
+
     class SenderViewHolder extends RecyclerView.ViewHolder {
-        private CheckBox checkBox;
-        private ImageView avatar;
-        private TextView nameText;
-        private TextView countText;
-        
+        private final CheckBox checkBox;
+        private final ImageView avatar;
+        private final TextView nameText;
+        private final TextView countText;
+
         public SenderViewHolder(@NonNull View itemView) {
             super(itemView);
             checkBox = itemView.findViewById(R.id.senderCheckBox);
@@ -76,11 +76,11 @@ public class SenderFilterAdapter extends RecyclerView.Adapter<SenderFilterAdapte
             nameText = itemView.findViewById(R.id.senderName);
             countText = itemView.findViewById(R.id.fileCount);
         }
-        
+
         public void bind(SenderInfo sender) {
             nameText.setText(sender.getSenderName());
             countText.setText(itemView.getContext().getString(R.string.files_count, sender.getFileCount()));
-            
+
             // Load avatar
             if (sender.getSenderAvatarUrl() != null && !sender.getSenderAvatarUrl().isEmpty()) {
                 Glide.with(itemView.getContext())
@@ -90,11 +90,11 @@ public class SenderFilterAdapter extends RecyclerView.Adapter<SenderFilterAdapte
             } else {
                 avatar.setImageResource(R.drawable.ic_person);
             }
-            
+
             // Set checkbox state
             boolean isSelected = selectedSenderIds.contains(sender.getSenderId());
             checkBox.setChecked(isSelected);
-            
+
             // Handle checkbox clicks
             checkBox.setOnClickListener(v -> {
                 if (checkBox.isChecked()) {
@@ -103,7 +103,7 @@ public class SenderFilterAdapter extends RecyclerView.Adapter<SenderFilterAdapte
                     selectedSenderIds.remove(sender.getSenderId());
                 }
             });
-            
+
             // Handle item clicks
             itemView.setOnClickListener(v -> {
                 checkBox.setChecked(!checkBox.isChecked());

@@ -19,10 +19,10 @@ public class GroupViewModel extends ViewModel {
 
     private final ChatRepository chatRepository;
     private final ConversationRepository conversationRepository;
-    private MutableLiveData<Resource<Conversation>> createGroupResult;
-    private MutableLiveData<Resource<Boolean>> updateResult;
-    private MutableLiveData<Resource<Void>> leaveGroupResult;
-    private MutableLiveData<Resource<Boolean>> deleteGroupResult;
+    private final MutableLiveData<Resource<Conversation>> createGroupResult;
+    private final MutableLiveData<Resource<Boolean>> updateResult;
+    private final MutableLiveData<Resource<Void>> leaveGroupResult;
+    private final MutableLiveData<Resource<Boolean>> deleteGroupResult;
 
     public GroupViewModel() {
         this.chatRepository = new ChatRepository();
@@ -35,13 +35,14 @@ public class GroupViewModel extends ViewModel {
 
     /**
      * Create a new group conversation
-     * @param adminId ID of the group creator
+     *
+     * @param adminId   ID of the group creator
      * @param groupName Name of the group
      * @param memberIds List of member IDs (including admin)
      */
-    public void createGroup(@NonNull String adminId, 
-                           @NonNull String groupName, 
-                           @NonNull List<String> memberIds) {
+    public void createGroup(@NonNull String adminId,
+                            @NonNull String groupName,
+                            @NonNull List<String> memberIds) {
         chatRepository.createGroup(adminId, groupName, memberIds)
                 .observeForever(resource -> createGroupResult.setValue(resource));
     }

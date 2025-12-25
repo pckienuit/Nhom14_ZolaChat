@@ -9,17 +9,17 @@ import com.example.doan_zaloclone.R;
  * Allows users to share their current location or a pinned location
  */
 public class SendLocationAction implements QuickAction {
-    
+
     @Override
     public int getIconResId() {
         return R.drawable.ic_location;
     }
-    
+
     @Override
     public String getLabel() {
         return "Gửi vị trí";
     }
-    
+
     @Override
     public void execute(Context context, QuickActionCallback callback) {
         // Trigger UI to show location picker

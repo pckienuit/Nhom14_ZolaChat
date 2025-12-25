@@ -20,32 +20,32 @@ import com.google.firebase.firestore.ListenerRegistration;
 public class IncomingCallService extends Service {
     private static final String TAG = "IncomingCallService";
     private static final int NOTIFICATION_ID = 1001;
-    
+
     private CallRepository callRepository;
     private ListenerRegistration callListener;
     private Ringtone ringtone;
     private Vibrator vibrator;
     private String currentCallId;
-    
+
     @Override
     public void onCreate() {
         super.onCreate();
         callRepository = new CallRepository();
-        
+
         // Create notification channel
         CallNotificationHelper.createNotificationChannel(this);
     }
-    
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null) {
             stopSelf();
             return START_NOT_STICKY;
         }
-        
+
         String action = intent.getAction();
         currentCallId = intent.getStringExtra("CALL_ID");
-        
+
         if (action == null) {
             // Show incoming call notification
             showIncomingCallNotification(intent);
@@ -56,19 +56,19 @@ public class IncomingCallService extends Service {
         } else if ("ACTION_CANCEL_CALL".equals(action)) {
             stopService();
         }
-        
+
         return START_NOT_STICKY;
     }
-    
+
     private void showIncomingCallNotification(Intent intent) {
         String callerName = intent.getStringExtra("CALLER_NAME");
         boolean isVideo = intent.getBooleanExtra("IS_VIDEO", false);
-        
+
         // Create call object for notification
         Call call = new Call();
         call.setId(currentCallId);
         call.setType(isVideo ? Call.TYPE_VIDEO : Call.TYPE_VOICE);
-        
+
         // Start foreground with notification
         // Conditionally set foreground service type based on call type
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
@@ -76,26 +76,26 @@ public class IncomingCallService extends Service {
             if (isVideo) {
                 serviceType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA;
             }
-            startForeground(NOTIFICATION_ID, 
-                CallNotificationHelper.createIncomingCallNotification(this, call, callerName, null),
-                serviceType);
-            Log.d(TAG, "Started with foreground service type: " + 
-                (isVideo ? "camera|microphone" : "microphone"));
+            startForeground(NOTIFICATION_ID,
+                    CallNotificationHelper.createIncomingCallNotification(this, call, callerName, null),
+                    serviceType);
+            Log.d(TAG, "Started with foreground service type: " +
+                    (isVideo ? "camera|microphone" : "microphone"));
         } else {
-            startForeground(NOTIFICATION_ID, 
-                CallNotificationHelper.createIncomingCallNotification(this, call, callerName, null));
+            startForeground(NOTIFICATION_ID,
+                    CallNotificationHelper.createIncomingCallNotification(this, call, callerName, null));
         }
-        
+
         // Start ringtone
         playRingtone();
-        
+
         // Start vibration
         startVibration();
-        
+
         // Listen to call updates (auto-dismiss if caller cancels)
         listenToCallUpdates();
     }
-    
+
     private void playRingtone() {
         try {
             Uri ringtoneUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE);
@@ -105,13 +105,13 @@ public class IncomingCallService extends Service {
             Log.e(TAG, "Error playing ringtone", e);
         }
     }
-    
+
     private void startVibration() {
         vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
         long[] pattern = {0, 1000, 1000}; // Wait 0ms, vibrate 1s, wait 1s
         vibrator.vibrate(pattern, 0); // Repeat
     }
-    
+
     private void stopRingtoneAndVibration() {
         if (ringtone != null && ringtone.isPlaying()) {
             ringtone.stop();
@@ -120,78 +120,78 @@ public class IncomingCallService extends Service {
             vibrator.cancel();
         }
     }
-    
+
     private void listenToCallUpdates() {
         if (currentCallId == null) return;
-        
+
         callListener = callRepository.listenToCall(currentCallId, new CallRepository.OnCallChangedListener() {
             @Override
             public void onCallChanged(Call call) {
                 // If call ended/rejected/missed/cancelled, stop service
-                if (call.isEnded() || 
-                    Call.STATUS_MISSED.equals(call.getStatus()) ||
-                    Call.STATUS_ENDED.equals(call.getStatus())) {
+                if (call.isEnded() ||
+                        Call.STATUS_MISSED.equals(call.getStatus()) ||
+                        Call.STATUS_ENDED.equals(call.getStatus())) {
                     stopService();
                 }
             }
-            
+
             @Override
             public void onError(String errorMsg) {
                 Log.e(TAG, "Error listening to call: " + errorMsg);
             }
         });
     }
-    
+
     private void acceptCall() {
         stopRingtoneAndVibration();
-        
+
         // Open CallActivity
         Intent callIntent = new Intent(this, CallActivity.class);
         callIntent.putExtra("CALL_ID", currentCallId);
         callIntent.putExtra("IS_INCOMING", true);
         callIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(callIntent);
-        
+
         stopService();
     }
-    
+
     private void rejectCall() {
         if (currentCallId != null) {
-            callRepository.updateCallStatus(currentCallId, Call.STATUS_REJECTED, 
-                new CallRepository.OnCallUpdatedListener() {
-                    @Override
-                    public void onSuccess() {
-                        stopService();
-                    }
-                    
-                    @Override
-                    public void onError(String errorMsg) {
-                        stopService();
-                    }
-                });
+            callRepository.updateCallStatus(currentCallId, Call.STATUS_REJECTED,
+                    new CallRepository.OnCallUpdatedListener() {
+                        @Override
+                        public void onSuccess() {
+                            stopService();
+                        }
+
+                        @Override
+                        public void onError(String errorMsg) {
+                            stopService();
+                        }
+                    });
         } else {
             stopService();
         }
     }
-    
+
     private void stopService() {
         stopRingtoneAndVibration();
-        
+
         if (callListener != null) {
             callListener.remove();
         }
-        
+
         CallNotificationHelper.cancelNotification(this, NOTIFICATION_ID);
         stopForeground(true);
         stopSelf();
     }
-    
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
         return null;
     }
-    
+
     @Override
     public void onDestroy() {
         super.onDestroy();

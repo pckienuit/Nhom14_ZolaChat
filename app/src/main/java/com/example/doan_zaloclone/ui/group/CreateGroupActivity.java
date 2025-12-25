@@ -5,7 +5,6 @@ import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
@@ -22,7 +21,6 @@ import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.models.User;
 import com.example.doan_zaloclone.ui.room.RoomActivity;
-import com.example.doan_zaloclone.utils.Resource;
 import com.example.doan_zaloclone.viewmodel.ContactViewModel;
 import com.example.doan_zaloclone.viewmodel.GroupViewModel;
 import com.google.android.material.appbar.MaterialToolbar;
@@ -96,7 +94,8 @@ public class CreateGroupActivity extends AppCompatActivity implements Selectable
         // Enable create button only when group name is filled and at least 1 friend selected
         groupNameEditText.addTextChangedListener(new TextWatcher() {
             @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
@@ -104,7 +103,8 @@ public class CreateGroupActivity extends AppCompatActivity implements Selectable
             }
 
             @Override
-            public void afterTextChanged(Editable s) {}
+            public void afterTextChanged(Editable s) {
+            }
         });
 
         createGroupButton.setOnClickListener(v -> createGroup());
@@ -151,7 +151,7 @@ public class CreateGroupActivity extends AppCompatActivity implements Selectable
                         Conversation conversation = resource.getData();
                         Log.d(TAG, "Group created successfully: " + conversation.getId());
                         Toast.makeText(this, "Tạo nhóm thành công!", Toast.LENGTH_SHORT).show();
-                        
+
                         // Navigate to chat room
                         Intent intent = new Intent(this, RoomActivity.class);
                         intent.putExtra("conversationId", conversation.getId());
@@ -172,8 +172,8 @@ public class CreateGroupActivity extends AppCompatActivity implements Selectable
     }
 
     private void loadFriends() {
-        String currentUserId = firebaseAuth.getCurrentUser() != null 
-                ? firebaseAuth.getCurrentUser().getUid() 
+        String currentUserId = firebaseAuth.getCurrentUser() != null
+                ? firebaseAuth.getCurrentUser().getUid()
                 : null;
 
         if (currentUserId == null) {
@@ -199,8 +199,8 @@ public class CreateGroupActivity extends AppCompatActivity implements Selectable
             return;
         }
 
-        String currentUserId = firebaseAuth.getCurrentUser() != null 
-                ? firebaseAuth.getCurrentUser().getUid() 
+        String currentUserId = firebaseAuth.getCurrentUser() != null
+                ? firebaseAuth.getCurrentUser().getUid()
                 : null;
 
         if (currentUserId == null) {
@@ -222,7 +222,7 @@ public class CreateGroupActivity extends AppCompatActivity implements Selectable
     private void updateCreateButtonState() {
         String groupName = groupNameEditText.getText().toString().trim();
         int selectedCount = friendsAdapter.getSelectedFriendIds().size();
-        
+
         boolean isValid = !groupName.isEmpty() && selectedCount > 0;
         createGroupButton.setEnabled(isValid);
     }

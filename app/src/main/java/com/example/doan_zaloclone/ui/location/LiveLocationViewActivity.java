@@ -38,7 +38,7 @@ public class LiveLocationViewActivity extends AppCompatActivity {
 
     private String sessionId;
     private boolean isSender;
-    
+
     private ListenerRegistration liveLocationListener;
     private Marker userMarker;
     private CountDownTimer countDownTimer;
@@ -47,7 +47,7 @@ public class LiveLocationViewActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
+
         // Initialize OSMDroid configuration
         Configuration.getInstance().load(getApplicationContext(), PreferenceManager.getDefaultSharedPreferences(getApplicationContext()));
         Configuration.getInstance().setUserAgentValue(getPackageName());
@@ -64,7 +64,7 @@ public class LiveLocationViewActivity extends AppCompatActivity {
         }
 
         chatRepository = new ChatRepository();
-        
+
         initViews();
         setupMap();
         startListening();
@@ -160,7 +160,7 @@ public class LiveLocationViewActivity extends AppCompatActivity {
             }
         }.start();
     }
-    
+
     private void cleanupTimer() {
         if (countDownTimer != null) {
             countDownTimer.cancel();
@@ -176,7 +176,7 @@ public class LiveLocationViewActivity extends AppCompatActivity {
         Intent intent = new Intent(this, LocationSharingService.class);
         intent.setAction(LocationSharingService.ACTION_STOP_SHARING);
         startService(intent);
-        
+
         Toast.makeText(this, "Đã dừng chia sẻ vị trí", Toast.LENGTH_SHORT).show();
         finish();
     }
@@ -189,7 +189,7 @@ public class LiveLocationViewActivity extends AppCompatActivity {
         }
         cleanupTimer();
     }
-    
+
     @Override
     public void onResume() {
         super.onResume();

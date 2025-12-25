@@ -8,57 +8,62 @@ import androidx.activity.result.ActivityResultLauncher;
 
 /**
  * Helper class for picking files using Android's Storage Access Framework (SAF)
- * 
+ * <p>
  * Usage:
  * 1. Register launcher in Activity/Fragment onCreate:
- *    ActivityResultLauncher<String> launcher = registerForActivityResult(
- *        new ActivityResultContracts.GetContent(),
- *        uri -> { ... handle selected file ... }
- *    );
- * 
+ * ActivityResultLauncher<String> launcher = registerForActivityResult(
+ * new ActivityResultContracts.GetContent(),
+ * uri -> { ... handle selected file ... }
+ * );
+ * <p>
  * 2. Launch picker:
- *    FilePickerHelper.launchFilePicker(launcher);
+ * FilePickerHelper.launchFilePicker(launcher);
  */
 public class FilePickerHelper {
-    
+
     /**
      * Launch file picker for any file type
+     *
      * @param launcher ActivityResultLauncher for GetContent contract
      */
     public static void launchFilePicker(ActivityResultLauncher<String> launcher) {
         launcher.launch("*/*");
     }
-    
+
     /**
      * Launch file picker for specific MIME type
+     *
      * @param launcher ActivityResultLauncher for GetContent contract
      * @param mimeType MIME type filter (e.g., "image/*", "application/pdf")
      */
     public static void launchFilePickerWithType(ActivityResultLauncher<String> launcher, String mimeType) {
         launcher.launch(mimeType);
     }
-    
+
     /**
      * Launch file picker for multiple file types
      * Note: This requires using GetMultipleContents contract
+     *
      * @param launcher ActivityResultLauncher for GetMultipleContents contract
      */
     public static void launchMultipleFilePicker(ActivityResultLauncher<String> launcher) {
         launcher.launch("*/*");
     }
-    
+
     /**
      * Launch multiple file picker with specific MIME type
+     *
      * @param launcher ActivityResultLauncher for GetMultipleContents contract
      * @param mimeType MIME type filter
      */
     public static void launchMultipleFilePickerWithType(ActivityResultLauncher<String> launcher, String mimeType) {
         launcher.launch(mimeType);
     }
-    
+
     /**
      * Create intent for file picker (alternative approach without ActivityResultLauncher)
      * Use this with startActivityForResult if needed
+     *
      * @param mimeType MIME type filter
      * @return Intent for file picker
      */
@@ -68,9 +73,10 @@ public class FilePickerHelper {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         return intent;
     }
-    
+
     /**
      * Create intent for multiple file selection
+     *
      * @param mimeType MIME type filter
      * @return Intent for multiple file picker
      */
@@ -81,16 +87,17 @@ public class FilePickerHelper {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         return intent;
     }
-    
+
     /**
      * Validate if URI is accessible
+     *
      * @param context Android context
-     * @param uri File URI
+     * @param uri     File URI
      * @return true if URI is valid and accessible
      */
     public static boolean isValidUri(Context context, Uri uri) {
         if (uri == null) return false;
-        
+
         try {
             context.getContentResolver().openInputStream(uri);
             return true;

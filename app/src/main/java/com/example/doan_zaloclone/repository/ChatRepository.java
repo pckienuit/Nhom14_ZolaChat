@@ -1,21 +1,5 @@
 package com.example.doan_zaloclone.repository;
 
-import com.example.doan_zaloclone.api.ApiService;
-import com.example.doan_zaloclone.api.RetrofitClient;
-import com.example.doan_zaloclone.api.models.ApiResponse;
-import com.example.doan_zaloclone.api.models.SendMessageRequest;
-import com.example.doan_zaloclone.api.models.MessageListResponse;
-import com.example.doan_zaloclone.websocket.SocketManager;
-import com.example.doan_zaloclone.models.Conversation;
-import com.example.doan_zaloclone.models.Message;
-import com.example.doan_zaloclone.services.FirestoreManager;
-import com.example.doan_zaloclone.utils.Resource;
-import com.google.firebase.firestore.DocumentReference;
-import com.google.firebase.firestore.DocumentSnapshot;
-import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.ListenerRegistration;
-import com.google.firebase.firestore.Query;
-
 import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
@@ -25,13 +9,24 @@ import androidx.annotation.NonNull;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-
 import com.cloudinary.android.MediaManager;
 import com.cloudinary.android.callback.ErrorInfo;
 import com.cloudinary.android.callback.UploadCallback;
+import com.example.doan_zaloclone.api.ApiService;
+import com.example.doan_zaloclone.api.RetrofitClient;
+import com.example.doan_zaloclone.api.models.ApiResponse;
+import com.example.doan_zaloclone.api.models.MessageListResponse;
+import com.example.doan_zaloclone.models.Conversation;
+import com.example.doan_zaloclone.models.Message;
+import com.example.doan_zaloclone.services.FirestoreManager;
+import com.example.doan_zaloclone.utils.Resource;
+import com.example.doan_zaloclone.websocket.SocketManager;
+import com.google.firebase.firestore.DocumentReference;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
+
+import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,8 +35,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.json.JSONException;
-import org.json.JSONObject;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 /**
  * Repository class for handling chat/messaging operations with Firestore
@@ -56,18 +52,15 @@ public class ChatRepository {
     private final ApiService apiService;
     private final SocketManager socketManager;
     private final Handler mainHandler;
+    private final List<Message> cachedMessages = new ArrayList<>();
+    // Track pending sent messages to prevent WebSocket duplicates
+    private final Set<String> pendingSentMessageIds = new HashSet<>();
     private ListenerRegistration messagesListener;
-    
     // Track current conversation for WebSocket
     private String currentConversationId;
-    private List<Message> cachedMessages = new ArrayList<>();
-    
     // For notifying UI after send
     private MessagesListener activeMessagesListener;
     private MutableLiveData<Resource<List<Message>>> activeMessagesLiveData;
-    
-    // Track pending sent messages to prevent WebSocket duplicates
-    private final Set<String> pendingSentMessageIds = new HashSet<>();
 
     public ChatRepository() {
         this.firestore = FirebaseFirestore.getInstance();
@@ -75,7 +68,7 @@ public class ChatRepository {
         this.apiService = RetrofitClient.getApiService();
         this.socketManager = SocketManager.getInstance();
         this.mainHandler = new Handler(Looper.getMainLooper());
-        
+
         // Connect WebSocket for real-time updates
         Log.d("ChatRepository", "Initializing WebSocket connection");
         socketManager.connect();
@@ -83,259 +76,266 @@ public class ChatRepository {
 
     /**
      * Send a message to a conversation (LiveData version)
+     *
      * @param conversationId ID of the conversation
-     * @param message Message object to send (ID will be auto-generated)
+     * @param message        Message object to send (ID will be auto-generated)
      * @return LiveData containing Resource with success status
      */
-    public LiveData<Resource<Boolean>> sendMessageLiveData(@NonNull String conversationId, 
-                                                             @NonNull Message message) {
+    public LiveData<Resource<Boolean>> sendMessageLiveData(@NonNull String conversationId,
+                                                           @NonNull Message message) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         sendMessage(conversationId, message, new SendMessageCallback() {
             @Override
             public void onSuccess() {
                 result.setValue(Resource.success(true));
             }
-            
+
             @Override
             public void onError(String error) {
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
 
     /**
- * Send a message to a conversation (callback version - for backward compatibility)
- * MIGRATED: Now uses new /api/messages API (Phase 3C-1)
- * Backend handles: save to Firestore, update conversation, broadcast via WebSocket
- * @param conversationId ID of the conversation
- * @param message Message object to send (ID will be auto-generated by backend)
- * @param callback Callback for success/error
- */
-public void sendMessage(String conversationId, Message message, SendMessageCallback callback) {
-    // Create request map for new API
-    Map<String, Object> messageData = new HashMap<>();
-    messageData.put("conversationId", conversationId);
-    messageData.put("type", message.getType());
-    messageData.put("content", message.getContent());
-    
-    // Add file metadata if present (for FILE, IMAGE, VIDEO, AUDIO types)
-    if (message.getFileName() != null && !message.getFileName().isEmpty()) {
-        messageData.put("fileName", message.getFileName());
-        messageData.put("fileSize", message.getFileSize());
-        if (message.getFileMimeType() != null) {
-            messageData.put("fileMimeType", message.getFileMimeType());
-        }
-    }
-    
-    Log.d("ChatRepository", "Sending message via new API: " + message.getType());
-    
-    // Call new API
-    Call<Map<String, Object>> call = apiService.sendMessageV2(messageData);
-    
-    call.enqueue(new Callback<Map<String, Object>>() {
-        @Override
-        public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-            if (response.isSuccessful() && response.body() != null) {
-                Map<String, Object> responseBody = response.body();
-                Boolean success = (Boolean) responseBody.get("success");
-                
-                if (success != null && success) {
-                    String messageId = (String) responseBody.get("messageId");
-                    message.setId(messageId);
-                    
-                    Log.d("ChatRepository", "✅ Message sent successfully - ID: " + messageId);
-                    
-                    // Add to pending set - WebSocket will add to cache
-                    synchronized (pendingSentMessageIds) {
-                        pendingSentMessageIds.add(messageId);
-                    }
-                    
-                    mainHandler.postDelayed(() -> {
-                        synchronized (pendingSentMessageIds) {
-                            pendingSentMessageIds.remove(messageId);
-                            Log.d("ChatRepository", "Removed message from pending: " + messageId);
-                        }
-                    }, 5000);
-                    
-                    callback.onSuccess();
-                } else {
-                    callback.onError("Failed to send message");
-                }
-            } else {
-                String error = "HTTP " + response.code();
-                if (response.message() != null) {
-                    error += ": " + response.message();
-                }
-                Log.e("ChatRepository", "❌ Send message failed: " + error);
-                callback.onError(error);
-            }
-        }
-        
-        @Override
-        public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-            String error = t.getMessage() != null ? t.getMessage() : "Network error";
-            Log.e("ChatRepository", "❌ Send message network error: " + error);
-            callback.onError(error);
-        }
-    });
-}
-    /**
- * Recall a message (set isRecalled flag and change content)
- * MIGRATED: Now uses new /api/messages API (Phase 3C-1)
- * @param conversationId ID of the conversation
- * @param messageId ID of the message to recall
- * @param callback Callback for success/error
- */
-public void recallMessage(String conversationId, String messageId, SendMessageCallback callback) {
-    Log.d("ChatRepository", "Recalling message via new API: " + messageId);
-    
-    Map<String, Object> updates = new HashMap<>();
-    updates.put("conversationId", conversationId);
-    updates.put("action", "recall");
-    
-    Call<Map<String, Object>> call = apiService.updateMessageV2(messageId, updates);
-    
-    call.enqueue(new Callback<Map<String, Object>>() {
-        @Override
-        public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-            if (response.isSuccessful() && response.body() != null) {
-                Map<String, Object> responseBody = response.body();
-                Boolean success = (Boolean) responseBody.get("success");
-                
-                if (success != null && success) {
-                    Log.d("ChatRepository", "✅ Message recalled successfully - ID: " + messageId);
-                    // Backend broadcasts update via WebSocket
-                    callback.onSuccess();
-                } else {
-                    callback.onError("Failed to recall message");
-                }
-            } else {
-                String error = "HTTP " + response.code();
-                Log.e("ChatRepository", "❌ Recall message failed: " + error);
-                callback.onError(error);
-            }
-        }
-        
-        @Override
-        public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-            String error = t.getMessage() != null ? t.getMessage() : "Network error";
-            Log.e("ChatRepository", "❌ Recall message network error: " + error);
-            callback.onError(error);
-        }
-    });
-}
-    
-    /**
-     * Update message content
+     * Send a message to a conversation (callback version - for backward compatibility)
+     * MIGRATED: Now uses new /api/messages API (Phase 3C-1)
+     * Backend handles: save to Firestore, update conversation, broadcast via WebSocket
+     *
      * @param conversationId ID of the conversation
-     * @param messageId ID of the message to update
-     * @param newContent New content for the message
-     * @param callback Callback for success/error
+     * @param message        Message object to send (ID will be auto-generated by backend)
+     * @param callback       Callback for success/error
      */
-    public void updateMessage(String conversationId, String messageId, String newContent, SendMessageCallback callback) {
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("content", newContent);
-        
-        Call<ApiResponse<Message>> call = apiService.updateMessage(conversationId, messageId, updates);
-        
-        call.enqueue(new Callback<ApiResponse<Message>>() {
-            @Override
-            public void onResponse(Call<ApiResponse<Message>> call, Response<ApiResponse<Message>> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    ApiResponse<Message> apiResponse = response.body();
-                    
-                    if (apiResponse.isSuccess()) {
-                        Log.d("ChatRepository", "Message updated successfully - ID: " + messageId);
-                        // Backend broadcasts update via WebSocket
-                        callback.onSuccess();
-                    } else {
-                        String error = apiResponse.getMessage() != null 
-                            ? apiResponse.getMessage() 
-                            : "Failed to update message";
-                        callback.onError(error);
-                    }
-                } else {
-                    callback.onError("HTTP " + response.code());
-                }
-            }
-            
-            @Override
-            public void onFailure(Call<ApiResponse<Message>> call, Throwable t) {
-                callback.onError(t.getMessage() != null ? t.getMessage() : "Network error");
-            }
-        });
-    }
-    
-    /**
- * Delete a message permanently
- * MIGRATED: Now uses new /api/messages API (Phase 3C-1)
- * @param conversationId ID of the conversation
- * @param messageId ID of the message to delete
- * @param callback Callback for success/error
- */
-public void deleteMessage(String conversationId, String messageId, SendMessageCallback callback) {
-    Log.d("ChatRepository", "Deleting message via new API: " + messageId);
-    
-    Call<Map<String, Object>> call = apiService.deleteMessageV2(messageId, conversationId);
-    
-    call.enqueue(new Callback<Map<String, Object>>() {
-        @Override
-        public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-            if (response.isSuccessful() && response.body() != null) {
-                Map<String, Object> responseBody = response.body();
-                Boolean success = (Boolean) responseBody.get("success");
-                
-                if (success != null && success) {
-                    Log.d("ChatRepository", "✅ Message deleted successfully - ID: " + messageId);
-                    // Backend broadcasts delete via WebSocket
-                    callback.onSuccess();
-                } else {
-                    callback.onError("Failed to delete message");
-                }
-            } else {
-                String error = "HTTP " + response.code();
-                Log.e("ChatRepository", "❌ Delete message failed: " + error);
-                callback.onError(error);
+    public void sendMessage(String conversationId, Message message, SendMessageCallback callback) {
+        // Create request map for new API
+        Map<String, Object> messageData = new HashMap<>();
+        messageData.put("conversationId", conversationId);
+        messageData.put("type", message.getType());
+        messageData.put("content", message.getContent());
+
+        // Add file metadata if present (for FILE, IMAGE, VIDEO, AUDIO types)
+        if (message.getFileName() != null && !message.getFileName().isEmpty()) {
+            messageData.put("fileName", message.getFileName());
+            messageData.put("fileSize", message.getFileSize());
+            if (message.getFileMimeType() != null) {
+                messageData.put("fileMimeType", message.getFileMimeType());
             }
         }
-        
-        @Override
-        public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-            String error = t.getMessage() != null ? t.getMessage() : "Network error";
-            Log.e("ChatRepository", "❌ Delete message network error: " + error);
-            callback.onError(error);
-        }
-    });
-}
-    
-    /**
-     * Add, change, or remove a reaction on a message
-     * MIGRATED: Now uses new /api/messages API (Phase 3C-3)
-     * @param conversationId ID of the conversation
-     * @param messageId ID of the message to react to
-     * @param reactionType Type of reaction (heart, like, haha, wow, sad, angry) or null to remove
-     * @param callback Callback for success/error
-     */
-    public void addReaction(String conversationId, String messageId, String reactionType, SendMessageCallback callback) {
-        Log.d("ChatRepository", "Adding reaction via new API: " + reactionType + " on message " + messageId);
-        
-        Map<String, Object> reactionData = new HashMap<>();
-        reactionData.put("conversationId", conversationId);
-        reactionData.put("reactionType", reactionType); // null to remove reaction
-        
-        Call<Map<String, Object>> call = apiService.addReactionV2(messageId, reactionData);
-        
+
+        Log.d("ChatRepository", "Sending message via new API: " + message.getType());
+
+        // Call new API
+        Call<Map<String, Object>> call = apiService.sendMessageV2(messageData);
+
         call.enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     Map<String, Object> responseBody = response.body();
                     Boolean success = (Boolean) responseBody.get("success");
-                    
+
+                    if (success != null && success) {
+                        String messageId = (String) responseBody.get("messageId");
+                        message.setId(messageId);
+
+                        Log.d("ChatRepository", "✅ Message sent successfully - ID: " + messageId);
+
+                        // Add to pending set - WebSocket will add to cache
+                        synchronized (pendingSentMessageIds) {
+                            pendingSentMessageIds.add(messageId);
+                        }
+
+                        mainHandler.postDelayed(() -> {
+                            synchronized (pendingSentMessageIds) {
+                                pendingSentMessageIds.remove(messageId);
+                                Log.d("ChatRepository", "Removed message from pending: " + messageId);
+                            }
+                        }, 5000);
+
+                        callback.onSuccess();
+                    } else {
+                        callback.onError("Failed to send message");
+                    }
+                } else {
+                    String error = "HTTP " + response.code();
+                    if (response.message() != null) {
+                        error += ": " + response.message();
+                    }
+                    Log.e("ChatRepository", "❌ Send message failed: " + error);
+                    callback.onError(error);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e("ChatRepository", "❌ Send message network error: " + error);
+                callback.onError(error);
+            }
+        });
+    }
+
+    /**
+     * Recall a message (set isRecalled flag and change content)
+     * MIGRATED: Now uses new /api/messages API (Phase 3C-1)
+     *
+     * @param conversationId ID of the conversation
+     * @param messageId      ID of the message to recall
+     * @param callback       Callback for success/error
+     */
+    public void recallMessage(String conversationId, String messageId, SendMessageCallback callback) {
+        Log.d("ChatRepository", "Recalling message via new API: " + messageId);
+
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("conversationId", conversationId);
+        updates.put("action", "recall");
+
+        Call<Map<String, Object>> call = apiService.updateMessageV2(messageId, updates);
+
+        call.enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Map<String, Object> responseBody = response.body();
+                    Boolean success = (Boolean) responseBody.get("success");
+
+                    if (success != null && success) {
+                        Log.d("ChatRepository", "✅ Message recalled successfully - ID: " + messageId);
+                        // Backend broadcasts update via WebSocket
+                        callback.onSuccess();
+                    } else {
+                        callback.onError("Failed to recall message");
+                    }
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e("ChatRepository", "❌ Recall message failed: " + error);
+                    callback.onError(error);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e("ChatRepository", "❌ Recall message network error: " + error);
+                callback.onError(error);
+            }
+        });
+    }
+
+    /**
+     * Update message content
+     *
+     * @param conversationId ID of the conversation
+     * @param messageId      ID of the message to update
+     * @param newContent     New content for the message
+     * @param callback       Callback for success/error
+     */
+    public void updateMessage(String conversationId, String messageId, String newContent, SendMessageCallback callback) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("content", newContent);
+
+        Call<ApiResponse<Message>> call = apiService.updateMessage(conversationId, messageId, updates);
+
+        call.enqueue(new Callback<ApiResponse<Message>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Message>> call, Response<ApiResponse<Message>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    ApiResponse<Message> apiResponse = response.body();
+
+                    if (apiResponse.isSuccess()) {
+                        Log.d("ChatRepository", "Message updated successfully - ID: " + messageId);
+                        // Backend broadcasts update via WebSocket
+                        callback.onSuccess();
+                    } else {
+                        String error = apiResponse.getMessage() != null
+                                ? apiResponse.getMessage()
+                                : "Failed to update message";
+                        callback.onError(error);
+                    }
+                } else {
+                    callback.onError("HTTP " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ApiResponse<Message>> call, Throwable t) {
+                callback.onError(t.getMessage() != null ? t.getMessage() : "Network error");
+            }
+        });
+    }
+
+    /**
+     * Delete a message permanently
+     * MIGRATED: Now uses new /api/messages API (Phase 3C-1)
+     *
+     * @param conversationId ID of the conversation
+     * @param messageId      ID of the message to delete
+     * @param callback       Callback for success/error
+     */
+    public void deleteMessage(String conversationId, String messageId, SendMessageCallback callback) {
+        Log.d("ChatRepository", "Deleting message via new API: " + messageId);
+
+        Call<Map<String, Object>> call = apiService.deleteMessageV2(messageId, conversationId);
+
+        call.enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Map<String, Object> responseBody = response.body();
+                    Boolean success = (Boolean) responseBody.get("success");
+
+                    if (success != null && success) {
+                        Log.d("ChatRepository", "✅ Message deleted successfully - ID: " + messageId);
+                        // Backend broadcasts delete via WebSocket
+                        callback.onSuccess();
+                    } else {
+                        callback.onError("Failed to delete message");
+                    }
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e("ChatRepository", "❌ Delete message failed: " + error);
+                    callback.onError(error);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e("ChatRepository", "❌ Delete message network error: " + error);
+                callback.onError(error);
+            }
+        });
+    }
+
+    /**
+     * Add, change, or remove a reaction on a message
+     * MIGRATED: Now uses new /api/messages API (Phase 3C-3)
+     *
+     * @param conversationId ID of the conversation
+     * @param messageId      ID of the message to react to
+     * @param reactionType   Type of reaction (heart, like, haha, wow, sad, angry) or null to remove
+     * @param callback       Callback for success/error
+     */
+    public void addReaction(String conversationId, String messageId, String reactionType, SendMessageCallback callback) {
+        Log.d("ChatRepository", "Adding reaction via new API: " + reactionType + " on message " + messageId);
+
+        Map<String, Object> reactionData = new HashMap<>();
+        reactionData.put("conversationId", conversationId);
+        reactionData.put("reactionType", reactionType); // null to remove reaction
+
+        Call<Map<String, Object>> call = apiService.addReactionV2(messageId, reactionData);
+
+        call.enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Map<String, Object> responseBody = response.body();
+                    Boolean success = (Boolean) responseBody.get("success");
+
                     if (success != null && success) {
                         Log.d("ChatRepository", "✅ Reaction updated successfully");
                         // Backend broadcasts update via WebSocket
@@ -349,7 +349,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                     callback.onError(error);
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -358,55 +358,57 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
             }
         });
     }
-    
+
     /**
      * Listen to messages in a conversation with real-time updates (LiveData version)
+     *
      * @param conversationId ID of the conversation
      * @return LiveData containing Resource with list of messages
      */
     public LiveData<Resource<List<Message>>> getMessagesLiveData(@NonNull String conversationId) {
         MutableLiveData<Resource<List<Message>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         // Store reference for notification after send
         activeMessagesLiveData = result;
-        
+
         // Remove previous listener if exists
         if (messagesListener != null) {
             messagesListener.remove();
         }
-        
+
         // Create listener that will be reused
         activeMessagesListener = new MessagesListener() {
             @Override
             public void onMessagesChanged(List<Message> messages) {
                 result.setValue(Resource.success(messages));
             }
-            
+
             @Override
             public void onError(String error) {
                 result.setValue(Resource.error(error));
             }
         };
-        
+
         // Set up real-time listener
         messagesListener = listenToMessages(conversationId, activeMessagesListener);
-        
+
         return result;
     }
 
     /**
      * Listen to messages in a conversation (callback version - for backward compatibility)
      * MIGRATED: Uses API for initial load + WebSocket for real-time updates
+     *
      * @param conversationId ID of the conversation
-     * @param listener Listener for message updates
+     * @param listener       Listener for message updates
      * @return ListenerRegistration for cleanup
      */
     public ListenerRegistration listenToMessages(String conversationId, MessagesListener listener) {
         // Update current conversation
         currentConversationId = conversationId;
         cachedMessages.clear();
-        
+
         // 1. Load initial messages via API
         Call<MessageListResponse> call = apiService.getMessages(conversationId, 100, null);
         call.enqueue(new Callback<MessageListResponse>() {
@@ -430,7 +432,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                     listener.onError("Failed to load messages: HTTP " + response.code());
                     return;
                 }
-                
+
                 // 2. Setup WebSocket listener for real-time message updates
                 socketManager.setMessageListener(new SocketManager.OnMessageListener() {
                     @Override
@@ -438,16 +440,16 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                         try {
                             // Parse JSON to Message object
                             Message newMessage = parseMessageFromJson(messageData);
-                            
+
                             // Only add if from current conversation
                             String msgConvId = messageData.optString("conversationId");
                             if (!conversationId.equals(msgConvId)) {
                                 return; // Not for this conversation
                             }
-                            
+
                             String messageId = newMessage.getId();
                             Log.d("ChatRepository", "WebSocket message received - ID: " + messageId);
-                            
+
                             // Remove from pending if it was sent by us
                             boolean wasPending = false;
                             synchronized (pendingSentMessageIds) {
@@ -456,7 +458,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                             if (wasPending) {
                                 Log.d("ChatRepository", "Message was pending, removed from set: " + messageId);
                             }
-                            
+
                             // Check if message already exists (avoid duplicates)
                             boolean exists = false;
                             for (Message msg : cachedMessages) {
@@ -466,11 +468,11 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                                     break;
                                 }
                             }
-                            
+
                             if (!exists) {
                                 Log.d("ChatRepository", "Adding new message from WebSocket: " + messageId);
                                 cachedMessages.add(newMessage);
-                                
+
                                 // CRITICAL: Post to main thread for UI update
                                 mainHandler.post(() -> {
                                     listener.onMessagesChanged(new ArrayList<>(cachedMessages));
@@ -480,7 +482,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                             Log.e("ChatRepository", "Error parsing WebSocket message", e);
                         }
                     }
-                    
+
                     @Override
                     public void onMessageUpdated(JSONObject messageData) {
                         try {
@@ -488,10 +490,10 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                             if (!conversationId.equals(msgConvId)) {
                                 return; // Not for this conversation
                             }
-                            
+
                             String messageId = messageData.optString("id");
                             Log.d("ChatRepository", "Message updated via WebSocket - ID: " + messageId);
-                            
+
                             // Find and update message in cache
                             boolean found = false;
                             for (int i = 0; i < cachedMessages.size(); i++) {
@@ -499,14 +501,14 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                                 if (msg.getId() != null && msg.getId().equals(messageId)) {
                                     // Parse updated message
                                     Message updatedMessage = parseMessageFromJson(messageData);
-                                    
+
                                     // Replace in cache
                                     cachedMessages.set(i, updatedMessage);
                                     found = true;
-                                    
-                                    Log.d("ChatRepository", "Message updated in cache - isRecalled: " + 
-                                        updatedMessage.isRecalled() + ", content: " + updatedMessage.getContent());
-                                    
+
+                                    Log.d("ChatRepository", "Message updated in cache - isRecalled: " +
+                                            updatedMessage.isRecalled() + ", content: " + updatedMessage.getContent());
+
                                     // Notify UI
                                     mainHandler.post(() -> {
                                         listener.onMessagesChanged(new ArrayList<>(cachedMessages));
@@ -514,7 +516,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                                     break;
                                 }
                             }
-                            
+
                             if (!found) {
                                 Log.w("ChatRepository", "Updated message not found in cache: " + messageId);
                             }
@@ -522,7 +524,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                             Log.e("ChatRepository", "Error handling message update", e);
                         }
                     }
-                    
+
                     @Override
                     public void onMessageDeleted(JSONObject messageData) {
                         try {
@@ -530,10 +532,10 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                             if (!conversationId.equals(msgConvId)) {
                                 return; // Not for this conversation
                             }
-                            
+
                             String messageId = messageData.optString("messageId");
                             Log.d("ChatRepository", "Message deleted via WebSocket - ID: " + messageId);
-                            
+
                             // Remove message from cache
                             boolean removed = false;
                             for (int i = 0; i < cachedMessages.size(); i++) {
@@ -541,9 +543,9 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                                 if (msg.getId() != null && msg.getId().equals(messageId)) {
                                     cachedMessages.remove(i);
                                     removed = true;
-                                    
+
                                     Log.d("ChatRepository", "Message removed from cache");
-                                    
+
                                     // Notify UI
                                     mainHandler.post(() -> {
                                         listener.onMessagesChanged(new ArrayList<>(cachedMessages));
@@ -551,7 +553,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                                     break;
                                 }
                             }
-                            
+
                             if (!removed) {
                                 Log.w("ChatRepository", "Deleted message not found in cache: " + messageId);
                             }
@@ -560,11 +562,11 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                         }
                     }
                 });
-                
+
                 // 3. Join conversation room for real-time updates
                 Log.d("ChatRepository", "Joining WebSocket room: " + conversationId);
                 socketManager.joinConversation(conversationId);
-                
+
                 // 4. Setup reaction listener for real-time reaction updates
                 socketManager.setReactionListener(new SocketManager.OnReactionListener() {
                     @Override
@@ -574,12 +576,12 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                             if (!conversationId.equals(convId)) {
                                 return; // Not for this conversation
                             }
-                            
-                            Log.d("ChatRepository", "Reaction updated via WebSocket - messageId: " + messageId 
-                                + ", userId: " + userId + ", type: " + reactionType
-                                + ", reactions: " + (reactions != null ? reactions.size() : 0)
-                                + ", reactionCounts: " + reactionCounts);
-                            
+
+                            Log.d("ChatRepository", "Reaction updated via WebSocket - messageId: " + messageId
+                                    + ", userId: " + userId + ", type: " + reactionType
+                                    + ", reactions: " + (reactions != null ? reactions.size() : 0)
+                                    + ", reactionCounts: " + reactionCounts);
+
                             // Find and update message reactions in cache
                             boolean found = false;
                             for (int i = 0; i < cachedMessages.size(); i++) {
@@ -588,18 +590,18 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                                     // Use data from server directly (not recalculate)
                                     msg.setReactions(reactions != null ? reactions : new java.util.HashMap<>());
                                     msg.setReactionCounts(reactionCounts != null ? reactionCounts : new java.util.HashMap<>());
-                                    
+
                                     found = true;
-                                    
+
                                     Log.d("ChatRepository", "Reaction updated in cache from server - reactionCounts: " + reactionCounts);
-                                    
+
                                     // CRITICAL: Create deep copy of messages list for UI
                                     // DiffUtil compares old vs new by reference, so we need new Message objects
                                     List<Message> messagesCopy = new ArrayList<>();
                                     for (Message m : cachedMessages) {
                                         messagesCopy.add(new Message(m)); // Use copy constructor
                                     }
-                                    
+
                                     // Notify UI with deep copy
                                     mainHandler.post(() -> {
                                         listener.onMessagesChanged(messagesCopy);
@@ -607,7 +609,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                                     break;
                                 }
                             }
-                            
+
                             if (!found) {
                                 Log.w("ChatRepository", "Message not found in cache for reaction update: " + messageId);
                             }
@@ -617,13 +619,13 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                     }
                 });
             }
-            
+
             @Override
             public void onFailure(Call<MessageListResponse> call, Throwable t) {
                 listener.onError("Network error: " + (t.getMessage() != null ? t.getMessage() : "Unknown"));
             }
         });
-        
+
         // 4. Return custom ListenerRegistration for cleanup
         return new ListenerRegistration() {
             @Override
@@ -637,7 +639,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
             }
         };
     }
-    
+
     /**
      * Helper: Parse Message from WebSocket JSON data
      */
@@ -647,7 +649,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
         message.setSenderId(messageData.optString("senderId", null));
         message.setContent(messageData.optString("content", ""));
         message.setType(messageData.optString("type", Message.TYPE_TEXT));
-        
+
         // Parse timestamp - handle both number and Firestore Timestamp object
         if (messageData.has("timestamp")) {
             Object tsObj = messageData.opt("timestamp");
@@ -664,18 +666,18 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
         } else {
             message.setTimestamp(System.currentTimeMillis());
         }
-        
+
         // Recalled flag
         if (messageData.has("isRecalled")) {
             message.setRecalled(messageData.optBoolean("isRecalled", false));
             Log.d("ChatRepository", "parseMessageFromJson - isRecalled: " + message.isRecalled());
         }
-        
+
         // Optional fields
         if (messageData.has("senderName")) {
             message.setSenderName(messageData.optString("senderName"));
         }
-        
+
         // File metadata
         if (messageData.has("fileName")) {
             message.setFileName(messageData.optString("fileName"));
@@ -686,7 +688,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
         if (messageData.has("fileMimeType")) {
             message.setFileMimeType(messageData.optString("fileMimeType"));
         }
-        
+
         // Reply fields
         if (messageData.has("replyToId")) {
             message.setReplyToId(messageData.optString("replyToId"));
@@ -694,22 +696,23 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
             message.setReplyToSenderId(messageData.optString("replyToSenderId"));
             message.setReplyToSenderName(messageData.optString("replyToSenderName"));
         }
-        
+
         // Forward fields
         if (messageData.has("isForwarded") && messageData.optBoolean("isForwarded", false)) {
             message.setForwarded(true);
             message.setOriginalSenderId(messageData.optString("originalSenderId"));
             message.setOriginalSenderName(messageData.optString("originalSenderName"));
         }
-        
+
         return message;
     }
 
     /**
      * Update conversation's lastMessage and timestamp
+     *
      * @param conversationId ID of the conversation
-     * @param lastMessage Content of the last message
-     * @param timestamp Timestamp of the last message
+     * @param lastMessage    Content of the last message
+     * @param timestamp      Timestamp of the last message
      */
     private void updateConversationLastMessage(String conversationId, String lastMessage, long timestamp) {
         Map<String, Object> updates = new HashMap<>();
@@ -727,38 +730,40 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
 
     /**
      * Upload image to Cloudinary and send as message (LiveData version)
+     *
      * @param conversationId ID of the conversation
-     * @param imageUri Local URI of the image to upload
-     * @param senderId ID of the sender
+     * @param imageUri       Local URI of the image to upload
+     * @param senderId       ID of the sender
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> uploadImageAndSendMessageLiveData(@NonNull String conversationId,
-                                                                          @NonNull Uri imageUri,
-                                                                          @NonNull String senderId) {
+                                                                         @NonNull Uri imageUri,
+                                                                         @NonNull String senderId) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         uploadImageAndSendMessage(conversationId, imageUri, senderId, new SendMessageCallback() {
             @Override
             public void onSuccess() {
                 result.setValue(Resource.success(true));
             }
-            
+
             @Override
             public void onError(String error) {
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
 
     /**
      * Upload image to Cloudinary and send as message (callback version)
+     *
      * @param conversationId ID of the conversation
-     * @param imageUri Local URI of the image to upload
-     * @param senderId ID of the sender
-     * @param callback Callback for success/error
+     * @param imageUri       Local URI of the image to upload
+     * @param senderId       ID of the sender
+     * @param callback       Callback for success/error
      */
     public void uploadImageAndSendMessage(String conversationId, Uri imageUri, String senderId, SendMessageCallback callback) {
         try {
@@ -780,7 +785,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                         public void onSuccess(String requestId, Map resultData) {
                             // Get the secure URL from Cloudinary response
                             String imageUrl = (String) resultData.get("secure_url");
-                            
+
                             // Extract metadata from Cloudinary response
                             String format = (String) resultData.get("format");  // e.g., "jpg", "png"
                             Object bytesObj = resultData.get("bytes");
@@ -788,7 +793,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                             if (bytesObj instanceof Number) {
                                 fileSize = ((Number) bytesObj).longValue();
                             }
-                            
+
                             // Generate filename and MIME type
                             String fileName = "image_" + System.currentTimeMillis();
                             if (format != null && !format.isEmpty()) {
@@ -796,7 +801,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                             } else {
                                 fileName += ".jpg";  // Default
                             }
-                            
+
                             // Determine MIME type from format
                             String mimeType = "image/jpeg";  // Default
                             if (format != null) {
@@ -818,10 +823,10 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                                         mimeType = "image/" + format;
                                 }
                             }
-                            
-                            Log.d("Cloudinary", "Image uploaded: " + fileName + 
-                                ", size: " + fileSize + ", mimeType: " + mimeType);
-                            
+
+                            Log.d("Cloudinary", "Image uploaded: " + fileName +
+                                    ", size: " + fileSize + ", mimeType: " + mimeType);
+
                             // Create IMAGE type message with metadata
                             Message imageMessage = new Message(
                                     null,
@@ -833,7 +838,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                                     fileSize,
                                     mimeType
                             );
-                            
+
                             // Fetch sender name before sending
                             firestore.collection("users")
                                     .document(senderId)
@@ -869,51 +874,53 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
             callback.onError("Failed to start upload: " + e.getMessage());
         }
     }
-    
+
     /**
      * Upload file to Cloudinary and send as message (LiveData version)
+     *
      * @param conversationId ID of the conversation
-     * @param fileUri Local URI of the file to upload
-     * @param senderId ID of the sender
-     * @param fileName Original file name
-     * @param fileSize File size in bytes
-     * @param fileMimeType File MIME type
+     * @param fileUri        Local URI of the file to upload
+     * @param senderId       ID of the sender
+     * @param fileName       Original file name
+     * @param fileSize       File size in bytes
+     * @param fileMimeType   File MIME type
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> uploadFileAndSendMessageLiveData(@NonNull String conversationId,
-                                                                          @NonNull Uri fileUri,
-                                                                          @NonNull String senderId,
-                                                                          @NonNull String fileName,
-                                                                          long fileSize,
-                                                                          @NonNull String fileMimeType) {
+                                                                        @NonNull Uri fileUri,
+                                                                        @NonNull String senderId,
+                                                                        @NonNull String fileName,
+                                                                        long fileSize,
+                                                                        @NonNull String fileMimeType) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         uploadFileAndSendMessage(conversationId, fileUri, senderId, fileName, fileSize, fileMimeType,
                 new SendMessageCallback() {
                     @Override
                     public void onSuccess() {
                         result.setValue(Resource.success(true));
                     }
-                    
+
                     @Override
                     public void onError(String error) {
                         result.setValue(Resource.error(error));
                     }
                 });
-        
+
         return result;
     }
-    
+
     /**
      * Upload file to Cloudinary and send as message (callback version)
+     *
      * @param conversationId ID of the conversation
-     * @param fileUri Local URI of the file to upload
-     * @param senderId ID of the sender
-     * @param fileName Original file name
-     * @param fileSize File size in bytes
-     * @param fileMimeType File MIME type
-     * @param callback Callback for success/error
+     * @param fileUri        Local URI of the file to upload
+     * @param senderId       ID of the sender
+     * @param fileName       Original file name
+     * @param fileSize       File size in bytes
+     * @param fileMimeType   File MIME type
+     * @param callback       Callback for success/error
      */
     public void uploadFileAndSendMessage(String conversationId, Uri fileUri, String senderId,
                                          String fileName, long fileSize, String fileMimeType,
@@ -928,7 +935,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
             } else {
                 resourceType = "raw"; // For documents, audio, etc.
             }
-            
+
             // Upload to Cloudinary
             MediaManager.get().upload(fileUri)
                     .option("folder", "zalo_chat/" + conversationId + "/files")
@@ -950,7 +957,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                         public void onSuccess(String requestId, Map resultData) {
                             // Get the secure URL from Cloudinary response
                             String fileUrl = (String) resultData.get("secure_url");
-                            
+
                             // Create FILE type message with Cloudinary URL and metadata
                             Message fileMessage = new Message(
                                     null,
@@ -962,7 +969,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                                     fileSize,
                                     fileMimeType
                             );
-                            
+
                             // Fetch sender name before sending
                             firestore.collection("users")
                                     .document(senderId)
@@ -998,7 +1005,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
             callback.onError("Failed to start file upload: " + e.getMessage());
         }
     }
-    
+
     /**
      * Clean up listeners when repository is no longer needed
      */
@@ -1011,7 +1018,8 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
 
     /**
      * Create a group conversation (LiveData version)
-     * @param adminId ID of the user creating the group (becomes admin)
+     *
+     * @param adminId   ID of the user creating the group (becomes admin)
      * @param groupName Name of the group
      * @param memberIds List of member IDs including admin
      * @return LiveData containing Resource with the created Conversation
@@ -1021,43 +1029,43 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                                                         @NonNull List<String> memberIds) {
         MutableLiveData<Resource<Conversation>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         // Validate inputs
         if (groupName.trim().isEmpty()) {
             result.setValue(Resource.error("Tên nhóm không được để trống"));
             return result;
         }
-        
+
         if (memberIds.size() < 2) {
             result.setValue(Resource.error("Nhóm phải có ít nhất 2 thành viên"));
             return result;
         }
-        
+
         if (!memberIds.contains(adminId)) {
             result.setValue(Resource.error("Admin phải là thành viên của nhóm"));
             return result;
         }
-        
+
         // Call API to create group (enables real-time WebSocket notification)
         Log.d(TAG, "Creating group via API: " + groupName + " with " + memberIds.size() + " members");
-        
+
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("memberIds", memberIds);
         requestBody.put("name", groupName);
         requestBody.put("type", "GROUP");
         requestBody.put("adminId", adminId);
-        
+
         Call<Map<String, Object>> call = apiService.createConversation(requestBody);
-        
+
         call.enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     Map<String, Object> body = response.body();
                     String conversationId = (String) body.get("conversationId");
-                    
+
                     Log.d(TAG, "✅ Group created via API: " + conversationId);
-                    
+
                     // Create Conversation object from response
                     Conversation conversation = new Conversation();
                     conversation.setId(conversationId);
@@ -1065,9 +1073,9 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                     conversation.setMemberIds(memberIds);
                     conversation.setType("GROUP");
                     conversation.setAdminIds(java.util.Collections.singletonList(adminId));
-                    
+
                     result.setValue(Resource.success(conversation));
-                    
+
                     // WebSocket will handle the notification - no manual trigger needed
                 } else {
                     String error = "HTTP " + response.code();
@@ -1075,7 +1083,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                     result.setValue(Resource.error(error));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -1083,35 +1091,35 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
 
     /**
      * Update group name
      */
-    public LiveData<Resource<Boolean>> updateGroupName(@NonNull String conversationId, 
-                                                        @NonNull String newName) {
+    public LiveData<Resource<Boolean>> updateGroupName(@NonNull String conversationId,
+                                                       @NonNull String newName) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
         firestoreManager.updateGroupName(conversationId, newName,
-            new FirestoreManager.OnGroupUpdatedListener() {
-                @Override
-                public void onSuccess() {
-                    result.setValue(Resource.success(true));
-                    // Trigger UI refresh
-                    socketManager.triggerConversationUpdated(conversationId);
-                }
+                new FirestoreManager.OnGroupUpdatedListener() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(true));
+                        // Trigger UI refresh
+                        socketManager.triggerConversationUpdated(conversationId);
+                    }
 
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể cập nhật tên nhóm";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Không thể cập nhật tên nhóm";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
 
         return result;
     }
@@ -1120,27 +1128,27 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
      * Update group avatar
      */
     public LiveData<Resource<Boolean>> updateGroupAvatar(@NonNull String conversationId,
-                                                          @NonNull String avatarUrl) {
+                                                         @NonNull String avatarUrl) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
         firestoreManager.updateGroupAvatar(conversationId, avatarUrl,
-            new FirestoreManager.OnGroupUpdatedListener() {
-                @Override
-                public void onSuccess() {
-                    result.setValue(Resource.success(true));
-                    // Trigger UI refresh
-                    socketManager.triggerConversationUpdated(conversationId);
-                }
+                new FirestoreManager.OnGroupUpdatedListener() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(true));
+                        // Trigger UI refresh
+                        socketManager.triggerConversationUpdated(conversationId);
+                    }
 
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể cập nhật avatar";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Không thể cập nhật avatar";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
 
         return result;
     }
@@ -1149,25 +1157,25 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
      * Add members to group
      */
     public LiveData<Resource<Boolean>> addGroupMembers(@NonNull String conversationId,
-                                                        @NonNull List<String> memberIds) {
+                                                       @NonNull List<String> memberIds) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
         firestoreManager.addGroupMembers(conversationId, memberIds,
-            new FirestoreManager.OnGroupUpdatedListener() {
-                @Override
-                public void onSuccess() {
-                    result.setValue(Resource.success(true));
-                }
+                new FirestoreManager.OnGroupUpdatedListener() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(true));
+                    }
 
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể thêm thành viên";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Không thể thêm thành viên";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
 
         return result;
     }
@@ -1176,25 +1184,25 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
      * Remove member from group
      */
     public LiveData<Resource<Boolean>> removeGroupMember(@NonNull String conversationId,
-                                                          @NonNull String memberId) {
+                                                         @NonNull String memberId) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
         firestoreManager.removeGroupMember(conversationId, memberId,
-            new FirestoreManager.OnGroupUpdatedListener() {
-                @Override
-                public void onSuccess() {
-                    result.setValue(Resource.success(true));
-                }
+                new FirestoreManager.OnGroupUpdatedListener() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(true));
+                    }
 
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể xóa thành viên";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Không thể xóa thành viên";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
 
         return result;
     }
@@ -1203,25 +1211,25 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
      * Leave group
      */
     public LiveData<Resource<Boolean>> leaveGroup(@NonNull String conversationId,
-                                                   @NonNull String userId) {
+                                                  @NonNull String userId) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
         firestoreManager.leaveGroup(conversationId, userId,
-            new FirestoreManager.OnGroupUpdatedListener() {
-                @Override
-                public void onSuccess() {
-                    result.setValue(Resource.success(true));
-                }
+                new FirestoreManager.OnGroupUpdatedListener() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(true));
+                    }
 
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể rời nhóm";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Không thể rời nhóm";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
 
         return result;
     }
@@ -1235,20 +1243,20 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
         result.setValue(Resource.loading());
 
         firestoreManager.transferAdmin(conversationId, newAdminId,
-            new FirestoreManager.OnGroupUpdatedListener() {
-                @Override
-                public void onSuccess() {
-                    result.setValue(Resource.success(true));
-                }
+                new FirestoreManager.OnGroupUpdatedListener() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(true));
+                    }
 
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể chuyển quyền quản trị";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Không thể chuyển quyền quản trị";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
 
         return result;
     }
@@ -1261,9 +1269,9 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
         result.setValue(Resource.loading());
 
         Log.d(TAG, "Deleting group via API: " + conversationId);
-        
+
         Call<Map<String, Object>> call = apiService.deleteConversation(conversationId);
-        
+
         call.enqueue(new Callback<Map<String, Object>>() {
             @Override
             public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
@@ -1276,7 +1284,7 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
                     result.setValue(Resource.error(error));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<Map<String, Object>> call, Throwable t) {
                 String error = t.getMessage() != null ? t.getMessage() : "Network error";
@@ -1289,252 +1297,259 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
     }
 
     // ===================== PINNED MESSAGES METHODS =====================
-    
+
     /**
      * Pin a message in a conversation
+     *
      * @param conversationId ID of the conversation
-     * @param messageId ID of the message to pin
+     * @param messageId      ID of the message to pin
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> pinMessage(@NonNull String conversationId,
-                                                   @NonNull String messageId) {
+                                                  @NonNull String messageId) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         firestoreManager.pinMessage(conversationId, messageId,
-            new FirestoreManager.OnPinMessageListener() {
-                @Override
-                public void onSuccess() {
-                    result.setValue(Resource.success(true));
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể ghim tin nhắn";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
-        
+                new FirestoreManager.OnPinMessageListener() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(true));
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Không thể ghim tin nhắn";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
+
         return result;
     }
-    
+
     /**
      * Unpin a message from a conversation
+     *
      * @param conversationId ID of the conversation
-     * @param messageId ID of the message to unpin
+     * @param messageId      ID of the message to unpin
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> unpinMessage(@NonNull String conversationId,
-                                                     @NonNull String messageId) {
+                                                    @NonNull String messageId) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         firestoreManager.unpinMessage(conversationId, messageId,
-            new FirestoreManager.OnPinMessageListener() {
-                @Override
-                public void onSuccess() {
-                    result.setValue(Resource.success(true));
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể gỡ ghim tin nhắn";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
-        
+                new FirestoreManager.OnPinMessageListener() {
+                    @Override
+                    public void onSuccess() {
+                        result.setValue(Resource.success(true));
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Không thể gỡ ghim tin nhắn";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
+
         return result;
     }
-    
+
     /**
      * Get all pinned messages for a conversation
+     *
      * @param conversationId ID of the conversation
      * @return LiveData containing Resource with list of pinned messages
      */
     public LiveData<Resource<List<Message>>> getPinnedMessages(@NonNull String conversationId) {
         MutableLiveData<Resource<List<Message>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         firestoreManager.getPinnedMessages(conversationId,
-            new FirestoreManager.OnPinnedMessagesListener() {
-                @Override
-                public void onSuccess(List<Message> messages) {
-                    result.setValue(Resource.success(messages));
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể tải tin nhắn đã ghim";
-                    result.setValue(Resource.error(errorMessage));
-                }
-            });
-        
+                new FirestoreManager.OnPinnedMessagesListener() {
+                    @Override
+                    public void onSuccess(List<Message> messages) {
+                        result.setValue(Resource.success(messages));
+                    }
+
+                    @Override
+                    public void onFailure(Exception e) {
+                        String errorMessage = e.getMessage() != null
+                                ? e.getMessage()
+                                : "Không thể tải tin nhắn đã ghim";
+                        result.setValue(Resource.error(errorMessage));
+                    }
+                });
+
         return result;
     }
 
     // ===================== MESSAGE REACTIONS METHODS =====================
-    
+
     /**
      * Add or update a reaction to a message
+     *
      * @param conversationId ID of the conversation
-     * @param messageId ID of the message to react to
-     * @param userId ID of the user adding the reaction
-     * @param reactionType Type of reaction (heart, haha, sad, angry, wow, like)
+     * @param messageId      ID of the message to react to
+     * @param userId         ID of the user adding the reaction
+     * @param reactionType   Type of reaction (heart, haha, sad, angry, wow, like)
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> addReaction(@NonNull String conversationId,
-                                                    @NonNull String messageId,
-                                                    @NonNull String userId,
-                                                    @NonNull String reactionType) {
+                                                   @NonNull String messageId,
+                                                   @NonNull String userId,
+                                                   @NonNull String reactionType) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         // Validate reaction type
         if (!com.example.doan_zaloclone.models.MessageReaction.isValidReactionType(reactionType)) {
             result.setValue(Resource.error("Loại cảm xúc không hợp lệ"));
             return result;
         }
-        
+
         // Prepare request body
         Map<String, String> reactionData = new HashMap<>();
         reactionData.put("userId", userId);
         reactionData.put("reactionType", reactionType);
-        
+
         // Call API to add reaction
         Call<ApiResponse<Message>> call = apiService.addReaction(conversationId, messageId, reactionData);
-        
+
         call.enqueue(new Callback<ApiResponse<Message>>() {
             @Override
             public void onResponse(Call<ApiResponse<Message>> call, Response<ApiResponse<Message>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     ApiResponse<Message> apiResponse = response.body();
-                    
+
                     if (apiResponse.isSuccess()) {
                         Log.d("ChatRepository", "Reaction added via API: " + reactionType + " by user: " + userId);
-                        
+
                         // DO NOT update local cache here - WebSocket will handle it with correct reactionCounts
                         // The WebSocket reaction_updated event contains authoritative data from server
-                        
+
                         // Backend broadcasts update via WebSocket (reaction_updated event)
                         result.setValue(Resource.success(true));
                     } else {
-                        String error = apiResponse.getMessage() != null 
-                            ? apiResponse.getMessage() 
-                            : "Failed to add reaction";
+                        String error = apiResponse.getMessage() != null
+                                ? apiResponse.getMessage()
+                                : "Failed to add reaction";
                         result.setValue(Resource.error(error));
                     }
                 } else {
                     result.setValue(Resource.error("HTTP " + response.code()));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<ApiResponse<Message>> call, Throwable t) {
-                String error = t.getMessage() != null 
-                    ? t.getMessage() 
-                    : "Network error";
+                String error = t.getMessage() != null
+                        ? t.getMessage()
+                        : "Network error";
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
-    
+
     /**
- * Remove current user's ALL reactions from a message
- * MIGRATED: Now uses new /api/messages API (Phase 3C-3)
- * Note: This removes ALL of current user's reactions (all counts), not other users' reactions
- * @param conversationId ID of the conversation
- * @param messageId ID of the message
- * @param userId ID of the user removing their reactions
- * @return LiveData containing Resource with success status
- */
-public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId,
-                                                   @NonNull String messageId,
-                                                   @NonNull String userId) {
-    MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
-    result.setValue(Resource.loading());
-    
-    Log.d("ChatRepository", "Removing ALL reactions for user: " + userId + " on message: " + messageId);
-    
-    // Call addReaction with null to remove current user's ALL reactions
-    Map<String, Object> reactionData = new HashMap<>();
-    reactionData.put("conversationId", conversationId);
-    reactionData.put("reactionType", null); // null = remove ALL my reactions
-    
-    Call<Map<String, Object>> call = apiService.addReactionV2(messageId, reactionData);
-    
-    call.enqueue(new Callback<Map<String, Object>>() {
-        @Override
-        public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
-            if (response.isSuccessful() && response.body() != null) {
-                Map<String, Object> responseBody = response.body();
-                Boolean success = (Boolean) responseBody.get("success");
-                
-                if (success != null && success) {
-                    Log.d("ChatRepository", "✅ All user reactions removed successfully");
-                    result.setValue(Resource.success(true));
+     * Remove current user's ALL reactions from a message
+     * MIGRATED: Now uses new /api/messages API (Phase 3C-3)
+     * Note: This removes ALL of current user's reactions (all counts), not other users' reactions
+     *
+     * @param conversationId ID of the conversation
+     * @param messageId      ID of the message
+     * @param userId         ID of the user removing their reactions
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId,
+                                                      @NonNull String messageId,
+                                                      @NonNull String userId) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+
+        Log.d("ChatRepository", "Removing ALL reactions for user: " + userId + " on message: " + messageId);
+
+        // Call addReaction with null to remove current user's ALL reactions
+        Map<String, Object> reactionData = new HashMap<>();
+        reactionData.put("conversationId", conversationId);
+        reactionData.put("reactionType", null); // null = remove ALL my reactions
+
+        Call<Map<String, Object>> call = apiService.addReactionV2(messageId, reactionData);
+
+        call.enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Map<String, Object> responseBody = response.body();
+                    Boolean success = (Boolean) responseBody.get("success");
+
+                    if (success != null && success) {
+                        Log.d("ChatRepository", "✅ All user reactions removed successfully");
+                        result.setValue(Resource.success(true));
+                    } else {
+                        result.setValue(Resource.error("Failed to remove reactions"));
+                    }
                 } else {
-                    result.setValue(Resource.error("Failed to remove reactions"));
+                    String error = "HTTP " + response.code();
+                    Log.e("ChatRepository", "❌ Remove reactions failed: " + error);
+                    result.setValue(Resource.error(error));
                 }
-            } else {
-                String error = "HTTP " + response.code();
-                Log.e("ChatRepository", "❌ Remove reactions failed: " + error);
+            }
+
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e("ChatRepository", "❌ Remove reactions network error: " + error);
                 result.setValue(Resource.error(error));
             }
-        }
-        
-        @Override
-        public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-            String error = t.getMessage() != null ? t.getMessage() : "Network error";
-            Log.e("ChatRepository", "❌ Remove reactions network error: " + error);
-            result.setValue(Resource.error(error));
-        }
-    });
-    
-    return result;
-}    
+        });
+
+        return result;
+    }
+
     /**
      * Toggle a reaction - if user already has this reaction type, remove it; otherwise add/update it
+     *
      * @param conversationId ID of the conversation
-     * @param messageId ID of the message
-     * @param userId ID of the user toggling the reaction
-     * @param reactionType Type of reaction to toggle
+     * @param messageId      ID of the message
+     * @param userId         ID of the user toggling the reaction
+     * @param reactionType   Type of reaction to toggle
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> toggleReaction(@NonNull String conversationId,
-                                                       @NonNull String messageId,
-                                                       @NonNull String userId,
-                                                       @NonNull String reactionType) {
+                                                      @NonNull String messageId,
+                                                      @NonNull String userId,
+                                                      @NonNull String reactionType) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         // First, fetch the current message to check existing reaction
         DocumentReference messageRef = firestore
                 .collection("conversations")
                 .document(conversationId)
                 .collection("messages")
                 .document(messageId);
-        
+
         messageRef.get()
                 .addOnSuccessListener(doc -> {
                     if (!doc.exists()) {
                         result.setValue(Resource.error("Tin nhắn không tồn tại"));
                         return;
                     }
-                    
+
                     Message message = doc.toObject(Message.class);
                     if (message == null) {
                         result.setValue(Resource.error("Không thể đọc tin nhắn"));
                         return;
                     }
-                    
+
                     // Zalo style: Always add/update reaction, never remove on same click
                     // This ensures clicking on the same reaction type keeps it (doesn't toggle off)
                     LiveData<Resource<Boolean>> addResult = addReaction(conversationId, messageId, userId, reactionType);
@@ -1542,20 +1557,21 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
                 })
                 .addOnFailureListener(e -> {
                     Log.e("ChatRepository", "Error fetching message for toggle reaction", e);
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
+                    String errorMessage = e.getMessage() != null
+                            ? e.getMessage()
                             : "Không thể thay đổi cảm xúc";
                     result.setValue(Resource.error(errorMessage));
                 });
-        
+
         return result;
     }
 
     /**
      * Recall a message (mark as recalled and clear content)
+     *
      * @param conversationId ID of the conversation
-     * @param messageId ID of the message to recall
-     * @param callback Callback for success/error
+     * @param messageId      ID of the message to recall
+     * @param callback       Callback for success/error
      */
     public void recallMessage(String conversationId, String messageId, RecallMessageCallback callback) {
         DocumentReference messageRef = firestore
@@ -1575,31 +1591,24 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
                     callback.onSuccess();
                 })
                 .addOnFailureListener(e -> {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
+                    String errorMessage = e.getMessage() != null
+                            ? e.getMessage()
                             : "Failed to recall message";
                     callback.onError(errorMessage);
                 });
     }
 
     /**
-     * Callback interface for recall message operations
-     */
-    public interface RecallMessageCallback {
-        void onSuccess();
-        void onError(String error);
-    }
-
-    /**
      * Forward a message to a target conversation
+     *
      * @param targetConversationId ID of the conversation to forward to
-     * @param originalMessage Original message to forward
-     * @param newSenderId ID of the user forwarding the message
-     * @param originalSenderName Name of the original sender (for display)
-     * @param callback Callback for success/error
+     * @param originalMessage      Original message to forward
+     * @param newSenderId          ID of the user forwarding the message
+     * @param originalSenderName   Name of the original sender (for display)
+     * @param callback             Callback for success/error
      */
-    public void forwardMessage(String targetConversationId, Message originalMessage, 
-                               String newSenderId, String originalSenderName, 
+    public void forwardMessage(String targetConversationId, Message originalMessage,
+                               String newSenderId, String originalSenderName,
                                ForwardMessageCallback callback) {
         // Clone the message with new sender
         Message forwardedMessage = new Message();
@@ -1607,20 +1616,20 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
         forwardedMessage.setContent(originalMessage.getContent());
         forwardedMessage.setType(originalMessage.getType());
         forwardedMessage.setTimestamp(System.currentTimeMillis());
-        
+
         // Copy file metadata if applicable
-        if (Message.TYPE_FILE.equals(originalMessage.getType()) || 
-            Message.TYPE_IMAGE.equals(originalMessage.getType())) {
+        if (Message.TYPE_FILE.equals(originalMessage.getType()) ||
+                Message.TYPE_IMAGE.equals(originalMessage.getType())) {
             forwardedMessage.setFileName(originalMessage.getFileName());
             forwardedMessage.setFileSize(originalMessage.getFileSize());
             forwardedMessage.setFileMimeType(originalMessage.getFileMimeType());
         }
-        
+
         // Set forward metadata
         forwardedMessage.setForwarded(true);
         forwardedMessage.setOriginalSenderId(originalMessage.getSenderId());
         forwardedMessage.setOriginalSenderName(originalSenderName);
-        
+
         // Fetch sender name (the user who is forwarding) before sending
         firestore.collection("users")
                 .document(newSenderId)
@@ -1638,7 +1647,7 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
                         public void onSuccess() {
                             callback.onSuccess();
                         }
-                        
+
                         @Override
                         public void onError(String error) {
                             callback.onError(error);
@@ -1652,7 +1661,7 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
                         public void onSuccess() {
                             callback.onSuccess();
                         }
-                        
+
                         @Override
                         public void onError(String error) {
                             callback.onError(error);
@@ -1662,208 +1671,174 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
     }
 
     /**
-     * Callback interface for forward message operations
-     */
-    public interface ForwardMessageCallback {
-        void onSuccess();
-        void onError(String error);
-    }
-
-    /**
-     * Callback interface for send message operations
-     */
-    public interface SendMessageCallback {
-        void onSuccess();
-        void onError(String error);
-    }
-
-    /**
-     * Listener interface for real-time message updates
-     */
-    public interface MessagesListener {
-        void onMessagesChanged(List<Message> messages);
-        void onError(String error);
-    }
-    
-    /**
-     * Callback interface for conversation operations
-     */
-    public interface ConversationCallback {
-        void onSuccess(String conversationId);
-        void onError(String error);
-    }
-    
-    /**
      * Get or create a conversation with a friend
      * If existing conversation is missing memberNames, it will be updated
      */
     public void getOrCreateConversationWithFriend(String currentUserId, String friendId, ConversationCallback callback) {
         android.util.Log.d("ChatRepository", "getOrCreateConversationWithFriend - currentUserId: " + currentUserId + ", friendId: " + friendId);
-        
+
         // Query for existing conversation between these two users
         // Don't filter by type - old conversations may not have type field
         firestore.collection("conversations")
-            .whereArrayContains("memberIds", currentUserId)
-            .get()
-            .addOnSuccessListener(querySnapshot -> {
-                android.util.Log.d("ChatRepository", "Found " + querySnapshot.size() + " conversations containing currentUser");
-                
-                com.google.firebase.firestore.DocumentSnapshot existingDoc = null;
-                
-                // Find 1-1 conversation that contains both users
-                for (com.google.firebase.firestore.DocumentSnapshot doc : querySnapshot.getDocuments()) {
-                    java.util.List<String> memberIds = (java.util.List<String>) doc.get("memberIds");
-                    String type = doc.getString("type");
-                    
-                    android.util.Log.d("ChatRepository", "Checking conversation " + doc.getId() + 
-                        " - memberIds: " + memberIds + ", type: " + type + 
-                        ", containsFriend: " + (memberIds != null && memberIds.contains(friendId)));
-                    
-                    // Check if this is a 1-1 conversation (2 members, and type is FRIEND or null/empty)
-                    if (memberIds != null && memberIds.contains(friendId) && memberIds.size() == 2) {
-                        // Accept conversations with type=FRIEND, type=null, or type="" (for backward compatibility)
-                        if (type == null || type.isEmpty() || "FRIEND".equals(type)) {
-                            android.util.Log.d("ChatRepository", "Found existing conversation: " + doc.getId());
-                            existingDoc = doc;
-                            break;
+                .whereArrayContains("memberIds", currentUserId)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    android.util.Log.d("ChatRepository", "Found " + querySnapshot.size() + " conversations containing currentUser");
+
+                    com.google.firebase.firestore.DocumentSnapshot existingDoc = null;
+
+                    // Find 1-1 conversation that contains both users
+                    for (com.google.firebase.firestore.DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        java.util.List<String> memberIds = (java.util.List<String>) doc.get("memberIds");
+                        String type = doc.getString("type");
+
+                        android.util.Log.d("ChatRepository", "Checking conversation " + doc.getId() +
+                                " - memberIds: " + memberIds + ", type: " + type +
+                                ", containsFriend: " + (memberIds != null && memberIds.contains(friendId)));
+
+                        // Check if this is a 1-1 conversation (2 members, and type is FRIEND or null/empty)
+                        if (memberIds != null && memberIds.contains(friendId) && memberIds.size() == 2) {
+                            // Accept conversations with type=FRIEND, type=null, or type="" (for backward compatibility)
+                            if (type == null || type.isEmpty() || "FRIEND".equals(type)) {
+                                android.util.Log.d("ChatRepository", "Found existing conversation: " + doc.getId());
+                                existingDoc = doc;
+                                break;
+                            }
                         }
                     }
-                }
-                
-                if (existingDoc != null) {
-                    final String conversationId = existingDoc.getId();
-                    android.util.Log.d("ChatRepository", "Using existing conversation: " + conversationId);
-                    
-                    // Check if conversation has memberNames and type
-                    @SuppressWarnings("unchecked")
-                    java.util.Map<String, String> existingMemberNames = 
-                        (java.util.Map<String, String>) existingDoc.get("memberNames");
-                    String existingType = existingDoc.getString("type");
-                    
-                    if (existingMemberNames == null || existingMemberNames.isEmpty() || 
-                        existingType == null || existingType.isEmpty()) {
-                        // Missing memberNames or type - update the existing conversation
-                        updateConversationMemberNamesAndType(conversationId, currentUserId, friendId, callback);
+
+                    if (existingDoc != null) {
+                        final String conversationId = existingDoc.getId();
+                        android.util.Log.d("ChatRepository", "Using existing conversation: " + conversationId);
+
+                        // Check if conversation has memberNames and type
+                        @SuppressWarnings("unchecked")
+                        java.util.Map<String, String> existingMemberNames =
+                                (java.util.Map<String, String>) existingDoc.get("memberNames");
+                        String existingType = existingDoc.getString("type");
+
+                        if (existingMemberNames == null || existingMemberNames.isEmpty() ||
+                                existingType == null || existingType.isEmpty()) {
+                            // Missing memberNames or type - update the existing conversation
+                            updateConversationMemberNamesAndType(conversationId, currentUserId, friendId, callback);
+                        } else {
+                            callback.onSuccess(conversationId);
+                        }
                     } else {
-                        callback.onSuccess(conversationId);
+                        android.util.Log.d("ChatRepository", "No existing conversation found, creating new one");
+                        // Create new conversation
+                        createConversationWithFriend(currentUserId, friendId, callback);
                     }
-                } else {
-                    android.util.Log.d("ChatRepository", "No existing conversation found, creating new one");
-                    // Create new conversation
-                    createConversationWithFriend(currentUserId, friendId, callback);
-                }
-            })
-            .addOnFailureListener(e -> {
-                android.util.Log.e("ChatRepository", "Error querying conversations", e);
-                callback.onError(e.getMessage());
-            });
+                })
+                .addOnFailureListener(e -> {
+                    android.util.Log.e("ChatRepository", "Error querying conversations", e);
+                    callback.onError(e.getMessage());
+                });
     }
-    
+
     /**
      * Update memberNames and type for an existing conversation that's missing them
      */
     private void updateConversationMemberNamesAndType(String conversationId, String currentUserId, String friendId, ConversationCallback callback) {
         // Fetch both user names
-        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> currentUserTask = 
-            firestore.collection("users").document(currentUserId).get();
-        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> friendTask = 
-            firestore.collection("users").document(friendId).get();
-        
+        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> currentUserTask =
+                firestore.collection("users").document(currentUserId).get();
+        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> friendTask =
+                firestore.collection("users").document(friendId).get();
+
         com.google.android.gms.tasks.Tasks.whenAllSuccess(currentUserTask, friendTask)
-            .addOnSuccessListener(results -> {
-                com.google.firebase.firestore.DocumentSnapshot currentUserDoc = 
-                    (com.google.firebase.firestore.DocumentSnapshot) results.get(0);
-                com.google.firebase.firestore.DocumentSnapshot friendDoc = 
-                    (com.google.firebase.firestore.DocumentSnapshot) results.get(1);
-                
-                String currentUserName = currentUserDoc.exists() && currentUserDoc.getString("name") != null 
-                    ? currentUserDoc.getString("name") : "User";
-                String friendName = friendDoc.exists() && friendDoc.getString("name") != null 
-                    ? friendDoc.getString("name") : "User";
-                
-                // Update conversation with memberNames and type
-                java.util.Map<String, String> memberNames = new java.util.HashMap<>();
-                memberNames.put(currentUserId, currentUserName);
-                memberNames.put(friendId, friendName);
-                
-                java.util.Map<String, Object> updates = new java.util.HashMap<>();
-                updates.put("memberNames", memberNames);
-                updates.put("type", "FRIEND");
-                
-                firestore.collection("conversations")
-                    .document(conversationId)
-                    .update(updates)
-                    .addOnSuccessListener(aVoid -> callback.onSuccess(conversationId))
-                    .addOnFailureListener(e -> {
-                        // Still return success even if update fails - the conversation exists
-                        android.util.Log.e("ChatRepository", "Failed to update memberNames/type", e);
-                        callback.onSuccess(conversationId);
-                    });
-            })
-            .addOnFailureListener(e -> {
-                // Still return success - the conversation exists
-                android.util.Log.e("ChatRepository", "Failed to fetch user names for update", e);
-                callback.onSuccess(conversationId);
-            });
+                .addOnSuccessListener(results -> {
+                    com.google.firebase.firestore.DocumentSnapshot currentUserDoc =
+                            (com.google.firebase.firestore.DocumentSnapshot) results.get(0);
+                    com.google.firebase.firestore.DocumentSnapshot friendDoc =
+                            (com.google.firebase.firestore.DocumentSnapshot) results.get(1);
+
+                    String currentUserName = currentUserDoc.exists() && currentUserDoc.getString("name") != null
+                            ? currentUserDoc.getString("name") : "User";
+                    String friendName = friendDoc.exists() && friendDoc.getString("name") != null
+                            ? friendDoc.getString("name") : "User";
+
+                    // Update conversation with memberNames and type
+                    java.util.Map<String, String> memberNames = new java.util.HashMap<>();
+                    memberNames.put(currentUserId, currentUserName);
+                    memberNames.put(friendId, friendName);
+
+                    java.util.Map<String, Object> updates = new java.util.HashMap<>();
+                    updates.put("memberNames", memberNames);
+                    updates.put("type", "FRIEND");
+
+                    firestore.collection("conversations")
+                            .document(conversationId)
+                            .update(updates)
+                            .addOnSuccessListener(aVoid -> callback.onSuccess(conversationId))
+                            .addOnFailureListener(e -> {
+                                // Still return success even if update fails - the conversation exists
+                                android.util.Log.e("ChatRepository", "Failed to update memberNames/type", e);
+                                callback.onSuccess(conversationId);
+                            });
+                })
+                .addOnFailureListener(e -> {
+                    // Still return success - the conversation exists
+                    android.util.Log.e("ChatRepository", "Failed to fetch user names for update", e);
+                    callback.onSuccess(conversationId);
+                });
     }
-    
+
     /**
      * Create a new conversation with a friend
      * Fetches user names from Firestore to properly populate memberNames
      */
     private void createConversationWithFriend(String currentUserId, String friendId, ConversationCallback callback) {
         // First, fetch both user names
-        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> currentUserTask = 
-            firestore.collection("users").document(currentUserId).get();
-        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> friendTask = 
-            firestore.collection("users").document(friendId).get();
-        
+        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> currentUserTask =
+                firestore.collection("users").document(currentUserId).get();
+        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> friendTask =
+                firestore.collection("users").document(friendId).get();
+
         com.google.android.gms.tasks.Tasks.whenAllSuccess(currentUserTask, friendTask)
-            .addOnSuccessListener(results -> {
-                com.google.firebase.firestore.DocumentSnapshot currentUserDoc = 
-                    (com.google.firebase.firestore.DocumentSnapshot) results.get(0);
-                com.google.firebase.firestore.DocumentSnapshot friendDoc = 
-                    (com.google.firebase.firestore.DocumentSnapshot) results.get(1);
-                
-                String currentUserName = currentUserDoc.exists() && currentUserDoc.getString("name") != null 
-                    ? currentUserDoc.getString("name") : "User";
-                String friendName = friendDoc.exists() && friendDoc.getString("name") != null 
-                    ? friendDoc.getString("name") : "User";
-                
-                // Create conversation with proper memberNames
-                java.util.Map<String, Object> conversationData = new java.util.HashMap<>();
-                java.util.List<String> memberIds = java.util.Arrays.asList(currentUserId, friendId);
-                conversationData.put("memberIds", memberIds);
-                conversationData.put("type", "FRIEND");
-                conversationData.put("name", ""); // Empty for 1-1 chats
-                conversationData.put("timestamp", System.currentTimeMillis());
-                conversationData.put("lastMessage", "");
-                
-                // Store member names for proper display
-                java.util.Map<String, String> memberNames = new java.util.HashMap<>();
-                memberNames.put(currentUserId, currentUserName);
-                memberNames.put(friendId, friendName);
-                conversationData.put("memberNames", memberNames);
-                
-                firestore.collection("conversations")
-                    .add(conversationData)
-                    .addOnSuccessListener(docRef -> {
-                        // Update document with its own ID
-                        docRef.update("id", docRef.getId())
-                            .addOnSuccessListener(aVoid -> callback.onSuccess(docRef.getId()))
-                            .addOnFailureListener(e -> callback.onSuccess(docRef.getId())); // Still succeed even if id update fails
-                    })
-                    .addOnFailureListener(e -> callback.onError(e.getMessage()));
-            })
-            .addOnFailureListener(e -> callback.onError("Failed to fetch user names: " + e.getMessage()));
+                .addOnSuccessListener(results -> {
+                    com.google.firebase.firestore.DocumentSnapshot currentUserDoc =
+                            (com.google.firebase.firestore.DocumentSnapshot) results.get(0);
+                    com.google.firebase.firestore.DocumentSnapshot friendDoc =
+                            (com.google.firebase.firestore.DocumentSnapshot) results.get(1);
+
+                    String currentUserName = currentUserDoc.exists() && currentUserDoc.getString("name") != null
+                            ? currentUserDoc.getString("name") : "User";
+                    String friendName = friendDoc.exists() && friendDoc.getString("name") != null
+                            ? friendDoc.getString("name") : "User";
+
+                    // Create conversation with proper memberNames
+                    java.util.Map<String, Object> conversationData = new java.util.HashMap<>();
+                    java.util.List<String> memberIds = java.util.Arrays.asList(currentUserId, friendId);
+                    conversationData.put("memberIds", memberIds);
+                    conversationData.put("type", "FRIEND");
+                    conversationData.put("name", ""); // Empty for 1-1 chats
+                    conversationData.put("timestamp", System.currentTimeMillis());
+                    conversationData.put("lastMessage", "");
+
+                    // Store member names for proper display
+                    java.util.Map<String, String> memberNames = new java.util.HashMap<>();
+                    memberNames.put(currentUserId, currentUserName);
+                    memberNames.put(friendId, friendName);
+                    conversationData.put("memberNames", memberNames);
+
+                    firestore.collection("conversations")
+                            .add(conversationData)
+                            .addOnSuccessListener(docRef -> {
+                                // Update document with its own ID
+                                docRef.update("id", docRef.getId())
+                                        .addOnSuccessListener(aVoid -> callback.onSuccess(docRef.getId()))
+                                        .addOnFailureListener(e -> callback.onSuccess(docRef.getId())); // Still succeed even if id update fails
+                            })
+                            .addOnFailureListener(e -> callback.onError(e.getMessage()));
+                })
+                .addOnFailureListener(e -> callback.onError("Failed to fetch user names: " + e.getMessage()));
     }
-    
-    // ===================== POLL METHODS =====================
-    
+
     /**
      * Send a poll message to conversation
      */
-    public void sendPollMessage(String conversationId, String senderId, 
+    public void sendPollMessage(String conversationId, String senderId,
                                 com.example.doan_zaloclone.models.Poll poll,
                                 SendMessageCallback callback) {
         if (conversationId == null || senderId == null || poll == null) {
@@ -1872,23 +1847,23 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
             }
             return;
         }
-        
+
         // Create message document reference
         DocumentReference messageRef = firestore
                 .collection("conversations")
                 .document(conversationId)
                 .collection("messages")
                 .document();
-        
+
         // Create message object
-        com.example.doan_zaloclone.models.Message message = 
+        com.example.doan_zaloclone.models.Message message =
                 new com.example.doan_zaloclone.models.Message();
         message.setId(messageRef.getId());
         message.setSenderId(senderId);
         message.setType(com.example.doan_zaloclone.models.Message.TYPE_POLL);
         message.setTimestamp(System.currentTimeMillis());
         message.setPollData(poll);
-        
+
         // Fetch sender name before saving
         firestore.collection("users")
                 .document(senderId)
@@ -1908,8 +1883,8 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
                     savePollMessage(messageRef, message, conversationId, poll, callback);
                 });
     }
-    
-    private void savePollMessage(DocumentReference messageRef, 
+
+    private void savePollMessage(DocumentReference messageRef,
                                  com.example.doan_zaloclone.models.Message message,
                                  String conversationId,
                                  com.example.doan_zaloclone.models.Poll poll,
@@ -1917,10 +1892,10 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
         messageRef.set(message)
                 .addOnSuccessListener(aVoid -> {
                     // Update conversation's lastMessage
-                    updateConversationLastMessage(conversationId, 
-                            "📊 Bình chọn: " + poll.getQuestion(), 
+                    updateConversationLastMessage(conversationId,
+                            "📊 Bình chọn: " + poll.getQuestion(),
                             message.getTimestamp());
-                    
+
                     if (callback != null) {
                         callback.onSuccess();
                     }
@@ -1931,20 +1906,20 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
                     }
                 });
     }
-    
+
     /**
      * Vote for a poll option
      */
-    public void votePoll(String conversationId, String messageId, 
-                        String optionId, String userId,
-                        VotePollCallback callback) {
+    public void votePoll(String conversationId, String messageId,
+                         String optionId, String userId,
+                         VotePollCallback callback) {
         if (conversationId == null || messageId == null || optionId == null || userId == null) {
             if (callback != null) {
                 callback.onError("Invalid parameters");
             }
             return;
         }
-        
+
         // Fetch user name first, then execute vote
         firestore.collection("users")
                 .document(userId)
@@ -1952,7 +1927,7 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
                 .addOnSuccessListener(doc -> {
                     String userName = "User";
                     if (doc.exists()) {
-                        com.example.doan_zaloclone.models.User user = 
+                        com.example.doan_zaloclone.models.User user =
                                 doc.toObject(com.example.doan_zaloclone.models.User.class);
                         if (user != null && user.getName() != null) {
                             userName = user.getName();
@@ -1964,11 +1939,11 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
                     executeVotePoll(conversationId, messageId, optionId, userId, "User", callback);
                 });
     }
-    
+
     /**
      * Execute the actual vote transaction
      */
-    private void executeVotePoll(String conversationId, String messageId, 
+    private void executeVotePoll(String conversationId, String messageId,
                                  String optionId, String userId, String userName,
                                  VotePollCallback callback) {
         DocumentReference messageRef = firestore
@@ -1976,29 +1951,29 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
                 .document(conversationId)
                 .collection("messages")
                 .document(messageId);
-        
+
         firestore.runTransaction(transaction -> {
             DocumentSnapshot snapshot = transaction.get(messageRef);
-            com.example.doan_zaloclone.models.Message message = 
+            com.example.doan_zaloclone.models.Message message =
                     snapshot.toObject(com.example.doan_zaloclone.models.Message.class);
-            
+
             if (message == null || message.getPollData() == null) {
                 throw new RuntimeException("Poll not found");
             }
-            
+
             com.example.doan_zaloclone.models.Poll poll = message.getPollData();
-            
+
             // Check if poll is still open
             if (!poll.canVote()) {
                 throw new RuntimeException("Poll is closed or expired");
             }
-            
+
             // Find the option
             com.example.doan_zaloclone.models.PollOption option = poll.getOptionById(optionId);
             if (option == null) {
                 throw new RuntimeException("Option not found");
             }
-            
+
             // Check if user already voted for this option
             if (option.hasUserVoted(userId)) {
                 // User already voted for this option - unvote it
@@ -2010,15 +1985,15 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
                         opt.removeVote(userId);
                     }
                 }
-                
+
                 // Add vote to selected option WITH USER NAME
                 option.addVote(userId, userName);
             }
-            
+
             // Update message
             message.setPollData(poll);
             transaction.set(messageRef, message);
-            
+
             return null;
         }).addOnSuccessListener(aVoid -> {
             if (callback != null) {
@@ -2030,46 +2005,46 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
             }
         });
     }
-    
+
     /**
      * Close a poll (only creator or group admin can close)
      */
-    public void closePoll(String conversationId, String messageId, 
-                         String userId, boolean isGroupAdmin,
-                         VotePollCallback callback) {
+    public void closePoll(String conversationId, String messageId,
+                          String userId, boolean isGroupAdmin,
+                          VotePollCallback callback) {
         if (conversationId == null || messageId == null || userId == null) {
             if (callback != null) {
                 callback.onError("Invalid parameters");
             }
             return;
         }
-        
+
         DocumentReference messageRef = firestore
                 .collection("conversations")
                 .document(conversationId)
                 .collection("messages")
                 .document(messageId);
-        
+
         firestore.runTransaction(transaction -> {
             DocumentSnapshot snapshot = transaction.get(messageRef);
-            com.example.doan_zaloclone.models.Message message = 
+            com.example.doan_zaloclone.models.Message message =
                     snapshot.toObject(com.example.doan_zaloclone.models.Message.class);
-            
+
             if (message == null || message.getPollData() == null) {
                 throw new RuntimeException("Poll not found");
             }
-            
+
             com.example.doan_zaloclone.models.Poll poll = message.getPollData();
-            
+
             // Check permission
             if (!poll.canClosePoll(userId, isGroupAdmin)) {
                 throw new RuntimeException("You don't have permission to close this poll");
             }
-            
+
             poll.setClosed(true);
             message.setPollData(poll);
             transaction.set(messageRef, message);
-            
+
             return null;
         }).addOnSuccessListener(aVoid -> {
             if (callback != null) {
@@ -2081,93 +2056,144 @@ public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId
             }
         });
     }
-    
+
+    // ===================== POLL METHODS =====================
+
     /**
      * Mark conversation as seen/read via API
+     *
      * @param conversationId ID of the conversation
-     * @param userId ID of the user marking as seen
+     * @param userId         ID of the user marking as seen
      * @return LiveData containing Resource with success status
      */
     public LiveData<Resource<Boolean>> markConversationAsSeen(@NonNull String conversationId,
-                                                                @NonNull String userId) {
+                                                              @NonNull String userId) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
-        
+
         // Prepare request body
         Map<String, String> seenData = new HashMap<>();
         seenData.put("userId", userId);
-        
+
         // Call API to mark as seen
         Call<ApiResponse<Map<String, Object>>> call = apiService.markConversationAsSeen(conversationId, seenData);
-        
+
         call.enqueue(new Callback<ApiResponse<Map<String, Object>>>() {
             @Override
             public void onResponse(Call<ApiResponse<Map<String, Object>>> call, Response<ApiResponse<Map<String, Object>>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     ApiResponse<Map<String, Object>> apiResponse = response.body();
-                    
+
                     if (apiResponse.isSuccess()) {
                         Log.d("ChatRepository", "Conversation marked as seen via API: " + conversationId);
                         // Backend broadcasts update via WebSocket (message_read event)
                         result.setValue(Resource.success(true));
                     } else {
-                        String error = apiResponse.getMessage() != null 
-                            ? apiResponse.getMessage() 
-                            : "Failed to mark as seen";
+                        String error = apiResponse.getMessage() != null
+                                ? apiResponse.getMessage()
+                                : "Failed to mark as seen";
                         result.setValue(Resource.error(error));
                     }
                 } else {
                     result.setValue(Resource.error("HTTP " + response.code()));
                 }
             }
-            
+
             @Override
             public void onFailure(Call<ApiResponse<Map<String, Object>>> call, Throwable t) {
-                String error = t.getMessage() != null 
-                    ? t.getMessage() 
-                    : "Network error";
+                String error = t.getMessage() != null
+                        ? t.getMessage()
+                        : "Network error";
                 result.setValue(Resource.error(error));
             }
         });
-        
+
         return result;
     }
-    
-    /**
-     * Callback for poll vote operations
-     */
-    public interface VotePollCallback {
-        void onSuccess();
-        void onError(String error);
-    }
-    
+
     /**
      * Update live location data in Firestore
+     *
      * @param liveLocation The updated live location object
      */
     public void updateLiveLocation(com.example.doan_zaloclone.models.LiveLocation liveLocation) {
         if (liveLocation == null || liveLocation.getSessionId() == null) return;
-        
+
         firestore.collection("liveLocations")
                 .document(liveLocation.getSessionId())
                 .set(liveLocation)
                 .addOnFailureListener(e -> android.util.Log.e("ChatRepo", "Failed to update live location", e));
     }
-    
+
     /**
      * Stop live location sharing
+     *
      * @param sessionId Session ID to stop
      */
     public void stopLiveLocation(String sessionId) {
         if (sessionId == null) return;
-        
+
         Map<String, Object> updates = new HashMap<>();
         updates.put("active", false);
-        
+
         firestore.collection("liveLocations")
                 .document(sessionId)
                 .update(updates)
                 .addOnFailureListener(e -> android.util.Log.e("ChatRepo", "Failed to stop live location", e));
+    }
+
+    /**
+     * Callback interface for recall message operations
+     */
+    public interface RecallMessageCallback {
+        void onSuccess();
+
+        void onError(String error);
+    }
+
+    /**
+     * Callback interface for forward message operations
+     */
+    public interface ForwardMessageCallback {
+        void onSuccess();
+
+        void onError(String error);
+    }
+
+    /**
+     * Callback interface for send message operations
+     */
+    public interface SendMessageCallback {
+        void onSuccess();
+
+        void onError(String error);
+    }
+
+    /**
+     * Listener interface for real-time message updates
+     */
+    public interface MessagesListener {
+        void onMessagesChanged(List<Message> messages);
+
+        void onError(String error);
+    }
+
+    /**
+     * Callback interface for conversation operations
+     */
+    public interface ConversationCallback {
+        void onSuccess(String conversationId);
+
+        void onError(String error);
+    }
+
+    /**
+     * Callback for poll vote operations
+     */
+    public interface VotePollCallback {
+        void onSuccess();
+
+        void onError(String error);
     }
 }
 
