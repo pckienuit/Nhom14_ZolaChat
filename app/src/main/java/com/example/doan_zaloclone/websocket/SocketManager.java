@@ -21,8 +21,8 @@ public class SocketManager {
     private static final String TAG = "SocketManager";
 
     // TODO: Change to production URL when deploying
-    private static final String SOCKET_URL = "http://10.0.2.2:3000";  // Emulator localhost
-    // private static final String SOCKET_URL = "https://api.zolachat.site";  // Production
+    // private static final String SOCKET_URL = "http://10.0.2.2:3000";  // Emulator localhost
+    private static final String SOCKET_URL = "https://zolachat.site";  // Production
 
     private static SocketManager instance;
     private Socket socket;
@@ -71,10 +71,15 @@ public class SocketManager {
                 IO.Options options = new IO.Options();
                 options.auth = new java.util.HashMap<>();
                 options.auth.put("token", token);
+                
+                // Force WebSocket transport and secure connection
+                options.transports = new String[]{"websocket"};
+                options.secure = true;
+                
                 options.reconnection = true;
-                options.reconnectionAttempts = 5;
-                options.reconnectionDelay = 1000;
-                options.timeout = 10000;
+                options.reconnectionAttempts = 10;
+                options.reconnectionDelay = 2000;
+                options.timeout = 20000;
 
                 socket = IO.socket(SOCKET_URL, options);
 
