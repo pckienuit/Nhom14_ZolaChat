@@ -10,8 +10,10 @@
     <!-- Zalo-style Header -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="#0068FF">
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_gradient_blue"
+        android:paddingTop="50dp"
+        android:paddingBottom="12dp">
 
         <!-- Search Bar -->
         <ImageView

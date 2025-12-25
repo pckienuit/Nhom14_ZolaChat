@@ -30,6 +30,8 @@ import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 
+import androidx.core.view.WindowCompat;
+
 public class MainActivity extends AppCompatActivity {
 
     private RelativeLayout navMessages, navContact, navGrid, navTimeline, navPersonal;
@@ -55,6 +57,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Enable Edge-to-Edge
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        
         setContentView(R.layout.activity_main);
 
         // Record login timestamp for force logout comparison
@@ -76,8 +83,20 @@ public class MainActivity extends AppCompatActivity {
             showFragment(0);
         }
 
-        // setupBottomNavigation(); // Replaced by initCustomBottomNav listeners
-        observeViewModel();
+        // Setup friend events via WebSocket
+        setupFriendEventListener();
+
+        // Apply window insets for Edge-to-Edge Navigation Bar
+        View bottomNav = findViewById(R.id.bottom_navigation_container);
+        if (bottomNav != null) {
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(bottomNav, (v, windowInsets) -> {
+                androidx.core.graphics.Insets insets = windowInsets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+                // Apply bottom padding = system nav bar height
+                // Keep existing horizontal padding if any (likely 0)
+                v.setPadding(v.getPaddingLeft(), v.getPaddingTop(), v.getPaddingRight(), insets.bottom);
+                return androidx.core.view.WindowInsetsCompat.CONSUMED;
+            });
+        }
 
         // Start listening for incoming calls
         setupIncomingCallListener();

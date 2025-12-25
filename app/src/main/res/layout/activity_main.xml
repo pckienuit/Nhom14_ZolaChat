@@ -4,7 +4,6 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true"
     tools:context=".MainActivity">
 
     <androidx.appcompat.widget.Toolbar
@@ -18,7 +17,8 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:popupTheme="@style/ThemeOverlay.AppCompat.Light"
-        app:title="Zalo Clone" />
+        app:title="Zalo Clone"
+        android:visibility="gone" />
 
     <FrameLayout
         android:id="@+id/fragmentContainer"
@@ -32,7 +32,7 @@
     <LinearLayout
         android:id="@+id/bottom_navigation_container"
         android:layout_width="0dp"
-        android:layout_height="56dp"
+        android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:background="#FFFFFF"
         android:elevation="8dp"
@@ -44,7 +44,7 @@
         <RelativeLayout
             android:id="@+id/nav_messages"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="56dp"
             android:layout_weight="1"
             android:clickable="true"
             android:focusable="true"
@@ -99,7 +99,7 @@
         <RelativeLayout
             android:id="@+id/nav_contact"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="56dp"
             android:layout_weight="1"
             android:clickable="true"
             android:focusable="true"
@@ -136,7 +136,7 @@
         <RelativeLayout
             android:id="@+id/nav_grid"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="56dp"
             android:layout_weight="1"
             android:clickable="true"
             android:focusable="true"
@@ -184,7 +184,7 @@
         <RelativeLayout
             android:id="@+id/nav_timeline"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="56dp"
             android:layout_weight="1"
             android:clickable="true"
             android:focusable="true"
@@ -237,7 +237,7 @@
         <RelativeLayout
             android:id="@+id/nav_personal"
             android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_height="56dp"
             android:layout_weight="1"
             android:clickable="true"
             android:focusable="true"
