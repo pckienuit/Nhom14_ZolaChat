@@ -120,6 +120,20 @@ public interface ApiService {
         @Path("messageId") String messageId,
         @Body Map<String, Object> updates
     );
+    
+    // Add/change/remove reaction (new API - Phase 3C-3)
+    @POST("messages/{messageId}/reactions")
+    Call<Map<String, Object>> addReactionV2(
+        @Path("messageId") String messageId,
+        @Body Map<String, Object> reactionData
+    );
+    
+    // Clear ALL reactions on a message (new API - Phase 3C-3)
+    @DELETE("messages/{messageId}/reactions")
+    Call<Map<String, Object>> clearAllReactions(
+        @Path("messageId") String messageId,
+        @Query("conversationId") String conversationId
+    );
 
     
     // Remove reaction

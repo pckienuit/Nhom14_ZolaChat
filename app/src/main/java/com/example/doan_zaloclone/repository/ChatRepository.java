@@ -313,6 +313,53 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
 }
     
     /**
+     * Add, change, or remove a reaction on a message
+     * MIGRATED: Now uses new /api/messages API (Phase 3C-3)
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message to react to
+     * @param reactionType Type of reaction (heart, like, haha, wow, sad, angry) or null to remove
+     * @param callback Callback for success/error
+     */
+    public void addReaction(String conversationId, String messageId, String reactionType, SendMessageCallback callback) {
+        Log.d("ChatRepository", "Adding reaction via new API: " + reactionType + " on message " + messageId);
+        
+        Map<String, Object> reactionData = new HashMap<>();
+        reactionData.put("conversationId", conversationId);
+        reactionData.put("reactionType", reactionType); // null to remove reaction
+        
+        Call<Map<String, Object>> call = apiService.addReactionV2(messageId, reactionData);
+        
+        call.enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Map<String, Object> responseBody = response.body();
+                    Boolean success = (Boolean) responseBody.get("success");
+                    
+                    if (success != null && success) {
+                        Log.d("ChatRepository", "✅ Reaction updated successfully");
+                        // Backend broadcasts update via WebSocket
+                        callback.onSuccess();
+                    } else {
+                        callback.onError("Failed to update reaction");
+                    }
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e("ChatRepository", "❌ Add reaction failed: " + error);
+                    callback.onError(error);
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e("ChatRepository", "❌ Add reaction network error: " + error);
+                callback.onError(error);
+            }
+        });
+    }
+    
+    /**
      * Listen to messages in a conversation with real-time updates (LiveData version)
      * @param conversationId ID of the conversation
      * @return LiveData containing Resource with list of messages
@@ -1400,46 +1447,59 @@ public void deleteMessage(String conversationId, String messageId, SendMessageCa
     }
     
     /**
-     * Remove ALL reactions from a message (clear all reactions and counts)
-     * This is used when user clicks the X button to reset all reactions
-     * @param conversationId ID of the conversation
-     * @param messageId ID of the message
-     * @param userId ID of the user removing reactions (not used but kept for consistency)
-     * @return LiveData containing Resource with success status
-     */
-    public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId,
-                                                       @NonNull String messageId,
-                                                       @NonNull String userId) {
-        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
-        result.setValue(Resource.loading());
-        
-        DocumentReference messageRef = firestore
-                .collection("conversations")
-                .document(conversationId)
-                .collection("messages")
-                .document(messageId);
-        
-        // Clear ALL reactions and counts (reset to empty maps)
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("reactions", new HashMap<String, String>());
-        updates.put("reactionCounts", new HashMap<String, Integer>());
-        
-        messageRef.update(updates)
-                .addOnSuccessListener(aVoid -> {
-                    Log.d("ChatRepository", "All reactions cleared for message: " + messageId);
-                    result.setValue(Resource.success(true));
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("ChatRepository", "Error clearing reactions", e);
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể xóa cảm xúc";
-                    result.setValue(Resource.error(errorMessage));
-                });
-        
-        return result;
-    }
+ * Remove current user's ALL reactions from a message
+ * MIGRATED: Now uses new /api/messages API (Phase 3C-3)
+ * Note: This removes ALL of current user's reactions (all counts), not other users' reactions
+ * @param conversationId ID of the conversation
+ * @param messageId ID of the message
+ * @param userId ID of the user removing their reactions
+ * @return LiveData containing Resource with success status
+ */
+public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId,
+                                                   @NonNull String messageId,
+                                                   @NonNull String userId) {
+    MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+    result.setValue(Resource.loading());
     
+    Log.d("ChatRepository", "Removing ALL reactions for user: " + userId + " on message: " + messageId);
+    
+    // Call addReaction with null to remove current user's ALL reactions
+    Map<String, Object> reactionData = new HashMap<>();
+    reactionData.put("conversationId", conversationId);
+    reactionData.put("reactionType", null); // null = remove ALL my reactions
+    
+    Call<Map<String, Object>> call = apiService.addReactionV2(messageId, reactionData);
+    
+    call.enqueue(new Callback<Map<String, Object>>() {
+        @Override
+        public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+            if (response.isSuccessful() && response.body() != null) {
+                Map<String, Object> responseBody = response.body();
+                Boolean success = (Boolean) responseBody.get("success");
+                
+                if (success != null && success) {
+                    Log.d("ChatRepository", "✅ All user reactions removed successfully");
+                    result.setValue(Resource.success(true));
+                } else {
+                    result.setValue(Resource.error("Failed to remove reactions"));
+                }
+            } else {
+                String error = "HTTP " + response.code();
+                Log.e("ChatRepository", "❌ Remove reactions failed: " + error);
+                result.setValue(Resource.error(error));
+            }
+        }
+        
+        @Override
+        public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+            String error = t.getMessage() != null ? t.getMessage() : "Network error";
+            Log.e("ChatRepository", "❌ Remove reactions network error: " + error);
+            result.setValue(Resource.error(error));
+        }
+    });
+    
+    return result;
+}    
     /**
      * Toggle a reaction - if user already has this reaction type, remove it; otherwise add/update it
      * @param conversationId ID of the conversation

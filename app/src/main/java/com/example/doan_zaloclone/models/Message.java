@@ -40,8 +40,14 @@ public class Message {
     private String originalSenderId;    // Original sender ID if forwarded
     private String originalSenderName;  // Original sender name if forwarded
     
-    // Reaction field - Map of userId to reaction type (heart, haha, sad, angry, wow, like)
+    // Reaction field - Map of userId to reaction type (backward compatible - shows primary reaction)
+    // For Option 2: This shows the reaction type with highest count for each user
     private Map<String, String> reactions;
+    
+    // Detailed reactions - Map of userId to Map of reaction type to count
+    // Format: {"userId1": {"heart": 3, "like": 1}, "userId2": {"heart": 2}}
+    // This supports multiple reactions per user (Option 2)
+    private Map<String, Map<String, Object>> reactionsDetailed;
     
     // Reaction counts - Map of reaction type to total count (allows multiple clicks per user)
     // Format: {"heart": 5, "haha": 3} - tracks total clicks, not just unique users
@@ -222,7 +228,11 @@ public class Message {
     public Map<String, String> getReactions() {
         return reactions;
     }
-
+    
+    public Map<String, Map<String, Object>> getReactionsDetailed() {
+        return reactionsDetailed;
+    }
+    
     // Setters (cần cho Firestore)
     public void setId(String id) {
         this.id = id;
@@ -304,6 +314,10 @@ public class Message {
     
     public void setReactions(Map<String, String> reactions) {
         this.reactions = reactions;
+    }
+    
+    public void setReactionsDetailed(Map<String, Map<String, Object>> reactionsDetailed) {
+        this.reactionsDetailed = reactionsDetailed;
     }
     
     public Map<String, Integer> getReactionCounts() {

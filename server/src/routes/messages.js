@@ -203,4 +203,215 @@ router.put('/:messageId', authenticateUser, async (req, res) => {
   }
 });
 
+/**
+ * POST /api/messages/:messageId/reactions - Add, change, or remove a reaction
+ */
+router.post('/:messageId/reactions', authenticateUser, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { conversationId, reactionType } = req.body;
+    
+    if (!conversationId) {
+      return res.status(400).json({ error: 'conversationId required' });
+    }
+    
+    console.log(`❤️ ${reactionType ? 'Adding' : 'Removing'} reaction on message ${messageId} by ${req.user.uid}`);
+    
+    const messageRef = db.collection('conversations')
+      .doc(conversationId)
+      .collection('messages')
+      .doc(messageId);
+    
+    // Use transaction to safely update reactions
+    const result = await db.runTransaction(async (transaction) => {
+      const messageDoc = await transaction.get(messageRef);
+      
+      if (!messageDoc.exists) {
+        throw new Error('Message not found');
+      }
+      
+      const messageData = messageDoc.data();
+      let reactionsDetailed = messageData.reactionsDetailed || {};
+      let reactionCounts = messageData.reactionCounts || {};
+      
+      // MIGRATION: If reactionsDetailed is empty but reactions exists (old format),
+      // migrate old data while preserving click counts from reactionCounts
+      if (Object.keys(reactionsDetailed).length === 0 && messageData.reactions) {
+        console.log(`📦 Migrating old reactions format to reactionsDetailed`);
+        
+        // Count how many users have each reaction type
+        const usersByType = {};
+        for (const userId in messageData.reactions) {
+          const reactionType = messageData.reactions[userId];
+          if (reactionType && typeof reactionType === 'string') {
+            if (!usersByType[reactionType]) {
+              usersByType[reactionType] = [];
+            }
+            usersByType[reactionType].push(userId);
+          }
+        }
+        
+        // Distribute counts evenly among users (best guess for old data)
+        for (const type in usersByType) {
+          const users = usersByType[type];
+          const totalCount = reactionCounts[type] || users.length;
+          const countPerUser = Math.max(1, Math.floor(totalCount / users.length));
+          
+          users.forEach(userId => {
+            reactionsDetailed[userId] = { [type]: countPerUser };
+          });
+        }
+        
+        console.log(`📦 Migrated to: ${JSON.stringify(reactionsDetailed)}`);
+      }
+      
+      // Get user's current reactions (object with counts per type)
+      const userReactions = reactionsDetailed[req.user.uid] || {};
+      
+      if (reactionType) {
+        // Add/increment reaction
+        const currentCount = userReactions[reactionType] || 0;
+        userReactions[reactionType] = currentCount + 1;
+        
+        // Update user's reactions
+        reactionsDetailed[req.user.uid] = userReactions;
+        
+        // Update global count
+        reactionCounts[reactionType] = (reactionCounts[reactionType] || 0) + 1;
+      } else {
+        // Remove ALL user's reactions
+        for (const type in userReactions) {
+          const count = userReactions[type] || 0;
+          // Ensure we don't go negative
+          reactionCounts[type] = Math.max(0, (reactionCounts[type] || 0) - count);
+          if (reactionCounts[type] === 0) {
+            delete reactionCounts[type];
+          }
+        }
+        
+        // Remove user from reactions
+        delete reactionsDetailed[req.user.uid];
+      }
+      
+      // IMPORTANT: Recalculate reactionCounts from reactionsDetailed to fix inconsistencies
+      // This ensures counts are always accurate
+      reactionCounts = {};
+      for (const userId in reactionsDetailed) {
+        const userReacts = reactionsDetailed[userId];
+        for (const type in userReacts) {
+          reactionCounts[type] = (reactionCounts[type] || 0) + (userReacts[type] || 0);
+        }
+      }
+      
+      // Create flattened reactions for backward compatibility
+      // Format: { "userId": "heart" } - shows primary reaction type (highest count)
+      const reactions = {};
+      for (const userId in reactionsDetailed) {
+        const userReacts = reactionsDetailed[userId];
+        let maxType = null;
+        let maxCount = 0;
+        for (const type in userReacts) {
+          if (userReacts[type] > maxCount) {
+            maxCount = userReacts[type];
+            maxType = type;
+          }
+        }
+        if (maxType) {
+          reactions[userId] = maxType;
+        }
+      }
+      
+      // Update message with both formats
+      transaction.update(messageRef, { 
+        reactions,           // Flattened for backward compatibility
+        reactionsDetailed,   // Detailed for Option 2
+        reactionCounts 
+      });
+      
+      return { reactions, reactionsDetailed, reactionCounts };
+    });
+    
+    console.log(`✅ Reaction updated - counts: ${JSON.stringify(result.reactionCounts)}`);
+    console.log(`📊 Flattened reactions: ${JSON.stringify(result.reactions)}`);
+    console.log(`� Detailed reactions: ${JSON.stringify(result.reactionsDetailed)}`);
+    
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    if (io) {
+      const eventData = {
+        messageId,
+        conversationId,
+        userId: req.user.uid,
+        reactionType,
+        reactions: result.reactions,
+        reactionCounts: result.reactionCounts
+      };
+      console.log(`📡 Emitting reaction_updated to conversation:${conversationId}`);
+      console.log(`📡 Event data: ${JSON.stringify(eventData)}`);
+      io.to(`conversation:${conversationId}`).emit('reaction_updated', eventData);
+    }
+    
+    res.json({ 
+      success: true,
+      reactions: result.reactions,
+      reactionCounts: result.reactionCounts
+    });
+  } catch (error) {
+    console.error('❌ Error updating reaction:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/messages/:messageId/reactions - Clear ALL reactions on a message
+ */
+router.delete('/:messageId/reactions', authenticateUser, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { conversationId } = req.query;
+    
+    if (!conversationId) {
+      return res.status(400).json({ error: 'conversationId required' });
+    }
+    
+    console.log(`🗑️ Clearing ALL reactions on message ${messageId}`);
+    
+    const messageRef = db.collection('conversations')
+      .doc(conversationId)
+      .collection('messages')
+      .doc(messageId);
+    
+    // Clear all reactions and counts
+    await messageRef.update({
+      reactions: {},
+      reactionCounts: {}
+    });
+    
+    console.log(`✅ All reactions cleared on message ${messageId}`);
+    
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    if (io) {
+      console.log(`📡 Emitting reaction_updated (cleared) to conversation:${conversationId}`);
+      io.to(`conversation:${conversationId}`).emit('reaction_updated', {
+        messageId,
+        conversationId,
+        userId: req.user.uid,
+        reactionType: null,
+        reactions: {},
+        reactionCounts: {}
+      });
+    }
+    
+    res.json({ 
+      success: true,
+      reactions: {},
+      reactionCounts: {}
+    });
+  } catch (error) {
+    console.error('❌ Error clearing reactions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

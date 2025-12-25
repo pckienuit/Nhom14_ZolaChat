@@ -220,7 +220,8 @@ public class MessageReaction {
         // Filter out reactions with 0 count and sort by count descending
         java.util.List<java.util.Map.Entry<String, Integer>> sortedEntries = new java.util.ArrayList<>();
         for (java.util.Map.Entry<String, Integer> entry : reactionCounts.entrySet()) {
-            if (entry.getValue() > 0) {
+            Integer value = entry.getValue();
+            if (value != null && value > 0) {
                 sortedEntries.add(entry);
             }
         }
