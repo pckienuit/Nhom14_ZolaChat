@@ -1,6 +1,6 @@
 server {
     listen 80;
-    server_name zolachat.site www.zolachat.site api.zolachat.site;
+    server_name zolachat.site www.zolachat.site;
 
     # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
@@ -15,41 +15,60 @@ server {
     # 1. ADMIN WEB FRONTEND
     # Serve static files from /var/www/html/admin-web/
     # ==========================================
-    
-    # Alias /admin to the admin-web directory
     location /admin/ {
         alias /var/www/html/admin-web/;
         index index.html dashboard.html;
-        try_files $uri $uri/ =404;
+        try_files $uri $uri/ /admin/index.html;
     }
 
-    # Also support /admin-web/ path just in case
     location /admin-web/ {
         alias /var/www/html/admin-web/;
         index index.html dashboard.html;
-        try_files $uri $uri/ =404;
+        try_files $uri $uri/ /admin-web/index.html;
     }
 
     # ==========================================
-    # 2. BACKEND API & WEBSOCKET
-    # Proxy everything else to Node.js
+    # 2. API PROXY
+    # Proxy /api requests to Node.js
     # ==========================================
-    location / {
+    location /api/ {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
-
-        # WebSocket support (CRITICAL)
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-
-        # Headers
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+    }
 
-        # Timeouts for WebSocket
+    # ==========================================
+    # 3. WEBSOCKET PROXY
+    # Critical for Real-time features
+    # ==========================================
+    location /socket.io/ {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
         proxy_read_timeout 3600s;
         proxy_send_timeout 3600s;
+    }
+
+    # ==========================================
+    # 4. HEALTH CHECK
+    # ==========================================
+    location /health {
+        proxy_pass http://localhost:3000/health;
+        access_log off;
+    }
+
+    # ==========================================
+    # 5. LANDING PAGE (ROOT)
+    # Serve static files from /var/www/html/landing-page/
+    # ==========================================
+    location / {
+        root /var/www/html/landing-page;
+        index index.html;
+        try_files $uri $uri/ =404;
     }
 }
