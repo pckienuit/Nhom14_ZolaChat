@@ -70,8 +70,8 @@ body {
 }
 
 .sidebar-nav a.active {
-    background: rgba(99, 102, 241, 0.1);
-    color: var(--primary-light);
+    background: rgba(0, 104, 255, 0.1);
+    color: var(--primary);
     border-left-color: var(--primary);
 }
 
@@ -182,7 +182,7 @@ body {
 .stat-card:hover {
     border-color: var(--primary);
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.1);
+    box-shadow: 0 8px 24px rgba(0, 104, 255, 0.1);
 }
 
 .stat-icon {
@@ -278,7 +278,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem;
-    background: var(--bg-dark);
+    background: var(--bg-gray);
     border-radius: var(--radius);
 }
 
@@ -312,7 +312,7 @@ body {
 
 .top-list .item-value {
     font-weight: 600;
-    color: var(--primary-light);
+    color: var(--primary);
 }
 
 /* Responsive */
