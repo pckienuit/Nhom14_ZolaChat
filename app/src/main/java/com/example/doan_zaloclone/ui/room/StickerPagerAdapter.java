@@ -23,14 +23,13 @@ import java.util.Map;
  */
 public class StickerPagerAdapter extends RecyclerView.Adapter<StickerPagerAdapter.PageViewHolder> {
 
-    private List<StickerPack> packs = new ArrayList<>();
-    private Map<String, List<Sticker>> packStickersMap = new HashMap<>();
-    private StickerGridAdapter.OnStickerClickListener stickerClickListener;
-
     // Special "Recent" pack has index 0
     private static final int POSITION_RECENT = 0;
+    private final Map<String, List<Sticker>> packStickersMap = new HashMap<>();
+    private final boolean hasRecentTab = true;
+    private List<StickerPack> packs = new ArrayList<>();
+    private StickerGridAdapter.OnStickerClickListener stickerClickListener;
     private List<Sticker> recentStickers = new ArrayList<>();
-    private boolean hasRecentTab = true;
 
     public void setPacks(List<StickerPack> packs) {
         this.packs = packs != null ? packs : new ArrayList<>();
@@ -71,7 +70,7 @@ public class StickerPagerAdapter extends RecyclerView.Adapter<StickerPagerAdapte
     @Override
     public void onBindViewHolder(@NonNull PageViewHolder holder, int position) {
         List<Sticker> stickers;
-        
+
         if (hasRecentTab && position == POSITION_RECENT) {
             // Recent stickers page
             stickers = recentStickers;
@@ -88,7 +87,7 @@ public class StickerPagerAdapter extends RecyclerView.Adapter<StickerPagerAdapte
                 stickers = new ArrayList<>();
             }
         }
-        
+
         holder.bind(stickers, stickerClickListener);
     }
 
@@ -111,7 +110,7 @@ public class StickerPagerAdapter extends RecyclerView.Adapter<StickerPagerAdapte
             }
             position--; // Adjust for Recent tab
         }
-        
+
         if (position >= 0 && position < packs.size()) {
             return packs.get(position);
         }
@@ -125,7 +124,7 @@ public class StickerPagerAdapter extends RecyclerView.Adapter<StickerPagerAdapte
         public PageViewHolder(@NonNull View itemView) {
             super(itemView);
             stickerGrid = itemView.findViewById(R.id.stickerGridRecycler);
-            
+
             // Setup grid
             adapter = new StickerGridAdapter();
             stickerGrid.setLayoutManager(new GridLayoutManager(itemView.getContext(), 4));

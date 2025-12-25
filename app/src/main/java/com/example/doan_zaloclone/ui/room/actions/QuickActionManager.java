@@ -9,15 +9,15 @@ import java.util.List;
  * Registry pattern for extensibility
  */
 public class QuickActionManager {
-    
+
     private static QuickActionManager instance;
-    private List<QuickAction> actions;
-    
+    private final List<QuickAction> actions;
+
     private QuickActionManager() {
         actions = new ArrayList<>();
         registerDefaultActions();
     }
-    
+
     /**
      * Get singleton instance
      */
@@ -27,26 +27,27 @@ public class QuickActionManager {
         }
         return instance;
     }
-    
+
     private void registerDefaultActions() {
         // Register send image action
         registerAction(new SendImageAction());
-        
+
         // Register send file action
         registerAction(new SendFileAction());
-        
+
         // Register send poll action
         registerAction(new SendPollAction());
-        
+
         // Register send contact action (business card)
         registerAction(new SendContactAction());
-        
+
         // Register send location action
         registerAction(new SendLocationAction());
     }
-    
+
     /**
      * Register a new action
+     *
      * @param action Action to register
      */
     public void registerAction(QuickAction action) {
@@ -54,30 +55,32 @@ public class QuickActionManager {
             actions.add(action);
         }
     }
-    
+
     /**
      * Unregister an action
+     *
      * @param action Action to remove
      */
     public void unregisterAction(QuickAction action) {
         actions.remove(action);
     }
-    
+
     /**
      * Get all registered actions
+     *
      * @return List of actions
      */
     public List<QuickAction> getActions() {
         return new ArrayList<>(actions);
     }
-    
+
     /**
      * Clear all actions
      */
     public void clearActions() {
         actions.clear();
     }
-    
+
     /**
      * Reset to default actions
      */

@@ -26,11 +26,6 @@ public class StickerGridAdapter extends RecyclerView.Adapter<StickerGridAdapter.
     private List<Sticker> stickers = new ArrayList<>();
     private OnStickerClickListener listener;
 
-    public interface OnStickerClickListener {
-        void onStickerClick(Sticker sticker);
-        void onStickerLongClick(Sticker sticker); // For preview
-    }
-
     public void setOnStickerClickListener(OnStickerClickListener listener) {
         this.listener = listener;
     }
@@ -62,7 +57,7 @@ public class StickerGridAdapter extends RecyclerView.Adapter<StickerGridAdapter.
     public void onBindViewHolder(@NonNull StickerViewHolder holder, int position) {
         Sticker sticker = stickers.get(position);
         holder.bind(sticker);
-        
+
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) {
                 listener.onStickerClick(sticker);
@@ -82,6 +77,12 @@ public class StickerGridAdapter extends RecyclerView.Adapter<StickerGridAdapter.
         return stickers.size();
     }
 
+    public interface OnStickerClickListener {
+        void onStickerClick(Sticker sticker);
+
+        void onStickerLongClick(Sticker sticker); // For preview
+    }
+
     static class StickerViewHolder extends RecyclerView.ViewHolder {
         private final ImageView stickerImage;
 
@@ -95,11 +96,11 @@ public class StickerGridAdapter extends RecyclerView.Adapter<StickerGridAdapter.
             if (imageUrl == null || imageUrl.isEmpty()) {
                 imageUrl = sticker.getImageUrl();
             }
-            
+
             // Debug log
-            android.util.Log.d("StickerGridAdapter", "Loading sticker - ID: " + sticker.getId() 
-                + ", imageUrl: " + imageUrl 
-                + ", thumbnailUrl: " + sticker.getThumbnailUrl());
+            android.util.Log.d("StickerGridAdapter", "Loading sticker - ID: " + sticker.getId()
+                    + ", imageUrl: " + imageUrl
+                    + ", thumbnailUrl: " + sticker.getThumbnailUrl());
 
             if (imageUrl != null && !imageUrl.isEmpty()) {
                 Glide.with(itemView.getContext())

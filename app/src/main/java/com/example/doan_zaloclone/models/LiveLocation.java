@@ -23,24 +23,59 @@ public class LiveLocation {
         this.isActive = true;
     }
 
-    public String getSessionId() { return sessionId; }
-    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+    public String getSessionId() {
+        return sessionId;
+    }
 
-    public String getSenderId() { return senderId; }
-    public void setSenderId(String senderId) { this.senderId = senderId; }
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
 
-    public double getLatitude() { return latitude; }
-    public void setLatitude(double latitude) { this.latitude = latitude; }
+    public String getSenderId() {
+        return senderId;
+    }
 
-    public double getLongitude() { return longitude; }
-    public void setLongitude(double longitude) { this.longitude = longitude; }
+    public void setSenderId(String senderId) {
+        this.senderId = senderId;
+    }
 
-    public long getTimestamp() { return timestamp; }
-    public void setTimestamp(long timestamp) { this.timestamp = timestamp; }
+    public double getLatitude() {
+        return latitude;
+    }
 
-    public boolean isActive() { return isActive; }
-    public void setActive(boolean active) { isActive = active; }
+    public void setLatitude(double latitude) {
+        this.latitude = latitude;
+    }
 
-    public long getEndTime() { return endTime; }
-    public void setEndTime(long endTime) { this.endTime = endTime; }
+    public double getLongitude() {
+        return longitude;
+    }
+
+    public void setLongitude(double longitude) {
+        this.longitude = longitude;
+    }
+
+    public long getTimestamp() {
+        return timestamp;
+    }
+
+    public void setTimestamp(long timestamp) {
+        this.timestamp = timestamp;
+    }
+
+    public boolean isActive() {
+        return isActive;
+    }
+
+    public void setActive(boolean active) {
+        isActive = active;
+    }
+
+    public long getEndTime() {
+        return endTime;
+    }
+
+    public void setEndTime(long endTime) {
+        this.endTime = endTime;
+    }
 }

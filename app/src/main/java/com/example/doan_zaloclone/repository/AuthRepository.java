@@ -42,14 +42,14 @@ public class AuthRepository {
                             callback.onError("Login failed");
                         }
                     } else {
-                        String errorMessage = task.getException() != null 
-                                ? task.getException().getMessage() 
+                        String errorMessage = task.getException() != null
+                                ? task.getException().getMessage()
                                 : "Login failed";
                         callback.onError(errorMessage);
                     }
                 });
     }
-    
+
     /**
      * Check if user is banned in Firestore
      */
@@ -96,8 +96,8 @@ public class AuthRepository {
                             callback.onError("Registration failed");
                         }
                     } else {
-                        String errorMessage = task.getException() != null 
-                                ? task.getException().getMessage() 
+                        String errorMessage = task.getException() != null
+                                ? task.getException().getMessage()
                                 : "Registration failed";
                         callback.onError(errorMessage);
                     }
@@ -110,7 +110,7 @@ public class AuthRepository {
     private void saveUserToFirestore(String userId, String name, String email, AuthCallback callback) {
         // Normalize email to lowercase for consistent searching
         String normalizedEmail = email.trim().toLowerCase();
-        
+
         Map<String, Object> user = new HashMap<>();
         user.put("userId", userId);
         user.put("name", name);
@@ -126,13 +126,13 @@ public class AuthRepository {
                     callback.onSuccess(firebaseUser);
                 })
                 .addOnFailureListener(e -> {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
+                    String errorMessage = e.getMessage() != null
+                            ? e.getMessage()
                             : "Failed to save user data";
                     callback.onError(errorMessage);
                 });
     }
-    
+
     /**
      * Helper to update user status
      */
@@ -140,7 +140,7 @@ public class AuthRepository {
         Map<String, Object> updates = new HashMap<>();
         updates.put("isOnline", isOnline);
         updates.put("lastSeen", System.currentTimeMillis());
-        
+
         firestore.collection("users").document(userId).update(updates)
                 .addOnFailureListener(e -> {
                     // Log error silently
@@ -157,7 +157,7 @@ public class AuthRepository {
             // Set Offline before signing out
             updateUserStatus(user.getUid(), false);
         }
-        
+
         firebaseAuth.signOut();
         if (callback != null) {
             callback.onLogoutComplete();
@@ -176,9 +176,10 @@ public class AuthRepository {
      */
     public interface AuthCallback {
         void onSuccess(FirebaseUser user);
+
         void onError(String error);
     }
-    
+
     /**
      * Callback interface for logout operations
      */

@@ -12,13 +12,13 @@ public class PinnedMessage {
     private String type;  // Message.TYPE_TEXT, TYPE_IMAGE, TYPE_FILE, TYPE_CALL
     private long pinnedAt;
     private long originalTimestamp;
-    
+
     // Empty constructor for Firestore
     public PinnedMessage() {
     }
-    
-    public PinnedMessage(String messageId, String content, String senderName, String senderId, 
-                        String type, long pinnedAt, long originalTimestamp) {
+
+    public PinnedMessage(String messageId, String content, String senderName, String senderId,
+                         String type, long pinnedAt, long originalTimestamp) {
         this.messageId = messageId;
         this.content = content;
         this.senderName = senderName;
@@ -27,72 +27,73 @@ public class PinnedMessage {
         this.pinnedAt = pinnedAt;
         this.originalTimestamp = originalTimestamp;
     }
-    
+
     // Getters
     public String getMessageId() {
         return messageId;
     }
-    
-    public String getContent() {
-        return content;
-    }
-    
-    public String getSenderName() {
-        return senderName;
-    }
-    
-    public String getSenderId() {
-        return senderId;
-    }
-    
-    public String getType() {
-        return type;
-    }
-    
-    public long getPinnedAt() {
-        return pinnedAt;
-    }
-    
-    public long getOriginalTimestamp() {
-        return originalTimestamp;
-    }
-    
+
     // Setters
     public void setMessageId(String messageId) {
         this.messageId = messageId;
     }
-    
+
+    public String getContent() {
+        return content;
+    }
+
     public void setContent(String content) {
         this.content = content;
     }
-    
+
+    public String getSenderName() {
+        return senderName;
+    }
+
     public void setSenderName(String senderName) {
         this.senderName = senderName;
     }
-    
+
+    public String getSenderId() {
+        return senderId;
+    }
+
     public void setSenderId(String senderId) {
         this.senderId = senderId;
     }
-    
+
+    public String getType() {
+        return type;
+    }
+
     public void setType(String type) {
         this.type = type;
     }
-    
+
+    public long getPinnedAt() {
+        return pinnedAt;
+    }
+
     public void setPinnedAt(long pinnedAt) {
         this.pinnedAt = pinnedAt;
     }
-    
+
+    public long getOriginalTimestamp() {
+        return originalTimestamp;
+    }
+
     public void setOriginalTimestamp(long originalTimestamp) {
         this.originalTimestamp = originalTimestamp;
     }
-    
+
     /**
      * Get display preview based on message type
+     *
      * @return Human-readable preview of the message
      */
     public String getPreview() {
         if (type == null) return content;
-        
+
         switch (type) {
             case Message.TYPE_IMAGE:
                 return "📷 Hình ảnh";
@@ -109,7 +110,7 @@ public class PinnedMessage {
                 return content != null ? content : "";
         }
     }
-    
+
     private String extractFileName(String content) {
         if (content == null) return "File";
         // If content contains '/', get last part

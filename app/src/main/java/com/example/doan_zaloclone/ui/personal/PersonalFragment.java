@@ -25,132 +25,132 @@ import com.example.doan_zaloclone.viewmodel.PersonalViewModel;
  * Displays compact user card and menu items
  */
 public class PersonalFragment extends Fragment {
-    
+
     private PersonalViewModel viewModel;
-    
+
     // Views
     private LinearLayout compactUserCard;
     private ImageView avatarImage;
     private TextView txtDisplayName;
-    
+
     // Menu items
     private View menuQrWallet;
     private View menuSecurity;
     private View menuPrivacy;
     private View menuCloud;
-    
+
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         viewModel = new ViewModelProvider(this).get(PersonalViewModel.class);
     }
-    
+
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, 
-                             @Nullable ViewGroup container, 
+    public View onCreateView(@NonNull LayoutInflater inflater,
+                             @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_personal, container, false);
         return view;
     }
-    
+
     @Override
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
-        
+
         initializeViews(view);
         setupClickListeners();
         setupMenuItems();
         observeViewModel();
-        
+
         // Load current user's profile
         viewModel.loadCurrentUser();
     }
-    
+
     private void initializeViews(View view) {
         // Compact user card views
         compactUserCard = view.findViewById(R.id.compactUserCard);
         avatarImage = view.findViewById(R.id.avatarImage);
         txtDisplayName = view.findViewById(R.id.txtDisplayName);
-        
+
         // Menu views
         menuQrWallet = view.findViewById(R.id.menuQrWallet);
         menuSecurity = view.findViewById(R.id.menuSecurity);
         menuPrivacy = view.findViewById(R.id.menuPrivacy);
         menuCloud = view.findViewById(R.id.menuCloud);
     }
-    
+
     private void setupClickListeners() {
         // Click compact user card to open full profile
         compactUserCard.setOnClickListener(v -> openProfileCard());
     }
-    
+
     private void setupMenuItems() {
         // QR Wallet
-        setupMenuItem(menuQrWallet, R.drawable.ic_qr_code, 
-            "Ví QR", "Lưu trữ và xuất trình các mã QR quan trọng",
-            new QrWalletFragment());
-        
+        setupMenuItem(menuQrWallet, R.drawable.ic_qr_code,
+                "Ví QR", "Lưu trữ và xuất trình các mã QR quan trọng",
+                new QrWalletFragment());
+
         // Account & Security
-        setupMenuItem(menuSecurity, R.drawable.ic_security, 
-            "Tài khoản và bảo mật", "Quản lý thông tin tài khoản",
-            new SecurityFragment());
-        
+        setupMenuItem(menuSecurity, R.drawable.ic_security,
+                "Tài khoản và bảo mật", "Quản lý thông tin tài khoản",
+                new SecurityFragment());
+
         // Privacy
-        setupMenuItem(menuPrivacy, R.drawable.ic_privacy, 
-            "Quyền riêng tư", "Cài đặt quyền riêng tư",
-            new PrivacyFragment());
-        
+        setupMenuItem(menuPrivacy, R.drawable.ic_privacy,
+                "Quyền riêng tư", "Cài đặt quyền riêng tư",
+                new PrivacyFragment());
+
         // My Cloud
-        setupMenuItem(menuCloud, R.drawable.ic_cloud, 
-            "Cloud của tôi", "Lưu trữ các tin nhắn quan trọng",
-            new MyCloudFragment());
+        setupMenuItem(menuCloud, R.drawable.ic_cloud,
+                "Cloud của tôi", "Lưu trữ các tin nhắn quan trọng",
+                new MyCloudFragment());
     }
-    
+
     private void setupMenuItem(View menuView, int iconRes, String title, String description, Fragment targetFragment) {
         ImageView icon = menuView.findViewById(R.id.menuIcon);
         TextView titleView = menuView.findViewById(R.id.menuTitle);
         TextView descView = menuView.findViewById(R.id.menuDescription);
-        
+
         icon.setImageResource(iconRes);
         titleView.setText(title);
         descView.setText(description);
-        
+
         // Navigate to placeholder fragment
         menuView.setOnClickListener(v -> {
             requireActivity().getSupportFragmentManager()
-                .beginTransaction()
-                .replace(R.id.fragmentContainer, targetFragment)
-                .addToBackStack(null)
-                .commit();
+                    .beginTransaction()
+                    .replace(R.id.fragmentContainer, targetFragment)
+                    .addToBackStack(null)
+                    .commit();
         });
     }
-    
+
     private void observeViewModel() {
         // Observe current user data
         viewModel.getCurrentUser().observe(getViewLifecycleOwner(), resource -> {
             if (resource == null) return;
-            
+
             if (resource.isSuccess()) {
                 User user = resource.getData();
                 if (user != null) {
                     updateUI(user);
                 }
             } else if (resource.isError()) {
-                Toast.makeText(requireContext(), 
-                    "Lỗi tải thông tin: " + resource.getMessage(), 
-                    Toast.LENGTH_SHORT).show();
+                Toast.makeText(requireContext(),
+                        "Lỗi tải thông tin: " + resource.getMessage(),
+                        Toast.LENGTH_SHORT).show();
             }
         });
     }
-    
+
     private void openProfileCard() {
         Intent intent = new Intent(requireContext(), ProfileCardActivity.class);
         // Don't need to pass userId, ProfileCardActivity will use current user
         intent.putExtra(ProfileCardActivity.EXTRA_IS_EDITABLE, true);
         startActivity(intent);
     }
-    
+
     private void updateUI(User user) {
         // Update name
         if (user.getName() != null && !user.getName().isEmpty()) {
@@ -158,13 +158,13 @@ public class PersonalFragment extends Fragment {
         } else {
             txtDisplayName.setText("Người dùng");
         }
-        
+
         // Update avatar
         if (user.getAvatarUrl() != null && !user.getAvatarUrl().isEmpty()) {
             Glide.with(this)
-                .load(user.getAvatarUrl())
-                .placeholder(R.drawable.ic_avatar)
-                .into(avatarImage);
+                    .load(user.getAvatarUrl())
+                    .placeholder(R.drawable.ic_avatar)
+                    .into(avatarImage);
         }
     }
 }

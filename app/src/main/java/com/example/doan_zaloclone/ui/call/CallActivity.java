@@ -1,51 +1,42 @@
 package com.example.doan_zaloclone.ui.call;
 
-import android.Manifest;
+import android.app.PictureInPictureParams;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.media.AudioManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.IBinder;
-import android.app.PictureInPictureParams;
-import android.content.res.Configuration;
-import android.util.Rational;
-import android.provider.Settings;
 import android.os.Handler;
+import android.os.IBinder;
 import android.os.Looper;
 import android.util.Log;
+import android.util.Rational;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
-import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
 import androidx.lifecycle.ViewModelProvider;
 
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Call;
 import com.example.doan_zaloclone.services.OngoingCallService;
 import com.example.doan_zaloclone.utils.PermissionHelper;
-import com.example.doan_zaloclone.utils.Resource;
 import com.example.doan_zaloclone.viewmodel.CallViewModel;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import org.webrtc.EglBase;
-import org.webrtc.MediaStream;
 import org.webrtc.SurfaceViewRenderer;
 import org.webrtc.VideoTrack;
 
@@ -54,8 +45,6 @@ import org.webrtc.VideoTrack;
  * Supports incoming, outgoing, and ongoing call states
  */
 public class CallActivity extends AppCompatActivity {
-    private static final String TAG = "CallActivity";
-
     // Intent extras
     public static final String EXTRA_CALL_ID = "call_id";
     public static final String EXTRA_IS_INCOMING = "is_incoming";
@@ -64,7 +53,7 @@ public class CallActivity extends AppCompatActivity {
     public static final String EXTRA_CALLER_ID = "caller_id";
     public static final String EXTRA_RECEIVER_ID = "receiver_id";
     public static final String EXTRA_CALLER_NAME = "caller_name";
-
+    private static final String TAG = "CallActivity";
     // UI Components
     private View callerInfoContainer;  // Container holding avatar, name, status
     private ImageView callerAvatar;
@@ -120,12 +109,31 @@ public class CallActivity extends AppCompatActivity {
 
     // Audio
     private AudioManager audioManager;
-
+    // Audio routing
+    private final BroadcastReceiver audioDeviceChangeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
+                // Headphones unplugged
+                Log.d(TAG, "Headphones unplugged");
+                configureAudioRouting();
+            } else if (AudioManager.ACTION_HEADSET_PLUG.equals(intent.getAction())) {
+                // Wired headset plugged/unplugged
+                int state = intent.getIntExtra("state", -1);
+                if (state == 1) {
+                    Log.d(TAG, "Wired headset connected");
+                } else if (state == 0) {
+                    Log.d(TAG, "Wired headset disconnected");
+                }
+                configureAudioRouting();
+            }
+        }
+    };
     // Proximity Sensor
     private SensorManager sensorManager;
     private Sensor proximitySensor;
     private boolean isProximityNear = false;
-    private SensorEventListener proximitySensorListener = new SensorEventListener() {
+    private final SensorEventListener proximitySensorListener = new SensorEventListener() {
         @Override
         public void onSensorChanged(SensorEvent event) {
             if (event.sensor.getType() == Sensor.TYPE_PROXIMITY) {
@@ -145,11 +153,10 @@ public class CallActivity extends AppCompatActivity {
             // Not needed
         }
     };
-
     // OngoingCallService
     private OngoingCallService ongoingCallService;
     private boolean serviceBound = false;
-    private ServiceConnection serviceConnection = new ServiceConnection() {
+    private final ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             OngoingCallService.LocalBinder binder = (OngoingCallService.LocalBinder) service;
@@ -163,27 +170,6 @@ public class CallActivity extends AppCompatActivity {
             ongoingCallService = null;
             serviceBound = false;
             Log.d(TAG, "OngoingCallService unbound");
-        }
-    };
-
-    // Audio routing
-    private BroadcastReceiver audioDeviceChangeReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            if (AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(intent.getAction())) {
-                // Headphones unplugged
-                Log.d(TAG, "Headphones unplugged");
-                configureAudioRouting();
-            } else if (AudioManager.ACTION_HEADSET_PLUG.equals(intent.getAction())) {
-                // Wired headset plugged/unplugged
-                int state = intent.getIntExtra("state", -1);
-                if (state == 1) {
-                    Log.d(TAG, "Wired headset connected");
-                } else if (state == 0) {
-                    Log.d(TAG, "Wired headset disconnected");
-                }
-                configureAudioRouting();
-            }
         }
     };
 
@@ -426,12 +412,19 @@ public class CallActivity extends AppCompatActivity {
 
     private void setupObservers() {
         // Observe current call
+        // Observe current call
         callViewModel.getCurrentCall().observe(this, resource -> {
             if (resource.isLoading()) {
                 Log.d(TAG, "Loading call...");
             } else if (resource.isSuccess()) {
                 Call call = resource.getData();
                 if (call != null) {
+                    // Sync call start time from server to ensure consistent duration across devices
+                    if (call.getConnectedAt() > 0 && callStartTime != call.getConnectedAt()) {
+                        Log.d(TAG, "Syncing call start time from server: " + call.getConnectedAt());
+                        callStartTime = call.getConnectedAt();
+                    }
+                    
                     updateUIForCallStatus(call.getStatus());
                 }
             } else if (resource.isError()) {
@@ -554,7 +547,7 @@ public class CallActivity extends AppCompatActivity {
 
             // Log call history as MISSED from receiver's perspective
             if (conversationId != null) {
-                Log.d(TAG, "========== REJECT CALL - LOGGING ==========="  );
+                Log.d(TAG, "========== REJECT CALL - LOGGING ===========");
                 Log.d(TAG, "Logging MISSED call history (rejected by receiver)");
                 Log.d(TAG, "isIncoming (should be TRUE): " + isIncoming);
                 Log.d(TAG, "conversationId: " + conversationId);
@@ -896,7 +889,20 @@ public class CallActivity extends AppCompatActivity {
     }
 
     private void startDurationTimer() {
-        callStartTime = System.currentTimeMillis();
+        // Initialize start time if not set
+        if (callStartTime == 0) {
+            long connectedAt = 0;
+            if (callViewModel.getCurrentCall().getValue() != null && 
+                callViewModel.getCurrentCall().getValue().getData() != null) {
+                connectedAt = callViewModel.getCurrentCall().getValue().getData().getConnectedAt();
+            }
+            
+            if (connectedAt > 0) {
+                callStartTime = connectedAt;
+            } else {
+                callStartTime = System.currentTimeMillis();
+            }
+        }
         durationHandler = new Handler(Looper.getMainLooper());
         durationRunnable = new Runnable() {
             @Override

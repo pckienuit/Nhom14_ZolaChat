@@ -63,125 +63,125 @@ public class StickerPack {
         return id;
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public String getIconUrl() {
-        return iconUrl;
-    }
-
-    public String getBannerUrl() {
-        return bannerUrl;
-    }
-
-    public String getCreatorId() {
-        return creatorId;
-    }
-
-    public String getCreatorName() {
-        return creatorName;
-    }
-
-    public String getType() {
-        return type;
-    }
-
-    public int getStickerCount() {
-        return stickerCount;
-    }
-
-    public long getDownloadCount() {
-        return downloadCount;
-    }
-
-    public long getCreatedAt() {
-        return createdAt;
-    }
-
-    public long getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public boolean isPublished() {
-        return isPublished;
-    }
-
-    public boolean isFree() {
-        return isFree;
-    }
-
-    public double getPrice() {
-        return price;
-    }
-
-    public List<String> getSampleStickerUrls() {
-        return sampleStickerUrls;
-    }
-
     // Setters (for Firestore)
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getName() {
+        return name;
     }
 
     public void setName(String name) {
         this.name = name;
     }
 
+    public String getDescription() {
+        return description;
+    }
+
     public void setDescription(String description) {
         this.description = description;
+    }
+
+    public String getIconUrl() {
+        return iconUrl;
     }
 
     public void setIconUrl(String iconUrl) {
         this.iconUrl = iconUrl;
     }
 
+    public String getBannerUrl() {
+        return bannerUrl;
+    }
+
     public void setBannerUrl(String bannerUrl) {
         this.bannerUrl = bannerUrl;
+    }
+
+    public String getCreatorId() {
+        return creatorId;
     }
 
     public void setCreatorId(String creatorId) {
         this.creatorId = creatorId;
     }
 
+    public String getCreatorName() {
+        return creatorName;
+    }
+
     public void setCreatorName(String creatorName) {
         this.creatorName = creatorName;
+    }
+
+    public String getType() {
+        return type;
     }
 
     public void setType(String type) {
         this.type = type;
     }
 
+    public int getStickerCount() {
+        return stickerCount;
+    }
+
     public void setStickerCount(int stickerCount) {
         this.stickerCount = stickerCount;
+    }
+
+    public long getDownloadCount() {
+        return downloadCount;
     }
 
     public void setDownloadCount(long downloadCount) {
         this.downloadCount = downloadCount;
     }
 
+    public long getCreatedAt() {
+        return createdAt;
+    }
+
     public void setCreatedAt(long createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public long getUpdatedAt() {
+        return updatedAt;
     }
 
     public void setUpdatedAt(long updatedAt) {
         this.updatedAt = updatedAt;
     }
 
+    public boolean isPublished() {
+        return isPublished;
+    }
+
     public void setPublished(boolean published) {
         isPublished = published;
+    }
+
+    public boolean isFree() {
+        return isFree;
     }
 
     public void setFree(boolean free) {
         isFree = free;
     }
 
+    public double getPrice() {
+        return price;
+    }
+
     public void setPrice(double price) {
         this.price = price;
+    }
+
+    public List<String> getSampleStickerUrls() {
+        return sampleStickerUrls;
     }
 
     public void setSampleStickerUrls(List<String> sampleStickerUrls) {
