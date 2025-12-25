@@ -251,4 +251,97 @@ public interface ApiService {
     
     @POST("stickers/packs")
     Call<ApiResponse<Void>> createStickerPack(@Body Map<String, Object> packData);
+    
+    // ========== Group Management (Phase 4A - 3D) ==========
+    
+    // Update group info (name, avatar)
+    @PUT("conversations/{id}")
+    Call<Map<String, Object>> updateConversation(
+        @Path("id") String conversationId,
+        @Body Map<String, Object> updates
+    );
+    
+    // Add member to group
+    @POST("conversations/{id}/members")
+    Call<Map<String, Object>> addMember(
+        @Path("id") String conversationId,
+        @Body Map<String, Object> data
+    );
+    
+    // Remove member from group
+    @DELETE("conversations/{id}/members/{userId}")
+    Call<Map<String, Object>> removeMember(
+        @Path("id") String conversationId,
+        @Path("userId") String userId
+    );
+    
+    // Leave group
+    @POST("conversations/{id}/leave")
+    Call<Map<String, Object>> leaveGroup(@Path("id") String conversationId);
+    
+    // Promote/demote admin
+    @PUT("conversations/{id}/admins")
+    Call<Map<String, Object>> updateAdmins(
+        @Path("id") String conversationId,
+        @Body Map<String, Object> data
+    );
+    
+    // ========== Conversation Settings (Phase 4A - 3E) ==========
+    
+    // Archive/unarchive conversation
+    @PUT("conversations/{id}/archive")
+    Call<Map<String, Object>> archiveConversation(
+        @Path("id") String conversationId,
+        @Body Map<String, Object> data
+    );
+    
+    // Mute/unmute conversation
+    @PUT("conversations/{id}/mute")
+    Call<Map<String, Object>> muteConversation(
+        @Path("id") String conversationId,
+        @Body Map<String, Object> data
+    );
+    
+    // Pin/unpin conversation
+    @PUT("conversations/{id}/pin")
+    Call<Map<String, Object>> pinConversation(
+        @Path("id") String conversationId,
+        @Body Map<String, Object> data
+    );
+    
+    // Delete conversation (soft delete)
+    @DELETE("conversations/{id}/user")
+    Call<Map<String, Object>> deleteConversation(@Path("id") String conversationId);
+    
+    // Get user's conversation settings
+    @GET("conversations/{id}/settings")
+    Call<Map<String, Object>> getConversationSettings(@Path("id") String conversationId);
+    
+    // ========== Search & Filter (Phase 4A - 3F) ==========
+    
+    // Search conversations by name
+    @GET("conversations/search")
+    Call<Map<String, Object>> searchConversations(
+        @Query("query") String query,
+        @Query("limit") Integer limit
+    );
+    
+    // Search messages in conversation
+    @GET("conversations/{id}/messages/search")
+    Call<Map<String, Object>> searchMessages(
+        @Path("id") String conversationId,
+        @Query("query") String query,
+        @Query("limit") Integer limit,
+        @Query("offset") Integer offset
+    );
+    
+    // Filter conversations
+    @GET("conversations/filter")
+    Call<Map<String, Object>> filterConversations(
+        @Query("type") String type,
+        @Query("archived") String archived,
+        @Query("muted") String muted,
+        @Query("pinned") String pinned,
+        @Query("limit") Integer limit
+    );
 }
