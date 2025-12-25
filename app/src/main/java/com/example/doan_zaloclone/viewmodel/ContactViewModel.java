@@ -174,6 +174,16 @@ public class ContactViewModel extends BaseViewModel {
                                                     @NonNull String userId2) {
         return friendRepository.removeFriend(userId1, userId2);
     }
+    
+    /**
+     * Cancel/recall a sent friend request
+     *
+     * @param request The request to cancel
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> cancelFriendRequest(@NonNull FriendRequest request) {
+        return friendRepository.cancelFriendRequest(request.getId());
+    }
 
     @Override
     protected void onCleared() {

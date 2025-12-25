@@ -160,6 +160,17 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
             }
+            
+            @Override
+            public void onFriendRequestCancelled(String senderId) {
+                runOnUiThread(() -> {
+                    android.util.Log.d("MainActivity", "Friend request cancelled by sender: " + senderId);
+                    // Notify fragment if active
+                    if (contactFragment != null && contactFragment.isAdded()) {
+                        contactFragment.onFriendEventReceived("CANCELLED", senderId);
+                    }
+                });
+            }
 
             @Override
             public void onFriendAdded(String userId) {

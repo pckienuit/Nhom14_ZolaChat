@@ -104,6 +104,18 @@ public class FriendRequestReceivedFragment extends Fragment implements FriendReq
             public void onFriendRequestRejected(String userId) {
                 // Not relevant for received requests
             }
+            
+            @Override
+            public void onFriendRequestCancelled(String senderId) {
+                // Sender cancelled their request - reload to remove from list
+                android.util.Log.d("FriendRequestReceived", "Request cancelled by sender: " + senderId);
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        Toast.makeText(getContext(), "Lời mời kết bạn đã bị thu hồi", Toast.LENGTH_SHORT).show();
+                        loadRequests();
+                    });
+                }
+            }
 
             @Override
             public void onFriendAdded(String userId) {

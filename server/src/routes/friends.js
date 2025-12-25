@@ -228,4 +228,50 @@ router.delete('/:friendId', authenticateUser, async (req, res) => {
   }
 });
 
+// DELETE /friends/requests/:requestId - Cancel/recall a sent friend request
+router.delete('/requests/:requestId', authenticateUser, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    
+    // Get the friend request
+    const requestDoc = await db.collection('friendRequests').doc(requestId).get();
+    
+    if (!requestDoc.exists) {
+      return res.status(404).json({ error: 'Friend request not found' });
+    }
+    
+    const requestData = requestDoc.data();
+    
+    // Verify the current user is the sender
+    if (requestData.senderId !== req.user.uid) {
+      return res.status(403).json({ error: 'You can only cancel your own friend requests' });
+    }
+    
+    // Verify status is still pending
+    if (requestData.status !== 'pending') {
+      return res.status(400).json({ error: 'Can only cancel pending requests' });
+    }
+    
+    // Delete the friend request
+    await db.collection('friendRequests').doc(requestId).delete();
+    
+    // Notify receiver via WebSocket that the request was cancelled
+    const io = req.app.get('io');
+    if (io) {
+      console.log(`🔔 Emitting friend_request_cancelled to user:${requestData.receiverId}`);
+      io.to(`user:${requestData.receiverId}`).emit('friend_request_cancelled', {
+        requestId: requestId,
+        senderId: req.user.uid
+      });
+    }
+    
+    console.log(`✅ Friend request cancelled: ${requestId}`);
+    res.json({ success: true, message: 'Friend request cancelled' });
+    
+  } catch (error) {
+    console.error('❌ Error cancelling friend request:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

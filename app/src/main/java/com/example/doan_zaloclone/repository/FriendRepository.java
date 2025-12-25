@@ -355,6 +355,47 @@ public class FriendRepository {
 
         return result;
     }
+    
+    /**
+     * Cancel/recall a sent friend request
+     *
+     * @param requestId ID of the friend request to cancel
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> cancelFriendRequest(@NonNull String requestId) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+
+        Call<ApiResponse<Void>> call = apiService.cancelFriendRequest(requestId);
+        call.enqueue(new Callback<ApiResponse<Void>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+                if (response.isSuccessful()) {
+                    Log.d(TAG, "✅ Friend request cancelled: " + requestId);
+                    result.setValue(Resource.success(true));
+                } else {
+                    String errorMsg = "HTTP " + response.code();
+                    try {
+                        if (response.errorBody() != null) {
+                            errorMsg = response.errorBody().string();
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error reading error body", e);
+                    }
+                    Log.e(TAG, "Failed to cancel friend request: " + errorMsg);
+                    result.setValue(Resource.error(errorMsg));
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+                Log.e(TAG, "Failed to cancel friend request", t);
+                result.setValue(Resource.error(t.getMessage()));
+            }
+        });
+
+        return result;
+    }
 
     /**
      * Check if two users are friends

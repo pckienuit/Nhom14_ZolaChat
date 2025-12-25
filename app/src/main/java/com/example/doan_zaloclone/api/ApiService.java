@@ -236,6 +236,9 @@ public interface ApiService {
 
     @DELETE("friends/{friendId}")
     Call<ApiResponse<Void>> unfriend(@Path("friendId") String friendId);
+    
+    @DELETE("friends/requests/{requestId}")
+    Call<ApiResponse<Void>> cancelFriendRequest(@Path("requestId") String requestId);
 
     // ========== Stickers ==========
 

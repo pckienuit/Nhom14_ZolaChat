@@ -450,6 +450,24 @@ public class SocketManager {
                 }
             }
         });
+        
+        // Friend request cancelled event (sender cancelled their request)
+        socket.on("friend_request_cancelled", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String senderId = data.getString("senderId");
+
+                    Log.d(TAG, "🔔 Friend request cancelled by sender: " + senderId);
+
+                    for (OnFriendEventListener listener : friendEventListeners) {
+                        listener.onFriendRequestCancelled(senderId);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing friend_request_cancelled event", e);
+                }
+            }
+        });
 
         // ========== Phase 4B: Group Management Events ==========
 
@@ -763,6 +781,8 @@ public class SocketManager {
         void onFriendRequestAccepted(String userId);
 
         void onFriendRequestRejected(String userId);
+        
+        void onFriendRequestCancelled(String senderId);
 
         void onFriendAdded(String userId);
 

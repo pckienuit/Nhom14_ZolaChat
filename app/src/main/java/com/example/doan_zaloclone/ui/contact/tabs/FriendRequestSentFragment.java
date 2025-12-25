@@ -109,6 +109,11 @@ public class FriendRequestSentFragment extends Fragment implements FriendRequest
                     });
                 }
             }
+            
+            @Override
+            public void onFriendRequestCancelled(String senderId) {
+                // Not relevant - we are the sender, we already know
+            }
 
             @Override
             public void onFriendAdded(String userId) {
@@ -154,9 +159,29 @@ public class FriendRequestSentFragment extends Fragment implements FriendRequest
 
     @Override
     public void onRecall(FriendRequest request) {
-        // Implement recall logic
-        // If API supports 'cancel', use it. Otherwise 'reject' or 'unfriend' might work depending on backend.
-        // For now, show toast
-        Toast.makeText(getContext(), "Tính năng thu hồi đang phát triển", Toast.LENGTH_SHORT).show();
+        // Show confirmation dialog before cancelling
+        if (getContext() == null) return;
+        
+        new androidx.appcompat.app.AlertDialog.Builder(getContext())
+                .setTitle("Thu hồi lời mời")
+                .setMessage("Bạn có chắc muốn thu hồi lời mời kết bạn gửi đến " + 
+                        (request.getToUserName() != null ? request.getToUserName() : "người này") + "?")
+                .setPositiveButton("Thu hồi", (dialog, which) -> {
+                    // Call ViewModel to cancel the request
+                    viewModel.cancelFriendRequest(request).observe(getViewLifecycleOwner(), resource -> {
+                        if (resource.getStatus() == Resource.Status.SUCCESS) {
+                            Toast.makeText(getContext(), "Đã thu hồi lời mời", Toast.LENGTH_SHORT).show();
+                            // Reload the list
+                            loadRequests();
+                        } else if (resource.getStatus() == Resource.Status.ERROR) {
+                            Toast.makeText(getContext(), "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                        } else if (resource.getStatus() == Resource.Status.LOADING) {
+                            // Could show a progress indicator here
+                            android.util.Log.d("FriendRequestSent", "Cancelling request...");
+                        }
+                    });
+                })
+                .setNegativeButton("Huỷ", null)
+                .show();
     }
 }

@@ -114,6 +114,11 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             public void onFriendRequestRejected(String userId) {
                 // Not relevant for friends list
             }
+            
+            @Override
+            public void onFriendRequestCancelled(String senderId) {
+                // Not relevant for friends list
+            }
 
             @Override
             public void onFriendAdded(String userId) {
