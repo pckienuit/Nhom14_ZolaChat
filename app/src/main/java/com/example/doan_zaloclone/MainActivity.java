@@ -140,7 +140,6 @@ public class MainActivity extends AppCompatActivity {
         // Observe WebSocket events for real-time badge updates
         friendRepository.getFriendRequestRefreshNeeded().observe(this, needsRefresh -> {
             if (needsRefresh != null && needsRefresh) {
-                Log.d("MainActivity", "Friend request refresh needed - updating badge");
                 loadFriendRequestsCount(userId);
             }
         });
@@ -153,7 +152,6 @@ public class MainActivity extends AppCompatActivity {
         friendRepository.getFriendRequests(userId).observe(this, resource -> {
             if (resource != null && resource.isSuccess() && resource.getData() != null) {
                 int count = resource.getData().size();
-                Log.d("MainActivity", "Friend requests count loaded: " + count);
                 updateContactBadge(count);
             }
         });
@@ -176,7 +174,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFriendRequestReceived(String senderId, String senderName) {
                 runOnUiThread(() -> {
-                    android.util.Log.d("MainActivity", "New friend request from: " + senderName);
                     Toast.makeText(MainActivity.this, senderName + " sent you a friend request!", Toast.LENGTH_SHORT).show();
                     // Update badge immediately
                     refreshFriendRequestsBadge();
@@ -190,7 +187,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFriendRequestAccepted(String userId) {
                 runOnUiThread(() -> {
-                    android.util.Log.d("MainActivity", "Friend request accepted by: " + userId);
                     Toast.makeText(MainActivity.this, "Friend request accepted!", Toast.LENGTH_SHORT).show();
                     // Update badge immediately
                     refreshFriendRequestsBadge();
@@ -204,7 +200,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFriendRequestRejected(String userId) {
                 runOnUiThread(() -> {
-                    android.util.Log.d("MainActivity", "Friend request rejected by: " + userId);
                     Toast.makeText(MainActivity.this, "Friend request was rejected", Toast.LENGTH_SHORT).show();
                     // Update badge immediately
                     refreshFriendRequestsBadge();
@@ -218,7 +213,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFriendRequestCancelled(String senderId) {
                 runOnUiThread(() -> {
-                    android.util.Log.d("MainActivity", "Friend request cancelled by sender: " + senderId);
                     // Update badge immediately
                     refreshFriendRequestsBadge();
                     // Notify fragment if active
@@ -231,7 +225,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFriendAdded(String userId) {
                 runOnUiThread(() -> {
-                    android.util.Log.d("MainActivity", "New friend added: " + userId);
                     if (contactFragment != null && contactFragment.isAdded()) {
                         contactFragment.onFriendEventReceived("ADDED", userId);
                     }
@@ -241,7 +234,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFriendRemoved(String userId) {
                 runOnUiThread(() -> {
-                    android.util.Log.d("MainActivity", "Friend removed: " + userId);
                     Toast.makeText(MainActivity.this, "Friend removed", Toast.LENGTH_SHORT).show();
                     if (contactFragment != null && contactFragment.isAdded()) {
                         contactFragment.onFriendEventReceived("REMOVED", userId);
@@ -252,7 +244,6 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFriendStatusChanged(String friendId, boolean isOnline) {
                 // Online status updates are handled in ContactFragment directly
-                android.util.Log.d("MainActivity", "Friend " + friendId + " status: " + (isOnline ? "online" : "offline"));
             }
         });
     }
@@ -532,7 +523,6 @@ public class MainActivity extends AppCompatActivity {
      * Called from HomeFragment when conversations are loaded
      */
     public void updateMessagesBadge(int totalUnread) {
-        Log.d("MainActivity", "updateMessagesBadge called with: " + totalUnread);
         if (badgeMessages != null) {
             if (totalUnread > 0) {
                 badgeMessages.setVisibility(View.VISIBLE);
@@ -544,8 +534,6 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 badgeMessages.setVisibility(View.GONE);
             }
-        } else {
-            Log.e("MainActivity", "badgeMessages is NULL");
         }
     }
 
@@ -554,7 +542,6 @@ public class MainActivity extends AppCompatActivity {
      * Called from ContactFragment
      */
     public void updateContactBadge(int count) {
-        Log.d("MainActivity", "updateContactBadge called with: " + count);
         if (badgeContact != null) {
             if (count > 0) {
                 badgeContact.setVisibility(View.VISIBLE);
@@ -566,8 +553,6 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 badgeContact.setVisibility(View.GONE);
             }
-        } else {
-            Log.e("MainActivity", "badgeContact is NULL");
         }
     }
     

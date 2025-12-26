@@ -2,7 +2,6 @@ package com.example.doan_zaloclone.ui.contact;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -63,7 +62,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        Log.d("ContactFragment", "onCreateView called");
         View view = inflater.inflate(R.layout.fragment_contact, container, false);
 
         // Initialize ViewModel
@@ -97,7 +95,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     @Override
     public void onResume() {
         super.onResume();
-        Log.d("ContactFragment", "onResume called - loading friends and updating badge");
         // Load friends when fragment becomes visible (critical for show/hide pattern)
         loadFriends();
         // Also refresh friend request count to update badge
@@ -116,7 +113,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             @Override
             public void onFriendRequestReceived(String senderId, String senderName) {
                 // Reload friend request count when receiving new request
-                Log.d("ContactFragment", "Friend request received from: " + senderName);
                 if (getActivity() != null && shouldProcessEvent()) {
                     getActivity().runOnUiThread(() -> {
                         loadFriendRequestsCount();
@@ -127,7 +123,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             @Override
             public void onFriendRequestAccepted(String userId) {
                 // When someone accepts our request, we become friends - reload list
-                Log.d("ContactFragment", "Friend request accepted by: " + userId + ", reloading friends");
                 if (getActivity() != null && shouldProcessEvent()) {
                     getActivity().runOnUiThread(() -> {
                         Toast.makeText(getContext(), "Đã trở thành bạn bè!", Toast.LENGTH_SHORT).show();
@@ -156,7 +151,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             @Override
             public void onFriendAdded(String userId) {
                 // New friend added - reload list
-                Log.d("ContactFragment", "Friend added: " + userId + ", reloading friends");
                 if (getActivity() != null && shouldProcessEvent()) {
                     getActivity().runOnUiThread(() -> {
                         loadFriends();
@@ -168,7 +162,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             @Override
             public void onFriendRemoved(String userId) {
                 // Friend removed - reload list
-                Log.d("ContactFragment", "Friend removed: " + userId + ", reloading friends");
                 if (getActivity() != null && shouldProcessEvent()) {
                     getActivity().runOnUiThread(() -> {
                         Toast.makeText(getContext(), "Đã xóa bạn bè", Toast.LENGTH_SHORT).show();
@@ -180,7 +173,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             @Override
             public void onFriendStatusChanged(String friendId, boolean isOnline) {
                 // Friend online/offline status changed - update UI
-                Log.d("ContactFragment", "Friend " + friendId + " status changed: " + (isOnline ? "online" : "offline"));
                 if (getActivity() != null) {
                     getActivity().runOnUiThread(() -> {
                         updateFriendOnlineStatus(friendId, isOnline);
@@ -315,11 +307,9 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 }
             }
             friendsAdapter.updateFriends(onlineFriends);
-            Log.d("ContactFragment", "Filtered to " + onlineFriends.size() + " online friends");
         } else {
             // Show all friends
             friendsAdapter.updateFriends(allFriendsList);
-            Log.d("ContactFragment", "Showing all " + allFriendsList.size() + " friends");
         }
     }
     
@@ -402,7 +392,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             if (resource.isSuccess()) {
                 List<User> friends = resource.getData();
                 if (friends != null) {
-                    Log.d("ContactFragment", "Friends loaded: " + friends.size());
                     friendsAdapter.updateFriends(friends);
                     friendsRecyclerView.requestLayout();
                 }
@@ -574,7 +563,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         if (firebaseAuth.getCurrentUser() == null) return;
 
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
-        Log.d("ContactFragment", "Loading friends for user: " + currentUserId);
 
         // Force reload friends
         contactViewModel.loadFriends(currentUserId);
@@ -586,8 +574,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             if (resource.isSuccess()) {
                 List<User> friends = resource.getData();
                 if (friends != null) {
-                    Log.d("ContactFragment", "Friends reloaded: " + friends.size());
-                    
                     // Cache all friends for filtering
                     allFriendsList = new ArrayList<>(friends);
                     
@@ -597,8 +583,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                     // Update real-time counts
                     updateFriendCounts(friends);
                 }
-            } else if (resource.isError()) {
-                Log.e("ContactFragment", "Error loading friends: " + resource.getMessage());
             }
         });
     }
@@ -610,22 +594,13 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         if (firebaseAuth.getCurrentUser() == null) return;
         
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
-        Log.d("ContactFragment", "Loading friend requests for user: " + currentUserId);
         
         contactViewModel.getFriendRequests(currentUserId).observe(getViewLifecycleOwner(), resource -> {
-            if (resource == null) {
-                Log.d("ContactFragment", "Friend requests resource is null");
-                return;
-            }
+            if (resource == null) return;
             
-            if (resource.isLoading()) {
-                Log.d("ContactFragment", "Loading friend requests...");
-            } else if (resource.isSuccess() && resource.getData() != null) {
+            if (resource.isSuccess() && resource.getData() != null) {
                 int count = resource.getData().size();
-                Log.d("ContactFragment", "Friend requests count: " + count);
                 updateFriendRequestCount(count);
-            } else if (resource.isError()) {
-                Log.e("ContactFragment", "Error loading friend requests: " + resource.getMessage());
             }
         });
     }
@@ -671,12 +646,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 .filter(user -> user.isOnline())
                 .count();
         
-        // Debug log to check online status
-        Log.d("ContactFragment", "Total friends: " + totalFriends + ", Online: " + onlineFriends);
-        for (User friend : friends) {
-            Log.d("ContactFragment", "Friend " + friend.getName() + " isOnline: " + friend.isOnline());
-        }
-        
         if (chipAllFriends != null) {
             chipAllFriends.setText("Tất cả " + totalFriends);
         }
@@ -691,7 +660,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
      */
     private void updateFriendOnlineStatus(String friendId, boolean isOnline) {
         if (allFriendsList == null || allFriendsList.isEmpty()) {
-            Log.d("ContactFragment", "allFriendsList is empty, cannot update status");
             return;
         }
         
@@ -700,7 +668,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             if (friend.getId() != null && friend.getId().equals(friendId)) {
                 friend.setOnline(isOnline);
                 found = true;
-                Log.d("ContactFragment", "Updated " + friend.getName() + " isOnline to " + isOnline);
                 break;
             }
         }
@@ -808,8 +775,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
      * @param userId    The user ID involved in the event
      */
     public void onFriendEventReceived(String eventType, String userId) {
-        Log.e("ContactFragment", "🔔 onFriendEventReceived: " + eventType + " for user: " + userId);
-        
         // Simplified event handling for now
         reloadFriendData();
         
