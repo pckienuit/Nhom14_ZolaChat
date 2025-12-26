@@ -41,6 +41,7 @@ public class ProfileCardActivity extends AppCompatActivity {
 
     private PersonalViewModel viewModel;
     private FriendRepository friendRepository;
+    private com.example.doan_zaloclone.repository.UserRepository userRepository;
     private ProgressDialog progressDialog;
     private String userId;
     private String currentUserId;
@@ -90,6 +91,7 @@ public class ProfileCardActivity extends AppCompatActivity {
 
         viewModel = new ViewModelProvider(this).get(PersonalViewModel.class);
         friendRepository = new FriendRepository();
+        userRepository = new com.example.doan_zaloclone.repository.UserRepository();
 
         // Load the specific user (not just current user)
         if (userId != null) {
@@ -182,9 +184,11 @@ public class ProfileCardActivity extends AppCompatActivity {
         // Add options
         if (isEditable) {
             // Self profile options
+            popup.getMenu().add("Chia sẻ QR code");
             popup.getMenu().add("Cập nhật thông tin");
         } else {
             // Other user profile options
+            popup.getMenu().add("Chia sẻ trang cá nhân");
             if (areFriends) {
                  popup.getMenu().add("Xóa bạn bè");
             }
@@ -194,18 +198,181 @@ public class ProfileCardActivity extends AppCompatActivity {
 
         popup.setOnMenuItemClickListener(item -> {
             String title = item.getTitle().toString();
-            if (title.equals("Xóa bạn bè")) {
-                showDeleteFriendConfirmation();
-                return true;
-            } else if (title.equals("Cập nhật thông tin")) {
-                showEditNameDialog(); // Reuse existing dialog flow or create a new general one
-                return true;
+            switch (title) {
+                case "Chia sẻ trang cá nhân":
+                    shareProfile();
+                    return true;
+                case "Chia sẻ QR code":
+                    shareQRCode();
+                    return true;
+                case "Xóa bạn bè":
+                    showDeleteFriendConfirmation();
+                    return true;
+                case "Chặn người này":
+                    showBlockConfirmation();
+                    return true;
+                case "Báo xấu":
+                    showReportDialog();
+                    return true;
+                case "Cập nhật thông tin":
+                    showEditNameDialog();
+                    return true;
+                default:
+                    Toast.makeText(this, "Tính năng " + title + " đang phát triển", Toast.LENGTH_SHORT).show();
+                    return false;
             }
-            Toast.makeText(this, "Tính năng " + title + " đang phát triển", Toast.LENGTH_SHORT).show();
-            return false;
         });
         
         popup.show();
+    }
+
+    /**
+     * Share profile link or QR code
+     */
+    private void shareProfile() {
+        // Get user from ViewModel
+        viewModel.getCurrentUser().observe(this, resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                User user = resource.getData();
+                String userName = user.getName() != null ? user.getName() : "Người dùng";
+                
+                String shareText = "Trang cá nhân: " + userName + "\n" +
+                                  "ID: " + userId + "\n" +
+                                  "Zalo: zalo://user/" + userId;
+                
+                android.content.Intent shareIntent = new android.content.Intent(android.content.Intent.ACTION_SEND);
+                shareIntent.setType("text/plain");
+                shareIntent.putExtra(android.content.Intent.EXTRA_TEXT, shareText);
+                shareIntent.putExtra(android.content.Intent.EXTRA_SUBJECT, "Trang cá nhân Zalo");
+                
+                startActivity(android.content.Intent.createChooser(shareIntent, "Chia sẻ qua"));
+            }
+        });
+    }
+
+    /**
+     * Share QR code (for own profile)
+     */
+    private void shareQRCode() {
+        // TODO: Generate QR code image and share
+        Toast.makeText(this, "Tính năng chia sẻ QR code đang phát triển", Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * Show block confirmation dialog
+     */
+    private void showBlockConfirmation() {
+        new AlertDialog.Builder(this)
+            .setTitle("Chặn người dùng")
+            .setMessage("Bạn có chắc muốn chặn người này? Họ sẽ không thể gửi tin nhắn hoặc gọi cho bạn.")
+            .setPositiveButton("Chặn", (dialog, which) -> blockUser())
+            .setNegativeButton("Hủy", null)
+            .setIcon(android.R.drawable.ic_dialog_alert)
+            .show();
+    }
+
+    /**
+     * Block the user
+     */
+    private void blockUser() {
+        if (userId == null) return;
+        
+        showProgress("Đang chặn...");
+        
+        // Call UserRepository to block user
+        userRepository.blockUser(userId).observe(this, resource -> {
+            hideProgress();
+            if (resource != null) {
+                switch (resource.getStatus()) {
+                    case SUCCESS:
+                        Toast.makeText(this, "Đã chặn người dùng", Toast.LENGTH_SHORT).show();
+                        finish(); // Close profile after blocking
+                        break;
+                    case ERROR:
+                        Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                        break;
+                }
+            }
+        });
+    }
+
+    /**
+     * Show report dialog with reason selection
+     */
+    private void showReportDialog() {
+        String[] reasons = {
+            "Spam/Quảng cáo",
+            "Nội dung không phù hợp",
+            "Giả mạo",
+            "Quấy rối",
+            "Lý do khác"
+        };
+        
+        new AlertDialog.Builder(this)
+            .setTitle("Báo xấu người dùng")
+            .setItems(reasons, (dialog, which) -> {
+                String selectedReason = reasons[which];
+                
+                if (selectedReason.equals("Lý do khác")) {
+                    showReportInputDialog();
+                } else {
+                    submitReport(selectedReason);
+                }
+            })
+            .setNegativeButton("Hủy", null)
+            .show();
+    }
+
+    /**
+     * Show custom reason input dialog
+     */
+    private void showReportInputDialog() {
+        View dialogView = getLayoutInflater().inflate(android.R.layout.simple_list_item_1, null);
+        android.widget.EditText input = new android.widget.EditText(this);
+        input.setHint("Nhập lý do báo xấu");
+        input.setMinLines(3);
+        
+        new AlertDialog.Builder(this)
+            .setTitle("Lý do báo xấu")
+            .setView(input)
+            .setPositiveButton("Gửi", (dialog, which) -> {
+                String reason = input.getText().toString().trim();
+                if (!reason.isEmpty()) {
+                    submitReport(reason);
+                } else {
+                    Toast.makeText(this, "Vui lòng nhập lý do", Toast.LENGTH_SHORT).show();
+                }
+            })
+            .setNegativeButton("Hủy", null)
+            .show();
+    }
+
+    /**
+     * Submit report to server
+     */
+    private void submitReport(String reason) {
+        if (userId == null) return;
+        
+        showProgress("Đang gửi báo cáo...");
+        
+        // Call UserRepository to report user
+        userRepository.reportUser(userId, reason).observe(this, resource -> {
+            hideProgress();
+            if (resource != null) {
+                switch (resource.getStatus()) {
+                    case SUCCESS:
+                        new AlertDialog.Builder(this)
+                            .setTitle("Báo cáo đã gửi")
+                            .setMessage("Cảm ơn bạn đã báo cáo. Chúng tôi sẽ xem xét và xử lý trong thời gian sớm nhất.")
+                            .setPositiveButton("OK", null)
+                            .show();
+                        break;
+                    case ERROR:
+                        Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                        break;
+                }
+            }
+        });
     }
 
     private void showDeleteFriendConfirmation() {

@@ -53,7 +53,10 @@ router.post('/:conversationId/messages', authenticateUser, async (req, res) => {
       stickerId,
       stickerPackId,
       stickerUrl,
-      isStickerAnimated
+      isStickerAnimated,
+      // Voice message
+      voiceUrl,
+      voiceDuration
     } = req.body;
     
     // Build message object with only defined fields (no undefined!)
@@ -108,6 +111,12 @@ router.post('/:conversationId/messages', authenticateUser, async (req, res) => {
       if (stickerPackId) message.stickerPackId = stickerPackId;
       if (stickerUrl) message.stickerUrl = stickerUrl;
       if (isStickerAnimated !== undefined) message.isStickerAnimated = isStickerAnimated;
+    }
+
+    // Voice message
+    if (voiceUrl) {
+      message.voiceUrl = voiceUrl;
+      if (voiceDuration !== undefined) message.voiceDuration = voiceDuration;
     }
     
     const messageRef = await db.collection('conversations').doc(conversationId)

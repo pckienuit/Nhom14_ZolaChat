@@ -10,6 +10,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
@@ -31,6 +32,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.doan_zaloclone.R;
+import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.models.Message;
 import com.example.doan_zaloclone.repository.ChatRepository;
 import com.example.doan_zaloclone.ui.call.CallActivity;
@@ -41,8 +43,14 @@ import com.example.doan_zaloclone.viewmodel.ContactViewModel;
 import com.example.doan_zaloclone.viewmodel.RoomViewModel;
 import com.google.firebase.auth.FirebaseAuth;
 
+import com.cloudinary.android.MediaManager;
+import com.cloudinary.android.callback.ErrorInfo;
+import com.cloudinary.android.callback.UploadCallback;
+
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class RoomActivity extends AppCompatActivity {
 
@@ -285,6 +293,9 @@ public class RoomActivity extends AppCompatActivity {
     private LinearLayout inputContainer;
 
     private void initViews() {
+        // Init banner first for debugging
+        initAddFriendBanner();
+
         toolbar = findViewById(R.id.toolbar);
         titleTextView = findViewById(R.id.titleTextView);
         messagesRecyclerView = findViewById(R.id.messagesRecyclerView);
@@ -324,12 +335,1006 @@ public class RoomActivity extends AppCompatActivity {
         // Initialize QuickActionManager
         quickActionManager = com.example.doan_zaloclone.ui.room.actions.QuickActionManager.getInstance();
 
+        // Setup voice record button (Phase 4A)
+        setupVoiceRecordButton();
+        
         initPinnedMessagesViews();
         initReplyBarViews();
+        // initAddFriendBanner(); // Moved to top
         
         setupInsets();
     }
+    
+    // Add friend banner views
+    private LinearLayout addFriendBanner;
+    private com.google.android.material.button.MaterialButton btnSendFriendRequest;
+    private com.example.doan_zaloclone.repository.FriendRepository friendRepository;
+    
+    /**
+     * Initialize add friend banner for non-friend conversations
+     */
+    private void initAddFriendBanner() {
+        addFriendBanner = findViewById(R.id.addFriendBanner);
+        btnSendFriendRequest = findViewById(R.id.btnSendFriendRequest);
+        friendRepository = new com.example.doan_zaloclone.repository.FriendRepository();
+        
+        // Setup button click
+        if (btnSendFriendRequest != null) {
+            btnSendFriendRequest.setOnClickListener(v -> sendFriendRequestFromBanner());
+        }
+        
+        // Listen for realtime updates
+        friendRepository.getFriendListRefreshNeeded().observe(this, refresh -> {
+            if (Boolean.TRUE.equals(refresh)) checkFriendshipStatusForBanner();
+        });
+        
+        friendRepository.getFriendRequestRefreshNeeded().observe(this, refresh -> {
+            if (Boolean.TRUE.equals(refresh)) checkFriendshipStatusForBanner();
+        });
+        
+        // Check initial status
+        checkFriendshipStatusForBanner();
+    }
+    
+    /**
+     * Check if current user is friends with the other user
+     */
+    private void checkFriendshipStatusForBanner() {
+        if (conversationId == null || addFriendBanner == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser() != null ? 
+            firebaseAuth.getCurrentUser().getUid() : null;
+        if (currentUserId == null) return;
+        
+        // Load conversation from Firestore
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("conversations")
+            .document(conversationId)
+            .get()
+            .addOnSuccessListener(documentSnapshot -> {
+                if (!documentSnapshot.exists()) {
+                    addFriendBanner.setVisibility(View.GONE);
+                    return;
+                }
+                
+                String type = documentSnapshot.getString("type");
+                
+                // Only show for 1-1 conversations
+                if ("group".equalsIgnoreCase(type)) {
+                    addFriendBanner.setVisibility(View.GONE);
+                    return;
+                }
+                
+                // Get participants
+                @SuppressWarnings("unchecked")
+                java.util.List<String> participantIds = (java.util.List<String>) documentSnapshot.get("participantIds");
+                
+                if (participantIds == null) {
+                    participantIds = (java.util.List<String>) documentSnapshot.get("memberIds");
+                }
+                
+                if (participantIds == null || participantIds.size() != 2) {
+                    addFriendBanner.setVisibility(View.GONE);
+                    return;
+                }
+                
+                String otherUserId = null;
+                for (String participantId : participantIds) {
+                    if (!participantId.equals(currentUserId)) {
+                        otherUserId = participantId;
+                        break;
+                    }
+                }
+                
+                if (otherUserId == null) {
+                    addFriendBanner.setVisibility(View.GONE);
+                    return;
+                }
+                
+                String finalOtherUserId = otherUserId;
+                
+                // Check friendship status
+                friendRepository.checkFriendship(currentUserId, finalOtherUserId)
+                    .observe(RoomActivity.this, friendshipResource -> {
+                        if (friendshipResource != null && friendshipResource.isSuccess()) {
+                            boolean areFriendsStatus = friendshipResource.getData() != null && 
+                                               friendshipResource.getData();
+                            
+                            // Update member variable
+                            RoomActivity.this.areFriends = areFriendsStatus;
+                            RoomActivity.this.otherUserId = finalOtherUserId;
+                            
+                            if (areFriendsStatus) {
+                                // Already friends -> Hide banner
+                                addFriendBanner.setVisibility(View.GONE);
+                            } else {
+                                // Not friends -> Check if request sent
+                                checkSentRequestStatus(currentUserId, finalOtherUserId);
+                            }
+                        } else {
+                            // Error checking -> Hide to vary safe
+                            addFriendBanner.setVisibility(View.GONE);
+                        }
+                    });
+            })
+            .addOnFailureListener(e -> {
+                android.util.Log.e("AddFriendBanner", "Failed to load conversation", e);
+                addFriendBanner.setVisibility(View.GONE);
+            });
+    }
 
+    private void checkSentRequestStatus(String currentUserId, String otherUserId) {
+        // Optimistic UI: Show banner immediately for non-friends
+        addFriendBanner.setVisibility(View.VISIBLE);
+        
+        friendRepository.getSentFriendRequests(currentUserId)
+            .observe(RoomActivity.this, sentResource -> {
+                if (sentResource == null) return;
+                
+                // If success, update button state
+                if (sentResource.isSuccess() && sentResource.getData() != null) {
+                    boolean isSent = false;
+                    for (com.example.doan_zaloclone.models.FriendRequest req : sentResource.getData()) {
+                        if (otherUserId.equals(req.getToUserId()) && 
+                            "PENDING".equalsIgnoreCase(req.getStatus())) {
+                            isSent = true;
+                            break;
+                        }
+                    }
+                    
+                    if (isSent) {
+                        btnSendFriendRequest.setText("Đã gửi lời mời");
+                        btnSendFriendRequest.setEnabled(false);
+                    } else {
+                        btnSendFriendRequest.setText("Kết bạn");
+                        btnSendFriendRequest.setEnabled(true);
+                    }
+                }
+            });
+    }
+    
+    /**
+     * Send friend request from banner
+     */
+    private void sendFriendRequestFromBanner() {
+        String currentUserId = firebaseAuth.getCurrentUser() != null ? 
+            firebaseAuth.getCurrentUser().getUid() : null;
+        if (currentUserId == null) {
+            Toast.makeText(this, "Lỗi: Không xác định được người dùng", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (otherUserId == null || otherUserId.isEmpty()) {
+            Toast.makeText(this, "Lỗi: Không tìm thấy người dùng", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Disable button to prevent multiple clicks
+        btnSendFriendRequest.setEnabled(false);
+        btnSendFriendRequest.setText("Đang gửi...");
+        
+        // Get current user name
+        new com.example.doan_zaloclone.repository.UserRepository()
+            .getUser(currentUserId)
+            .observe(this, userResource -> {
+                if (userResource != null && userResource.isSuccess() && 
+                    userResource.getData() != null) {
+                    
+                    String currentUserName = userResource.getData().getName() != null ?
+                        userResource.getData().getName() : "Người dùng";
+                    
+                    // Send friend request
+                    friendRepository.sendFriendRequest(currentUserId, otherUserId, currentUserName)
+                        .observe(this, friendResource -> {
+                            if (friendResource != null) {
+                                if (friendResource.isSuccess()) {
+                                    Toast.makeText(this, "Đã gửi lời mời kết bạn", 
+                                        Toast.LENGTH_SHORT).show();
+                                    btnSendFriendRequest.setText("Đã gửi lời mời");
+                                    btnSendFriendRequest.setEnabled(false);
+                                    
+                                    // Banner remains visible until request accepted
+                                } else {
+                                    Toast.makeText(this, "Lỗi: " + friendResource.getMessage(),
+                                        Toast.LENGTH_SHORT).show();
+                                    btnSendFriendRequest.setText("Kết bạn");
+                                    btnSendFriendRequest.setEnabled(true);
+                                }
+                            }
+                        });
+                }
+            });
+    }
+    
+    // Phase 4A, 4B, 4C & 4D-1/4D-2/4D-3: Voice Record - Full Implementation with Editor
+    private static final int RECORD_AUDIO_PERMISSION_CODE = 1001;
+    private boolean isRecording = false;
+    private android.media.MediaRecorder mediaRecorder;
+    private String audioFilePath;
+    private long recordingStartTime = 0;
+    private Handler recordingTimerHandler = new Handler(Looper.getMainLooper());
+    private Runnable recordingTimerRunnable;
+    
+    // Phase 4D-1: Recording UI views
+    private LinearLayout recordingInputLayout;
+    private TextView recordingTimerText;
+    private ImageButton stopRecordingButton;
+    private ImageButton deleteRecordingButton;
+    
+    // Phase 4D-2: Waveform visualization
+    private WaveformView waveformView;
+    
+    // Phase 4D-3a: Editor UI views
+    private LinearLayout editorInputLayout;
+    private WaveformView editorWaveformView;
+    private TextView editorDurationText;
+    private ImageButton playPauseButton;
+    private ImageButton closeEditorButton;
+    private Button speed05Button, speed10Button, speed15Button, speed20Button;
+    private Button reRecordButton, sendVoiceButton;
+    
+    // Phase 4D-3a: Editor state
+    private int recordedDurationSeconds = 0;
+    
+    // Phase 4D-3b: Audio playback
+    private android.media.MediaPlayer mediaPlayer;
+    private boolean isPlaying = false;
+    
+    // Phase 4D-3c: Playback speed
+    private float playbackSpeed = 1.0f; // Default 1x
+    
+    private void setupVoiceRecordButton() {
+        if (voiceRecordButton == null) return;
+        
+        //Phase 4D-1: Bind recording UI views
+        recordingInputLayout = findViewById(R.id.recordingInputLayout);
+        recordingTimerText = findViewById(R.id.recordingTimerText);
+        stopRecordingButton = findViewById(R.id.stopRecordingButton);
+        deleteRecordingButton = findViewById(R.id.deleteRecordingButton);
+        
+        // Phase 4D-2: Bind waveform view
+        waveformView = findViewById(R.id.waveformView);
+        
+        // Phase 4D-3a: Bind editor views
+        editorInputLayout = findViewById(R.id.editorInputLayout);
+        editorWaveformView = findViewById(R.id.editorWaveformView);
+        editorDurationText = findViewById(R.id.editorDurationText);
+        playPauseButton = findViewById(R.id.playPauseButton);
+        closeEditorButton = findViewById(R.id.closeEditorButton);
+        speed05Button = findViewById(R.id.speed05Button);
+        speed10Button = findViewById(R.id.speed10Button);
+        speed15Button = findViewById(R.id.speed15Button);
+        speed20Button = findViewById(R.id.speed20Button);
+        reRecordButton = findViewById(R.id.reRecordButton);
+        sendVoiceButton = findViewById(R.id.sendVoiceButton);
+        
+        // Phase 4D-1: Click to toggle recording (not long-press)
+        voiceRecordButton.setOnClickListener(v -> {
+            if (!isRecording) {
+                // Start recording
+                if (checkRecordAudioPermission()) {
+                    startVoiceRecording();
+                } else {
+                    requestRecordAudioPermission();
+                }
+            }
+        });
+        
+        // Stop button click
+        if (stopRecordingButton != null) {
+            stopRecordingButton.setOnClickListener(v -> stopVoiceRecording());
+        }
+        
+        // Delete button click
+        if (deleteRecordingButton != null) {
+            deleteRecordingButton.setOnClickListener(v -> cancelVoiceRecording());
+        }
+        
+        // Phase 4D-3b: Play/Pause button
+        if (playPauseButton != null) {
+            playPauseButton.setOnClickListener(v -> togglePlayPause());
+        }
+        
+        // Phase 4D-3c: Speed buttons
+        if (speed05Button != null) {
+            speed05Button.setOnClickListener(v -> setPlaybackSpeed(0.5f));
+        }
+        if (speed10Button != null) {
+            speed10Button.setOnClickListener(v -> setPlaybackSpeed(1.0f));
+        }
+        if (speed15Button != null) {
+            speed15Button.setOnClickListener(v -> setPlaybackSpeed(1.5f));
+        }
+        if (speed20Button != null) {
+            speed20Button.setOnClickListener(v -> setPlaybackSpeed(2.0f));
+        }
+        
+        // Phase 4D-3d: Send and Re-record buttons
+        if (sendVoiceButton != null) {
+            sendVoiceButton.setOnClickListener(v -> sendRecordedVoice());
+        }
+        if (reRecordButton != null) {
+            reRecordButton.setOnClickListener(v -> reRecord());
+        }
+        
+        // Close editor button
+        if (closeEditorButton != null) {
+            closeEditorButton.setOnClickListener(v -> closeEditor());
+        }
+    }
+    
+    private boolean checkRecordAudioPermission() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+    
+    private void requestRecordAudioPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, RECORD_AUDIO_PERMISSION_CODE);
+        }
+    }
+    
+    private void startVoiceRecording() {
+        try {
+            isRecording = true;
+            recordingStartTime = System.currentTimeMillis();
+            
+            // Phase 4D-1: Switch UI to recording mode
+            showRecordingUI();
+            
+            // Create audio file in cache directory
+            String fileName = "voice_" + System.currentTimeMillis() + ".m4a";
+            audioFilePath = new java.io.File(getCacheDir(), fileName).getAbsolutePath();
+            
+            // Setup MediaRecorder
+            mediaRecorder = new android.media.MediaRecorder();
+            mediaRecorder.setAudioSource(android.media.MediaRecorder.AudioSource.MIC);
+            mediaRecorder.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4);
+            mediaRecorder.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC);
+            mediaRecorder.setAudioEncodingBitRate(128000);
+            mediaRecorder.setAudioSamplingRate(44100);
+            mediaRecorder.setOutputFile(audioFilePath);
+            
+            mediaRecorder.prepare();
+            mediaRecorder.start();
+            
+            // Start recording timer
+            startRecordingTimer();
+            
+            Toast.makeText(this, "🎤 Đang ghi âm...", Toast.LENGTH_SHORT).show();
+            
+        } catch (Exception e) {
+            android.util.Log.e("RoomActivity", "Error starting recording", e);
+            Toast.makeText(this, "Lỗi khi ghi âm: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            cleanupRecording();
+        }
+    }
+    
+    private void stopVoiceRecording() {
+        if (!isRecording) return;
+        
+        try {
+            // Stop timer
+            stopRecordingTimer();
+            
+            // Calculate duration
+            long duration = System.currentTimeMillis() - recordingStartTime;
+            
+            // Stop and release MediaRecorder
+            if (mediaRecorder != null) {
+                try {
+                    mediaRecorder.stop();
+                    mediaRecorder.release();
+                } catch (RuntimeException e) {
+                    android.util.Log.e("RoomActivity", "Error stopping MediaRecorder", e);
+                }
+                mediaRecorder = null;
+            }
+            
+            isRecording = false;
+            
+            // Check if recording is too short (less than 1 second)
+            if (duration < 1000) {
+                Toast.makeText(this, "Ghi âm quá ngắn", Toast.LENGTH_SHORT).show();
+                deleteAudioFile();
+                hideRecordingUI();
+                return;
+            }
+            
+            // Phase 4D-3a: Show editor instead of sending immediately
+            recordedDurationSeconds = (int) (duration / 1000);
+            showEditorUI();
+            
+        } catch (Exception e) {
+            android.util.Log.e("RoomActivity", "Error stopping recording", e);
+            Toast.makeText(this, "Lỗi khi dừng ghi âm", Toast.LENGTH_SHORT).show();
+        } finally {
+            cleanupRecording();
+        }
+    }
+    
+    // Phase 4D-3a: Show editor UI
+    private void showEditorUI() {
+        // Hide recording UI
+        if (recordingInputLayout != null) {
+            recordingInputLayout.setVisibility(View.GONE);
+        }
+        
+        // Show editor UI
+        if (editorInputLayout != null) {
+            editorInputLayout.setVisibility(View.VISIBLE);
+        }
+        
+        // Set duration text
+        if (editorDurationText != null) {
+            int minutes = recordedDurationSeconds / 60;
+            int seconds = recordedDurationSeconds % 60;
+            String durationStr = String.format("%02d:%02d", minutes, seconds);
+            editorDurationText.setText(durationStr);
+        }
+        
+        // Copy waveform from recording to editor (simplified - just clear for now)
+        if (editorWaveformView != null) {
+            editorWaveformView.clear();
+            // TODO: Could copy amplitude data from waveformView if needed
+        }
+        
+        // Phase 4D-3c: Initialize speed buttons
+        updateSpeedButtons();
+    }
+    
+    // Phase 4D-3b: Toggle play/pause
+    private void togglePlayPause() {
+        if (isPlaying) {
+            pauseAudio();
+        } else {
+            playAudio();
+        }
+    }
+    
+    // Phase 4D-3b: Play audio
+    private void playAudio() {
+        if (audioFilePath == null || audioFilePath.isEmpty()) {
+            Toast.makeText(this, "Không tìm thấy file âm thanh", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        try {
+            // Release existing player if any
+            releaseMediaPlayer();
+            
+            // Create and setup MediaPlayer
+            mediaPlayer = new android.media.MediaPlayer();
+            mediaPlayer.setDataSource(audioFilePath);
+            mediaPlayer.prepare();
+            
+            // Set completion listener
+            mediaPlayer.setOnCompletionListener(mp -> {
+                isPlaying = false;
+                updatePlayPauseButton();
+            });
+            
+            // Phase 4D-3c: Apply playback speed (API 23+)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                try {
+                    android.media.PlaybackParams params = mediaPlayer.getPlaybackParams();
+                    params.setSpeed(playbackSpeed);
+                    mediaPlayer.setPlaybackParams(params);
+                } catch (Exception e) {
+                    android.util.Log.e("RoomActivity", "Error setting playback speed", e);
+                }
+            }
+            
+            // Start playing
+            mediaPlayer.start();
+            isPlaying = true;
+            updatePlayPauseButton();
+            
+        } catch (Exception e) {
+            android.util.Log.e("RoomActivity", "Error playing audio", e);
+            Toast.makeText(this, "Lỗi khi phát âm thanh", Toast.LENGTH_SHORT).show();
+            isPlaying = false;
+            updatePlayPauseButton();
+        }
+    }
+    
+    // Phase 4D-3b: Pause audio
+    private void pauseAudio() {
+        if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+            mediaPlayer.pause();
+            isPlaying = false;
+            updatePlayPauseButton();
+        }
+    }
+    
+    // Phase 4D-3b: Update play/pause button icon
+    private void updatePlayPauseButton() {
+        if (playPauseButton == null) return;
+        
+        if (isPlaying) {
+            playPauseButton.setImageResource(android.R.drawable.ic_media_pause);
+        } else {
+            playPauseButton.setImageResource(android.R.drawable.ic_media_play);
+        }
+    }
+    
+    // Phase 4D-3b: Release MediaPlayer
+    private void releaseMediaPlayer() {
+        if (mediaPlayer != null) {
+            try {
+                if (mediaPlayer.isPlaying()) {
+                    mediaPlayer.stop();
+                }
+                mediaPlayer.release();
+            } catch (Exception e) {
+                // Ignore
+            }
+            mediaPlayer = null;
+        }
+        isPlaying = false;
+    }
+    
+    // Phase 4D-3c: Set playback speed
+    private void setPlaybackSpeed(float speed) {
+        playbackSpeed = speed;
+        
+        // Update speed buttons UI
+        updateSpeedButtons();
+        
+        // Apply speed to currently playing audio
+        if (mediaPlayer != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            try {
+                android.media.PlaybackParams params = mediaPlayer.getPlaybackParams();
+                params.setSpeed(playbackSpeed);
+                mediaPlayer.setPlaybackParams(params);
+            } catch (Exception e) {
+                android.util.Log.e("RoomActivity", "Error updating playback speed", e);
+            }
+        }
+    }
+    
+    // Phase 4D-3c: Update speed button styles
+    private void updateSpeedButtons() {
+        // Reset all to normal (transparent background, normal text)
+        int normalTextColor = 0xFF666666; // Dark gray
+        int activeTextColor = 0xFFFFFFFF; // White
+        
+        if (speed05Button != null) {
+            speed05Button.setBackgroundResource(android.R.color.transparent);
+            speed05Button.setTextColor(normalTextColor);
+            speed05Button.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+        if (speed10Button != null) {
+            speed10Button.setBackgroundResource(android.R.color.transparent);
+            speed10Button.setTextColor(normalTextColor);
+            speed10Button.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+        if (speed15Button != null) {
+            speed15Button.setBackgroundResource(android.R.color.transparent);
+            speed15Button.setTextColor(normalTextColor);
+            speed15Button.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+        if (speed20Button != null) {
+            speed20Button.setBackgroundResource(android.R.color.transparent);
+            speed20Button.setTextColor(normalTextColor);
+            speed20Button.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+        
+        // Set active to bold with rounded blue background
+        Button activeButton = null;
+        if (playbackSpeed == 0.5f) activeButton = speed05Button;
+        else if (playbackSpeed == 1.0f) activeButton = speed10Button;
+        else if (playbackSpeed == 1.5f) activeButton = speed15Button;
+        else if (playbackSpeed == 2.0f) activeButton = speed20Button;
+        
+        if (activeButton != null) {
+            activeButton.setBackgroundResource(R.drawable.rounded_blue_bg_small);
+            activeButton.setTextColor(activeTextColor);
+            activeButton.setTypeface(null, android.graphics.Typeface.BOLD);
+        }
+    }
+    
+    // Phase 4D-3d: Send recorded voice message
+    private void sendRecordedVoice() {
+        android.util.Log.d("RoomActivity", "sendRecordedVoice called - audioFilePath: " + audioFilePath + ", duration: " + recordedDurationSeconds);
+        
+        // Stop playback if playing
+        if (isPlaying) {
+            pauseAudio();
+        }
+        
+        // Upload and send
+        if (audioFilePath != null && !audioFilePath.isEmpty()) {
+            android.util.Log.d("RoomActivity", "Calling uploadVoiceMessage...");
+            uploadVoiceMessage(audioFilePath, recordedDurationSeconds);
+        } else {
+            android.util.Log.e("RoomActivity", "audioFilePath is null or empty!");
+            Toast.makeText(this, "Không tìm thấy file ghi âm", Toast.LENGTH_SHORT).show();
+        }
+        
+        // Hide editor UI and show normal input
+        hideEditorUI();
+    }
+
+    // Phase 4D-3e: Upload voice message to Cloudinary and send
+    private void uploadVoiceMessage(String filePath, long durationSeconds) {
+        if (filePath == null) {
+            android.util.Log.e("RoomActivity", "uploadVoiceMessage: filePath is null");
+            return;
+        }
+        
+        android.util.Log.d("RoomActivity", "Starting voice upload: " + filePath + ", duration: " + durationSeconds);
+        Toast.makeText(this, "Đang gửi tin nhắn thoại...", Toast.LENGTH_SHORT).show();
+
+        Uri fileUri = Uri.fromFile(new File(filePath));
+        
+        MediaManager.get().upload(fileUri)
+                .option("resource_type", "video") // Audio is treated as video
+                .option("folder", "zalo_chat_voice/" + conversationId)
+                .callback(new UploadCallback() {
+                    @Override
+                    public void onStart(String requestId) {
+                        android.util.Log.d("RoomActivity", "Voice upload started: " + requestId);
+                    }
+
+                    @Override
+                    public void onProgress(String requestId, long bytes, long totalBytes) {
+                        // Optional
+                    }
+
+                    @Override
+                    public void onSuccess(String requestId, Map resultData) {
+                        String voiceUrl = (String) resultData.get("secure_url");
+                        android.util.Log.d("RoomActivity", "Voice upload success: " + voiceUrl);
+                        
+                        // Delete local file to clean up cache
+                        try {
+                            new File(filePath).delete();
+                            android.util.Log.d("RoomActivity", "Local voice file deleted after upload");
+                        } catch (Exception e) {
+                            android.util.Log.e("RoomActivity", "Error deleting local voice file", e);
+                        }
+                        
+                        runOnUiThread(() -> {
+                            if (firebaseAuth.getCurrentUser() == null) return;
+                            
+                            Message message = new Message();
+                            message.setSenderId(firebaseAuth.getCurrentUser().getUid());
+                            message.setType(Message.TYPE_VOICE);
+                            message.setContent("Tin nhắn thoại");
+                            message.setTimestamp(System.currentTimeMillis());
+                            message.setVoiceUrl(voiceUrl);
+                            
+                            // Ensure duration is valid (at least 1 second)
+                            int finalDuration = (int) Math.max(durationSeconds, 1);
+                            message.setVoiceDuration(finalDuration);
+                            
+                            // Send via ViewModel
+                            roomViewModel.sendMessage(conversationId, message);
+                        });
+                    }
+
+                    @Override
+                    public void onError(String requestId, ErrorInfo error) {
+                        android.util.Log.e("RoomActivity", "Voice upload failed: " + error.getDescription());
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi gửi voice: " + error.getDescription(), Toast.LENGTH_SHORT).show();
+                        });
+                    }
+
+                    @Override
+                    public void onReschedule(String requestId, ErrorInfo error) {
+                        android.util.Log.d("RoomActivity", "Voice upload rescheduled");
+                    }
+                })
+                .dispatch();
+    }
+    
+    // Phase 4D-3d: Re-record (discard current and start new)
+    private void reRecord() {
+        // Stop playback if playing
+        if (isPlaying) {
+            pauseAudio();
+        }
+        
+        // Release media player
+        releaseMediaPlayer();
+        
+        // Delete current audio file
+        deleteAudioFile();
+        
+        // Hide editor UI and show normal input
+        hideEditorUI();
+        
+        // Auto-start recording again
+        startVoiceRecording();
+    }
+    
+    // Close editor without re-recording
+    private void closeEditor() {
+        // Stop playback if playing
+        if (isPlaying) {
+            pauseAudio();
+        }
+        
+        // Release media player
+        releaseMediaPlayer();
+        
+        // Delete current audio file
+        deleteAudioFile();
+        
+        // Hide editor UI and show normal input
+        hideEditorUI();
+        
+        Toast.makeText(this, "Đã hủy", Toast.LENGTH_SHORT).show();
+    }
+    
+    // Phase 4D-3d: Hide editor UI and show normal input
+    private void hideEditorUI() {
+        if (editorInputLayout != null) {
+            editorInputLayout.setVisibility(View.GONE);
+        }
+        if (normalInputLayout != null) {
+            normalInputLayout.setVisibility(View.VISIBLE);
+        }
+    }
+    
+    // Phase 4D-1: Cancel recording (delete button)
+    private void cancelVoiceRecording() {
+        if (!isRecording) return;
+        
+        try {
+            // Stop timer
+            stopRecordingTimer();
+            
+            // Stop and release MediaRecorder
+            if (mediaRecorder != null) {
+                try {
+                    mediaRecorder.stop();
+                    mediaRecorder.release();
+                } catch (RuntimeException e) {
+                    // Ignore
+                }
+                mediaRecorder = null;
+            }
+            
+            isRecording = false;
+            
+            // Delete audio file
+            deleteAudioFile();
+            
+            // Phase 4D-1: Hide recording UI and show normal UI
+            hideRecordingUI();
+            
+            Toast.makeText(this, "Đã hủy ghi âm", Toast.LENGTH_SHORT).show();
+            
+        } catch (Exception e) {
+            android.util.Log.e("RoomActivity", "Error canceling recording", e);
+        } finally {
+            cleanupRecording();
+        }
+    }
+    
+    // Phase 4D-1: Show recording UI, hide normal input
+    private void showRecordingUI() {
+        if (normalInputLayout != null) {
+            normalInputLayout.setVisibility(View.GONE);
+        }
+        if (recordingInputLayout != null) {
+            recordingInputLayout.setVisibility(View.VISIBLE);
+        }
+        if (recordingTimerText != null) {
+            recordingTimerText.setText("00:00");
+        }
+        // Phase 4D-2: Clear waveform for new recording
+        if (waveformView != null) {
+            waveformView.clear();
+        }
+    }
+    
+    // Phase 4D-1: Hide recording UI, show normal input
+    private void hideRecordingUI() {
+        if (recordingInputLayout != null) {
+            recordingInputLayout.setVisibility(View.GONE);
+        }
+        if (normalInputLayout != null) {
+            normalInputLayout.setVisibility(View.VISIBLE);
+        }
+    }
+    
+    // Phase 4C: Upload voice message to Cloudinary and send
+    private void uploadVoiceMessage(String filePath, int durationSeconds) {
+        if (filePath == null || filePath.isEmpty()) {
+            Toast.makeText(this, "Không tìm thấy file ghi âm", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        Toast.makeText(this, "Đang gửi tin nhắn thoại...", Toast.LENGTH_SHORT).show();
+        
+        java.io.File audioFile = new java.io.File(filePath);
+        if (!audioFile.exists()) {
+            Toast.makeText(this, "File ghi âm không tồn tại", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Upload to Cloudinary in background
+        new Thread(() -> {
+            try {
+                // Upload audio file
+                com.cloudinary.Cloudinary cloudinary = new com.cloudinary.Cloudinary(
+                    com.cloudinary.utils.ObjectUtils.asMap(
+                        "cloud_name", "do0mdssvu",
+                        "api_key", "248235972111755",
+                        "api_secret", "9hnWcqIA7en-XduIpo1f3C1CdIg"
+                    )
+                );
+                
+                java.util.Map uploadResult = cloudinary.uploader().upload(
+                    audioFile,
+                    com.cloudinary.utils.ObjectUtils.asMap(
+                        "resource_type", "raw",
+                        "folder", "zalo_voice_messages"
+                    )
+                );
+                
+                String voiceUrl = (String) uploadResult.get("secure_url");
+                
+                // Send voice message on main thread
+                runOnUiThread(() -> {
+                    sendVoiceMessage(voiceUrl, durationSeconds);
+                    // Delete temp file after upload
+                    audioFile.delete();
+                    Toast.makeText(this, "✅ Đã gửi tin nhắn thoại", Toast.LENGTH_SHORT).show();
+                });
+                
+            } catch (Exception e) {
+                android.util.Log.e("RoomActivity", "Error uploading voice", e);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Lỗi khi upload: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+    
+    private void sendVoiceMessage(String voiceUrl, int durationSeconds) {
+        String currentUserId = firebaseAuth.getCurrentUser() != null
+                ? firebaseAuth.getCurrentUser().getUid()
+                : "";
+        
+        if (currentUserId.isEmpty()) {
+            Toast.makeText(this, "Lỗi: Không tìm thấy user ID", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Create voice message
+        Message voiceMessage = new Message();
+        voiceMessage.setId(java.util.UUID.randomUUID().toString());
+        voiceMessage.setSenderId(currentUserId);
+        voiceMessage.setType(Message.TYPE_VOICE);
+        voiceMessage.setContent("🎤 Tin nhắn thoại (" + durationSeconds + "s)");
+        voiceMessage.setVoiceUrl(voiceUrl);
+        voiceMessage.setVoiceDuration(durationSeconds);
+        voiceMessage.setTimestamp(System.currentTimeMillis());
+        
+        // Set sender name for group chats
+        String displayName = firebaseAuth.getCurrentUser().getDisplayName();
+        if (displayName != null && !displayName.isEmpty()) {
+            voiceMessage.setSenderName(displayName);
+        }
+        
+        // Handle reply if replying to a message
+        if (replyingToMessage != null) {
+            voiceMessage.setReplyToId(replyingToMessage.getId());
+            voiceMessage.setReplyToContent(replyingToMessage.getContent());
+            voiceMessage.setReplyToSenderId(replyingToMessage.getSenderId());
+            hideReplyBar();
+        }
+        
+        // Send via ViewModel
+        roomViewModel.sendMessage(conversationId, voiceMessage);
+    }
+    
+    private void startRecordingTimer() {
+        recordingTimerRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (isRecording) {
+                    long elapsed = System.currentTimeMillis() - recordingStartTime;
+                    int totalSeconds = (int) (elapsed / 1000);
+                    int minutes = totalSeconds / 60;
+                    int seconds = totalSeconds % 60;
+                    
+                    // Phase 4D-1: Update UI timer display
+                    if (recordingTimerText != null) {
+                        String timeStr = String.format("%02d:%02d", minutes, seconds);
+                        recordingTimerText.setText(timeStr);
+                    }
+                    
+                    // Phase 4D-2: Get amplitude from MediaRecorder and update waveform
+                    if (mediaRecorder != null && waveformView != null) {
+                        try {
+                            // Get max amplitude (0-32767 for 16-bit audio)
+                            int maxAmplitude = mediaRecorder.getMaxAmplitude();
+                            
+                            // Normalize to 0-100 range
+                            float normalizedAmplitude = (maxAmplitude / 32767f) * 100f;
+                            
+                            // Add to waveform visualization
+                            waveformView.addAmplitude(normalizedAmplitude);
+                        } catch (IllegalStateException e) {
+                            // MediaRecorder not in proper state, ignore
+                        }
+                    }
+                    
+                    // Schedule next update (faster for waveform smoothness)
+                    recordingTimerHandler.postDelayed(this, 100); // Update every 100ms
+                }
+            }
+        };
+        recordingTimerHandler.post(recordingTimerRunnable);
+    }
+    
+    private void stopRecordingTimer() {
+        if (recordingTimerRunnable != null) {
+            recordingTimerHandler.removeCallbacks(recordingTimerRunnable);
+            recordingTimerRunnable = null;
+        }
+    }
+    
+    private void cleanupRecording() {
+        isRecording = false;
+        updateVoiceRecordButtonUI();
+        stopRecordingTimer();
+        
+        if (mediaRecorder != null) {
+            try {
+                mediaRecorder.release();
+            } catch (Exception e) {
+                // Ignore
+            }
+            mediaRecorder = null;
+        }
+    }
+    
+    private void deleteAudioFile() {
+        if (audioFilePath != null) {
+            android.util.Log.d("RoomActivity", "Deleting audio file: " + audioFilePath);
+            java.io.File file = new java.io.File(audioFilePath);
+            if (file.exists()) {
+                boolean deleted = file.delete();
+                android.util.Log.d("RoomActivity", "File deleted: " + deleted);
+            }
+            audioFilePath = null;
+        }
+    }
+    
+    private void updateVoiceRecordButtonUI() {
+        if (voiceRecordButton == null) return;
+        
+        if (isRecording) {
+            // Show pause/stop icon and red tint
+            voiceRecordButton.setImageResource(android.R.drawable.ic_media_pause);
+            voiceRecordButton.setColorFilter(getResources().getColor(android.R.color.holo_red_dark, null));
+        } else {
+            // Show mic icon with normal tint
+            voiceRecordButton.setImageResource(R.drawable.ic_mic);
+            voiceRecordButton.setColorFilter(getResources().getColor(R.color.colorPrimary, null));
+        }
+    }
+    
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        
+        if (requestCode == RECORD_AUDIO_PERMISSION_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Quyền ghi âm đã được cấp. Nhấn giữ mic để ghi âm.", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Cần quyền ghi âm để gửi tin nhắn thoại", Toast.LENGTH_LONG).show();
+            }
+        }
+    }
+    
     private void setupInsets() {
         if (inputContainer != null) {
             androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(inputContainer, (v, windowInsets) -> {
@@ -2412,6 +3417,24 @@ public class RoomActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        // Cleanup recording resources
+        cleanupRecording();
+        deleteAudioFile();
+        // Phase 4D-3b: Release MediaPlayer
+        releaseMediaPlayer();
         // ViewModel will automatically clean up listeners
+    }
+    
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Stop recording if activity is paused
+        if (isRecording) {
+            stopVoiceRecording();
+        }
+        // Phase 4D-3b: Pause audio if playing
+        if (isPlaying) {
+            pauseAudio();
+        }
     }
 }

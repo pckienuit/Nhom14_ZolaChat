@@ -86,6 +86,15 @@ public class PersonalFragment extends Fragment {
         // Click compact user card to open full profile
         compactUserCard.setOnClickListener(v -> openProfileCard());
         
+        // Search button - opens search/add friend activity
+        View btnSearch = getView().findViewById(R.id.btn_search);
+        if (btnSearch != null) {
+            btnSearch.setOnClickListener(v -> {
+                Intent intent = new Intent(getContext(), com.example.doan_zaloclone.ui.contact.AddFriendActivity.class);
+                startActivity(intent);
+            });
+        }
+        
         if (btnSettings != null) {
             btnSettings.setOnClickListener(v -> {
                  Toast.makeText(getContext(), "Cài đặt & Quyền riêng tư", Toast.LENGTH_SHORT).show();

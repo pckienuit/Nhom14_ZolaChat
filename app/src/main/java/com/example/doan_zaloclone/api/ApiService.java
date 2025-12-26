@@ -63,6 +63,12 @@ public interface ApiService {
     @POST("users/batch")
     Call<Map<String, Object>> getUsersBatch(@Body Map<String, java.util.List<String>> userIds);
 
+    @POST("users/block")
+    Call<ApiResponse<Void>> blockUser(@Body Map<String, String> blockData);
+
+    @POST("users/report")
+    Call<ApiResponse<Void>> reportUser(@Body Map<String, String> reportData);
+
     // ========== Messages ==========
 
 

@@ -25,9 +25,8 @@ import retrofit2.converter.gson.GsonConverterFactory;
 public class RetrofitClient {
     private static final String TAG = "RetrofitClient";
 
-    // Production URL
-    private static final String BASE_URL = "https://zolachat.site/api/";  // Production VPS
-    // private static final String BASE_URL = "http://10.0.2.2:3000/api/";  // Localhost (for development)
+    // Server URL from BuildConfig (set by product flavor)
+    private static final String BASE_URL = com.example.doan_zaloclone.config.ServerConfig.API_BASE_URL;
 
     private static Retrofit retrofit = null;
     private static ApiService apiService = null;

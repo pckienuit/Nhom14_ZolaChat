@@ -63,6 +63,113 @@ public class HomeFragment extends Fragment {
         conversationsRecyclerView = view.findViewById(R.id.conversationsRecyclerView);
         filterChipsContainer = view.findViewById(R.id.filterChipsContainer);
         setupFilterChips();
+        
+        // Setup inline search EditText
+        setupSearchEditText(view);
+        
+        // QR button - scan QR code
+        View btnQr = view.findViewById(R.id.btn_qr);
+        if (btnQr != null) {
+            btnQr.setOnClickListener(v -> openQRScanner());
+        }
+        
+        // Add button - show menu for adding friend or creating group
+        View btnAdd = view.findViewById(R.id.btn_add);
+        if (btnAdd != null) {
+            btnAdd.setOnClickListener(v -> showAddMenu(v));
+        }
+    }
+    
+    private void setupSearchEditText(View view) {
+        android.widget.EditText searchEditText = view.findViewById(R.id.searchEditText);
+        if (searchEditText == null) return;
+        
+        // TextWatcher for realtime filtering
+        searchEditText.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterConversations(s.toString());
+            }
+            
+            @Override
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+    }
+    
+    private void filterConversations(String query) {
+        if (conversationAdapter == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser() != null
+                ? firebaseAuth.getCurrentUser().getUid()
+                : "";
+        
+        // Get all conversations from ViewModel
+        homeViewModel.getConversations(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                java.util.List<Conversation> allConversations = resource.getData();
+                
+                if (query == null || query.trim().isEmpty()) {
+                    // Show all if search is empty
+                    conversationAdapter.updateConversations(allConversations);
+                } else {
+                    // Filter by conversation name or last message
+                    String lowerQuery = query.toLowerCase();
+                    java.util.List<Conversation> filtered = new java.util.ArrayList<>();
+                    
+                    for (Conversation conv : allConversations) {
+                        // Search in conversation name
+                        String convName = conv.getName();
+                        if (convName == null) {
+                            convName = conv.getOtherUserName(currentUserId);
+                        }
+                        
+                        if (convName != null && convName.toLowerCase().contains(lowerQuery)) {
+                            filtered.add(conv);
+                            continue;
+                        }
+                        
+                        // Search in last message
+                        if (conv.getLastMessage() != null && 
+                            conv.getLastMessage().toLowerCase().contains(lowerQuery)) {
+                            filtered.add(conv);
+                        }
+                    }
+                    
+                    conversationAdapter.updateConversations(filtered);
+                }
+            }
+        });
+    }
+    
+    private void openQRScanner() {
+        Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.qr.QRScanActivity.class);
+        startActivity(intent);
+    }
+    
+    private void showAddMenu(View anchor) {
+        android.widget.PopupMenu popup = new android.widget.PopupMenu(getContext(), anchor);
+        popup.getMenu().add("Thêm bạn bè");
+        popup.getMenu().add("Tạo nhóm");
+        
+        popup.setOnMenuItemClickListener(item -> {
+            String title = item.getTitle().toString();
+            if (title.equals("Thêm bạn bè")) {
+                // Open AddFriendActivity
+                Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.contact.AddFriendActivity.class);
+                startActivity(intent);
+                return true;
+            } else if (title.equals("Tạo nhóm")) {
+                // Open CreateGroupActivity
+                Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.group.CreateGroupActivity.class);
+                startActivity(intent);
+                return true;
+            }
+            return false;
+        });
+        popup.show();
     }
 
     private void setupRecyclerView() {
