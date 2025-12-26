@@ -20,9 +20,8 @@ import io.socket.client.Socket;
 public class SocketManager {
     private static final String TAG = "SocketManager";
 
-    // TODO: Change to production URL when deploying
-    // private static final String SOCKET_URL = "http://10.0.2.2:3000";  // Emulator localhost
-    private static final String SOCKET_URL = "https://zolachat.site";  // Production
+    // Server URL from BuildConfig (set by product flavor)
+    private static final String SOCKET_URL = com.example.doan_zaloclone.config.ServerConfig.SOCKET_URL;
 
     private static SocketManager instance;
     private Socket socket;
@@ -74,7 +73,7 @@ public class SocketManager {
                 
                 // Force WebSocket transport and secure connection
                 options.transports = new String[]{"websocket"};
-                options.secure = true;
+                options.secure = SOCKET_URL.startsWith("https://");
                 
                 options.reconnection = true;
                 options.reconnectionAttempts = 10;
