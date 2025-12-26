@@ -3,9 +3,12 @@ server {
     server_name zolachat.site www.zolachat.site;
 
     # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
+    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+    add_header X-XSS-Protection "1; mode=block";
+
+    # Upload Size Limit
+    client_max_body_size 50M;
 
     # Logging
     access_log /var/log/nginx/zaloclone-access.log;
@@ -25,6 +28,23 @@ server {
         alias /var/www/html/admin-web/;
         index index.html dashboard.html;
         try_files $uri $uri/ /admin-web/index.html;
+    }
+
+    # ==========================================
+    # 5. UPLOADS (Stickers, Images, etc.)
+    # Directly serve static files for best performance
+    # ==========================================
+    location /uploads/ {
+        alias /opt/zaloclone-api/uploads/;
+        try_files $uri $uri/ =404;
+        
+        # Cache settings
+        expires 30d;
+        add_header Cache-Control "public, no-transform";
+        
+        # CORS
+        add_header 'Access-Control-Allow-Origin' '*';
+        add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS';
     }
 
     # ==========================================

@@ -35,7 +35,7 @@ public class SocketManager {
     private OnReactionListener reactionListener;
     private OnSeenListener seenListener;
     private OnGroupEventListener groupEventListener;
-    private OnFriendEventListener friendEventListener;
+    private final java.util.List<OnFriendEventListener> friendEventListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     private SocketManager() {
         // Private constructor for singleton
@@ -367,8 +367,8 @@ public class SocketManager {
 
                     Log.e(TAG, "📩 Friend request from: " + senderName + " (" + senderId + ")");
 
-                    if (friendEventListener != null) {
-                        friendEventListener.onFriendRequestReceived(senderId, senderName);
+                    for (OnFriendEventListener listener : friendEventListeners) {
+                        listener.onFriendRequestReceived(senderId, senderName);
                     }
                 } catch (JSONException e) {
                     Log.e(TAG, "Error parsing friend_request_received event", e);
@@ -385,8 +385,8 @@ public class SocketManager {
 
                     Log.d(TAG, "✅ Friend request accepted by: " + userId);
 
-                    if (friendEventListener != null) {
-                        friendEventListener.onFriendRequestAccepted(userId);
+                    for (OnFriendEventListener listener : friendEventListeners) {
+                        listener.onFriendRequestAccepted(userId);
                     }
                 } catch (JSONException e) {
                     Log.e(TAG, "Error parsing friend_request_accepted event", e);
@@ -404,10 +404,10 @@ public class SocketManager {
                     String userId = data.getString("userId");
 
                     Log.e(TAG, "❌ Friend request rejected by: " + userId);
-                    Log.e(TAG, "friendEventListener is null? " + (friendEventListener == null));
+                    Log.e(TAG, "friendEventListeners count: " + friendEventListeners.size());
 
-                    if (friendEventListener != null) {
-                        friendEventListener.onFriendRequestRejected(userId);
+                    for (OnFriendEventListener listener : friendEventListeners) {
+                        listener.onFriendRequestRejected(userId);
                     }
                 } catch (JSONException e) {
                     Log.e(TAG, "Error parsing friend_request_rejected event", e);
@@ -424,8 +424,8 @@ public class SocketManager {
 
                     Log.d(TAG, "👥 New friend added: " + userId);
 
-                    if (friendEventListener != null) {
-                        friendEventListener.onFriendAdded(userId);
+                    for (OnFriendEventListener listener : friendEventListeners) {
+                        listener.onFriendAdded(userId);
                     }
                 } catch (JSONException e) {
                     Log.e(TAG, "Error parsing friend_added event", e);
@@ -442,11 +442,29 @@ public class SocketManager {
 
                     Log.d(TAG, "👋 Friend removed: " + userId);
 
-                    if (friendEventListener != null) {
-                        friendEventListener.onFriendRemoved(userId);
+                    for (OnFriendEventListener listener : friendEventListeners) {
+                        listener.onFriendRemoved(userId);
                     }
                 } catch (JSONException e) {
                     Log.e(TAG, "Error parsing friend_removed event", e);
+                }
+            }
+        });
+        
+        // Friend request cancelled event (sender cancelled their request)
+        socket.on("friend_request_cancelled", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String senderId = data.getString("senderId");
+
+                    Log.d(TAG, "🔔 Friend request cancelled by sender: " + senderId);
+
+                    for (OnFriendEventListener listener : friendEventListeners) {
+                        listener.onFriendRequestCancelled(senderId);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing friend_request_cancelled event", e);
                 }
             }
         });
@@ -665,8 +683,25 @@ public class SocketManager {
         this.groupEventListener = listener;
     }
 
+    public void addFriendEventListener(OnFriendEventListener listener) {
+        if (listener != null && !friendEventListeners.contains(listener)) {
+            friendEventListeners.add(listener);
+        }
+    }
+    
+    public void removeFriendEventListener(OnFriendEventListener listener) {
+        friendEventListeners.remove(listener);
+    }
+    
+    /**
+     * @deprecated Use addFriendEventListener instead
+     */
+    @Deprecated
     public void setFriendEventListener(OnFriendEventListener listener) {
-        this.friendEventListener = listener;
+        // For backward compatibility, add the listener
+        if (listener != null) {
+            addFriendEventListener(listener);
+        }
     }
 
     /**
@@ -746,6 +781,8 @@ public class SocketManager {
         void onFriendRequestAccepted(String userId);
 
         void onFriendRequestRejected(String userId);
+        
+        void onFriendRequestCancelled(String senderId);
 
         void onFriendAdded(String userId);
 

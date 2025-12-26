@@ -288,6 +288,41 @@ public class FriendRepository {
     }
 
     /**
+     * Get sent friend requests via API (requests user has sent to others)
+     *
+     * @param userId ID of the user
+     * @return LiveData containing Resource with list of sent friend requests
+     */
+    public LiveData<Resource<List<FriendRequest>>> getSentFriendRequests(@NonNull String userId) {
+        MutableLiveData<Resource<List<FriendRequest>>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+
+        Call<Map<String, Object>> call = apiService.getSentFriendRequests();
+        call.enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    List<Map<String, Object>> requestsData = (List<Map<String, Object>>) response.body().get("requests");
+                    List<FriendRequest> requests = parseSentFriendRequestsFromData(requestsData);
+
+                    Log.d(TAG, "✅ Sent friend requests loaded: " + requests.size());
+                    result.setValue(Resource.success(requests));
+                } else {
+                    result.setValue(Resource.error("HTTP " + response.code()));
+                }
+            }
+
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                Log.e(TAG, "Failed to load sent requests", t);
+                result.setValue(Resource.error(t.getMessage()));
+            }
+        });
+
+        return result;
+    }
+
+    /**
      * Remove a friend via API
      *
      * @param userId1 Current user ID
@@ -314,6 +349,47 @@ public class FriendRepository {
             @Override
             public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
                 Log.e(TAG, "Failed to remove friend", t);
+                result.setValue(Resource.error(t.getMessage()));
+            }
+        });
+
+        return result;
+    }
+    
+    /**
+     * Cancel/recall a sent friend request
+     *
+     * @param requestId ID of the friend request to cancel
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> cancelFriendRequest(@NonNull String requestId) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+
+        Call<ApiResponse<Void>> call = apiService.cancelFriendRequest(requestId);
+        call.enqueue(new Callback<ApiResponse<Void>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+                if (response.isSuccessful()) {
+                    Log.d(TAG, "✅ Friend request cancelled: " + requestId);
+                    result.setValue(Resource.success(true));
+                } else {
+                    String errorMsg = "HTTP " + response.code();
+                    try {
+                        if (response.errorBody() != null) {
+                            errorMsg = response.errorBody().string();
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error reading error body", e);
+                    }
+                    Log.e(TAG, "Failed to cancel friend request: " + errorMsg);
+                    result.setValue(Resource.error(errorMsg));
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
+                Log.e(TAG, "Failed to cancel friend request", t);
                 result.setValue(Resource.error(t.getMessage()));
             }
         });
@@ -456,6 +532,44 @@ public class FriendRepository {
             return request;
         } catch (Exception e) {
             Log.e(TAG, "Error parsing friend request", e);
+            return null;
+        }
+    }
+    
+    private List<FriendRequest> parseSentFriendRequestsFromData(List<Map<String, Object>> requestsData) {
+        List<FriendRequest> requests = new ArrayList<>();
+        if (requestsData != null) {
+            for (Map<String, Object> requestData : requestsData) {
+                FriendRequest request = parseSentFriendRequestFromMap(requestData);
+                if (request != null) {
+                    requests.add(request);
+                }
+            }
+        }
+        return requests;
+    }
+
+    private FriendRequest parseSentFriendRequestFromMap(Map<String, Object> requestData) {
+        try {
+            FriendRequest request = new FriendRequest();
+            request.setId((String) requestData.get("id"));
+            request.setFromUserId((String) requestData.get("senderId"));
+            request.setToUserId((String) requestData.get("receiverId"));
+            // For sent requests, use toUserName/toUserEmail for display
+            request.setToUserName((String) requestData.get("toUserName"));
+            request.setToUserEmail((String) requestData.get("toUserEmail"));
+            request.setStatus((String) requestData.get("status"));
+
+            Object timestampObj = requestData.get("createdAt");
+            if (timestampObj instanceof Number) {
+                request.setTimestamp(((Number) timestampObj).longValue());
+            }
+
+            Log.d(TAG, "Parsed sent friend request to: " + request.getToUserName() + " (" + request.getToUserId() + ")");
+
+            return request;
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing sent friend request", e);
             return null;
         }
     }

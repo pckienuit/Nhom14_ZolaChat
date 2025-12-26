@@ -21,6 +21,11 @@ public class SendLocationAction implements QuickAction {
     }
 
     @Override
+    public int getBackgroundColor() {
+        return android.graphics.Color.parseColor("#E91E63"); // Pink/Red
+    }
+
+    @Override
     public void execute(Context context, QuickActionCallback callback) {
         // Trigger UI to show location picker
         callback.onShowUI();

@@ -23,6 +23,15 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT =
             new SimpleDateFormat("HH:mm", Locale.getDefault());
+            
+    private static boolean isSameDay(long time1, long time2) {
+        java.util.Calendar cal1 = java.util.Calendar.getInstance();
+        java.util.Calendar cal2 = java.util.Calendar.getInstance();
+        cal1.setTimeInMillis(time1);
+        cal2.setTimeInMillis(time2);
+        return cal1.get(java.util.Calendar.YEAR) == cal2.get(java.util.Calendar.YEAR) &&
+               cal1.get(java.util.Calendar.DAY_OF_YEAR) == cal2.get(java.util.Calendar.DAY_OF_YEAR);
+    }
 
     // Cache for custom tag colors from Firestore
     private static final java.util.Map<String, Integer> customTagColorsCache = new java.util.HashMap<>();
@@ -123,8 +132,11 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
         private final TextView nameTextView;
         private final TextView lastMessageTextView;
         private final TextView memberCountTextView;
+        private final TextView timestampTextView;
+        private final TextView badgeTextView;
         private final android.widget.ImageView groupIconImageView;
         private final android.widget.ImageView pinIndicator;
+        private final android.widget.ImageView muteIndicator;
         private final LinearLayout tagsContainer;
 
         public ViewHolder(@NonNull View itemView) {
@@ -132,8 +144,11 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             nameTextView = itemView.findViewById(R.id.nameTextView);
             lastMessageTextView = itemView.findViewById(R.id.lastMessageTextView);
             memberCountTextView = itemView.findViewById(R.id.memberCountTextView);
+            timestampTextView = itemView.findViewById(R.id.timestampTextView);
+            badgeTextView = itemView.findViewById(R.id.badgeTextView);
             groupIconImageView = itemView.findViewById(R.id.groupIconImageView);
             pinIndicator = itemView.findViewById(R.id.pinIndicator);
+            muteIndicator = itemView.findViewById(R.id.muteIndicator);
             tagsContainer = itemView.findViewById(R.id.tagsContainer);
         }
 
@@ -231,10 +246,63 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             nameTextView.setText(displayName);
             lastMessageTextView.setText(conversation.getLastMessage());
 
-            // Show/hide pin indicator
+            // --- Format Timestamp ---
+            if (conversation.getTimestamp() > 0) {
+                long now = System.currentTimeMillis();
+                long diff = now - conversation.getTimestamp();
+                long oneDay = 24 * 60 * 60 * 1000;
+                
+                if (diff < oneDay && isSameDay(now, conversation.getTimestamp())) {
+                    // Today: show HH:mm or "User: ..." might optionally show time differently? No, just HH:mm
+                    // Actually, for very recent, Zalo shows "X phút" (minutes) or "Vừa xong"
+                    if (diff < 60 * 60 * 1000) {
+                         long minutes = diff / (60 * 1000);
+                         if (minutes <= 0) timestampTextView.setText("Vừa xong");
+                         else timestampTextView.setText(minutes + " phút");
+                    } else if (diff < 12 * 60 * 60 * 1000) {
+                         long hours = diff / (60 * 60 * 1000);
+                         timestampTextView.setText(hours + " giờ");
+                    } else {
+                         timestampTextView.setText(TIMESTAMP_FORMAT.format(new java.util.Date(conversation.getTimestamp())));
+                    }
+                } else {
+                     // Older: show Date or Day
+                     // For now simple date format
+                     java.text.SimpleDateFormat sdfDate = new java.text.SimpleDateFormat("dd/MM", Locale.getDefault());
+                     timestampTextView.setText(sdfDate.format(new java.util.Date(conversation.getTimestamp())));
+                }
+            } else {
+                timestampTextView.setText("");
+            }
+
+            // --- Pin Indicator ---
             if (pinIndicator != null) {
                 boolean isPinned = conversation.isPinnedByUser(currentUserId);
                 pinIndicator.setVisibility(isPinned ? View.VISIBLE : View.GONE);
+            }
+            
+            // --- Mute Indicator ---
+            // For now, hide it as we don't have isMuted logic fully visible here
+            if (muteIndicator != null) muteIndicator.setVisibility(View.GONE);
+
+            // --- Unread Badge ---
+            int unreadCount = 0; 
+            // Mock logic since getUnreadCounts() is missing in Conversation model
+            // If we want to test UI, we could force a value, but for now let's keep it 0 (hidden)
+            // or maybe show random for demo? No, better safe.
+            // TODO: Implement unread count in Conversation model
+            
+            if (unreadCount > 0) {
+                badgeTextView.setVisibility(View.VISIBLE);
+                if (unreadCount > 5) {
+                    badgeTextView.setText("5+");
+                    badgeTextView.setBackgroundResource(R.drawable.bg_red_badge_pill);
+                } else {
+                    badgeTextView.setText(String.valueOf(unreadCount));
+                    badgeTextView.setBackgroundResource(R.drawable.bg_red_badge); // Circle for single digits usually
+                }
+            } else {
+                badgeTextView.setVisibility(View.GONE);
             }
 
             // Render tags

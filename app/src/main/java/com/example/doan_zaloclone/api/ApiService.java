@@ -221,6 +221,9 @@ public interface ApiService {
 
     @GET("friends/requests")
     Call<Map<String, Object>> getFriendRequests();
+    
+    @GET("friends/requests/sent")
+    Call<Map<String, Object>> getSentFriendRequests();
 
     @POST("friends/requests")
     Call<ApiResponse<Void>> sendFriendRequest(@Body Map<String, String> requestData);
@@ -233,6 +236,9 @@ public interface ApiService {
 
     @DELETE("friends/{friendId}")
     Call<ApiResponse<Void>> unfriend(@Path("friendId") String friendId);
+    
+    @DELETE("friends/requests/{requestId}")
+    Call<ApiResponse<Void>> cancelFriendRequest(@Path("requestId") String requestId);
 
     // ========== Stickers ==========
 

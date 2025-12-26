@@ -1774,6 +1774,13 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
             // Store current contact ID for callback validation
             this.currentContactUserId = contactUserId;
+            
+            // CRITICAL: If contact is current user (self), hide friend request button
+            if (contactUserId.equals(currentUserId)) {
+                android.util.Log.d("ContactMessageViewHolder", "Contact is self - hiding friend request button");
+                btnAddFriendFromCard.setVisibility(View.GONE);
+                friendRequestDivider.setVisibility(View.GONE);
+            }
 
             android.util.Log.d("ContactMessageViewHolder", "Fetching user info for: " + contactUserId);
 
@@ -1900,6 +1907,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
          * With caching, loading state, and retry mechanism
          */
         private void setupFriendshipListener(String contactUserId, String currentUserId) {
+            // Skip if contact is self
+            if (contactUserId.equals(currentUserId)) {
+                return;
+            }
+            
             String cacheKey = currentUserId + "_" + contactUserId;
 
             // Check cache first
@@ -2011,11 +2023,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 }
             };
 
-            // Listen to outgoing requests
+            // Listen to outgoing requests (I sent to contact)
             try {
                 friendRequestListener = db.collection("friendRequests")
-                        .whereEqualTo("fromUserId", currentUserId)
-                        .whereEqualTo("toUserId", contactUserId)
+                        .whereEqualTo("senderId", currentUserId)
+                        .whereEqualTo("receiverId", contactUserId)
                         .addSnapshotListener((snapshots, error) -> {
                             if (!contactUserId.equals(this.currentContactUserId)) return;
 
@@ -2038,11 +2050,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 return;
             }
 
-            // Listen to incoming requests
+            // Listen to incoming requests (contact sent to me)
             try {
                 friendsListener = db.collection("friendRequests")
-                        .whereEqualTo("fromUserId", contactUserId)
-                        .whereEqualTo("toUserId", currentUserId)
+                        .whereEqualTo("senderId", contactUserId)
+                        .whereEqualTo("receiverId", currentUserId)
                         .addSnapshotListener((snapshots, error) -> {
                             if (!contactUserId.equals(this.currentContactUserId)) return;
 
@@ -2067,17 +2079,23 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
         /**
          * Find best status from documents: ACCEPTED > PENDING > others
+         * Note: Server stores status in lowercase (accepted, pending), so we compare case-insensitively
          */
         private String findBestStatus(java.util.List<com.google.firebase.firestore.DocumentSnapshot> docs) {
             String bestStatus = null;
             for (com.google.firebase.firestore.DocumentSnapshot doc : docs) {
                 String status = doc.getString("status");
-                if ("ACCEPTED".equals(status)) {
+                if (status == null) continue;
+                
+                // Normalize to uppercase for comparison
+                String normalizedStatus = status.toUpperCase();
+                
+                if ("ACCEPTED".equals(normalizedStatus)) {
                     return "ACCEPTED"; // Can't get better
-                } else if ("PENDING".equals(status)) {
+                } else if ("PENDING".equals(normalizedStatus)) {
                     bestStatus = "PENDING";
                 } else if (bestStatus == null) {
-                    bestStatus = status;
+                    bestStatus = normalizedStatus;
                 }
             }
             return bestStatus;

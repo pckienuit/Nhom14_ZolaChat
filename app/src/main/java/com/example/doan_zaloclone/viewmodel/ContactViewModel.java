@@ -101,6 +101,15 @@ public class ContactViewModel extends BaseViewModel {
     }
 
     /**
+     * Get sent friend requests for a user (requests user has sent to others)
+     *
+     * @param userId ID of the user
+     */
+    public LiveData<Resource<List<FriendRequest>>> getSentFriendRequests(@NonNull String userId) {
+        return friendRepository.getSentFriendRequests(userId);
+    }
+
+    /**
      * Send a friend request
      *
      * @param fromUserId   Sender user ID
@@ -164,6 +173,16 @@ public class ContactViewModel extends BaseViewModel {
     public LiveData<Resource<Boolean>> removeFriend(@NonNull String userId1,
                                                     @NonNull String userId2) {
         return friendRepository.removeFriend(userId1, userId2);
+    }
+    
+    /**
+     * Cancel/recall a sent friend request
+     *
+     * @param request The request to cancel
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> cancelFriendRequest(@NonNull FriendRequest request) {
+        return friendRepository.cancelFriendRequest(request.getId());
     }
 
     @Override

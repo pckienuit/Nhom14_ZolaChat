@@ -4,6 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 require('dotenv').config();
 
 const { initializeWebSocket } = require('./websocket');
@@ -43,10 +44,15 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Serve static uploads (stickers, etc.)
+// index.js is in src/, uploads is in root/uploads, so we go up one level
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Rate limiting
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 1 * 60 * 1000, // 1 minute
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 500 // 500 requests per window
 });
 app.use('/api/', limiter);
 

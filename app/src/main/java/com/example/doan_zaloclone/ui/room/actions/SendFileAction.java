@@ -20,6 +20,11 @@ public class SendFileAction implements QuickAction {
     }
 
     @Override
+    public int getBackgroundColor() {
+        return android.graphics.Color.parseColor("#3F51B5"); // Indigo/Blue
+    }
+
+    @Override
     public void execute(Context context, QuickActionCallback callback) {
         // Trigger file picker UI
         callback.onShowUI();

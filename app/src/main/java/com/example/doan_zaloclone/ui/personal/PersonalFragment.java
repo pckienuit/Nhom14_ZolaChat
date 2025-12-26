@@ -32,6 +32,7 @@ public class PersonalFragment extends Fragment {
     private LinearLayout compactUserCard;
     private ImageView avatarImage;
     private TextView txtDisplayName;
+    private ImageView btnSettings;
 
     // Menu items
     private View menuQrWallet;
@@ -72,6 +73,7 @@ public class PersonalFragment extends Fragment {
         compactUserCard = view.findViewById(R.id.compactUserCard);
         avatarImage = view.findViewById(R.id.avatarImage);
         txtDisplayName = view.findViewById(R.id.txtDisplayName);
+        btnSettings = view.findViewById(R.id.btn_settings);
 
         // Menu views
         menuQrWallet = view.findViewById(R.id.menuQrWallet);
@@ -83,46 +85,87 @@ public class PersonalFragment extends Fragment {
     private void setupClickListeners() {
         // Click compact user card to open full profile
         compactUserCard.setOnClickListener(v -> openProfileCard());
+        
+        if (btnSettings != null) {
+            btnSettings.setOnClickListener(v -> {
+                 Toast.makeText(getContext(), "Cài đặt & Quyền riêng tư", Toast.LENGTH_SHORT).show();
+            });
+        }
+
+        // Logout Button
+        View btnLogout = getView().findViewById(R.id.btnLogout);
+        if (btnLogout != null) {
+            btnLogout.setOnClickListener(v -> showLogoutConfirmation());
+        }
+    }
+
+    private void showLogoutConfirmation() {
+        new androidx.appcompat.app.AlertDialog.Builder(requireContext())
+                .setTitle("Đăng xuất")
+                .setMessage("Bạn có chắc chắn muốn đăng xuất?")
+                .setPositiveButton("Đăng xuất", (dialog, which) -> performLogout())
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+
+    private void performLogout() {
+        com.google.firebase.auth.FirebaseAuth.getInstance().signOut();
+        
+        Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.login.LoginActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        startActivity(intent);
     }
 
     private void setupMenuItems() {
+        // Cloud của tôi
+        setupMenuItem(menuCloud, R.drawable.ic_cloud_blue,
+                "Cloud của tôi", "Lưu trữ các tin nhắn quan trọng",
+                new MyCloudFragment());
+
         // QR Wallet
-        setupMenuItem(menuQrWallet, R.drawable.ic_qr_code,
+        setupMenuItem(menuQrWallet, R.drawable.ic_qr_wallet_blue,
                 "Ví QR", "Lưu trữ và xuất trình các mã QR quan trọng",
                 new QrWalletFragment());
 
         // Account & Security
-        setupMenuItem(menuSecurity, R.drawable.ic_security,
-                "Tài khoản và bảo mật", "Quản lý thông tin tài khoản",
+        setupMenuItem(menuSecurity, R.drawable.ic_security_blue,
+                "Tài khoản và bảo mật", "",
                 new SecurityFragment());
 
         // Privacy
-        setupMenuItem(menuPrivacy, R.drawable.ic_privacy,
-                "Quyền riêng tư", "Cài đặt quyền riêng tư",
+        setupMenuItem(menuPrivacy, R.drawable.ic_privacy_blue,
+                "Quyền riêng tư", "",
                 new PrivacyFragment());
-
-        // My Cloud
-        setupMenuItem(menuCloud, R.drawable.ic_cloud,
-                "Cloud của tôi", "Lưu trữ các tin nhắn quan trọng",
-                new MyCloudFragment());
     }
 
     private void setupMenuItem(View menuView, int iconRes, String title, String description, Fragment targetFragment) {
+        if (menuView == null) return;
+        
         ImageView icon = menuView.findViewById(R.id.menuIcon);
         TextView titleView = menuView.findViewById(R.id.menuTitle);
         TextView descView = menuView.findViewById(R.id.menuDescription);
 
         icon.setImageResource(iconRes);
         titleView.setText(title);
-        descView.setText(description);
+        
+        if (description != null && !description.isEmpty()) {
+            descView.setText(description);
+            descView.setVisibility(View.VISIBLE);
+        } else {
+            descView.setVisibility(View.GONE);
+        }
 
         // Navigate to placeholder fragment
         menuView.setOnClickListener(v -> {
-            requireActivity().getSupportFragmentManager()
-                    .beginTransaction()
-                    .replace(R.id.fragmentContainer, targetFragment)
-                    .addToBackStack(null)
-                    .commit();
+             if (targetFragment != null) {
+                requireActivity().getSupportFragmentManager()
+                        .beginTransaction()
+                        .replace(R.id.fragmentContainer, targetFragment)
+                        .addToBackStack(null)
+                        .commit();
+            } else {
+                 Toast.makeText(getContext(), title + " - Tính năng đang phát triển", Toast.LENGTH_SHORT).show();
+            }
         });
     }
 

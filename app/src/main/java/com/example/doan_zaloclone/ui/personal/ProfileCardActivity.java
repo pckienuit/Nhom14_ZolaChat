@@ -48,15 +48,15 @@ public class ProfileCardActivity extends AppCompatActivity {
     private boolean areFriends = false;
 
     // Views
-    private Toolbar toolbar;
+    private ImageView btnBack; 
     private ImageView coverImage;
     private ImageView avatarImage;
-    private ImageButton btnEditCover;
-    private ImageButton btnEditAvatar;
+    private View btnEditCover; 
+    private View btnEditAvatar;
     private TextView txtDisplayName;
     private TextView txtBio;
-    private LinearLayout nameContainer;
-    private LinearLayout bioContainer;
+    private View nameContainer;
+    private View bioContainer;
     private MaterialButton btnAddFriend;
 
     // Image pickers
@@ -144,47 +144,110 @@ public class ProfileCardActivity extends AppCompatActivity {
                 }
         );
     }
+    
+    // ...
 
     private void initializeViews() {
-        toolbar = findViewById(R.id.toolbar);
+        // Toolbar Views
+        btnBack = findViewById(R.id.btnBack);
+        
         coverImage = findViewById(R.id.coverImage);
         avatarImage = findViewById(R.id.avatarImage);
-        btnEditCover = findViewById(R.id.btnEditCover);
+        
+        // These are invisible in new layout but kept for compatibility or repurposed
+        btnEditCover = findViewById(R.id.btnEditCover); 
         btnEditAvatar = findViewById(R.id.btnEditAvatar);
+        
         txtDisplayName = findViewById(R.id.txtDisplayName);
         txtBio = findViewById(R.id.txtBio);
         nameContainer = findViewById(R.id.nameContainer);
         bioContainer = findViewById(R.id.bioContainer);
         btnAddFriend = findViewById(R.id.btnAddFriend);
-
-        // Hide edit buttons if not editable
-        if (!isEditable) {
-            btnEditCover.setVisibility(View.GONE);
-            btnEditAvatar.setVisibility(View.GONE);
-            nameContainer.setClickable(false);
-            bioContainer.setClickable(false);
-        }
     }
 
     private void setupToolbar() {
-        setSupportActionBar(toolbar);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setTitle("Trang cá nhân");
+         if (btnBack != null) {
+             btnBack.setOnClickListener(v -> finish());
+         }
+         
+         View btnMore = findViewById(R.id.btnMore);
+         if (btnMore != null) {
+             btnMore.setOnClickListener(this::showMoreMenu);
+         }
+    }
+
+    private void showMoreMenu(View view) {
+        android.widget.PopupMenu popup = new android.widget.PopupMenu(this, view);
+        
+        // Add options
+        if (isEditable) {
+            // Self profile options
+            popup.getMenu().add("Cập nhật thông tin");
+        } else {
+            // Other user profile options
+            if (areFriends) {
+                 popup.getMenu().add("Xóa bạn bè");
+            }
+             popup.getMenu().add("Chặn người này");
+             popup.getMenu().add("Báo xấu");
         }
-        toolbar.setNavigationOnClickListener(v -> finish());
+
+        popup.setOnMenuItemClickListener(item -> {
+            String title = item.getTitle().toString();
+            if (title.equals("Xóa bạn bè")) {
+                showDeleteFriendConfirmation();
+                return true;
+            } else if (title.equals("Cập nhật thông tin")) {
+                showEditNameDialog(); // Reuse existing dialog flow or create a new general one
+                return true;
+            }
+            Toast.makeText(this, "Tính năng " + title + " đang phát triển", Toast.LENGTH_SHORT).show();
+            return false;
+        });
+        
+        popup.show();
+    }
+
+    private void showDeleteFriendConfirmation() {
+        new AlertDialog.Builder(this)
+                .setTitle("Xóa bạn bè")
+                .setMessage("Bạn có chắc chắn muốn xóa người này khỏi danh sách bạn bè?")
+                .setPositiveButton("Xóa", (dialog, which) -> {
+                    if (currentUserId != null && userId != null) {
+                        friendRepository.removeFriend(currentUserId, userId).observe(this, resource -> {
+                            if (resource.isSuccess()) {
+                                Toast.makeText(this, "Đã xóa bạn bè", Toast.LENGTH_SHORT).show();
+                                areFriends = false;
+                                updateAddFriendButtonVisibility();
+                                setResult(RESULT_OK); // Notify caller to refresh
+                                
+                                // Notify via WebSocket if needed, though fragment should handle it.
+                                // Actually, socket event will trigger fragment refresh.
+                            } else {
+                                Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
     }
 
     private void setupClickListeners() {
         if (isEditable) {
-            nameContainer.setOnClickListener(v -> showEditNameDialog());
+            // Allow clicking on name/bio to edit
+            txtDisplayName.setOnClickListener(v -> showEditNameDialog());
             bioContainer.setOnClickListener(v -> showEditBioDialog());
-            btnEditAvatar.setOnClickListener(v -> pickAvatarImage());
-            btnEditCover.setOnClickListener(v -> pickCoverImage());
+            
+            // Allow clicking images to edit
+            avatarImage.setOnClickListener(v -> pickAvatarImage());
+            coverImage.setOnClickListener(v -> pickCoverImage());
         }
 
         // Add friend button click listener
-        btnAddFriend.setOnClickListener(v -> sendFriendRequest());
+        if (btnAddFriend != null) {
+             btnAddFriend.setOnClickListener(v -> sendFriendRequest());
+        }
     }
 
     private void observeViewModel() {

@@ -1,0 +1,16 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="40dp"
+    android:height="40dp"
+    android:viewportWidth="40"
+    android:viewportHeight="40">
+    
+    <!-- Blue Background with rounded corners -->
+    <path
+        android:fillColor="#0068FF"
+        android:pathData="M12,0L28,0A12,12,0,0,1,40,12L40,28A12,12,0,0,1,28,40L12,40A12,12,0,0,1,0,28L0,12A12,12,0,0,1,12,0z" />
+        
+    <!-- White Cake Icon -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M20,10L20,10l2,0l0,4l-4,0l0,-4l2,0zm-8,6h16v4h-16z m-2,6h20v10h-20z" />
+</vector>
