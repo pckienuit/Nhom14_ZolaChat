@@ -333,7 +333,7 @@ public class RoomActivity extends AppCompatActivity {
         setupInsets();
     }
     
-    // Phase 4A, 4B, 4C & 4D-1: Voice Record - Full Implementation with Toggle UI
+    // Phase 4A, 4B, 4C & 4D-1/4D-2: Voice Record - Full Implementation with Waveform
     private static final int RECORD_AUDIO_PERMISSION_CODE = 1001;
     private boolean isRecording = false;
     private android.media.MediaRecorder mediaRecorder;
@@ -348,6 +348,9 @@ public class RoomActivity extends AppCompatActivity {
     private ImageButton stopRecordingButton;
     private ImageButton deleteRecordingButton;
     
+    // Phase 4D-2: Waveform visualization
+    private WaveformView waveformView;
+    
     private void setupVoiceRecordButton() {
         if (voiceRecordButton == null) return;
         
@@ -356,6 +359,9 @@ public class RoomActivity extends AppCompatActivity {
         recordingTimerText = findViewById(R.id.recordingTimerText);
         stopRecordingButton = findViewById(R.id.stopRecordingButton);
         deleteRecordingButton = findViewById(R.id.deleteRecordingButton);
+        
+        // Phase 4D-2: Bind waveform view
+        waveformView = findViewById(R.id.waveformView);
         
         // Phase 4D-1: Click to toggle recording (not long-press)
         voiceRecordButton.setOnClickListener(v -> {
@@ -519,6 +525,10 @@ public class RoomActivity extends AppCompatActivity {
         if (recordingTimerText != null) {
             recordingTimerText.setText("00:00");
         }
+        // Phase 4D-2: Clear waveform for new recording
+        if (waveformView != null) {
+            waveformView.clear();
+        }
     }
     
     // Phase 4D-1: Hide recording UI, show normal input
@@ -639,8 +649,24 @@ public class RoomActivity extends AppCompatActivity {
                         recordingTimerText.setText(timeStr);
                     }
                     
-                    // Schedule next update
-                    recordingTimerHandler.postDelayed(this, 1000);
+                    // Phase 4D-2: Get amplitude from MediaRecorder and update waveform
+                    if (mediaRecorder != null && waveformView != null) {
+                        try {
+                            // Get max amplitude (0-32767 for 16-bit audio)
+                            int maxAmplitude = mediaRecorder.getMaxAmplitude();
+                            
+                            // Normalize to 0-100 range
+                            float normalizedAmplitude = (maxAmplitude / 32767f) * 100f;
+                            
+                            // Add to waveform visualization
+                            waveformView.addAmplitude(normalizedAmplitude);
+                        } catch (IllegalStateException e) {
+                            // MediaRecorder not in proper state, ignore
+                        }
+                    }
+                    
+                    // Schedule next update (faster for waveform smoothness)
+                    recordingTimerHandler.postDelayed(this, 100); // Update every 100ms
                 }
             }
         };
