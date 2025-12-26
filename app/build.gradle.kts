@@ -32,12 +32,34 @@ android {
             )
         }
     }
+    
+    // Product flavors for server environment switching
+    flavorDimensions += "environment"
+    
+    productFlavors {
+        create("development") {
+            dimension = "environment"
+            versionNameSuffix = "-dev"
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000/api/\"")
+            buildConfigField("String", "SOCKET_URL", "\"http://10.0.2.2:3000\"")
+            buildConfigField("String", "VPS_BASE_URL", "\"http://10.0.2.2:3000\"")
+        }
+        
+        create("production") {
+            dimension = "environment"
+            buildConfigField("String", "API_BASE_URL", "\"https://zolachat.site/api/\"")
+            buildConfigField("String", "SOCKET_URL", "\"https://zolachat.site\"")
+            buildConfigField("String", "VPS_BASE_URL", "\"https://zolachat.site\"")
+        }
+    }
+    
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true  // Enable BuildConfig generation
     }
 }
 

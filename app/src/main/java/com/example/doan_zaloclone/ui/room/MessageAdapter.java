@@ -56,6 +56,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     public static final int VIEW_TYPE_LIVE_LOCATION_RECEIVED = 17;
     public static final int VIEW_TYPE_STICKER_SENT = 18;
     public static final int VIEW_TYPE_STICKER_RECEIVED = 19;
+    public static final int VIEW_TYPE_VOICE_SENT = 20;
+    public static final int VIEW_TYPE_VOICE_RECEIVED = 21;
 
     // Static SimpleDateFormat to avoid recreation in bind()
     private static final SimpleDateFormat TIMESTAMP_FORMAT =
@@ -537,6 +539,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             return isSent ? VIEW_TYPE_STICKER_SENT : VIEW_TYPE_STICKER_RECEIVED;
         }
 
+        // Voice messages
+        if (Message.TYPE_VOICE.equals(message.getType())) {
+            return isSent ? VIEW_TYPE_VOICE_SENT : VIEW_TYPE_VOICE_RECEIVED;
+        }
+
         if (isSent) {
             if (isFile) return VIEW_TYPE_FILE_SENT;
             return isImage ? VIEW_TYPE_IMAGE_SENT : VIEW_TYPE_SENT;
@@ -627,6 +634,14 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 view = LayoutInflater.from(parent.getContext())
                         .inflate(R.layout.item_message_sticker_received, parent, false);
                 return new StickerMessageViewHolder(view, false);
+            case VIEW_TYPE_VOICE_SENT:
+                view = LayoutInflater.from(parent.getContext())
+                        .inflate(R.layout.item_message_voice_sent, parent, false);
+                return com.example.doan_zaloclone.adapters.VoiceMessageViewHolder.create(view);
+            case VIEW_TYPE_VOICE_RECEIVED:
+                view = LayoutInflater.from(parent.getContext())
+                        .inflate(R.layout.item_message_voice_received, parent, false);
+                return com.example.doan_zaloclone.adapters.VoiceMessageViewHolder.create(view);
             default:
                 view = LayoutInflater.from(parent.getContext())
                         .inflate(R.layout.item_message_sent, parent, false);
@@ -664,8 +679,19 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             ((LocationMessageViewHolder) holder).bind(message);
         } else if (holder instanceof StickerMessageViewHolder) {
             ((StickerMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
+        } else if (holder instanceof com.example.doan_zaloclone.adapters.VoiceMessageViewHolder) {
+            ((com.example.doan_zaloclone.adapters.VoiceMessageViewHolder) holder).bind(message);
         } else if (holder instanceof RecalledMessageViewHolder) {
             // Recalled messages just display static text, no binding needed
+        }
+    }
+
+    @Override
+    public void onViewRecycled(@NonNull RecyclerView.ViewHolder holder) {
+        super.onViewRecycled(holder);
+        // Cleanup MediaPlayer when voice message ViewHolder is recycled
+        if (holder instanceof com.example.doan_zaloclone.adapters.VoiceMessageViewHolder) {
+            ((com.example.doan_zaloclone.adapters.VoiceMessageViewHolder) holder).onRecycled();
         }
     }
 

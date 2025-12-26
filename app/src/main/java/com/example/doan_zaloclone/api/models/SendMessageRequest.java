@@ -146,7 +146,19 @@ public class SendMessageRequest {
             this.stickerUrl = message.getStickerUrl();
             this.isStickerAnimated = message.isStickerAnimated() ? true : null;
         }
+
+        // Voice
+        if (Message.TYPE_VOICE.equals(message.getType())) {
+            this.voiceUrl = message.getVoiceUrl();
+            this.voiceDuration = message.getVoiceDuration() > 0 ? message.getVoiceDuration() : null;
+        }
     }
+
+    @SerializedName("voiceUrl")
+    private String voiceUrl;
+
+    @SerializedName("voiceDuration")
+    private Integer voiceDuration;
 
     // Getters and setters
     public String getContent() {
