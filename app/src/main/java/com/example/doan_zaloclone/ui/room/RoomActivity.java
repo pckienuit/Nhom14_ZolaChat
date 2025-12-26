@@ -32,6 +32,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.doan_zaloclone.R;
+import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.models.Message;
 import com.example.doan_zaloclone.repository.ChatRepository;
 import com.example.doan_zaloclone.ui.call.CallActivity;
@@ -133,6 +134,7 @@ public class RoomActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        android.util.Log.e("ANTIGRAVITY", "CODE VERSION 1132 - CHECK UI VISIBILITY");
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         setContentView(R.layout.activity_room);
 
@@ -292,6 +294,9 @@ public class RoomActivity extends AppCompatActivity {
     private LinearLayout inputContainer;
 
     private void initViews() {
+        // Init banner first for debugging
+        initAddFriendBanner();
+
         toolbar = findViewById(R.id.toolbar);
         titleTextView = findViewById(R.id.titleTextView);
         messagesRecyclerView = findViewById(R.id.messagesRecyclerView);
@@ -333,11 +338,239 @@ public class RoomActivity extends AppCompatActivity {
 
         // Setup voice record button (Phase 4A)
         setupVoiceRecordButton();
-
+        
         initPinnedMessagesViews();
         initReplyBarViews();
+        // initAddFriendBanner(); // Moved to top
         
         setupInsets();
+    }
+    
+    // Add friend banner views
+    private LinearLayout addFriendBanner;
+    private com.google.android.material.button.MaterialButton btnSendFriendRequest;
+    private com.example.doan_zaloclone.repository.FriendRepository friendRepository;
+    
+    /**
+     * Initialize add friend banner for non-friend conversations
+     */
+    private void initAddFriendBanner() {
+        addFriendBanner = findViewById(R.id.addFriendBanner);
+        btnSendFriendRequest = findViewById(R.id.btnSendFriendRequest);
+        friendRepository = new com.example.doan_zaloclone.repository.FriendRepository();
+        
+        // Setup button click
+        if (btnSendFriendRequest != null) {
+            btnSendFriendRequest.setOnClickListener(v -> sendFriendRequestFromBanner());
+        }
+        
+        // Listen for realtime updates
+        friendRepository.getFriendListRefreshNeeded().observe(this, refresh -> {
+            if (Boolean.TRUE.equals(refresh)) checkFriendshipStatusForBanner();
+        });
+        
+        friendRepository.getFriendRequestRefreshNeeded().observe(this, refresh -> {
+            if (Boolean.TRUE.equals(refresh)) checkFriendshipStatusForBanner();
+        });
+        
+        // Check initial status
+        checkFriendshipStatusForBanner();
+    }
+    
+    /**
+     * Check if current user is friends with the other user
+     */
+    private void checkFriendshipStatusForBanner() {
+        android.util.Log.e("ANTIGRAVITY", "checkFriendshipStatusForBanner START");
+        
+        if (conversationId == null) {
+            android.util.Log.e("ANTIGRAVITY", "conversationId is NULL");
+            return;
+        }
+        if (addFriendBanner == null) {
+            android.util.Log.e("ANTIGRAVITY", "addFriendBanner View is NULL");
+            return;
+        }
+        
+        String currentUserId = firebaseAuth.getCurrentUser() != null ? 
+            firebaseAuth.getCurrentUser().getUid() : null;
+        if (currentUserId == null) {
+            android.util.Log.e("ANTIGRAVITY", "Current User NULL");
+            return;
+        }
+        
+        // Load conversation from Firestore
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            .collection("conversations")
+            .document(conversationId)
+            .get()
+            .addOnSuccessListener(documentSnapshot -> {
+                if (!documentSnapshot.exists()) {
+                    android.util.Log.e("ANTIGRAVITY", "Document does not exist -> Hide");
+                    addFriendBanner.setVisibility(View.GONE);
+                    return;
+                }
+                
+                String type = documentSnapshot.getString("type");
+                android.util.Log.e("ANTIGRAVITY", "Conv Type: " + type);
+                
+                // Only show for 1-1 conversations
+                if ("group".equalsIgnoreCase(type)) {
+                    android.util.Log.e("ANTIGRAVITY", "Is Group -> Hide");
+                    addFriendBanner.setVisibility(View.GONE);
+                    return;
+                }
+                
+                // Get participants
+                @SuppressWarnings("unchecked")
+                java.util.List<String> participantIds = (java.util.List<String>) documentSnapshot.get("participantIds");
+                
+                if (participantIds == null) {
+                    android.util.Log.e("ANTIGRAVITY", "participantIds null -> Trying memberIds");
+                    participantIds = (java.util.List<String>) documentSnapshot.get("memberIds");
+                }
+                
+                if (participantIds == null || participantIds.size() != 2) {
+                    android.util.Log.e("ANTIGRAVITY", "Participants != 2 -> Hide (" + (participantIds==null?"null":participantIds.size()) + ")");
+                    addFriendBanner.setVisibility(View.GONE);
+                    return;
+                }
+                
+                String otherUserId = null;
+                for (String participantId : participantIds) {
+                    if (!participantId.equals(currentUserId)) {
+                        otherUserId = participantId;
+                        break;
+                    }
+                }
+                
+                if (otherUserId == null) {
+                    android.util.Log.e("ANTIGRAVITY", "Other User ID not found -> Hide");
+                    addFriendBanner.setVisibility(View.GONE);
+                    return;
+                }
+                
+                String finalOtherUserId = otherUserId;
+                android.util.Log.e("ANTIGRAVITY", "CheckingFriendship with: " + finalOtherUserId);
+                
+                // Check friendship status
+                friendRepository.checkFriendship(currentUserId, finalOtherUserId)
+                    .observe(RoomActivity.this, friendshipResource -> {
+                        if (friendshipResource != null && friendshipResource.isSuccess()) {
+                            boolean areFriendsStatus = friendshipResource.getData() != null && 
+                                               friendshipResource.getData();
+                            
+                            // Update member variable
+                            RoomActivity.this.areFriends = areFriendsStatus;
+                            RoomActivity.this.otherUserId = finalOtherUserId;
+                            
+                            if (areFriendsStatus) {
+                                // Already friends -> Hide banner
+                                android.util.Log.e("ANTIGRAVITY", "Already Friends -> Hide Banner");
+                                addFriendBanner.setVisibility(View.GONE);
+                            } else {
+                                // Not friends -> Check if request sent
+                                android.util.Log.e("ANTIGRAVITY", "Not Friends -> Calling checkSentRequestStatus");
+                                checkSentRequestStatus(currentUserId, finalOtherUserId);
+                            }
+                        } else {
+                            // Error checking -> Hide to vary safe
+                            addFriendBanner.setVisibility(View.GONE);
+                        }
+                    });
+            })
+            .addOnFailureListener(e -> {
+                android.util.Log.e("AddFriendBanner", "Failed to load conversation", e);
+                android.util.Log.e("ANTIGRAVITY", "Load Conv Failed -> Hide Banner");
+                addFriendBanner.setVisibility(View.GONE);
+            });
+    }
+
+    private void checkSentRequestStatus(String currentUserId, String otherUserId) {
+        // Optimistic UI: Show banner immediately for non-friends
+        android.util.Log.e("ANTIGRAVITY", "checkSentRequestStatus called -> Setting VISIBLE");
+        addFriendBanner.setVisibility(View.VISIBLE);
+        
+        friendRepository.getSentFriendRequests(currentUserId)
+            .observe(RoomActivity.this, sentResource -> {
+                if (sentResource == null) return;
+                
+                // If success, update button state
+                if (sentResource.isSuccess() && sentResource.getData() != null) {
+                    boolean isSent = false;
+                    for (com.example.doan_zaloclone.models.FriendRequest req : sentResource.getData()) {
+                        if (otherUserId.equals(req.getToUserId()) && 
+                            "PENDING".equalsIgnoreCase(req.getStatus())) {
+                            isSent = true;
+                            break;
+                        }
+                    }
+                    
+                    if (isSent) {
+                        btnSendFriendRequest.setText("Đã gửi lời mời");
+                        btnSendFriendRequest.setEnabled(false);
+                    } else {
+                        btnSendFriendRequest.setText("Kết bạn");
+                        btnSendFriendRequest.setEnabled(true);
+                    }
+                }
+                // Ignore Loading/Error states (keep default "Kết bạn" state if error)
+            });
+    }
+    
+    /**
+     * Send friend request from banner
+     */
+    private void sendFriendRequestFromBanner() {
+        String currentUserId = firebaseAuth.getCurrentUser() != null ? 
+            firebaseAuth.getCurrentUser().getUid() : null;
+        if (currentUserId == null) {
+            Toast.makeText(this, "Lỗi: Không xác định được người dùng", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        if (otherUserId == null || otherUserId.isEmpty()) {
+            Toast.makeText(this, "Lỗi: Không tìm thấy người dùng", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Disable button to prevent multiple clicks
+        btnSendFriendRequest.setEnabled(false);
+        btnSendFriendRequest.setText("Đang gửi...");
+        
+        // Get current user name
+        new com.example.doan_zaloclone.repository.UserRepository()
+            .getUser(currentUserId)
+            .observe(this, userResource -> {
+                if (userResource != null && userResource.isSuccess() && 
+                    userResource.getData() != null) {
+                    
+                    String currentUserName = userResource.getData().getName() != null ?
+                        userResource.getData().getName() : "Người dùng";
+                    
+                    // Send friend request
+                    friendRepository.sendFriendRequest(currentUserId, otherUserId, currentUserName)
+                        .observe(this, friendResource -> {
+                            if (friendResource != null) {
+                                if (friendResource.isSuccess()) {
+                                    Toast.makeText(this, "Đã gửi lời mời kết bạn", 
+                                        Toast.LENGTH_SHORT).show();
+                                    btnSendFriendRequest.setText("Đã gửi lời mời");
+                                    
+                                    // Hide banner after sending request
+                                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                        addFriendBanner.setVisibility(View.GONE);
+                                    }, 1000);
+                                } else {
+                                    Toast.makeText(this, "Lỗi: " + friendResource.getMessage(),
+                                        Toast.LENGTH_SHORT).show();
+                                    btnSendFriendRequest.setText("Kết bạn");
+                                    btnSendFriendRequest.setEnabled(true);
+                                }
+                            }
+                        });
+                }
+            });
     }
     
     // Phase 4A, 4B, 4C & 4D-1/4D-2/4D-3: Voice Record - Full Implementation with Editor
