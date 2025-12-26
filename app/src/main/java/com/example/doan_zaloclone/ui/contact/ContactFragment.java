@@ -150,14 +150,8 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     private void initViews(View view) {
         friendsRecyclerView = view.findViewById(R.id.friendsRecyclerView);
         
-        // Search button - open AddFriendActivity (has search function)
-        View btnSearch = view.findViewById(R.id.btn_search);
-        if (btnSearch != null) {
-            btnSearch.setOnClickListener(v -> {
-                Intent intent = new Intent(getActivity(), com.example.doan_zaloclone.ui.contact.AddFriendActivity.class);
-                startActivity(intent);
-            });
-        }
+        // Setup inline search EditText for realtime filtering
+        setupSearchEditText(view);
         
         // Find and set click listener for Friend Invitations row
         View friendRequestsRow = view.findViewById(R.id.clickable_friend_requests);
@@ -185,6 +179,58 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 startActivity(intent);
             });
         }
+    }
+    
+    private void setupSearchEditText(View view) {
+        android.widget.EditText searchEditText = view.findViewById(R.id.searchEditText);
+        if (searchEditText == null) return;
+        
+        // TextWatcher for realtime filtering
+        searchEditText.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterFriends(s.toString());
+            }
+            
+            @Override
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+    }
+    
+    private void filterFriends(String query) {
+        if (friendsAdapter == null) return;
+        
+        String currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser() != null
+                ? com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser().getUid()
+                : "";
+        
+        // Get all friends from ViewModel
+        contactViewModel.getFriends(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                java.util.List<com.example.doan_zaloclone.models.User> allFriends = resource.getData();
+                
+                if (query == null || query.trim().isEmpty()) {
+                    // Show all if search is empty
+                    friendsAdapter.updateFriends(allFriends);
+                } else {
+                    // Filter by friend name
+                    String lowerQuery = query.toLowerCase();
+                    java.util.List<com.example.doan_zaloclone.models.User> filtered = new java.util.ArrayList<>();
+                    
+                    for (com.example.doan_zaloclone.models.User friend : allFriends) {
+                        if (friend.getName() != null && 
+                            friend.getName().toLowerCase().contains(lowerQuery)) {
+                            filtered.add(friend);
+                        }
+                    }
+                    
+                    friendsAdapter.updateFriends(filtered);
+                }
+            }
+        });
     }
 
     private void setupRecyclerViews() {

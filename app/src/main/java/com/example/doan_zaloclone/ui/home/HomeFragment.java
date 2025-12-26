@@ -64,28 +64,84 @@ public class HomeFragment extends Fragment {
         filterChipsContainer = view.findViewById(R.id.filterChipsContainer);
         setupFilterChips();
         
-        // Bind header buttons
-        View btnSearch = view.findViewById(R.id.btn_search);
-        View btnQr = view.findViewById(R.id.btn_qr);
-        View btnAdd = view.findViewById(R.id.btn_add);
-        
-        // Search button - search conversations and messages
-        if (btnSearch != null) {
-            btnSearch.setOnClickListener(v -> {
-                // TODO: Open search activity for conversations/messages
-                Toast.makeText(getContext(), "Tìm kiếm cuộc trò chuyện (Đang phát triển)", Toast.LENGTH_SHORT).show();
-            });
-        }
+        // Setup inline search EditText
+        setupSearchEditText(view);
         
         // QR button - scan QR code
+        View btnQr = view.findViewById(R.id.btn_qr);
         if (btnQr != null) {
             btnQr.setOnClickListener(v -> openQRScanner());
         }
         
         // Add button - show menu for adding friend or creating group
+        View btnAdd = view.findViewById(R.id.btn_add);
         if (btnAdd != null) {
             btnAdd.setOnClickListener(v -> showAddMenu(v));
         }
+    }
+    
+    private void setupSearchEditText(View view) {
+        android.widget.EditText searchEditText = view.findViewById(R.id.searchEditText);
+        if (searchEditText == null) return;
+        
+        // TextWatcher for realtime filtering
+        searchEditText.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterConversations(s.toString());
+            }
+            
+            @Override
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+    }
+    
+    private void filterConversations(String query) {
+        if (conversationAdapter == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser() != null
+                ? firebaseAuth.getCurrentUser().getUid()
+                : "";
+        
+        // Get all conversations from ViewModel
+        homeViewModel.getConversations(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                java.util.List<Conversation> allConversations = resource.getData();
+                
+                if (query == null || query.trim().isEmpty()) {
+                    // Show all if search is empty
+                    conversationAdapter.updateConversations(allConversations);
+                } else {
+                    // Filter by conversation name or last message
+                    String lowerQuery = query.toLowerCase();
+                    java.util.List<Conversation> filtered = new java.util.ArrayList<>();
+                    
+                    for (Conversation conv : allConversations) {
+                        // Search in conversation name
+                        String convName = conv.getName();
+                        if (convName == null) {
+                            convName = conv.getOtherUserName(currentUserId);
+                        }
+                        
+                        if (convName != null && convName.toLowerCase().contains(lowerQuery)) {
+                            filtered.add(conv);
+                            continue;
+                        }
+                        
+                        // Search in last message
+                        if (conv.getLastMessage() != null && 
+                            conv.getLastMessage().toLowerCase().contains(lowerQuery)) {
+                            filtered.add(conv);
+                        }
+                    }
+                    
+                    conversationAdapter.updateConversations(filtered);
+                }
+            }
+        });
     }
     
     private void openQRScanner() {
