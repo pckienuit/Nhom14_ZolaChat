@@ -357,6 +357,7 @@ public class RoomActivity extends AppCompatActivity {
     private WaveformView editorWaveformView;
     private TextView editorDurationText;
     private ImageButton playPauseButton;
+    private ImageButton closeEditorButton;
     private Button speed05Button, speed10Button, speed15Button, speed20Button;
     private Button reRecordButton, sendVoiceButton;
     
@@ -387,6 +388,7 @@ public class RoomActivity extends AppCompatActivity {
         editorWaveformView = findViewById(R.id.editorWaveformView);
         editorDurationText = findViewById(R.id.editorDurationText);
         playPauseButton = findViewById(R.id.playPauseButton);
+        closeEditorButton = findViewById(R.id.closeEditorButton);
         speed05Button = findViewById(R.id.speed05Button);
         speed10Button = findViewById(R.id.speed10Button);
         speed15Button = findViewById(R.id.speed15Button);
@@ -433,6 +435,19 @@ public class RoomActivity extends AppCompatActivity {
         }
         if (speed20Button != null) {
             speed20Button.setOnClickListener(v -> setPlaybackSpeed(2.0f));
+        }
+        
+        // Phase 4D-3d: Send and Re-record buttons
+        if (sendVoiceButton != null) {
+            sendVoiceButton.setOnClickListener(v -> sendRecordedVoice());
+        }
+        if (reRecordButton != null) {
+            reRecordButton.setOnClickListener(v -> reRecord());
+        }
+        
+        // Close editor button
+        if (closeEditorButton != null) {
+            closeEditorButton.setOnClickListener(v -> closeEditor());
         }
     }
     
@@ -706,6 +721,73 @@ public class RoomActivity extends AppCompatActivity {
             activeButton.setBackgroundColor(activeBgColor);
             activeButton.setTextColor(activeTextColor);
             activeButton.setTypeface(null, android.graphics.Typeface.BOLD);
+        }
+    }
+    
+    // Phase 4D-3d: Send recorded voice message
+    private void sendRecordedVoice() {
+        // Stop playback if playing
+        if (isPlaying) {
+            pauseAudio();
+        }
+        
+        // Upload and send
+        if (audioFilePath != null && !audioFilePath.isEmpty()) {
+            uploadVoiceMessage(audioFilePath, recordedDurationSeconds);
+        } else {
+            Toast.makeText(this, "Không tìm thấy file ghi âm", Toast.LENGTH_SHORT).show();
+        }
+        
+        // Hide editor UI and show normal input
+        hideEditorUI();
+    }
+    
+    // Phase 4D-3d: Re-record (discard current and start new)
+    private void reRecord() {
+        // Stop playback if playing
+        if (isPlaying) {
+            pauseAudio();
+        }
+        
+        // Release media player
+        releaseMediaPlayer();
+        
+        // Delete current audio file
+        deleteAudioFile();
+        
+        // Hide editor UI and show normal input
+        hideEditorUI();
+        
+        // Auto-start recording again
+        startVoiceRecording();
+    }
+    
+    // Close editor without re-recording
+    private void closeEditor() {
+        // Stop playback if playing
+        if (isPlaying) {
+            pauseAudio();
+        }
+        
+        // Release media player
+        releaseMediaPlayer();
+        
+        // Delete current audio file
+        deleteAudioFile();
+        
+        // Hide editor UI and show normal input
+        hideEditorUI();
+        
+        Toast.makeText(this, "Đã hủy", Toast.LENGTH_SHORT).show();
+    }
+    
+    // Phase 4D-3d: Hide editor UI and show normal input
+    private void hideEditorUI() {
+        if (editorInputLayout != null) {
+            editorInputLayout.setVisibility(View.GONE);
+        }
+        if (normalInputLayout != null) {
+            normalInputLayout.setVisibility(View.VISIBLE);
         }
     }
     

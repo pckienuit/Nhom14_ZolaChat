@@ -281,6 +281,23 @@
             android:visibility="gone"
             android:background="#FFFAFAFA">
 
+            <!-- Close button (top-right) -->
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp">
+                
+                <ImageButton
+                    android:id="@+id/closeEditorButton"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_gravity="end"
+                    android:src="@android:drawable/ic_menu_close_clear_cancel"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:tint="#999999"
+                    android:contentDescription="Close editor" />
+            </FrameLayout>
+
             <!-- Waveform preview (static) -->
             <com.example.doan_zaloclone.ui.room.WaveformView
                 android:id="@+id/editorWaveformView"
