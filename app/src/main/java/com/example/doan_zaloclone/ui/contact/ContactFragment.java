@@ -150,11 +150,29 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     private void initViews(View view) {
         friendsRecyclerView = view.findViewById(R.id.friendsRecyclerView);
         
+        // Search button - open AddFriendActivity (has search function)
+        View btnSearch = view.findViewById(R.id.btn_search);
+        if (btnSearch != null) {
+            btnSearch.setOnClickListener(v -> {
+                Intent intent = new Intent(getActivity(), com.example.doan_zaloclone.ui.contact.AddFriendActivity.class);
+                startActivity(intent);
+            });
+        }
+        
         // Find and set click listener for Friend Invitations row
         View friendRequestsRow = view.findViewById(R.id.clickable_friend_requests);
         if (friendRequestsRow != null) {
             friendRequestsRow.setOnClickListener(v -> {
                 Intent intent = new Intent(getActivity(), com.example.doan_zaloclone.ui.contact.FriendRequestActivity.class);
+                startActivity(intent);
+            });
+        }
+        
+        // Birthdays row - open BirthdayListActivity
+        View birthdaysRow = view.findViewById(R.id.clickable_birthdays);
+        if (birthdaysRow != null) {
+            birthdaysRow.setOnClickListener(v -> {
+                Intent intent = new Intent(getActivity(), com.example.doan_zaloclone.ui.contact.BirthdayListActivity.class);
                 startActivity(intent);
             });
         }

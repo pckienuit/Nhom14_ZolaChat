@@ -11,6 +11,7 @@ public class User {
     private String bio; // User bio (max 200 characters)
     private String coverUrl; // Cover image URL
     private String phoneNumber; // Phone number (optional, for business card and future phone login)
+    private String birthday; // Birthday in format dd/MM/yyyy
     private Map<String, Boolean> devices; // Map<deviceToken, true> để hỗ trợ đa thiết bị
 
     // Custom tags - map of tag name to boolean (for Firestore compatibility)
@@ -98,6 +99,14 @@ public class User {
 
     public void setPhoneNumber(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+    }
+
+    public String getBirthday() {
+        return birthday;
+    }
+
+    public void setBirthday(String birthday) {
+        this.birthday = birthday;
     }
 
     public Map<String, Boolean> getDevices() {

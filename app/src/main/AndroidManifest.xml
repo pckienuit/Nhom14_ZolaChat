@@ -178,6 +178,13 @@
             android:exported="false"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+            
+        <!-- Birthday List Activity -->
+        <activity
+            android:name=".ui.contact.BirthdayListActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
 
         <!-- Call Activity -->
         <activity
