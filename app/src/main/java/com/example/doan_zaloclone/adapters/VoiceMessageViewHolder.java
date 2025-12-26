@@ -68,6 +68,7 @@ public class VoiceMessageViewHolder extends RecyclerView.ViewHolder {
         // Reset state
         stopPlayback();
         updateDurationDisplay(0, totalDuration);
+        waveformView.setProgress(0f);
         
         // Update speed display
         speedButton.setText(String.format("%.1fx", playbackSpeed).replace(".0", ""));
@@ -76,6 +77,10 @@ public class VoiceMessageViewHolder extends RecyclerView.ViewHolder {
         if (currentVoiceUrl == null || currentVoiceUrl.isEmpty()) {
             android.util.Log.e("VoiceViewHolder", "Voice URL is null or empty!");
             durationText.setText("Error: No audio file");
+            waveformView.clear();
+        } else {
+            // Generate static waveform visualization
+            waveformView.setStaticWaveform(totalDuration);
         }
     }
     
@@ -125,6 +130,7 @@ public class VoiceMessageViewHolder extends RecyclerView.ViewHolder {
                 updatePlayPauseButton();
                 stopProgressTracking();
                 updateDurationDisplay(0, totalDuration);
+                waveformView.setProgress(0f);
             });
             
             mediaPlayer.setOnErrorListener((mp, what, extra) -> {
@@ -177,6 +183,13 @@ public class VoiceMessageViewHolder extends RecyclerView.ViewHolder {
                     try {
                         int currentPos = mediaPlayer.getCurrentPosition() / 1000;
                         updateDurationDisplay(currentPos, totalDuration);
+                        
+                        // Update waveform progress
+                        if (totalDuration > 0) {
+                            float progress = (float) mediaPlayer.getCurrentPosition() / (totalDuration * 1000f);
+                            waveformView.setProgress(progress);
+                        }
+                        
                         progressHandler.postDelayed(this, 100);
                     } catch (Exception e) {
                         // Player released
