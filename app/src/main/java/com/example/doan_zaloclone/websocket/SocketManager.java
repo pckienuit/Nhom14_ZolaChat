@@ -467,6 +467,25 @@ public class SocketManager {
                 }
             }
         });
+        
+        // Friend online/offline status change event
+        socket.on("friend_status_changed", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String friendId = data.getString("friendId");
+                    boolean isOnline = data.getBoolean("isOnline");
+
+                    Log.d(TAG, "🟢 Friend status changed: " + friendId + " isOnline: " + isOnline);
+
+                    for (OnFriendEventListener listener : friendEventListeners) {
+                        listener.onFriendStatusChanged(friendId, isOnline);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing friend_status_changed event", e);
+                }
+            }
+        });
 
         // ========== Phase 4B: Group Management Events ==========
 
@@ -786,5 +805,7 @@ public class SocketManager {
         void onFriendAdded(String userId);
 
         void onFriendRemoved(String userId);
+        
+        void onFriendStatusChanged(String friendId, boolean isOnline);
     }
 }

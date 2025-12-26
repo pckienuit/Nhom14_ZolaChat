@@ -30,6 +30,10 @@ public class Conversation {
     // Displayed tag - map of userId to displayed tag (null means show latest, "ALL" means show all)
     private java.util.Map<String, String> displayedTags;
 
+    // Unread message counts - map of userId to unread count
+    // Using Object instead of Integer because Gson may deserialize as Double or Long
+    private java.util.Map<String, Object> unreadCounts;
+
     public Conversation() {
         this.memberIds = new ArrayList<>();
         this.type = TYPE_FRIEND;
@@ -534,5 +538,58 @@ public class Conversation {
         } else {
             this.displayedTags.put(userId, tag);
         }
+    }
+
+    // Unread counts management
+
+    /**
+     * Get unread counts map
+     *
+     * @return map of userId to unread count
+     */
+    public java.util.Map<String, Object> getUnreadCounts() {
+        return unreadCounts != null ? unreadCounts : new java.util.HashMap<>();
+    }
+
+    /**
+     * Set unread counts map
+     *
+     * @param unreadCounts map of userId to unread count
+     */
+    public void setUnreadCounts(java.util.Map<String, Object> unreadCounts) {
+        this.unreadCounts = unreadCounts;
+    }
+
+    /**
+     * Get unread count for a specific user
+     *
+     * @param userId ID of user
+     * @return unread count for this user (0 if none)
+     */
+    public int getUnreadCountForUser(String userId) {
+        if (this.unreadCounts == null || !this.unreadCounts.containsKey(userId)) {
+            return 0;
+        }
+        Object countObj = this.unreadCounts.get(userId);
+        if (countObj == null) {
+            return 0;
+        }
+        // Handle Gson deserializing numbers as Double or Long
+        if (countObj instanceof Number) {
+            return ((Number) countObj).intValue();
+        }
+        return 0;
+    }
+
+    /**
+     * Reset unread count to 0 for a user (mark as read)
+     *
+     * @param userId ID of user
+     */
+    public void markAsReadForUser(String userId) {
+        if (this.unreadCounts == null) {
+            this.unreadCounts = new java.util.HashMap<>();
+        }
+        this.unreadCounts.put(userId, 0);
     }
 }

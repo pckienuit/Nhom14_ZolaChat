@@ -151,6 +151,11 @@ public class RoomActivity extends AppCompatActivity {
         firebaseAuth = FirebaseAuth.getInstance();
 
         observeViewModel();
+        
+        // Mark conversation as read
+        if (conversationId != null && firebaseAuth.getCurrentUser() != null) {
+            roomViewModel.markAsRead(conversationId, firebaseAuth.getCurrentUser().getUid());
+        }
 
         // Register permission launcher
         permissionLauncher = registerForActivityResult(
@@ -255,6 +260,9 @@ public class RoomActivity extends AppCompatActivity {
         loadMessages();
         setupListeners();
 
+        // Mark conversation as read when opened
+        markConversationAsRead();
+
         // Check if we should auto-start a call (from business card)
         checkAutoStartCall();
     }
@@ -275,6 +283,21 @@ public class RoomActivity extends AppCompatActivity {
                 android.util.Log.d("RoomActivity", "Auto-starting " + (isVideo ? "video" : "voice") + " call");
                 startCall(isVideo);
             }, 500);
+        }
+    }
+
+    /**
+     * Mark conversation as read (reset unread count to 0)
+     * Called when user opens the conversation
+     */
+    private void markConversationAsRead() {
+        if (conversationId == null || chatRepository == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser() != null ? 
+            firebaseAuth.getCurrentUser().getUid() : null;
+        
+        if (currentUserId != null) {
+            chatRepository.markAsRead(conversationId, currentUserId);
         }
     }
 

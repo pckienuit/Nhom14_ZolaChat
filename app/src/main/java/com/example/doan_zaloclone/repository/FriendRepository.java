@@ -79,6 +79,11 @@ public class FriendRepository {
             public void onFriendRemoved(String userId) {
                 mainHandler.post(() -> friendListRefreshNeeded.setValue(true));
             }
+            
+            @Override
+            public void onFriendStatusChanged(String friendId, boolean isOnline) {
+                // Not handling status changes in repository - handled in UI
+            }
         });
     }
 
@@ -535,8 +540,17 @@ public class FriendRepository {
             user.setAvatarUrl((String) userData.get("avatarUrl"));
             user.setBio((String) userData.get("bio"));
 
-            // Note: User model doesn't have isOnline field in Android
-            // Online status is handled separately via presence system
+            // Parse online status
+            Object isOnlineObj = userData.get("isOnline");
+            if (isOnlineObj instanceof Boolean) {
+                user.setOnline((Boolean) isOnlineObj);
+            }
+            
+            // Parse last active timestamp
+            Object lastActiveObj = userData.get("lastActive");
+            if (lastActiveObj instanceof Number) {
+                user.setLastActive(((Number) lastActiveObj).longValue());
+            }
 
             return user;
         } catch (Exception e) {

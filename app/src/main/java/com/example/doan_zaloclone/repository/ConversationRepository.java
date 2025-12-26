@@ -34,6 +34,7 @@ import retrofit2.Response;
 public class ConversationRepository {
 
     private static final String TAG = "ConversationRepo";
+    private static final long REFRESH_DEBOUNCE_MS = 1500; // Debounce time for refresh events
 
     // Singleton instance
     private static ConversationRepository instance;
@@ -49,6 +50,10 @@ public class ConversationRepository {
     // LiveData for real-time events
     private final MutableLiveData<String> groupLeftEvent = new MutableLiveData<>();
     private final MutableLiveData<Boolean> conversationRefreshNeeded = new MutableLiveData<>();
+    
+    // Debounce for refresh events
+    private long lastRefreshTriggerTime = 0;
+    private Runnable pendingRefreshRunnable = null;
 
     // Legacy Firestore (keep for now for features not migrated yet)
     private final FirestoreManager firestoreManager;
@@ -103,7 +108,7 @@ public class ConversationRepository {
             public void onMemberLeft(String conversationId, String userId, String userName) {
                 Log.d(TAG, "👥 Member " + userName + " left conversation: " + conversationId);
                 // Trigger refresh to update member count
-                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+                triggerRefreshDebounced();
             }
 
             @Override
@@ -113,14 +118,14 @@ public class ConversationRepository {
                 synchronized (cachedConversations) {
                     cachedConversations.clear();
                 }
-                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+                triggerRefreshDebounced();
             }
 
             @Override
             public void onConversationUpdated(String conversationId) {
                 Log.d(TAG, "🔄 Conversation updated: " + conversationId);
                 // Trigger refresh to get latest data
-                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+                triggerRefreshDebounced();
             }
 
             @Override
@@ -140,21 +145,21 @@ public class ConversationRepository {
             public void onMemberAdded(String conversationId, String userId, String addedBy) {
                 Log.d(TAG, "➕ Member " + userId + " added to conversation: " + conversationId);
                 // Trigger refresh to update member list
-                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+                triggerRefreshDebounced();
             }
 
             @Override
             public void onMemberRemoved(String conversationId, String userId, String removedBy) {
                 Log.d(TAG, "➖ Member " + userId + " removed from conversation: " + conversationId);
                 // Trigger refresh to update member list
-                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+                triggerRefreshDebounced();
             }
 
             @Override
             public void onAdminUpdated(String conversationId, String userId, String action, String updatedBy) {
                 Log.d(TAG, "👑 Admin " + action + " for user " + userId + " in conversation: " + conversationId);
                 // Trigger refresh to update admin status
-                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+                triggerRefreshDebounced();
             }
         });
 
@@ -163,19 +168,44 @@ public class ConversationRepository {
             @Override
             public void onMessageReceived(org.json.JSONObject messageData) {
                 Log.d(TAG, "📨 ConversationRepo received new message, triggering refresh");
-                mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+                // Use debounced refresh to prevent multiple rapid refreshes
+                triggerRefreshDebounced();
             }
 
             @Override
             public void onMessageUpdated(org.json.JSONObject messageData) {
-                 mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+                 triggerRefreshDebounced();
             }
 
             @Override
             public void onMessageDeleted(org.json.JSONObject messageData) {
-                 mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+                 triggerRefreshDebounced();
             }
         });
+    }
+    
+    /**
+     * Trigger refresh with debounce to prevent multiple rapid refreshes
+     * This coalesces multiple events within REFRESH_DEBOUNCE_MS into a single refresh
+     */
+    private void triggerRefreshDebounced() {
+        long now = System.currentTimeMillis();
+        
+        // Cancel any pending refresh
+        if (pendingRefreshRunnable != null) {
+            mainHandler.removeCallbacks(pendingRefreshRunnable);
+        }
+        
+        // Schedule new refresh after debounce period
+        pendingRefreshRunnable = () -> {
+            Log.d(TAG, "🔄 Triggering debounced refresh");
+            conversationRefreshNeeded.setValue(true);
+            lastRefreshTriggerTime = System.currentTimeMillis();
+        };
+        
+        // If last refresh was recent, delay more; otherwise refresh sooner
+        long delay = (now - lastRefreshTriggerTime < REFRESH_DEBOUNCE_MS) ? REFRESH_DEBOUNCE_MS : 500;
+        mainHandler.postDelayed(pendingRefreshRunnable, delay);
     }
 
     /**

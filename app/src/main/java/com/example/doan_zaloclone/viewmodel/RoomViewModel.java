@@ -293,6 +293,13 @@ public class RoomViewModel extends BaseViewModel {
         uploadImageState.setValue(null);
     }
 
+    /**
+     * Mark conversation as read for the current user
+     */
+    public void markAsRead(String conversationId, String userId) {
+        chatRepository.markConversationAsSeen(conversationId, userId);
+    }
+
     @Override
     protected void onCleared() {
         super.onCleared();

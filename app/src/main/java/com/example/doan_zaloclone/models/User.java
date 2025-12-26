@@ -19,6 +19,12 @@ public class User {
 
     // Custom tag colors - map of tag name to color integer
     private Map<String, Integer> customTagColors;
+    
+    // Online status
+    private boolean isOnline;
+    
+    // Last active timestamp (milliseconds since epoch)
+    private long lastActive;
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public User() {
@@ -133,6 +139,42 @@ public class User {
 
     public boolean hasDevice(String deviceToken) {
         return this.devices != null && this.devices.containsKey(deviceToken);
+    }
+    
+    // Online status
+    public boolean isOnline() {
+        return isOnline;
+    }
+    
+    public void setOnline(boolean online) {
+        isOnline = online;
+    }
+    
+    // Last active timestamp
+    public long getLastActive() {
+        return lastActive;
+    }
+    
+    public void setLastActive(long lastActive) {
+        this.lastActive = lastActive;
+    }
+    
+    /**
+     * Check if user was active recently (within specified hours)
+     * @param hours Number of hours to consider as "recent"
+     * @return true if user was active within the specified hours
+     */
+    public boolean wasActiveRecently(int hours) {
+        if (lastActive <= 0) return isOnline; // Fallback to isOnline if no lastActive
+        long hoursInMillis = hours * 60 * 60 * 1000L;
+        return System.currentTimeMillis() - lastActive < hoursInMillis;
+    }
+    
+    /**
+     * Check if user was active within last 24 hours
+     */
+    public boolean wasActiveIn24Hours() {
+        return wasActiveRecently(24);
     }
 
     // Custom tags getters/setters

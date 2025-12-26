@@ -51,7 +51,7 @@ router.get('/', authenticateUser, async (req, res) => {
     const conversations = [];
     snapshot.forEach(doc => {
       const data = doc.data();
-      console.log('  - Conversation', doc.id, '- memberIds:', data.memberIds);
+      console.log('  - Conversation', doc.id, '- memberIds:', data.memberIds, '- unreadCounts:', JSON.stringify(data.unreadCounts));
       
       // Convert old structure to new API format
       const conversation = {
@@ -62,6 +62,7 @@ router.get('/', authenticateUser, async (req, res) => {
         lastMessageTime: data.timestamp || 0,
         isGroup: data.memberIds && data.memberIds.length > 2,
         type: data.type || 'FRIEND',
+        unreadCounts: data.unreadCounts || {},  // Explicitly include unreadCounts
         ...data
       };
       

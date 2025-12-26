@@ -2,7 +2,6 @@ package com.example.doan_zaloclone.ui.contact;
 
 import android.content.Intent;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -43,12 +42,26 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     
     // WebSocket listener for friend events
     private SocketManager.OnFriendEventListener friendEventListener;
+    
+    // Real-time counts views
+    private TextView tvFriendRequestCount;
+    private TextView chipAllFriends;
+    private TextView chipRecentlyActive;
+    private View dotFriendRequestNew;
+    
+    // Track last seen request count for notification dot
+    private int lastSeenRequestCount = -1;
+    
+    // Filter state: true = show online only, false = show all
+    private boolean isOnlineFilterActive = false;
+    
+    // Cache all friends list for filtering
+    private List<User> allFriendsList = new ArrayList<>();
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        Log.d("ContactFragment", "onCreateView called");
         View view = inflater.inflate(R.layout.fragment_contact, container, false);
 
         // Initialize ViewModel
@@ -82,51 +95,66 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     @Override
     public void onResume() {
         super.onResume();
-        Log.d("ContactFragment", "onResume called - loading friends");
         // Load friends when fragment becomes visible (critical for show/hide pattern)
         loadFriends();
+        // Also refresh friend request count to update badge
+        loadFriendRequestsCount();
     }
     
     /**
      * Setup WebSocket listener for friend events (added/removed)
      * This ensures friends list updates in real-time
      */
+    private long lastEventTime = 0;
+    private static final long DEBOUNCE_MS = 1000; // Debounce 1 second
+    
     private void setupFriendEventListener() {
         friendEventListener = new SocketManager.OnFriendEventListener() {
             @Override
             public void onFriendRequestReceived(String senderId, String senderName) {
-                // Not relevant for friends list
+                // Reload friend request count when receiving new request
+                if (getActivity() != null && shouldProcessEvent()) {
+                    getActivity().runOnUiThread(() -> {
+                        loadFriendRequestsCount();
+                    });
+                }
             }
 
             @Override
             public void onFriendRequestAccepted(String userId) {
                 // When someone accepts our request, we become friends - reload list
-                Log.d("ContactFragment", "Friend request accepted by: " + userId + ", reloading friends");
-                if (getActivity() != null) {
+                if (getActivity() != null && shouldProcessEvent()) {
                     getActivity().runOnUiThread(() -> {
                         Toast.makeText(getContext(), "Đã trở thành bạn bè!", Toast.LENGTH_SHORT).show();
                         loadFriends();
+                        loadFriendRequestsCount();
                     });
                 }
             }
 
             @Override
             public void onFriendRequestRejected(String userId) {
-                // Not relevant for friends list
+                // Reload friend request count
+                if (getActivity() != null && shouldProcessEvent()) {
+                    getActivity().runOnUiThread(() -> loadFriendRequestsCount());
+                }
             }
             
             @Override
             public void onFriendRequestCancelled(String senderId) {
-                // Not relevant for friends list
+                // Reload friend request count
+                if (getActivity() != null && shouldProcessEvent()) {
+                    getActivity().runOnUiThread(() -> loadFriendRequestsCount());
+                }
             }
 
             @Override
             public void onFriendAdded(String userId) {
                 // New friend added - reload list
-                Log.d("ContactFragment", "Friend added: " + userId + ", reloading friends");
-                if (getActivity() != null) {
+                if (getActivity() != null && shouldProcessEvent()) {
                     getActivity().runOnUiThread(() -> {
                         loadFriends();
+                        loadFriendRequestsCount();
                     });
                 }
             }
@@ -134,17 +162,38 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             @Override
             public void onFriendRemoved(String userId) {
                 // Friend removed - reload list
-                Log.d("ContactFragment", "Friend removed: " + userId + ", reloading friends");
-                if (getActivity() != null) {
+                if (getActivity() != null && shouldProcessEvent()) {
                     getActivity().runOnUiThread(() -> {
                         Toast.makeText(getContext(), "Đã xóa bạn bè", Toast.LENGTH_SHORT).show();
                         loadFriends();
                     });
                 }
             }
+            
+            @Override
+            public void onFriendStatusChanged(String friendId, boolean isOnline) {
+                // Friend online/offline status changed - update UI
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        updateFriendOnlineStatus(friendId, isOnline);
+                    });
+                }
+            }
         };
         
         socketManager.addFriendEventListener(friendEventListener);
+    }
+    
+    /**
+     * Debounce helper to prevent duplicate event processing
+     */
+    private boolean shouldProcessEvent() {
+        long now = System.currentTimeMillis();
+        if (now - lastEventTime < DEBOUNCE_MS) {
+            return false;
+        }
+        lastEventTime = now;
+        return true;
     }
 
     private void initViews(View view) {
@@ -178,6 +227,89 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 Intent intent = new Intent(getActivity(), com.example.doan_zaloclone.ui.contact.AddFriendActivity.class);
                 startActivity(intent);
             });
+        }
+        
+        // Real-time count views
+        tvFriendRequestCount = view.findViewById(R.id.tvFriendRequestCount);
+        chipAllFriends = view.findViewById(R.id.chipAllFriends);
+        chipRecentlyActive = view.findViewById(R.id.chipRecentlyActive);
+        dotFriendRequestNew = view.findViewById(R.id.dotFriendRequestNew);
+        
+        // Setup chip filter click listeners
+        setupChipFilters();
+        
+        // Load friend requests count
+        loadFriendRequestsCount();
+    }
+    
+    /**
+     * Setup chip filter click listeners for "Tất cả" and "Trực tuyến"
+     */
+    private void setupChipFilters() {
+        if (chipAllFriends != null) {
+            chipAllFriends.setOnClickListener(v -> {
+                if (isOnlineFilterActive) {
+                    isOnlineFilterActive = false;
+                    updateChipStyles();
+                    applyFilter();
+                }
+            });
+        }
+        
+        if (chipRecentlyActive != null) {
+            chipRecentlyActive.setOnClickListener(v -> {
+                if (!isOnlineFilterActive) {
+                    isOnlineFilterActive = true;
+                    updateChipStyles();
+                    applyFilter();
+                }
+            });
+        }
+    }
+    
+    /**
+     * Update chip visual styles based on filter state
+     */
+    private void updateChipStyles() {
+        if (chipAllFriends != null) {
+            if (!isOnlineFilterActive) {
+                chipAllFriends.setBackgroundResource(R.drawable.bg_chip_selected);
+                chipAllFriends.setTypeface(null, android.graphics.Typeface.BOLD);
+            } else {
+                chipAllFriends.setBackgroundResource(R.drawable.bg_chip_unselected);
+                chipAllFriends.setTypeface(null, android.graphics.Typeface.NORMAL);
+            }
+        }
+        
+        if (chipRecentlyActive != null) {
+            if (isOnlineFilterActive) {
+                chipRecentlyActive.setBackgroundResource(R.drawable.bg_chip_selected);
+                chipRecentlyActive.setTypeface(null, android.graphics.Typeface.BOLD);
+            } else {
+                chipRecentlyActive.setBackgroundResource(R.drawable.bg_chip_unselected);
+                chipRecentlyActive.setTypeface(null, android.graphics.Typeface.NORMAL);
+            }
+        }
+    }
+    
+    /**
+     * Apply the current filter to the friends list
+     */
+    private void applyFilter() {
+        if (friendsAdapter == null) return;
+        
+        if (isOnlineFilterActive) {
+            // Filter to show only online friends
+            List<User> onlineFriends = new ArrayList<>();
+            for (User friend : allFriendsList) {
+                if (friend.isOnline()) {
+                    onlineFriends.add(friend);
+                }
+            }
+            friendsAdapter.updateFriends(onlineFriends);
+        } else {
+            // Show all friends
+            friendsAdapter.updateFriends(allFriendsList);
         }
     }
     
@@ -260,7 +392,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             if (resource.isSuccess()) {
                 List<User> friends = resource.getData();
                 if (friends != null) {
-                    Log.d("ContactFragment", "Friends loaded: " + friends.size());
                     friendsAdapter.updateFriends(friends);
                     friendsRecyclerView.requestLayout();
                 }
@@ -432,7 +563,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         if (firebaseAuth.getCurrentUser() == null) return;
 
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
-        Log.d("ContactFragment", "Loading friends for user: " + currentUserId);
 
         // Force reload friends
         contactViewModel.loadFriends(currentUserId);
@@ -444,13 +574,118 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             if (resource.isSuccess()) {
                 List<User> friends = resource.getData();
                 if (friends != null) {
-                    Log.d("ContactFragment", "Friends reloaded: " + friends.size());
-                    friendsAdapter.updateFriends(friends);
+                    // Cache all friends for filtering
+                    allFriendsList = new ArrayList<>(friends);
+                    
+                    // Apply current filter
+                    applyFilter();
+                    
+                    // Update real-time counts
+                    updateFriendCounts(friends);
                 }
-            } else if (resource.isError()) {
-                Log.e("ContactFragment", "Error loading friends: " + resource.getMessage());
             }
         });
+    }
+    
+    /**
+     * Load and display friend request count
+     */
+    private void loadFriendRequestsCount() {
+        if (firebaseAuth.getCurrentUser() == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        contactViewModel.getFriendRequests(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess() && resource.getData() != null) {
+                int count = resource.getData().size();
+                updateFriendRequestCount(count);
+            }
+        });
+    }
+    
+    /**
+     * Update the friend request count display
+     */
+    private void updateFriendRequestCount(int count) {
+        if (tvFriendRequestCount != null) {
+            if (count > 0) {
+                tvFriendRequestCount.setText("Lời mời kết bạn (" + count + ")");
+            } else {
+                tvFriendRequestCount.setText("Lời mời kết bạn");
+            }
+        }
+        
+        // Show red dot if new requests since last seen
+        if (dotFriendRequestNew != null) {
+            if (lastSeenRequestCount >= 0 && count > lastSeenRequestCount) {
+                dotFriendRequestNew.setVisibility(View.VISIBLE);
+            } else {
+                dotFriendRequestNew.setVisibility(View.GONE);
+            }
+        }
+        
+        // Update badge in MainActivity
+        if (getActivity() instanceof com.example.doan_zaloclone.MainActivity) {
+            ((com.example.doan_zaloclone.MainActivity) getActivity()).updateContactBadge(count);
+        }
+        
+        // Update last seen count when not in friend requests screen
+        if (lastSeenRequestCount < 0) {
+            lastSeenRequestCount = count;
+        }
+    }
+    
+    /**
+     * Update friend counts (total and online)
+     */
+    private void updateFriendCounts(List<User> friends) {
+        int totalFriends = friends.size();
+        long onlineFriends = friends.stream()
+                .filter(user -> user.isOnline())
+                .count();
+        
+        if (chipAllFriends != null) {
+            chipAllFriends.setText("Tất cả " + totalFriends);
+        }
+        
+        if (chipRecentlyActive != null) {
+            chipRecentlyActive.setText("Trực tuyến " + onlineFriends);
+        }
+    }
+    
+    /**
+     * Update a friend's online status in real-time (called from WebSocket event)
+     */
+    private void updateFriendOnlineStatus(String friendId, boolean isOnline) {
+        if (allFriendsList == null || allFriendsList.isEmpty()) {
+            return;
+        }
+        
+        boolean found = false;
+        for (User friend : allFriendsList) {
+            if (friend.getId() != null && friend.getId().equals(friendId)) {
+                friend.setOnline(isOnline);
+                found = true;
+                break;
+            }
+        }
+        
+        if (found) {
+            // Update chip counts
+            updateFriendCounts(allFriendsList);
+            
+            // If filter is active, re-apply it
+            if (isOnlineFilterActive) {
+                applyFilter();
+            } else {
+                // Notify adapter of change
+                if (friendsAdapter != null) {
+                    friendsAdapter.notifyDataSetChanged();
+                }
+            }
+        }
     }
 
     private void reloadFriendData() {
@@ -540,8 +775,6 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
      * @param userId    The user ID involved in the event
      */
     public void onFriendEventReceived(String eventType, String userId) {
-        Log.e("ContactFragment", "🔔 onFriendEventReceived: " + eventType + " for user: " + userId);
-        
         // Simplified event handling for now
         reloadFriendData();
         
