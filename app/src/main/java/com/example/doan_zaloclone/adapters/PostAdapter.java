@@ -1,7 +1,9 @@
-package adapters;
+package com.example.doan_zaloclone.adapters; // Sửa dòng này
 
+// Các import giữ nguyên hoặc để Android Studio tự gợi ý lại
 import android.content.Context;
-import android.view.LayoutInflater;import android.view.View;
+import android.view.LayoutInflater;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -10,9 +12,10 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
-import com.example.doan_zaloclone.R; // Đã sửa package name theo tên project thực tế
-import com.example.doan_zaloclone.models.FireBasePost; // Đã sửa đường dẫn import model
+import com.example.doan_zaloclone.R;
+import com.example.doan_zaloclone.models.FireBasePost;
 
+// ... phần còn lại giữ nguyên
 import org.ocpsoft.prettytime.PrettyTime;
 
 import java.util.Date;
