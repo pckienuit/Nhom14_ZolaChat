@@ -363,6 +363,10 @@ public class RoomActivity extends AppCompatActivity {
     // Phase 4D-3a: Editor state
     private int recordedDurationSeconds = 0;
     
+    // Phase 4D-3b: Audio playback
+    private android.media.MediaPlayer mediaPlayer;
+    private boolean isPlaying = false;
+    
     private void setupVoiceRecordButton() {
         if (voiceRecordButton == null) return;
         
@@ -407,6 +411,11 @@ public class RoomActivity extends AppCompatActivity {
         // Delete button click
         if (deleteRecordingButton != null) {
             deleteRecordingButton.setOnClickListener(v -> cancelVoiceRecording());
+        }
+        
+        // Phase 4D-3b: Play/Pause button
+        if (playPauseButton != null) {
+            playPauseButton.setOnClickListener(v -> togglePlayPause());
         }
     }
     
@@ -525,6 +534,86 @@ public class RoomActivity extends AppCompatActivity {
             editorWaveformView.clear();
             // TODO: Could copy amplitude data from waveformView if needed
         }
+    }
+    
+    // Phase 4D-3b: Toggle play/pause
+    private void togglePlayPause() {
+        if (isPlaying) {
+            pauseAudio();
+        } else {
+            playAudio();
+        }
+    }
+    
+    // Phase 4D-3b: Play audio
+    private void playAudio() {
+        if (audioFilePath == null || audioFilePath.isEmpty()) {
+            Toast.makeText(this, "Không tìm thấy file âm thanh", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        try {
+            // Release existing player if any
+            releaseMediaPlayer();
+            
+            // Create and setup MediaPlayer
+            mediaPlayer = new android.media.MediaPlayer();
+            mediaPlayer.setDataSource(audioFilePath);
+            mediaPlayer.prepare();
+            
+            // Set completion listener
+            mediaPlayer.setOnCompletionListener(mp -> {
+                isPlaying = false;
+                updatePlayPauseButton();
+            });
+            
+            // Start playing
+            mediaPlayer.start();
+            isPlaying = true;
+            updatePlayPauseButton();
+            
+        } catch (Exception e) {
+            android.util.Log.e("RoomActivity", "Error playing audio", e);
+            Toast.makeText(this, "Lỗi khi phát âm thanh", Toast.LENGTH_SHORT).show();
+            isPlaying = false;
+            updatePlayPauseButton();
+        }
+    }
+    
+    // Phase 4D-3b: Pause audio
+    private void pauseAudio() {
+        if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+            mediaPlayer.pause();
+            isPlaying = false;
+            updatePlayPauseButton();
+        }
+    }
+    
+    // Phase 4D-3b: Update play/pause button icon
+    private void updatePlayPauseButton() {
+        if (playPauseButton == null) return;
+        
+        if (isPlaying) {
+            playPauseButton.setImageResource(android.R.drawable.ic_media_pause);
+        } else {
+            playPauseButton.setImageResource(android.R.drawable.ic_media_play);
+        }
+    }
+    
+    // Phase 4D-3b: Release MediaPlayer
+    private void releaseMediaPlayer() {
+        if (mediaPlayer != null) {
+            try {
+                if (mediaPlayer.isPlaying()) {
+                    mediaPlayer.stop();
+                }
+                mediaPlayer.release();
+            } catch (Exception e) {
+                // Ignore
+            }
+            mediaPlayer = null;
+        }
+        isPlaying = false;
     }
     
     // Phase 4D-1: Cancel recording (delete button)
@@ -2866,6 +2955,8 @@ public class RoomActivity extends AppCompatActivity {
         // Cleanup recording resources
         cleanupRecording();
         deleteAudioFile();
+        // Phase 4D-3b: Release MediaPlayer
+        releaseMediaPlayer();
         // ViewModel will automatically clean up listeners
     }
     
@@ -2875,6 +2966,10 @@ public class RoomActivity extends AppCompatActivity {
         // Stop recording if activity is paused
         if (isRecording) {
             stopVoiceRecording();
+        }
+        // Phase 4D-3b: Pause audio if playing
+        if (isPlaying) {
+            pauseAudio();
         }
     }
 }
