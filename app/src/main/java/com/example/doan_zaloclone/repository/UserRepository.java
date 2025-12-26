@@ -419,6 +419,78 @@ public class UserRepository {
 
     // ========== Helper methods ==========
 
+    /**
+     * Block a user
+     * @param userId ID of the user to block
+     * @return LiveData with operation result
+     */
+    public LiveData<Resource<Boolean>> blockUser(@NonNull String userId) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+
+        backgroundExecutor.execute(() -> {
+            try {
+                Map<String, String> blockData = new HashMap<>();
+                blockData.put("blockedUserId", userId);
+
+                Call<ApiResponse<Void>> call = apiService.blockUser(blockData);
+                Response<ApiResponse<Void>> response = call.execute();
+
+                if (response.isSuccessful()) {
+                    Log.d(TAG, "✅ User blocked successfully");
+                    mainHandler.post(() -> result.setValue(Resource.success(true)));
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e(TAG, "Failed to block user: " + error);
+                    mainHandler.post(() -> result.setValue(Resource.error(error)));
+                }
+            } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : "Network error";
+                Log.e(TAG, "Network error blocking user", e);
+                mainHandler.post(() -> result.setValue(Resource.error(error)));
+            }
+        });
+
+        return result;
+    }
+
+    /**
+     * Report a user
+     * @param userId ID of the user to report
+     * @param reason Reason for reporting
+     * @return LiveData with operation result
+     */
+    public LiveData<Resource<Boolean>> reportUser(@NonNull String userId, @NonNull String reason) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+
+        backgroundExecutor.execute(() -> {
+            try {
+                Map<String, String> reportData = new HashMap<>();
+                reportData.put("reportedUserId", userId);
+                reportData.put("reason", reason);
+
+                Call<ApiResponse<Void>> call = apiService.reportUser(reportData);
+                Response<ApiResponse<Void>> response = call.execute();
+
+                if (response.isSuccessful()) {
+                    Log.d(TAG, "✅ User reported successfully");
+                    mainHandler.post(() -> result.setValue(Resource.success(true)));
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e(TAG, "Failed to report user: " + error);
+                    mainHandler.post(() -> result.setValue(Resource.error(error)));
+                }
+            } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : "Network error";
+                Log.e(TAG, "Network error reporting user", e);
+                mainHandler.post(() -> result.setValue(Resource.error(error)));
+            }
+        });
+
+        return result;
+    }
+
     public interface OnUpdateListener {
         void onSuccess();
 
