@@ -730,6 +730,8 @@ public class RoomActivity extends AppCompatActivity {
     
     // Phase 4D-3d: Send recorded voice message
     private void sendRecordedVoice() {
+        android.util.Log.d("RoomActivity", "sendRecordedVoice called - audioFilePath: " + audioFilePath + ", duration: " + recordedDurationSeconds);
+        
         // Stop playback if playing
         if (isPlaying) {
             pauseAudio();
@@ -737,8 +739,10 @@ public class RoomActivity extends AppCompatActivity {
         
         // Upload and send
         if (audioFilePath != null && !audioFilePath.isEmpty()) {
+            android.util.Log.d("RoomActivity", "Calling uploadVoiceMessage...");
             uploadVoiceMessage(audioFilePath, recordedDurationSeconds);
         } else {
+            android.util.Log.e("RoomActivity", "audioFilePath is null or empty!");
             Toast.makeText(this, "Không tìm thấy file ghi âm", Toast.LENGTH_SHORT).show();
         }
         
