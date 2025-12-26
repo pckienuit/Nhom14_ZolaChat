@@ -131,6 +131,24 @@
                     android:textStyle="bold"
                     android:visibility="gone"/>
             </LinearLayout>
+
+            <TextView
+                android:id="@+id/badge_contact"
+                android:layout_width="wrap_content"
+                android:layout_height="16dp"
+                android:background="@drawable/bg_red_badge_pill"
+                android:text=""
+                android:textColor="#FFFFFF"
+                android:textSize="10sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:layout_alignParentTop="true"
+                android:layout_alignParentEnd="true"
+                android:layout_marginTop="4dp"
+                android:layout_marginEnd="16dp"
+                android:visibility="gone"/>
         </RelativeLayout>
 
         <!-- 3. Grid/Apps (Khám phá) -->
@@ -170,15 +188,6 @@
             </LinearLayout>
 
             <!-- Red Dot Badge -->
-            <View
-                android:id="@+id/badge_grid"
-                android:layout_width="8dp"
-                android:layout_height="8dp"
-                android:background="@drawable/bg_red_badge"
-                android:layout_alignTop="@+id/nav_grid"
-                android:layout_alignEnd="@+id/nav_grid"
-                android:layout_marginTop="10dp"
-                android:layout_marginEnd="22dp"/>
         </RelativeLayout>
 
         <!-- 4. Timeline (Nhật ký) -->
@@ -218,20 +227,6 @@
             </LinearLayout>
 
             <!-- Badge N -->
-            <TextView
-                android:id="@+id/badge_timeline"
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:background="@drawable/bg_red_badge"
-                android:text="N"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:layout_alignTop="@+id/nav_timeline"
-                android:layout_alignEnd="@+id/nav_timeline"
-                android:layout_marginTop="6dp"
-                android:layout_marginEnd="18dp"/>
         </RelativeLayout>
 
         <!-- 5. Personal (Cá nhân) -->
@@ -271,20 +266,6 @@
             </LinearLayout>
 
             <!-- Badge ! -->
-            <TextView
-                android:id="@+id/badge_personal"
-                android:layout_width="16dp"
-                android:layout_height="16dp"
-                android:background="@drawable/bg_red_badge"
-                android:text="!"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:layout_alignTop="@+id/nav_personal"
-                android:layout_alignEnd="@+id/nav_personal"
-                android:layout_marginTop="6dp"
-                android:layout_marginEnd="18dp"/>
         </RelativeLayout>
 
     </LinearLayout>

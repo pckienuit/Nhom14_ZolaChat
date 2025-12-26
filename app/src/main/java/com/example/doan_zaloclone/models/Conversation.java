@@ -31,7 +31,8 @@ public class Conversation {
     private java.util.Map<String, String> displayedTags;
 
     // Unread message counts - map of userId to unread count
-    private java.util.Map<String, Integer> unreadCounts;
+    // Using Object instead of Integer because Gson may deserialize as Double or Long
+    private java.util.Map<String, Object> unreadCounts;
 
     public Conversation() {
         this.memberIds = new ArrayList<>();
@@ -546,7 +547,7 @@ public class Conversation {
      *
      * @return map of userId to unread count
      */
-    public java.util.Map<String, Integer> getUnreadCounts() {
+    public java.util.Map<String, Object> getUnreadCounts() {
         return unreadCounts != null ? unreadCounts : new java.util.HashMap<>();
     }
 
@@ -555,7 +556,7 @@ public class Conversation {
      *
      * @param unreadCounts map of userId to unread count
      */
-    public void setUnreadCounts(java.util.Map<String, Integer> unreadCounts) {
+    public void setUnreadCounts(java.util.Map<String, Object> unreadCounts) {
         this.unreadCounts = unreadCounts;
     }
 
@@ -569,8 +570,15 @@ public class Conversation {
         if (this.unreadCounts == null || !this.unreadCounts.containsKey(userId)) {
             return 0;
         }
-        Integer count = this.unreadCounts.get(userId);
-        return count != null ? count : 0;
+        Object countObj = this.unreadCounts.get(userId);
+        if (countObj == null) {
+            return 0;
+        }
+        // Handle Gson deserializing numbers as Double or Long
+        if (countObj instanceof Number) {
+            return ((Number) countObj).intValue();
+        }
+        return 0;
     }
 
     /**
@@ -579,8 +587,9 @@ public class Conversation {
      * @param userId ID of user
      */
     public void markAsReadForUser(String userId) {
-        if (this.unreadCounts != null) {
-            this.unreadCounts.put(userId, 0);
+        if (this.unreadCounts == null) {
+            this.unreadCounts = new java.util.HashMap<>();
         }
+        this.unreadCounts.put(userId, 0);
     }
 }

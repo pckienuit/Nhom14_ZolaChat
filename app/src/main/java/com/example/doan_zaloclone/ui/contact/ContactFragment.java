@@ -91,51 +91,70 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     @Override
     public void onResume() {
         super.onResume();
-        Log.d("ContactFragment", "onResume called - loading friends");
+        Log.d("ContactFragment", "onResume called - loading friends and updating badge");
         // Load friends when fragment becomes visible (critical for show/hide pattern)
         loadFriends();
+        // Also refresh friend request count to update badge
+        loadFriendRequestsCount();
     }
     
     /**
      * Setup WebSocket listener for friend events (added/removed)
      * This ensures friends list updates in real-time
      */
+    private long lastEventTime = 0;
+    private static final long DEBOUNCE_MS = 1000; // Debounce 1 second
+    
     private void setupFriendEventListener() {
         friendEventListener = new SocketManager.OnFriendEventListener() {
             @Override
             public void onFriendRequestReceived(String senderId, String senderName) {
-                // Not relevant for friends list
+                // Reload friend request count when receiving new request
+                Log.d("ContactFragment", "Friend request received from: " + senderName);
+                if (getActivity() != null && shouldProcessEvent()) {
+                    getActivity().runOnUiThread(() -> {
+                        loadFriendRequestsCount();
+                    });
+                }
             }
 
             @Override
             public void onFriendRequestAccepted(String userId) {
                 // When someone accepts our request, we become friends - reload list
                 Log.d("ContactFragment", "Friend request accepted by: " + userId + ", reloading friends");
-                if (getActivity() != null) {
+                if (getActivity() != null && shouldProcessEvent()) {
                     getActivity().runOnUiThread(() -> {
                         Toast.makeText(getContext(), "Đã trở thành bạn bè!", Toast.LENGTH_SHORT).show();
                         loadFriends();
+                        loadFriendRequestsCount();
                     });
                 }
             }
 
             @Override
             public void onFriendRequestRejected(String userId) {
-                // Not relevant for friends list
+                // Reload friend request count
+                if (getActivity() != null && shouldProcessEvent()) {
+                    getActivity().runOnUiThread(() -> loadFriendRequestsCount());
+                }
             }
             
             @Override
             public void onFriendRequestCancelled(String senderId) {
-                // Not relevant for friends list
+                // Reload friend request count
+                if (getActivity() != null && shouldProcessEvent()) {
+                    getActivity().runOnUiThread(() -> loadFriendRequestsCount());
+                }
             }
 
             @Override
             public void onFriendAdded(String userId) {
                 // New friend added - reload list
                 Log.d("ContactFragment", "Friend added: " + userId + ", reloading friends");
-                if (getActivity() != null) {
+                if (getActivity() != null && shouldProcessEvent()) {
                     getActivity().runOnUiThread(() -> {
                         loadFriends();
+                        loadFriendRequestsCount();
                     });
                 }
             }
@@ -144,7 +163,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             public void onFriendRemoved(String userId) {
                 // Friend removed - reload list
                 Log.d("ContactFragment", "Friend removed: " + userId + ", reloading friends");
-                if (getActivity() != null) {
+                if (getActivity() != null && shouldProcessEvent()) {
                     getActivity().runOnUiThread(() -> {
                         Toast.makeText(getContext(), "Đã xóa bạn bè", Toast.LENGTH_SHORT).show();
                         loadFriends();
@@ -154,6 +173,18 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         };
         
         socketManager.addFriendEventListener(friendEventListener);
+    }
+    
+    /**
+     * Debounce helper to prevent duplicate event processing
+     */
+    private boolean shouldProcessEvent() {
+        long now = System.currentTimeMillis();
+        if (now - lastEventTime < DEBOUNCE_MS) {
+            return false;
+        }
+        lastEventTime = now;
+        return true;
     }
 
     private void initViews(View view) {
@@ -481,12 +512,22 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         if (firebaseAuth.getCurrentUser() == null) return;
         
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        Log.d("ContactFragment", "Loading friend requests for user: " + currentUserId);
+        
         contactViewModel.getFriendRequests(currentUserId).observe(getViewLifecycleOwner(), resource -> {
-            if (resource == null) return;
+            if (resource == null) {
+                Log.d("ContactFragment", "Friend requests resource is null");
+                return;
+            }
             
-            if (resource.isSuccess() && resource.getData() != null) {
+            if (resource.isLoading()) {
+                Log.d("ContactFragment", "Loading friend requests...");
+            } else if (resource.isSuccess() && resource.getData() != null) {
                 int count = resource.getData().size();
+                Log.d("ContactFragment", "Friend requests count: " + count);
                 updateFriendRequestCount(count);
+            } else if (resource.isError()) {
+                Log.e("ContactFragment", "Error loading friend requests: " + resource.getMessage());
             }
         });
     }
@@ -510,6 +551,11 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
             } else {
                 dotFriendRequestNew.setVisibility(View.GONE);
             }
+        }
+        
+        // Update badge in MainActivity
+        if (getActivity() instanceof com.example.doan_zaloclone.MainActivity) {
+            ((com.example.doan_zaloclone.MainActivity) getActivity()).updateContactBadge(count);
         }
         
         // Update last seen count when not in friend requests screen

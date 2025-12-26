@@ -18,23 +18,22 @@ import java.util.stream.Collectors;
  * Manages conversations list and related operations
  */
 public class HomeViewModel extends BaseViewModel {
-
+    
     private final ConversationRepository conversationRepository;
     private final FriendRepository friendRepository;
-    private final MutableLiveData<String> selectedTagFilter = new MutableLiveData<>(null);
-    private final MutableLiveData<Long> refreshTrigger = new MutableLiveData<>();
     private LiveData<Resource<List<Conversation>>> conversations;
-
+    private MutableLiveData<String> selectedTagFilter = new MutableLiveData<>(null);
+    private MutableLiveData<Long> refreshTrigger = new MutableLiveData<>();
+    
     public HomeViewModel() {
         this.conversationRepository = ConversationRepository.getInstance();
         this.friendRepository = new FriendRepository();
         this.refreshTrigger.setValue(System.currentTimeMillis()); // Initial value
     }
-
+    
     /**
      * Load conversations for a user with automatic sorting
      * Pinned conversations appear first (sorted by pin time), then unpinned (sorted by timestamp)
-     *
      * @param userId ID of the user
      * @return LiveData containing sorted list of conversations
      */
@@ -42,9 +41,9 @@ public class HomeViewModel extends BaseViewModel {
         if (conversations == null) {
             // Use switchMap to automatically reload when refreshTrigger changes
             conversations = Transformations.switchMap(refreshTrigger, trigger -> {
-                LiveData<Resource<List<Conversation>>> rawConversations =
-                        conversationRepository.getConversations(userId);
-
+                LiveData<Resource<List<Conversation>>> rawConversations = 
+                    conversationRepository.getConversations(userId);
+                
                 // Transform conversations to sort them: pinned first, then unpinned
                 return Transformations.map(rawConversations, resource -> {
                     if (resource != null && resource.isSuccess() && resource.getData() != null) {
@@ -57,18 +56,17 @@ public class HomeViewModel extends BaseViewModel {
         }
         return conversations;
     }
-
+    
     /**
      * Sort conversations: pinned first (by pin timestamp), then unpinned (by message timestamp)
-     *
      * @param conversationList List of conversations to sort
-     * @param userId           Current user ID
+     * @param userId Current user ID
      * @return Sorted list
      */
     private List<Conversation> sortConversations(List<Conversation> conversationList, String userId) {
         java.util.List<Conversation> pinned = new java.util.ArrayList<>();
         java.util.List<Conversation> unpinned = new java.util.ArrayList<>();
-
+        
         // Separate pinned and unpinned conversations
         for (Conversation c : conversationList) {
             if (c.isPinnedByUser(userId)) {
@@ -77,79 +75,73 @@ public class HomeViewModel extends BaseViewModel {
                 unpinned.add(c);
             }
         }
-
+        
         // Sort pinned by pinnedAt timestamp (oldest pinned first - maintains position)
         pinned.sort((a, b) -> Long.compare(
-                a.getPinnedAtTimestamp(userId),
-                b.getPinnedAtTimestamp(userId)));
-
+            a.getPinnedAtTimestamp(userId), 
+            b.getPinnedAtTimestamp(userId)));
+        
         // Sort unpinned by message timestamp (newest first)
         unpinned.sort((a, b) -> Long.compare(b.getTimestamp(), a.getTimestamp()));
-
+        
         // Combine: pinned first, then unpinned
         pinned.addAll(unpinned);
         return pinned;
     }
-
+    
     /**
      * Pin a conversation
-     *
      * @param conversationId ID of the conversation
-     * @param userId         ID of the user
+     * @param userId ID of the user
      * @return LiveData with success/error status
      */
     public LiveData<Resource<Void>> pinConversation(@NonNull String conversationId,
-                                                    @NonNull String userId) {
+                                                     @NonNull String userId) {
         return conversationRepository.pinConversation(conversationId, userId);
     }
-
+    
     /**
      * Unpin a conversation
-     *
      * @param conversationId ID of the conversation
-     * @param userId         ID of the user
+     * @param userId ID of the user
      * @return LiveData with success/error status
      */
     public LiveData<Resource<Void>> unpinConversation(@NonNull String conversationId,
-                                                      @NonNull String userId) {
+                                                       @NonNull String userId) {
         return conversationRepository.unpinConversation(conversationId, userId);
     }
-
+    
     /**
      * Update tags for a conversation
-     *
      * @param conversationId ID of the conversation
-     * @param userId         ID of the user
-     * @param tags           List of tags to set
+     * @param userId ID of the user
+     * @param tags List of tags to set
      * @return LiveData with success/error status
      */
     public LiveData<Resource<Void>> updateTags(@NonNull String conversationId,
-                                               @NonNull String userId,
-                                               @NonNull List<String> tags) {
+                                                @NonNull String userId,
+                                                @NonNull List<String> tags) {
         return conversationRepository.updateTags(conversationId, userId, tags);
     }
-
+    
     /**
      * Set tag filter
-     *
      * @param tag Tag to filter by (null for all)
      */
     public void setTagFilter(String tag) {
         selectedTagFilter.setValue(tag);
     }
-
+    
     /**
      * Get current tag filter
-     *
      * @return LiveData of selected tag filter
      */
     public LiveData<String> getSelectedTagFilter() {
         return selectedTagFilter;
     }
-
+    
     /**
      * Get filtered conversations based on selected tag
-     *
      * @param userId Current user ID
      * @return LiveData of filtered conversations
      */
@@ -163,8 +155,8 @@ public class HomeViewModel extends BaseViewModel {
                 return Transformations.map(getConversations(userId), resource -> {
                     if (resource != null && resource.isSuccess() && resource.getData() != null) {
                         List<Conversation> filtered = resource.getData().stream()
-                                .filter(conv -> conv.hasTag(userId, tag))
-                                .collect(Collectors.toList());
+                            .filter(conv -> conv.hasTag(userId, tag))
+                            .collect(Collectors.toList());
                         return Resource.success(filtered);
                     }
                     return resource;
@@ -180,7 +172,7 @@ public class HomeViewModel extends BaseViewModel {
     public LiveData<String> getGroupLeftEvent() {
         return conversationRepository.getGroupLeftEvent();
     }
-
+    
     /**
      * Get LiveData for conversation refresh trigger
      * Observe this to reload conversations when new conversation created or updated
@@ -188,15 +180,18 @@ public class HomeViewModel extends BaseViewModel {
     public LiveData<Boolean> getConversationRefreshNeeded() {
         return conversationRepository.getConversationRefreshNeeded();
     }
-
+    
     /**
-     * Refresh conversations (call this to reload)
-     * Updates trigger to force reload via switchMap
+     * Refresh conversations (call this if needed to reload)
+     * Updates the refresh trigger which causes switchMap to re-fetch data
+     * @param userId User ID (for logging purposes)
      */
     public void refreshConversations(@NonNull String userId) {
+        // Update trigger to force switchMap to reload from repository
+        android.util.Log.d("HomeViewModel", "Triggering refresh for user: " + userId);
         refreshTrigger.setValue(System.currentTimeMillis());
     }
-
+    
     @Override
     protected void onCleared() {
         super.onCleared();

@@ -151,6 +151,11 @@ public class RoomActivity extends AppCompatActivity {
         firebaseAuth = FirebaseAuth.getInstance();
 
         observeViewModel();
+        
+        // Mark conversation as read
+        if (conversationId != null && firebaseAuth.getCurrentUser() != null) {
+            roomViewModel.markAsRead(conversationId, firebaseAuth.getCurrentUser().getUid());
+        }
 
         // Register permission launcher
         permissionLauncher = registerForActivityResult(

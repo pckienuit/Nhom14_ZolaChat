@@ -287,6 +287,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
 
             // --- Unread Badge ---
             int unreadCount = conversation.getUnreadCountForUser(currentUserId);
+            android.util.Log.d("ConversationAdapter", "Conv[" + conversation.getId() + "] unreadCount for " + currentUserId + " = " + unreadCount + ", unreadCounts map: " + conversation.getUnreadCounts());
             
             if (unreadCount > 0) {
                 badgeTextView.setVisibility(View.VISIBLE);

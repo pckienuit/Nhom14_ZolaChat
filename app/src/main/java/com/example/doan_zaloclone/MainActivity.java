@@ -1,5 +1,7 @@
 package com.example.doan_zaloclone;
 
+import android.util.Log;
+
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.Menu;
@@ -56,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     
     // Unread badge view
     private TextView badgeMessages;
+    private TextView badgeContact;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -465,6 +468,7 @@ public class MainActivity extends AppCompatActivity {
         
         // Get badge view reference
         badgeMessages = findViewById(R.id.badge_messages);
+        badgeContact = findViewById(R.id.badge_contact);
     }
     
     /**
@@ -472,6 +476,7 @@ public class MainActivity extends AppCompatActivity {
      * Called from HomeFragment when conversations are loaded
      */
     public void updateMessagesBadge(int totalUnread) {
+        Log.d("MainActivity", "updateMessagesBadge called with: " + totalUnread);
         if (badgeMessages != null) {
             if (totalUnread > 0) {
                 badgeMessages.setVisibility(View.VISIBLE);
@@ -483,6 +488,30 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 badgeMessages.setVisibility(View.GONE);
             }
+        } else {
+            Log.e("MainActivity", "badgeMessages is NULL");
+        }
+    }
+
+    /**
+     * Update contact badge with new friend requests count
+     * Called from ContactFragment
+     */
+    public void updateContactBadge(int count) {
+        Log.d("MainActivity", "updateContactBadge called with: " + count);
+        if (badgeContact != null) {
+            if (count > 0) {
+                badgeContact.setVisibility(View.VISIBLE);
+                if (count > 5) {
+                    badgeContact.setText("5+");
+                } else {
+                    badgeContact.setText(String.valueOf(count));
+                }
+            } else {
+                badgeContact.setVisibility(View.GONE);
+            }
+        } else {
+            Log.e("MainActivity", "badgeContact is NULL");
         }
     }
 

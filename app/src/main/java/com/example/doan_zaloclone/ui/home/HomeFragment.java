@@ -656,6 +656,13 @@ public class HomeFragment extends Fragment {
                  android.widget.Toast.makeText(getContext(), "⚠️ Reconnecting Socket...", android.widget.Toast.LENGTH_SHORT).show();
              socketManager.connect();
         }
+        
+        // Refresh conversations to update badge when returning from another activity (e.g., RoomActivity)
+        if (firebaseAuth.getCurrentUser() != null) {
+            String userId = firebaseAuth.getCurrentUser().getUid();
+            android.util.Log.d("HomeFragment", "onResume: Refreshing conversations for badge update");
+            homeViewModel.refreshConversations(userId);
+        }
     }
 
     private void observeViewModel() {
@@ -664,6 +671,7 @@ public class HomeFragment extends Fragment {
                 ? firebaseAuth.getCurrentUser().getUid()
                 : "";
 
+        // Observer 1: For RecyclerView display (may be filtered by tag)
         homeViewModel.getFilteredConversations(currentUserId).observe(getViewLifecycleOwner(), resource -> {
             if (resource == null) return;
 
@@ -673,11 +681,8 @@ public class HomeFragment extends Fragment {
             } else if (resource.isSuccess()) {
                 List<Conversation> conversations = resource.getData();
                 if (conversations != null) {
-                    android.util.Log.d("HomeFragment", "Received " + conversations.size() + " conversations");
+                    android.util.Log.d("HomeFragment", "Received " + conversations.size() + " filtered conversations");
                     conversationAdapter.updateConversations(conversations);
-                    
-                    // Calculate total unread and update badge in MainActivity
-                    updateUnreadBadge(conversations, currentUserId);
                 }
             } else if (resource.isError()) {
                 // Show error message
@@ -688,6 +693,20 @@ public class HomeFragment extends Fragment {
                 if (getContext() != null) {
                     Toast.makeText(getContext(), errorMessage, Toast.LENGTH_SHORT).show();
                 }
+            }
+        });
+        
+        // Observer 2: For badge - ALWAYS use ALL conversations (not filtered)
+        // This ensures badge shows total unread count regardless of current filter
+        homeViewModel.getConversations(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                List<Conversation> allConversations = resource.getData();
+                android.util.Log.d("HomeFragment", "Badge update: Total " + allConversations.size() + " conversations");
+                // Debug: Log unreadCounts for each conversation
+                for (Conversation conv : allConversations) {
+                    android.util.Log.d("HomeFragment", "  Conv[" + conv.getId() + "] unreadCounts=" + conv.getUnreadCounts() + ", for user=" + conv.getUnreadCountForUser(currentUserId));
+                }
+                updateUnreadBadge(allConversations, currentUserId);
             }
         });
 
@@ -748,8 +767,14 @@ public class HomeFragment extends Fragment {
         
         int totalUnread = 0;
         for (Conversation conv : conversations) {
-            totalUnread += conv.getUnreadCountForUser(userId);
+            int unread = conv.getUnreadCountForUser(userId);
+            totalUnread += unread;
+            if (unread > 0) {
+                android.util.Log.d("HomeFragment", "Conv " + conv.getId() + " has " + unread + " unread");
+            }
         }
+        
+        android.util.Log.d("HomeFragment", "Total unread messages: " + totalUnread);
         
         // Update badge in MainActivity
         if (getActivity() instanceof com.example.doan_zaloclone.MainActivity) {

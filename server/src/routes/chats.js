@@ -128,6 +128,34 @@ router.post('/:conversationId/messages', authenticateUser, async (req, res) => {
       timestamp: message.timestamp // Update timestamp for sorting
     });
     
+    // Increment unreadCounts for all members except sender
+    const admin = require('firebase-admin');
+    try {
+      const convDoc = await db.collection('conversations').doc(conversationId).get();
+      if (convDoc.exists) {
+        const convData = convDoc.data();
+        const members = convData.memberIds || convData.participantIds || [];
+        const currentSenderId = senderId || req.user.uid;
+        const unreadUpdates = {};
+        
+        console.log(`📊 [UNREAD] Conversation ${conversationId} members: ${JSON.stringify(members)}, sender: ${currentSenderId}`);
+        
+        members.forEach(memberId => {
+          if (memberId !== currentSenderId) {
+            unreadUpdates['unreadCounts.' + memberId] = admin.firestore.FieldValue.increment(1);
+            console.log(`📊 [UNREAD] Will increment unreadCounts for member: ${memberId}`);
+          }
+        });
+        
+        if (Object.keys(unreadUpdates).length > 0) {
+          await db.collection('conversations').doc(conversationId).update(unreadUpdates);
+          console.log(`📊 [UNREAD] ✅ Successfully incremented unreadCounts for ${Object.keys(unreadUpdates).length} members`);
+        }
+      }
+    } catch (unreadErr) {
+      console.error('❌ [UNREAD] Failed to update unreadCounts:', unreadErr);
+    }
+    
     const fullMessage = { id: messageRef.id, ...message };
     fullMessage.conversationId = conversationId; // Add for WebSocket filtering
     
@@ -136,8 +164,6 @@ router.post('/:conversationId/messages', authenticateUser, async (req, res) => {
 
         // Notification for Home Screen Preview (emit to each user's room)
          try {
-            // We need to fetch the conversation to get members if we don't have them handy
-            // Or we can query db.collection('conversations').doc(conversationId)
             const conversationDoc = await db.collection('conversations').doc(conversationId).get();
             if (conversationDoc.exists) {
               const data = conversationDoc.data();
@@ -360,7 +386,14 @@ router.post('/:conversationId/seen', authenticateUser, async (req, res) => {
     // Update seen status with timestamp
     seenBy[userId] = Date.now();
     
-    await conversationRef.update({ seenBy });
+    // Reset unreadCounts for this user to 0
+    const updateData = { 
+      seenBy,
+      [`unreadCounts.${userId}`]: 0
+    };
+    
+    await conversationRef.update(updateData);
+    console.log(`📊 [SEEN] Reset unreadCounts for user ${userId} in conversation ${conversationId}`);
     
     // Broadcast seen update via WebSocket
     if (global.io) {
