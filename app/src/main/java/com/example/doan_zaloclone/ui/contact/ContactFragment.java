@@ -52,6 +52,12 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     
     // Track last seen request count for notification dot
     private int lastSeenRequestCount = -1;
+    
+    // Filter state: true = show online only, false = show all
+    private boolean isOnlineFilterActive = false;
+    
+    // Cache all friends list for filtering
+    private List<User> allFriendsList = new ArrayList<>();
 
     @Nullable
     @Override
@@ -170,6 +176,17 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                     });
                 }
             }
+            
+            @Override
+            public void onFriendStatusChanged(String friendId, boolean isOnline) {
+                // Friend online/offline status changed - update UI
+                Log.d("ContactFragment", "Friend " + friendId + " status changed: " + (isOnline ? "online" : "offline"));
+                if (getActivity() != null) {
+                    getActivity().runOnUiThread(() -> {
+                        updateFriendOnlineStatus(friendId, isOnline);
+                    });
+                }
+            }
         };
         
         socketManager.addFriendEventListener(friendEventListener);
@@ -226,8 +243,84 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         chipRecentlyActive = view.findViewById(R.id.chipRecentlyActive);
         dotFriendRequestNew = view.findViewById(R.id.dotFriendRequestNew);
         
+        // Setup chip filter click listeners
+        setupChipFilters();
+        
         // Load friend requests count
         loadFriendRequestsCount();
+    }
+    
+    /**
+     * Setup chip filter click listeners for "Tất cả" and "Trực tuyến"
+     */
+    private void setupChipFilters() {
+        if (chipAllFriends != null) {
+            chipAllFriends.setOnClickListener(v -> {
+                if (isOnlineFilterActive) {
+                    isOnlineFilterActive = false;
+                    updateChipStyles();
+                    applyFilter();
+                }
+            });
+        }
+        
+        if (chipRecentlyActive != null) {
+            chipRecentlyActive.setOnClickListener(v -> {
+                if (!isOnlineFilterActive) {
+                    isOnlineFilterActive = true;
+                    updateChipStyles();
+                    applyFilter();
+                }
+            });
+        }
+    }
+    
+    /**
+     * Update chip visual styles based on filter state
+     */
+    private void updateChipStyles() {
+        if (chipAllFriends != null) {
+            if (!isOnlineFilterActive) {
+                chipAllFriends.setBackgroundResource(R.drawable.bg_chip_selected);
+                chipAllFriends.setTypeface(null, android.graphics.Typeface.BOLD);
+            } else {
+                chipAllFriends.setBackgroundResource(R.drawable.bg_chip_unselected);
+                chipAllFriends.setTypeface(null, android.graphics.Typeface.NORMAL);
+            }
+        }
+        
+        if (chipRecentlyActive != null) {
+            if (isOnlineFilterActive) {
+                chipRecentlyActive.setBackgroundResource(R.drawable.bg_chip_selected);
+                chipRecentlyActive.setTypeface(null, android.graphics.Typeface.BOLD);
+            } else {
+                chipRecentlyActive.setBackgroundResource(R.drawable.bg_chip_unselected);
+                chipRecentlyActive.setTypeface(null, android.graphics.Typeface.NORMAL);
+            }
+        }
+    }
+    
+    /**
+     * Apply the current filter to the friends list
+     */
+    private void applyFilter() {
+        if (friendsAdapter == null) return;
+        
+        if (isOnlineFilterActive) {
+            // Filter to show only online friends
+            List<User> onlineFriends = new ArrayList<>();
+            for (User friend : allFriendsList) {
+                if (friend.isOnline()) {
+                    onlineFriends.add(friend);
+                }
+            }
+            friendsAdapter.updateFriends(onlineFriends);
+            Log.d("ContactFragment", "Filtered to " + onlineFriends.size() + " online friends");
+        } else {
+            // Show all friends
+            friendsAdapter.updateFriends(allFriendsList);
+            Log.d("ContactFragment", "Showing all " + allFriendsList.size() + " friends");
+        }
     }
     
     private void setupSearchEditText(View view) {
@@ -494,7 +587,12 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 List<User> friends = resource.getData();
                 if (friends != null) {
                     Log.d("ContactFragment", "Friends reloaded: " + friends.size());
-                    friendsAdapter.updateFriends(friends);
+                    
+                    // Cache all friends for filtering
+                    allFriendsList = new ArrayList<>(friends);
+                    
+                    // Apply current filter
+                    applyFilter();
                     
                     // Update real-time counts
                     updateFriendCounts(friends);
@@ -573,12 +671,53 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 .filter(user -> user.isOnline())
                 .count();
         
+        // Debug log to check online status
+        Log.d("ContactFragment", "Total friends: " + totalFriends + ", Online: " + onlineFriends);
+        for (User friend : friends) {
+            Log.d("ContactFragment", "Friend " + friend.getName() + " isOnline: " + friend.isOnline());
+        }
+        
         if (chipAllFriends != null) {
             chipAllFriends.setText("Tất cả " + totalFriends);
         }
         
         if (chipRecentlyActive != null) {
-            chipRecentlyActive.setText("Mới truy cập " + onlineFriends);
+            chipRecentlyActive.setText("Trực tuyến " + onlineFriends);
+        }
+    }
+    
+    /**
+     * Update a friend's online status in real-time (called from WebSocket event)
+     */
+    private void updateFriendOnlineStatus(String friendId, boolean isOnline) {
+        if (allFriendsList == null || allFriendsList.isEmpty()) {
+            Log.d("ContactFragment", "allFriendsList is empty, cannot update status");
+            return;
+        }
+        
+        boolean found = false;
+        for (User friend : allFriendsList) {
+            if (friend.getId() != null && friend.getId().equals(friendId)) {
+                friend.setOnline(isOnline);
+                found = true;
+                Log.d("ContactFragment", "Updated " + friend.getName() + " isOnline to " + isOnline);
+                break;
+            }
+        }
+        
+        if (found) {
+            // Update chip counts
+            updateFriendCounts(allFriendsList);
+            
+            // If filter is active, re-apply it
+            if (isOnlineFilterActive) {
+                applyFilter();
+            } else {
+                // Notify adapter of change
+                if (friendsAdapter != null) {
+                    friendsAdapter.notifyDataSetChanged();
+                }
+            }
         }
     }
 

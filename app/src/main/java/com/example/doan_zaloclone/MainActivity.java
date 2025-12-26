@@ -248,6 +248,12 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
             }
+            
+            @Override
+            public void onFriendStatusChanged(String friendId, boolean isOnline) {
+                // Online status updates are handled in ContactFragment directly
+                android.util.Log.d("MainActivity", "Friend " + friendId + " status: " + (isOnline ? "online" : "offline"));
+            }
         });
     }
 

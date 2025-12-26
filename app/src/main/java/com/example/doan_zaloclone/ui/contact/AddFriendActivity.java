@@ -128,6 +128,11 @@ public class AddFriendActivity extends AppCompatActivity {
             public void onFriendRemoved(String userId) {
                 // Not relevant
             }
+            
+            @Override
+            public void onFriendStatusChanged(String friendId, boolean isOnline) {
+                // Not relevant for add friend activity
+            }
         };
         
         SocketManager.getInstance().addFriendEventListener(friendEventListener);
