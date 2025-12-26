@@ -59,6 +59,9 @@ public class MainActivity extends AppCompatActivity {
     // Unread badge view
     private TextView badgeMessages;
     private TextView badgeContact;
+    
+    // Friend repository for badge updates
+    private com.example.doan_zaloclone.repository.FriendRepository friendRepository;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -112,9 +115,48 @@ public class MainActivity extends AppCompatActivity {
 
         // Setup friend events via WebSocket
         setupFriendEventListener();
+        
+        // Initialize FriendRepository and load friend requests badge
+        setupFriendRequestsBadge();
 
         // TEMPORARY: API Test Button - Only in DEBUG builds
         // addApiTestButton();
+    }
+    
+    /**
+     * Setup friend requests badge - load initial count and observe changes
+     */
+    private void setupFriendRequestsBadge() {
+        friendRepository = new com.example.doan_zaloclone.repository.FriendRepository();
+        
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null) return;
+        
+        String userId = currentUser.getUid();
+        
+        // Load initial friend requests count
+        loadFriendRequestsCount(userId);
+        
+        // Observe WebSocket events for real-time badge updates
+        friendRepository.getFriendRequestRefreshNeeded().observe(this, needsRefresh -> {
+            if (needsRefresh != null && needsRefresh) {
+                Log.d("MainActivity", "Friend request refresh needed - updating badge");
+                loadFriendRequestsCount(userId);
+            }
+        });
+    }
+    
+    /**
+     * Load friend requests count and update badge
+     */
+    private void loadFriendRequestsCount(String userId) {
+        friendRepository.getFriendRequests(userId).observe(this, resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                int count = resource.getData().size();
+                Log.d("MainActivity", "Friend requests count loaded: " + count);
+                updateContactBadge(count);
+            }
+        });
     }
 
     /**
@@ -136,6 +178,8 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     android.util.Log.d("MainActivity", "New friend request from: " + senderName);
                     Toast.makeText(MainActivity.this, senderName + " sent you a friend request!", Toast.LENGTH_SHORT).show();
+                    // Update badge immediately
+                    refreshFriendRequestsBadge();
                     // Notify fragment to reload friend requests if active
                     if (contactFragment != null && contactFragment.isAdded()) {
                         contactFragment.onFriendEventReceived("REQUEST_RECEIVED", senderId);
@@ -148,6 +192,8 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     android.util.Log.d("MainActivity", "Friend request accepted by: " + userId);
                     Toast.makeText(MainActivity.this, "Friend request accepted!", Toast.LENGTH_SHORT).show();
+                    // Update badge immediately
+                    refreshFriendRequestsBadge();
                     // Notify fragment to reload if active
                     if (contactFragment != null && contactFragment.isAdded()) {
                         contactFragment.onFriendEventReceived("ACCEPTED", userId);
@@ -160,6 +206,8 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     android.util.Log.d("MainActivity", "Friend request rejected by: " + userId);
                     Toast.makeText(MainActivity.this, "Friend request was rejected", Toast.LENGTH_SHORT).show();
+                    // Update badge immediately
+                    refreshFriendRequestsBadge();
                     // Notify fragment to update search results
                     if (contactFragment != null && contactFragment.isAdded()) {
                         contactFragment.onFriendEventReceived("REJECTED", userId);
@@ -171,6 +219,8 @@ public class MainActivity extends AppCompatActivity {
             public void onFriendRequestCancelled(String senderId) {
                 runOnUiThread(() -> {
                     android.util.Log.d("MainActivity", "Friend request cancelled by sender: " + senderId);
+                    // Update badge immediately
+                    refreshFriendRequestsBadge();
                     // Notify fragment if active
                     if (contactFragment != null && contactFragment.isAdded()) {
                         contactFragment.onFriendEventReceived("CANCELLED", senderId);
@@ -512,6 +562,17 @@ public class MainActivity extends AppCompatActivity {
             }
         } else {
             Log.e("MainActivity", "badgeContact is NULL");
+        }
+    }
+    
+    /**
+     * Refresh friend requests badge - reload count from server
+     * Called when WebSocket events occur
+     */
+    private void refreshFriendRequestsBadge() {
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser != null && friendRepository != null) {
+            loadFriendRequestsCount(currentUser.getUid());
         }
     }
 
