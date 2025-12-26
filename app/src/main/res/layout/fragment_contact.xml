@@ -169,13 +169,22 @@
                     android:src="@drawable/ic_friend_request_blue" />
 
                 <TextView
+                    android:id="@+id/tvFriendRequestCount"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginStart="16dp"
-                    android:text="Lời mời kết bạn (12)"
+                    android:text="Lời mời kết bạn"
                     android:textSize="16sp"
                     android:textColor="#000000"/>
+
+                <!-- Red dot notification for new requests -->
+                <View
+                    android:id="@+id/dotFriendRequestNew"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:background="@drawable/bg_red_badge"
+                    android:visibility="gone"/>
             </LinearLayout>
 
             <!-- 2. Birthdays -->
@@ -226,9 +235,10 @@
 
                     <!-- Chip: Tất cả -->
                     <TextView
+                        android:id="@+id/chipAllFriends"
                         android:layout_width="wrap_content"
                         android:layout_height="32dp"
-                        android:text="Tất cả 198"
+                        android:text="Tất cả"
                         android:background="@drawable/bg_chip_selected"
                         android:textColor="#000000"
                         android:textStyle="bold"
@@ -240,9 +250,10 @@
 
                     <!-- Chip: Mới truy cập -->
                     <TextView
+                        android:id="@+id/chipRecentlyActive"
                         android:layout_width="wrap_content"
                         android:layout_height="32dp"
-                        android:text="Mới truy cập 36"
+                        android:text="Mới truy cập"
                         android:background="@drawable/bg_chip_unselected"
                         android:textColor="#000000"
                         android:textSize="13sp"

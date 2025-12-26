@@ -286,11 +286,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             if (muteIndicator != null) muteIndicator.setVisibility(View.GONE);
 
             // --- Unread Badge ---
-            int unreadCount = 0; 
-            // Mock logic since getUnreadCounts() is missing in Conversation model
-            // If we want to test UI, we could force a value, but for now let's keep it 0 (hidden)
-            // or maybe show random for demo? No, better safe.
-            // TODO: Implement unread count in Conversation model
+            int unreadCount = conversation.getUnreadCountForUser(currentUserId);
             
             if (unreadCount > 0) {
                 badgeTextView.setVisibility(View.VISIBLE);
@@ -299,7 +295,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
                     badgeTextView.setBackgroundResource(R.drawable.bg_red_badge_pill);
                 } else {
                     badgeTextView.setText(String.valueOf(unreadCount));
-                    badgeTextView.setBackgroundResource(R.drawable.bg_red_badge); // Circle for single digits usually
+                    badgeTextView.setBackgroundResource(R.drawable.bg_red_badge);
                 }
             } else {
                 badgeTextView.setVisibility(View.GONE);

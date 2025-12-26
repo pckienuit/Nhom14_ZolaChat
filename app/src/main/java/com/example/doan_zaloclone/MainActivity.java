@@ -53,6 +53,9 @@ public class MainActivity extends AppCompatActivity {
     // Force logout listener
     private ListenerRegistration forceLogoutListener;
     private long loginTimestamp = 0;
+    
+    // Unread badge view
+    private TextView badgeMessages;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -459,6 +462,28 @@ public class MainActivity extends AppCompatActivity {
         navGrid.setOnClickListener(v -> showFragment(2));
         navTimeline.setOnClickListener(v -> showFragment(3));
         navPersonal.setOnClickListener(v -> showFragment(4));
+        
+        // Get badge view reference
+        badgeMessages = findViewById(R.id.badge_messages);
+    }
+    
+    /**
+     * Update messages badge with total unread count
+     * Called from HomeFragment when conversations are loaded
+     */
+    public void updateMessagesBadge(int totalUnread) {
+        if (badgeMessages != null) {
+            if (totalUnread > 0) {
+                badgeMessages.setVisibility(View.VISIBLE);
+                if (totalUnread > 5) {
+                    badgeMessages.setText("5+");
+                } else {
+                    badgeMessages.setText(String.valueOf(totalUnread));
+                }
+            } else {
+                badgeMessages.setVisibility(View.GONE);
+            }
+        }
     }
 
     private void updateBottomNavUI(int position) {

@@ -51,6 +51,30 @@ router.post('/', authenticateUser, async (req, res) => {
       lastMessageTime: message.timestamp
     });
     
+    // Increment unreadCounts for all members except sender
+    try {
+      const convDoc = await db.collection('conversations').doc(conversationId).get();
+      if (convDoc.exists) {
+        const convData = convDoc.data();
+        const members = convData.memberIds || convData.participantIds || [];
+        const unreadUpdates = {};
+        
+        members.forEach(memberId => {
+          if (memberId !== req.user.uid) {
+            unreadUpdates[`unreadCounts.${memberId}`] = admin.firestore.FieldValue.increment(1);
+          }
+        });
+        
+        if (Object.keys(unreadUpdates).length > 0) {
+          await db.collection('conversations').doc(conversationId).update(unreadUpdates);
+          console.log(`📊 Incremented unreadCounts for ${Object.keys(unreadUpdates).length} members`);
+        }
+      }
+    } catch (unreadErr) {
+      console.error('Failed to update unreadCounts:', unreadErr);
+      // Don't fail the request if unread update fails
+    }
+    
     // Emit WebSocket event
     const io = req.app.get('io');
     if (io) {

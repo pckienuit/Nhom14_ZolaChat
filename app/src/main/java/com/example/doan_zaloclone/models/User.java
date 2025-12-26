@@ -19,6 +19,9 @@ public class User {
 
     // Custom tag colors - map of tag name to color integer
     private Map<String, Integer> customTagColors;
+    
+    // Online status
+    private boolean isOnline;
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public User() {
@@ -133,6 +136,15 @@ public class User {
 
     public boolean hasDevice(String deviceToken) {
         return this.devices != null && this.devices.containsKey(deviceToken);
+    }
+    
+    // Online status
+    public boolean isOnline() {
+        return isOnline;
+    }
+    
+    public void setOnline(boolean online) {
+        isOnline = online;
     }
 
     // Custom tags getters/setters

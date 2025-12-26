@@ -675,6 +675,9 @@ public class HomeFragment extends Fragment {
                 if (conversations != null) {
                     android.util.Log.d("HomeFragment", "Received " + conversations.size() + " conversations");
                     conversationAdapter.updateConversations(conversations);
+                    
+                    // Calculate total unread and update badge in MainActivity
+                    updateUnreadBadge(conversations, currentUserId);
                 }
             } else if (resource.isError()) {
                 // Show error message
@@ -735,6 +738,23 @@ public class HomeFragment extends Fragment {
 
         // Conversations are automatically loaded via ViewModel observer
         // The observer in observeViewModel() handles the real-time updates
+    }
+    
+    /**
+     * Calculate total unread messages and update badge in MainActivity
+     */
+    private void updateUnreadBadge(List<Conversation> conversations, String userId) {
+        if (conversations == null || getActivity() == null) return;
+        
+        int totalUnread = 0;
+        for (Conversation conv : conversations) {
+            totalUnread += conv.getUnreadCountForUser(userId);
+        }
+        
+        // Update badge in MainActivity
+        if (getActivity() instanceof com.example.doan_zaloclone.MainActivity) {
+            ((com.example.doan_zaloclone.MainActivity) getActivity()).updateMessagesBadge(totalUnread);
+        }
     }
 }
 

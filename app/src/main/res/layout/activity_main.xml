@@ -76,13 +76,13 @@
                     android:visibility="visible"/>
             </LinearLayout>
 
-            <!-- Badge 5+ -->
+            <!-- Badge for unread messages - hidden by default -->
             <TextView
                 android:id="@+id/badge_messages"
                 android:layout_width="wrap_content"
                 android:layout_height="16dp"
                 android:background="@drawable/bg_red_badge_pill"
-                android:text="5+"
+                android:text=""
                 android:textColor="#FFFFFF"
                 android:textSize="10sp"
                 android:textStyle="bold"
@@ -92,7 +92,8 @@
                 android:layout_alignParentTop="true"
                 android:layout_alignParentEnd="true"
                 android:layout_marginTop="4dp"
-                android:layout_marginEnd="16dp"/>
+                android:layout_marginEnd="16dp"
+                android:visibility="gone"/>
         </RelativeLayout>
 
         <!-- 2. Contacts (Danh bạ) -->

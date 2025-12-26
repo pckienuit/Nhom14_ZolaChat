@@ -738,6 +738,32 @@ public class ChatRepository {
     }
 
     /**
+     * Mark conversation as read for a user (reset unread count to 0)
+     * Should be called when user opens a conversation
+     * @param conversationId ID of the conversation
+     * @param userId ID of the user reading the conversation
+     */
+    public void markAsRead(String conversationId, String userId) {
+        if (conversationId == null || userId == null) {
+            Log.w("ChatRepository", "markAsRead called with null params");
+            return;
+        }
+        
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("unreadCounts." + userId, 0);
+        
+        firestore.collection("conversations")
+                .document(conversationId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d("ChatRepository", "Marked conversation " + conversationId + " as read for user " + userId);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("ChatRepository", "Failed to mark as read", e);
+                });
+    }
+
+    /**
      * Upload image to Cloudinary and send as message (LiveData version)
      * @param conversationId ID of the conversation
      * @param imageUri Local URI of the image to upload

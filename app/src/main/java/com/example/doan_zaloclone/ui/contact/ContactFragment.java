@@ -43,6 +43,15 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     
     // WebSocket listener for friend events
     private SocketManager.OnFriendEventListener friendEventListener;
+    
+    // Real-time counts views
+    private TextView tvFriendRequestCount;
+    private TextView chipAllFriends;
+    private TextView chipRecentlyActive;
+    private View dotFriendRequestNew;
+    
+    // Track last seen request count for notification dot
+    private int lastSeenRequestCount = -1;
 
     @Nullable
     @Override
@@ -179,6 +188,15 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 startActivity(intent);
             });
         }
+        
+        // Real-time count views
+        tvFriendRequestCount = view.findViewById(R.id.tvFriendRequestCount);
+        chipAllFriends = view.findViewById(R.id.chipAllFriends);
+        chipRecentlyActive = view.findViewById(R.id.chipRecentlyActive);
+        dotFriendRequestNew = view.findViewById(R.id.dotFriendRequestNew);
+        
+        // Load friend requests count
+        loadFriendRequestsCount();
     }
     
     private void setupSearchEditText(View view) {
@@ -446,11 +464,76 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
                 if (friends != null) {
                     Log.d("ContactFragment", "Friends reloaded: " + friends.size());
                     friendsAdapter.updateFriends(friends);
+                    
+                    // Update real-time counts
+                    updateFriendCounts(friends);
                 }
             } else if (resource.isError()) {
                 Log.e("ContactFragment", "Error loading friends: " + resource.getMessage());
             }
         });
+    }
+    
+    /**
+     * Load and display friend request count
+     */
+    private void loadFriendRequestsCount() {
+        if (firebaseAuth.getCurrentUser() == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        contactViewModel.getFriendRequests(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource == null) return;
+            
+            if (resource.isSuccess() && resource.getData() != null) {
+                int count = resource.getData().size();
+                updateFriendRequestCount(count);
+            }
+        });
+    }
+    
+    /**
+     * Update the friend request count display
+     */
+    private void updateFriendRequestCount(int count) {
+        if (tvFriendRequestCount != null) {
+            if (count > 0) {
+                tvFriendRequestCount.setText("Lời mời kết bạn (" + count + ")");
+            } else {
+                tvFriendRequestCount.setText("Lời mời kết bạn");
+            }
+        }
+        
+        // Show red dot if new requests since last seen
+        if (dotFriendRequestNew != null) {
+            if (lastSeenRequestCount >= 0 && count > lastSeenRequestCount) {
+                dotFriendRequestNew.setVisibility(View.VISIBLE);
+            } else {
+                dotFriendRequestNew.setVisibility(View.GONE);
+            }
+        }
+        
+        // Update last seen count when not in friend requests screen
+        if (lastSeenRequestCount < 0) {
+            lastSeenRequestCount = count;
+        }
+    }
+    
+    /**
+     * Update friend counts (total and online)
+     */
+    private void updateFriendCounts(List<User> friends) {
+        int totalFriends = friends.size();
+        long onlineFriends = friends.stream()
+                .filter(user -> user.isOnline())
+                .count();
+        
+        if (chipAllFriends != null) {
+            chipAllFriends.setText("Tất cả " + totalFriends);
+        }
+        
+        if (chipRecentlyActive != null) {
+            chipRecentlyActive.setText("Mới truy cập " + onlineFriends);
+        }
     }
 
     private void reloadFriendData() {
