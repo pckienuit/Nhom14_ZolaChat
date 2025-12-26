@@ -447,12 +447,9 @@ public class RoomActivity extends AppCompatActivity {
                 return;
             }
             
-            // Phase 4B completed - file is saved
-            // Phase 4C will upload and send this file
-            Toast.makeText(this, String.format("⏹️ Đã ghi %d giây (Phase 4C: Upload pending)", duration / 1000), 
-                Toast.LENGTH_SHORT).show();
-            
-            // TODO Phase 4C: Upload audioFilePath to Cloudinary and send message
+            // Phase 4C: Upload and send voice message
+            int durationInSeconds = (int) (duration / 1000);
+            uploadVoiceMessage(audioFilePath, durationInSeconds);
             
         } catch (Exception e) {
             android.util.Log.e("RoomActivity", "Error stopping recording", e);
@@ -460,6 +457,98 @@ public class RoomActivity extends AppCompatActivity {
         } finally {
             cleanupRecording();
         }
+    }
+    
+    // Phase 4C: Upload voice message to Cloudinary and send
+    private void uploadVoiceMessage(String filePath, int durationSeconds) {
+        if (filePath == null || filePath.isEmpty()) {
+            Toast.makeText(this, "Không tìm thấy file ghi âm", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        Toast.makeText(this, "Đang gửi tin nhắn thoại...", Toast.LENGTH_SHORT).show();
+        
+        java.io.File audioFile = new java.io.File(filePath);
+        if (!audioFile.exists()) {
+            Toast.makeText(this, "File ghi âm không tồn tại", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Upload to Cloudinary in background
+        new Thread(() -> {
+            try {
+                // Upload audio file
+                com.cloudinary.Cloudinary cloudinary = new com.cloudinary.Cloudinary(
+                    com.cloudinary.utils.ObjectUtils.asMap(
+                        "cloud_name", "do0mdssvu",
+                        "api_key", "248235972111755",
+                        "api_secret", "9hnWcqIA7en-XduIpo1f3C1CdIg"
+                    )
+                );
+                
+                java.util.Map uploadResult = cloudinary.uploader().upload(
+                    audioFile,
+                    com.cloudinary.utils.ObjectUtils.asMap(
+                        "resource_type", "raw",
+                        "folder", "zalo_voice_messages"
+                    )
+                );
+                
+                String voiceUrl = (String) uploadResult.get("secure_url");
+                
+                // Send voice message on main thread
+                runOnUiThread(() -> {
+                    sendVoiceMessage(voiceUrl, durationSeconds);
+                    // Delete temp file after upload
+                    audioFile.delete();
+                    Toast.makeText(this, "✅ Đã gửi tin nhắn thoại", Toast.LENGTH_SHORT).show();
+                });
+                
+            } catch (Exception e) {
+                android.util.Log.e("RoomActivity", "Error uploading voice", e);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Lỗi khi upload: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                });
+            }
+        }).start();
+    }
+    
+    private void sendVoiceMessage(String voiceUrl, int durationSeconds) {
+        String currentUserId = firebaseAuth.getCurrentUser() != null
+                ? firebaseAuth.getCurrentUser().getUid()
+                : "";
+        
+        if (currentUserId.isEmpty()) {
+            Toast.makeText(this, "Lỗi: Không tìm thấy user ID", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Create voice message
+        Message voiceMessage = new Message();
+        voiceMessage.setId(java.util.UUID.randomUUID().toString());
+        voiceMessage.setSenderId(currentUserId);
+        voiceMessage.setType(Message.TYPE_VOICE);
+        voiceMessage.setContent("🎤 Tin nhắn thoại (" + durationSeconds + "s)");
+        voiceMessage.setVoiceUrl(voiceUrl);
+        voiceMessage.setVoiceDuration(durationSeconds);
+        voiceMessage.setTimestamp(System.currentTimeMillis());
+        
+        // Set sender name for group chats
+        String displayName = firebaseAuth.getCurrentUser().getDisplayName();
+        if (displayName != null && !displayName.isEmpty()) {
+            voiceMessage.setSenderName(displayName);
+        }
+        
+        // Handle reply if replying to a message
+        if (replyingToMessage != null) {
+            voiceMessage.setReplyToId(replyingToMessage.getId());
+            voiceMessage.setReplyToContent(replyingToMessage.getContent());
+            voiceMessage.setReplyToSenderId(replyingToMessage.getSenderId());
+            hideReplyBar();
+        }
+        
+        // Send via ViewModel
+        roomViewModel.sendMessage(conversationId, voiceMessage);
     }
     
     private void startRecordingTimer() {
