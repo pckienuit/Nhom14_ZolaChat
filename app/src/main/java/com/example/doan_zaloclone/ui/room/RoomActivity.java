@@ -42,8 +42,14 @@ import com.example.doan_zaloclone.viewmodel.ContactViewModel;
 import com.example.doan_zaloclone.viewmodel.RoomViewModel;
 import com.google.firebase.auth.FirebaseAuth;
 
+import com.cloudinary.android.MediaManager;
+import com.cloudinary.android.callback.ErrorInfo;
+import com.cloudinary.android.callback.UploadCallback;
+
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class RoomActivity extends AppCompatActivity {
 
@@ -739,6 +745,80 @@ public class RoomActivity extends AppCompatActivity {
         // Hide editor UI and show normal input
         hideEditorUI();
     }
+
+    // Phase 4D-3e: Upload voice message to Cloudinary and send
+    private void uploadVoiceMessage(String filePath, long durationSeconds) {
+        if (filePath == null) {
+            android.util.Log.e("RoomActivity", "uploadVoiceMessage: filePath is null");
+            return;
+        }
+        
+        android.util.Log.d("RoomActivity", "Starting voice upload: " + filePath + ", duration: " + durationSeconds);
+        Toast.makeText(this, "Đang gửi tin nhắn thoại...", Toast.LENGTH_SHORT).show();
+
+        Uri fileUri = Uri.fromFile(new File(filePath));
+        
+        MediaManager.get().upload(fileUri)
+                .option("resource_type", "video") // Audio is treated as video
+                .option("folder", "zalo_chat_voice/" + conversationId)
+                .callback(new UploadCallback() {
+                    @Override
+                    public void onStart(String requestId) {
+                        android.util.Log.d("RoomActivity", "Voice upload started: " + requestId);
+                    }
+
+                    @Override
+                    public void onProgress(String requestId, long bytes, long totalBytes) {
+                        // Optional
+                    }
+
+                    @Override
+                    public void onSuccess(String requestId, Map resultData) {
+                        String voiceUrl = (String) resultData.get("secure_url");
+                        android.util.Log.d("RoomActivity", "Voice upload success: " + voiceUrl);
+                        
+                        // Delete local file to clean up cache
+                        try {
+                            new File(filePath).delete();
+                            android.util.Log.d("RoomActivity", "Local voice file deleted after upload");
+                        } catch (Exception e) {
+                            android.util.Log.e("RoomActivity", "Error deleting local voice file", e);
+                        }
+                        
+                        runOnUiThread(() -> {
+                            if (firebaseAuth.getCurrentUser() == null) return;
+                            
+                            Message message = new Message();
+                            message.setSenderId(firebaseAuth.getCurrentUser().getUid());
+                            message.setType(Message.TYPE_VOICE);
+                            message.setContent("Tin nhắn thoại");
+                            message.setTimestamp(System.currentTimeMillis());
+                            message.setVoiceUrl(voiceUrl);
+                            
+                            // Ensure duration is valid (at least 1 second)
+                            int finalDuration = (int) Math.max(durationSeconds, 1);
+                            message.setVoiceDuration(finalDuration);
+                            
+                            // Send via ViewModel
+                            roomViewModel.sendMessage(conversationId, message);
+                        });
+                    }
+
+                    @Override
+                    public void onError(String requestId, ErrorInfo error) {
+                        android.util.Log.e("RoomActivity", "Voice upload failed: " + error.getDescription());
+                        runOnUiThread(() -> {
+                            Toast.makeText(RoomActivity.this, "Lỗi gửi voice: " + error.getDescription(), Toast.LENGTH_SHORT).show();
+                        });
+                    }
+
+                    @Override
+                    public void onReschedule(String requestId, ErrorInfo error) {
+                        android.util.Log.d("RoomActivity", "Voice upload rescheduled");
+                    }
+                })
+                .dispatch();
+    }
     
     // Phase 4D-3d: Re-record (discard current and start new)
     private void reRecord() {
@@ -1008,9 +1088,11 @@ public class RoomActivity extends AppCompatActivity {
     
     private void deleteAudioFile() {
         if (audioFilePath != null) {
+            android.util.Log.d("RoomActivity", "Deleting audio file: " + audioFilePath);
             java.io.File file = new java.io.File(audioFilePath);
             if (file.exists()) {
-                file.delete();
+                boolean deleted = file.delete();
+                android.util.Log.d("RoomActivity", "File deleted: " + deleted);
             }
             audioFilePath = null;
         }

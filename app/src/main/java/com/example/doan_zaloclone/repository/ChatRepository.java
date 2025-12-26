@@ -705,6 +705,14 @@ public class ChatRepository {
                 message.setStickerAnimated(messageData.optBoolean("isStickerAnimated", false));
             }
         }
+
+        // Voice fields
+        if (messageData.has("voiceUrl")) {
+            message.setVoiceUrl(messageData.optString("voiceUrl"));
+        }
+        if (messageData.has("voiceDuration")) {
+            message.setVoiceDuration(messageData.optInt("voiceDuration", 0));
+        }
         
         return message;
     }
