@@ -10,6 +10,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
@@ -333,7 +334,7 @@ public class RoomActivity extends AppCompatActivity {
         setupInsets();
     }
     
-    // Phase 4A, 4B, 4C & 4D-1/4D-2: Voice Record - Full Implementation with Waveform
+    // Phase 4A, 4B, 4C & 4D-1/4D-2/4D-3: Voice Record - Full Implementation with Editor
     private static final int RECORD_AUDIO_PERMISSION_CODE = 1001;
     private boolean isRecording = false;
     private android.media.MediaRecorder mediaRecorder;
@@ -351,6 +352,17 @@ public class RoomActivity extends AppCompatActivity {
     // Phase 4D-2: Waveform visualization
     private WaveformView waveformView;
     
+    // Phase 4D-3a: Editor UI views
+    private LinearLayout editorInputLayout;
+    private WaveformView editorWaveformView;
+    private TextView editorDurationText;
+    private ImageButton playPauseButton;
+    private Button speed05Button, speed10Button, speed15Button, speed20Button;
+    private Button reRecordButton, sendVoiceButton;
+    
+    // Phase 4D-3a: Editor state
+    private int recordedDurationSeconds = 0;
+    
     private void setupVoiceRecordButton() {
         if (voiceRecordButton == null) return;
         
@@ -362,6 +374,18 @@ public class RoomActivity extends AppCompatActivity {
         
         // Phase 4D-2: Bind waveform view
         waveformView = findViewById(R.id.waveformView);
+        
+        // Phase 4D-3a: Bind editor views
+        editorInputLayout = findViewById(R.id.editorInputLayout);
+        editorWaveformView = findViewById(R.id.editorWaveformView);
+        editorDurationText = findViewById(R.id.editorDurationText);
+        playPauseButton = findViewById(R.id.playPauseButton);
+        speed05Button = findViewById(R.id.speed05Button);
+        speed10Button = findViewById(R.id.speed10Button);
+        speed15Button = findViewById(R.id.speed15Button);
+        speed20Button = findViewById(R.id.speed20Button);
+        reRecordButton = findViewById(R.id.reRecordButton);
+        sendVoiceButton = findViewById(R.id.sendVoiceButton);
         
         // Phase 4D-1: Click to toggle recording (not long-press)
         voiceRecordButton.setOnClickListener(v -> {
@@ -456,25 +480,50 @@ public class RoomActivity extends AppCompatActivity {
             
             isRecording = false;
             
-            // Phase 4D-1: Hide recording UI and show normal UI
-            hideRecordingUI();
-            
             // Check if recording is too short (less than 1 second)
             if (duration < 1000) {
                 Toast.makeText(this, "Ghi âm quá ngắn", Toast.LENGTH_SHORT).show();
                 deleteAudioFile();
+                hideRecordingUI();
                 return;
             }
             
-            // Upload and send voice message
-            int durationInSeconds = (int) (duration / 1000);
-            uploadVoiceMessage(audioFilePath, durationInSeconds);
+            // Phase 4D-3a: Show editor instead of sending immediately
+            recordedDurationSeconds = (int) (duration / 1000);
+            showEditorUI();
             
         } catch (Exception e) {
             android.util.Log.e("RoomActivity", "Error stopping recording", e);
             Toast.makeText(this, "Lỗi khi dừng ghi âm", Toast.LENGTH_SHORT).show();
         } finally {
             cleanupRecording();
+        }
+    }
+    
+    // Phase 4D-3a: Show editor UI
+    private void showEditorUI() {
+        // Hide recording UI
+        if (recordingInputLayout != null) {
+            recordingInputLayout.setVisibility(View.GONE);
+        }
+        
+        // Show editor UI
+        if (editorInputLayout != null) {
+            editorInputLayout.setVisibility(View.VISIBLE);
+        }
+        
+        // Set duration text
+        if (editorDurationText != null) {
+            int minutes = recordedDurationSeconds / 60;
+            int seconds = recordedDurationSeconds % 60;
+            String durationStr = String.format("%02d:%02d", minutes, seconds);
+            editorDurationText.setText(durationStr);
+        }
+        
+        // Copy waveform from recording to editor (simplified - just clear for now)
+        if (editorWaveformView != null) {
+            editorWaveformView.clear();
+            // TODO: Could copy amplitude data from waveformView if needed
         }
     }
     
