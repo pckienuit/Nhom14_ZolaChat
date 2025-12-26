@@ -1,23 +1,38 @@
 package com.example.doan_zaloclone.repository;
 
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
+
+import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Repository class for handling Firebase Authentication operations
+ * Updated to use ExecutorService for sequential processing
  */
 public class AuthRepository {
 
+    private static final String TAG = "AuthRepository";
     private final FirebaseAuth firebaseAuth;
     private final FirebaseFirestore firestore;
+    private final ExecutorService backgroundExecutor;
+    private final Handler mainHandler;
 
     public AuthRepository() {
         this.firebaseAuth = FirebaseAuth.getInstance();
         this.firestore = FirebaseFirestore.getInstance();
+        this.backgroundExecutor = Executors.newSingleThreadExecutor();
+        this.mainHandler = new Handler(Looper.getMainLooper());
     }
 
     /**
@@ -30,138 +45,138 @@ public class AuthRepository {
     /**
      * Login with email and password
      */
-    public void login(String email, String password, AuthCallback callback) {
-        firebaseAuth.signInWithEmailAndPassword(email, password)
-                .addOnCompleteListener(task -> {
-                    if (task.isSuccessful()) {
-                        FirebaseUser user = firebaseAuth.getCurrentUser();
-                        if (user != null) {
-                            // Check if user is banned before allowing login
-                            checkBannedStatus(user, callback);
-                        } else {
-                            callback.onError("Login failed");
-                        }
-                    } else {
-                        String errorMessage = task.getException() != null
-                                ? task.getException().getMessage()
-                                : "Login failed";
-                        callback.onError(errorMessage);
-                    }
-                });
-    }
-
     /**
-     * Check if user is banned in Firestore
+     * Login with email and password
      */
-    private void checkBannedStatus(FirebaseUser user, AuthCallback callback) {
-        firestore.collection("users").document(user.getUid())
-                .get()
-                .addOnSuccessListener(documentSnapshot -> {
-                    if (documentSnapshot.exists()) {
-                        Boolean isBanned = documentSnapshot.getBoolean("isBanned");
+    public void login(String email, String password, AuthCallback callback) {
+        backgroundExecutor.execute(() -> {
+            try {
+                // 1. Authenticate with Firebase
+                AuthResult authResult = Tasks.await(firebaseAuth.signInWithEmailAndPassword(email, password));
+                FirebaseUser user = authResult.getUser();
+
+                if (user != null) {
+                    // 2. Check Banned Status synchronously
+                    DocumentSnapshot document = Tasks.await(firestore.collection("users").document(user.getUid()).get());
+                    
+                    if (document.exists()) {
+                        Boolean isBanned = document.getBoolean("isBanned");
                         if (isBanned != null && isBanned) {
-                            // User is banned - sign out immediately
+                            // User is banned
                             firebaseAuth.signOut();
-                            callback.onError("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ admin.");
-                        } else {
-                            // User not banned - proceed with login
-                            updateUserStatus(user.getUid(), true);
-                            callback.onSuccess(user);
+                            mainHandler.post(() -> callback.onError("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ admin."));
+                            return;
                         }
-                    } else {
-                        // User document doesn't exist - allow login (new user edge case)
-                        updateUserStatus(user.getUid(), true);
-                        callback.onSuccess(user);
                     }
-                })
-                .addOnFailureListener(e -> {
-                    // If we can't check ban status, allow login but log error
-                    updateUserStatus(user.getUid(), true);
-                    callback.onSuccess(user);
-                });
+
+                    // 3. Update Online Status
+                    Map<String, Object> updates = new HashMap<>();
+                    updates.put("isOnline", true);
+                    updates.put("lastSeen", System.currentTimeMillis());
+                    
+                    // Best effort update, don't block heavily on it or fail login if it fails
+                    try {
+                        Tasks.await(firestore.collection("users").document(user.getUid()).update(updates));
+                    } catch (Exception e) {
+                        Log.w(TAG, "Failed to update online status on login", e);
+                    }
+
+                    mainHandler.post(() -> callback.onSuccess(user));
+                } else {
+                    mainHandler.post(() -> callback.onError("Login failed: User is null"));
+                }
+
+            } catch (Exception e) {
+                Log.e(TAG, "Login failed", e);
+                // Unwrap ExecutionException if needed for cleaner messages
+                String msg = e.getMessage();
+                if (e.getCause() != null) {
+                    msg = e.getCause().getMessage();
+                }
+                String finalMsg = msg != null ? msg : "Login error";
+                mainHandler.post(() -> callback.onError(finalMsg));
+            }
+        });
     }
 
     /**
      * Register new user with email and password
      */
+    /**
+     * Register new user with email and password
+     */
     public void register(String name, String email, String password, AuthCallback callback) {
-        firebaseAuth.createUserWithEmailAndPassword(email, password)
-                .addOnCompleteListener(task -> {
-                    if (task.isSuccessful()) {
-                        FirebaseUser user = firebaseAuth.getCurrentUser();
-                        if (user != null) {
-                            // Save user info to Firestore (isOnline defaults to true in saveUserToFirestore)
-                            saveUserToFirestore(user.getUid(), name, email, callback);
-                        } else {
-                            callback.onError("Registration failed");
-                        }
-                    } else {
-                        String errorMessage = task.getException() != null
-                                ? task.getException().getMessage()
-                                : "Registration failed";
-                        callback.onError(errorMessage);
-                    }
-                });
-    }
+        backgroundExecutor.execute(() -> {
+            try {
+                // 1. Create User
+                AuthResult authResult = Tasks.await(firebaseAuth.createUserWithEmailAndPassword(email, password));
+                FirebaseUser user = authResult.getUser();
 
-    /**
-     * Save user information to Firestore
-     */
-    private void saveUserToFirestore(String userId, String name, String email, AuthCallback callback) {
-        // Normalize email to lowercase for consistent searching
-        String normalizedEmail = email.trim().toLowerCase();
+                if (user != null) {
+                    // 2. Prepare User Entity
+                    String normalizedEmail = email.trim().toLowerCase();
+                    Map<String, Object> userData = new HashMap<>();
+                    userData.put("userId", user.getUid());
+                    userData.put("name", name);
+                    userData.put("email", normalizedEmail);
+                    userData.put("createdAt", System.currentTimeMillis());
+                    userData.put("isOnline", true);
+                    userData.put("lastSeen", System.currentTimeMillis());
 
-        Map<String, Object> user = new HashMap<>();
-        user.put("userId", userId);
-        user.put("name", name);
-        user.put("email", normalizedEmail);  // Save lowercase email
-        user.put("createdAt", System.currentTimeMillis());
-        user.put("isOnline", true);
-        user.put("lastSeen", System.currentTimeMillis());
+                    // 3. Save to Firestore
+                    Tasks.await(firestore.collection("users").document(user.getUid()).set(userData));
+                    
+                    mainHandler.post(() -> callback.onSuccess(user));
+                } else {
+                    mainHandler.post(() -> callback.onError("Registration failed: User is null"));
+                }
 
-        firestore.collection("users").document(userId)
-                .set(user)
-                .addOnSuccessListener(aVoid -> {
-                    FirebaseUser firebaseUser = firebaseAuth.getCurrentUser();
-                    callback.onSuccess(firebaseUser);
-                })
-                .addOnFailureListener(e -> {
-                    String errorMessage = e.getMessage() != null
-                            ? e.getMessage()
-                            : "Failed to save user data";
-                    callback.onError(errorMessage);
-                });
-    }
-
-    /**
-     * Helper to update user status
-     */
-    private void updateUserStatus(String userId, boolean isOnline) {
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("isOnline", isOnline);
-        updates.put("lastSeen", System.currentTimeMillis());
-
-        firestore.collection("users").document(userId).update(updates)
-                .addOnFailureListener(e -> {
-                    // Log error silently
-                    System.err.println("Failed to update user status: " + e.getMessage());
-                });
+            } catch (Exception e) {
+                Log.e(TAG, "Registration failed", e);
+                String msg = e.getMessage();
+                if (e.getCause() != null) {
+                    msg = e.getCause().getMessage();
+                }
+                String finalMsg = msg != null ? msg : "Registration error";
+                mainHandler.post(() -> callback.onError(finalMsg));
+            }
+        });
     }
 
     /**
      * Logout current user
      */
+    /**
+     * Logout current user
+     */
     public void logout(LogoutCallback callback) {
-        FirebaseUser user = firebaseAuth.getCurrentUser();
-        if (user != null) {
-            // Set Offline before signing out
-            updateUserStatus(user.getUid(), false);
-        }
-
-        firebaseAuth.signOut();
-        if (callback != null) {
-            callback.onLogoutComplete();
-        }
+        backgroundExecutor.execute(() -> {
+            try {
+                FirebaseUser user = firebaseAuth.getCurrentUser();
+                if (user != null) {
+                    Map<String, Object> updates = new HashMap<>();
+                    updates.put("isOnline", false);
+                    updates.put("lastSeen", System.currentTimeMillis());
+                    
+                    try {
+                        Tasks.await(firestore.collection("users").document(user.getUid()).update(updates));
+                    } catch (Exception e) {
+                        Log.w(TAG, "Failed to set offline status on logout", e);
+                    }
+                }
+                
+                firebaseAuth.signOut();
+                if (callback != null) {
+                    mainHandler.post(callback::onLogoutComplete);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Logout error", e);
+                // Even on error, we try to ensure signout happens or callback is called
+                if (callback != null) {
+                    mainHandler.post(callback::onLogoutComplete);
+                }
+            }
+        });
     }
 
     /**
