@@ -134,7 +134,6 @@ public class RoomActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        android.util.Log.e("ANTIGRAVITY", "CODE VERSION 1132 - CHECK UI VISIBILITY");
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         setContentView(R.layout.activity_room);
 
@@ -381,23 +380,11 @@ public class RoomActivity extends AppCompatActivity {
      * Check if current user is friends with the other user
      */
     private void checkFriendshipStatusForBanner() {
-        android.util.Log.e("ANTIGRAVITY", "checkFriendshipStatusForBanner START");
-        
-        if (conversationId == null) {
-            android.util.Log.e("ANTIGRAVITY", "conversationId is NULL");
-            return;
-        }
-        if (addFriendBanner == null) {
-            android.util.Log.e("ANTIGRAVITY", "addFriendBanner View is NULL");
-            return;
-        }
+        if (conversationId == null || addFriendBanner == null) return;
         
         String currentUserId = firebaseAuth.getCurrentUser() != null ? 
             firebaseAuth.getCurrentUser().getUid() : null;
-        if (currentUserId == null) {
-            android.util.Log.e("ANTIGRAVITY", "Current User NULL");
-            return;
-        }
+        if (currentUserId == null) return;
         
         // Load conversation from Firestore
         com.google.firebase.firestore.FirebaseFirestore.getInstance()
@@ -406,17 +393,14 @@ public class RoomActivity extends AppCompatActivity {
             .get()
             .addOnSuccessListener(documentSnapshot -> {
                 if (!documentSnapshot.exists()) {
-                    android.util.Log.e("ANTIGRAVITY", "Document does not exist -> Hide");
                     addFriendBanner.setVisibility(View.GONE);
                     return;
                 }
                 
                 String type = documentSnapshot.getString("type");
-                android.util.Log.e("ANTIGRAVITY", "Conv Type: " + type);
                 
                 // Only show for 1-1 conversations
                 if ("group".equalsIgnoreCase(type)) {
-                    android.util.Log.e("ANTIGRAVITY", "Is Group -> Hide");
                     addFriendBanner.setVisibility(View.GONE);
                     return;
                 }
@@ -426,12 +410,10 @@ public class RoomActivity extends AppCompatActivity {
                 java.util.List<String> participantIds = (java.util.List<String>) documentSnapshot.get("participantIds");
                 
                 if (participantIds == null) {
-                    android.util.Log.e("ANTIGRAVITY", "participantIds null -> Trying memberIds");
                     participantIds = (java.util.List<String>) documentSnapshot.get("memberIds");
                 }
                 
                 if (participantIds == null || participantIds.size() != 2) {
-                    android.util.Log.e("ANTIGRAVITY", "Participants != 2 -> Hide (" + (participantIds==null?"null":participantIds.size()) + ")");
                     addFriendBanner.setVisibility(View.GONE);
                     return;
                 }
@@ -445,13 +427,11 @@ public class RoomActivity extends AppCompatActivity {
                 }
                 
                 if (otherUserId == null) {
-                    android.util.Log.e("ANTIGRAVITY", "Other User ID not found -> Hide");
                     addFriendBanner.setVisibility(View.GONE);
                     return;
                 }
                 
                 String finalOtherUserId = otherUserId;
-                android.util.Log.e("ANTIGRAVITY", "CheckingFriendship with: " + finalOtherUserId);
                 
                 // Check friendship status
                 friendRepository.checkFriendship(currentUserId, finalOtherUserId)
@@ -466,11 +446,9 @@ public class RoomActivity extends AppCompatActivity {
                             
                             if (areFriendsStatus) {
                                 // Already friends -> Hide banner
-                                android.util.Log.e("ANTIGRAVITY", "Already Friends -> Hide Banner");
                                 addFriendBanner.setVisibility(View.GONE);
                             } else {
                                 // Not friends -> Check if request sent
-                                android.util.Log.e("ANTIGRAVITY", "Not Friends -> Calling checkSentRequestStatus");
                                 checkSentRequestStatus(currentUserId, finalOtherUserId);
                             }
                         } else {
@@ -481,14 +459,12 @@ public class RoomActivity extends AppCompatActivity {
             })
             .addOnFailureListener(e -> {
                 android.util.Log.e("AddFriendBanner", "Failed to load conversation", e);
-                android.util.Log.e("ANTIGRAVITY", "Load Conv Failed -> Hide Banner");
                 addFriendBanner.setVisibility(View.GONE);
             });
     }
 
     private void checkSentRequestStatus(String currentUserId, String otherUserId) {
         // Optimistic UI: Show banner immediately for non-friends
-        android.util.Log.e("ANTIGRAVITY", "checkSentRequestStatus called -> Setting VISIBLE");
         addFriendBanner.setVisibility(View.VISIBLE);
         
         friendRepository.getSentFriendRequests(currentUserId)
@@ -514,7 +490,6 @@ public class RoomActivity extends AppCompatActivity {
                         btnSendFriendRequest.setEnabled(true);
                     }
                 }
-                // Ignore Loading/Error states (keep default "Kết bạn" state if error)
             });
     }
     
@@ -556,11 +531,9 @@ public class RoomActivity extends AppCompatActivity {
                                     Toast.makeText(this, "Đã gửi lời mời kết bạn", 
                                         Toast.LENGTH_SHORT).show();
                                     btnSendFriendRequest.setText("Đã gửi lời mời");
+                                    btnSendFriendRequest.setEnabled(false);
                                     
-                                    // Hide banner after sending request
-                                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                                        addFriendBanner.setVisibility(View.GONE);
-                                    }, 1000);
+                                    // Banner remains visible until request accepted
                                 } else {
                                     Toast.makeText(this, "Lỗi: " + friendResource.getMessage(),
                                         Toast.LENGTH_SHORT).show();
