@@ -208,6 +208,60 @@
 
         </LinearLayout>
 
+        <!-- Voice Recording UI (hidden by default) -->
+        <LinearLayout
+            android:id="@+id/recordingInputLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="12dp"
+            android:visibility="gone"
+            android:background="#FFF3F3F3">
+
+            <!-- Recording indicator -->
+            <View
+                android:id="@+id/recordingIndicator"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:background="@android:drawable/presence_audio_online"
+                android:backgroundTint="@android:color/holo_red_dark" />
+
+            <!-- Recording timer -->
+            <TextView
+                android:id="@+id/recordingTimerText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:text="00:00"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/holo_red_dark" />
+
+            <!-- Delete button -->
+            <ImageButton
+                android:id="@+id/deleteRecordingButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@android:drawable/ic_menu_delete"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="#999999"
+                android:contentDescription="Delete recording" />
+
+            <!-- Stop button -->
+            <ImageButton
+                android:id="@+id/stopRecordingButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:src="@android:drawable/ic_media_pause"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="@android:color/holo_red_dark"
+                android:contentDescription="Stop recording" />
+
+        </LinearLayout>
+
         <!-- Image mode input layout (hidden by default) -->
         <LinearLayout
             android:id="@+id/imageInputLayout"

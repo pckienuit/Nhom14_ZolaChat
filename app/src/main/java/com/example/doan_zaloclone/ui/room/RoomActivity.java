@@ -333,7 +333,7 @@ public class RoomActivity extends AppCompatActivity {
         setupInsets();
     }
     
-    // Phase 4A & 4B: Voice Record - Permission & Recording Logic
+    // Phase 4A, 4B, 4C & 4D-1: Voice Record - Full Implementation with Toggle UI
     private static final int RECORD_AUDIO_PERMISSION_CODE = 1001;
     private boolean isRecording = false;
     private android.media.MediaRecorder mediaRecorder;
@@ -342,33 +342,42 @@ public class RoomActivity extends AppCompatActivity {
     private Handler recordingTimerHandler = new Handler(Looper.getMainLooper());
     private Runnable recordingTimerRunnable;
     
+    // Phase 4D-1: Recording UI views
+    private LinearLayout recordingInputLayout;
+    private TextView recordingTimerText;
+    private ImageButton stopRecordingButton;
+    private ImageButton deleteRecordingButton;
+    
     private void setupVoiceRecordButton() {
         if (voiceRecordButton == null) return;
         
-        // Long-press to start recording, release to stop
-        voiceRecordButton.setOnTouchListener((v, event) -> {
-            switch (event.getAction()) {
-                case android.view.MotionEvent.ACTION_DOWN:
-                    // Start recording on press
-                    if (!isRecording) {
-                        if (checkRecordAudioPermission()) {
-                            startVoiceRecording();
-                        } else {
-                            requestRecordAudioPermission();
-                        }
-                    }
-                    return true;
-                    
-                case android.view.MotionEvent.ACTION_UP:
-                case android.view.MotionEvent.ACTION_CANCEL:
-                    // Stop recording on release
-                    if (isRecording) {
-                        stopVoiceRecording();
-                    }
-                    return true;
+        //Phase 4D-1: Bind recording UI views
+        recordingInputLayout = findViewById(R.id.recordingInputLayout);
+        recordingTimerText = findViewById(R.id.recordingTimerText);
+        stopRecordingButton = findViewById(R.id.stopRecordingButton);
+        deleteRecordingButton = findViewById(R.id.deleteRecordingButton);
+        
+        // Phase 4D-1: Click to toggle recording (not long-press)
+        voiceRecordButton.setOnClickListener(v -> {
+            if (!isRecording) {
+                // Start recording
+                if (checkRecordAudioPermission()) {
+                    startVoiceRecording();
+                } else {
+                    requestRecordAudioPermission();
+                }
             }
-            return false;
         });
+        
+        // Stop button click
+        if (stopRecordingButton != null) {
+            stopRecordingButton.setOnClickListener(v -> stopVoiceRecording());
+        }
+        
+        // Delete button click
+        if (deleteRecordingButton != null) {
+            deleteRecordingButton.setOnClickListener(v -> cancelVoiceRecording());
+        }
     }
     
     private boolean checkRecordAudioPermission() {
@@ -386,7 +395,9 @@ public class RoomActivity extends AppCompatActivity {
         try {
             isRecording = true;
             recordingStartTime = System.currentTimeMillis();
-            updateVoiceRecordButtonUI();
+            
+            // Phase 4D-1: Switch UI to recording mode
+            showRecordingUI();
             
             // Create audio file in cache directory
             String fileName = "voice_" + System.currentTimeMillis() + ".m4a";
@@ -407,7 +418,7 @@ public class RoomActivity extends AppCompatActivity {
             // Start recording timer
             startRecordingTimer();
             
-            Toast.makeText(this, "🎤 Recording...", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "🎤 Đang ghi âm...", Toast.LENGTH_SHORT).show();
             
         } catch (Exception e) {
             android.util.Log.e("RoomActivity", "Error starting recording", e);
@@ -438,7 +449,9 @@ public class RoomActivity extends AppCompatActivity {
             }
             
             isRecording = false;
-            updateVoiceRecordButtonUI();
+            
+            // Phase 4D-1: Hide recording UI and show normal UI
+            hideRecordingUI();
             
             // Check if recording is too short (less than 1 second)
             if (duration < 1000) {
@@ -447,7 +460,7 @@ public class RoomActivity extends AppCompatActivity {
                 return;
             }
             
-            // Phase 4C: Upload and send voice message
+            // Upload and send voice message
             int durationInSeconds = (int) (duration / 1000);
             uploadVoiceMessage(audioFilePath, durationInSeconds);
             
@@ -456,6 +469,65 @@ public class RoomActivity extends AppCompatActivity {
             Toast.makeText(this, "Lỗi khi dừng ghi âm", Toast.LENGTH_SHORT).show();
         } finally {
             cleanupRecording();
+        }
+    }
+    
+    // Phase 4D-1: Cancel recording (delete button)
+    private void cancelVoiceRecording() {
+        if (!isRecording) return;
+        
+        try {
+            // Stop timer
+            stopRecordingTimer();
+            
+            // Stop and release MediaRecorder
+            if (mediaRecorder != null) {
+                try {
+                    mediaRecorder.stop();
+                    mediaRecorder.release();
+                } catch (RuntimeException e) {
+                    // Ignore
+                }
+                mediaRecorder = null;
+            }
+            
+            isRecording = false;
+            
+            // Delete audio file
+            deleteAudioFile();
+            
+            // Phase 4D-1: Hide recording UI and show normal UI
+            hideRecordingUI();
+            
+            Toast.makeText(this, "Đã hủy ghi âm", Toast.LENGTH_SHORT).show();
+            
+        } catch (Exception e) {
+            android.util.Log.e("RoomActivity", "Error canceling recording", e);
+        } finally {
+            cleanupRecording();
+        }
+    }
+    
+    // Phase 4D-1: Show recording UI, hide normal input
+    private void showRecordingUI() {
+        if (normalInputLayout != null) {
+            normalInputLayout.setVisibility(View.GONE);
+        }
+        if (recordingInputLayout != null) {
+            recordingInputLayout.setVisibility(View.VISIBLE);
+        }
+        if (recordingTimerText != null) {
+            recordingTimerText.setText("00:00");
+        }
+    }
+    
+    // Phase 4D-1: Hide recording UI, show normal input
+    private void hideRecordingUI() {
+        if (recordingInputLayout != null) {
+            recordingInputLayout.setVisibility(View.GONE);
+        }
+        if (normalInputLayout != null) {
+            normalInputLayout.setVisibility(View.VISIBLE);
         }
     }
     
@@ -557,11 +629,15 @@ public class RoomActivity extends AppCompatActivity {
             public void run() {
                 if (isRecording) {
                     long elapsed = System.currentTimeMillis() - recordingStartTime;
-                    int seconds = (int) (elapsed / 1000);
+                    int totalSeconds = (int) (elapsed / 1000);
+                    int minutes = totalSeconds / 60;
+                    int seconds = totalSeconds % 60;
                     
-                    // Update UI - could show in a TextView if available
-                    // For Phase 4B, we just log it
-                    android.util.Log.d("RoomActivity", "Recording: " + seconds + "s");
+                    // Phase 4D-1: Update UI timer display
+                    if (recordingTimerText != null) {
+                        String timeStr = String.format("%02d:%02d", minutes, seconds);
+                        recordingTimerText.setText(timeStr);
+                    }
                     
                     // Schedule next update
                     recordingTimerHandler.postDelayed(this, 1000);
