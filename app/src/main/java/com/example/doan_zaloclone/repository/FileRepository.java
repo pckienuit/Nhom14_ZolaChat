@@ -1,6 +1,7 @@
 package com.example.doan_zaloclone.repository;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
@@ -11,7 +12,11 @@ import com.example.doan_zaloclone.models.User;
 import com.example.doan_zaloclone.services.FirestoreManager;
 import com.example.doan_zaloclone.utils.Resource;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.EventListener;
+import com.google.firebase.firestore.FirebaseFirestoreException;
+import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.QuerySnapshot;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -36,13 +41,14 @@ public class FileRepository {
     );
 
     private final FirestoreManager firestoreManager;
+    private ListenerRegistration fileListener;
 
     public FileRepository() {
         this.firestoreManager = FirestoreManager.getInstance();
     }
 
     /**
-     * Get all files for a conversation with pagination
+     * Get all files for a conversation with real-time updates
      *
      * @param conversationId ID of the conversation
      * @param limit          Maximum number of items to load
@@ -55,41 +61,52 @@ public class FileRepository {
         MutableLiveData<Resource<List<FileItem>>> result = new MutableLiveData<>();
         result.setValue(Resource.loading(null));
 
+        // Remove existing listener if any
+        if (fileListener != null) {
+            fileListener.remove();
+        }
+
         // Query messages with files or images, ordered by timestamp descending
-        firestoreManager.getFirestore()
+        fileListener = firestoreManager.getFirestore()
                 .collection("conversations")
                 .document(conversationId)
                 .collection("messages")
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .limit(limit)
-                .get()
-                .addOnSuccessListener(querySnapshot -> {
-                    List<Message> messages = new ArrayList<>();
-                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
-                        Message message = doc.toObject(Message.class);
-                        if (message != null) {
-                            message.setId(doc.getId());
-                            messages.add(message);
+                .addSnapshotListener(new EventListener<QuerySnapshot>() {
+                    @Override
+                    public void onEvent(@Nullable QuerySnapshot value, @Nullable FirebaseFirestoreException error) {
+                        if (error != null) {
+                            android.util.Log.e(TAG, "Listen failed.", error);
+                            result.setValue(Resource.error("Lỗi đồng bộ file: " + error.getMessage(), null));
+                            return;
+                        }
+
+                        if (value != null) {
+                            List<Message> messages = new ArrayList<>();
+                            for (DocumentSnapshot doc : value.getDocuments()) {
+                                Message message = doc.toObject(Message.class);
+                                if (message != null) {
+                                    message.setId(doc.getId());
+                                    messages.add(message);
+                                }
+                            }
+
+                            // Convert to FileItems and enrich with sender info
+                            enrichWithSenderInfo(messages, enrichedItems -> {
+                                result.setValue(Resource.success(enrichedItems));
+                            }, errorMsg -> {
+                                result.setValue(Resource.error(errorMsg, null));
+                            });
                         }
                     }
-
-                    // Convert to FileItems and enrich with sender info
-                    enrichWithSenderInfo(messages, enrichedItems -> {
-                        result.setValue(Resource.success(enrichedItems));
-                    }, error -> {
-                        result.setValue(Resource.error(error, null));
-                    });
-                })
-                .addOnFailureListener(e -> {
-                    android.util.Log.e(TAG, "Error loading files", e);
-                    result.setValue(Resource.error("Lỗi tải file: " + e.getMessage(), null));
                 });
 
         return result;
     }
 
     /**
-     * Load more files for pagination
+     * Load more files for pagination (remains one-time fetch)
      *
      * @param conversationId ID of the conversation
      * @param lastTimestamp  Timestamp of the last loaded message
@@ -303,6 +320,16 @@ public class FileRepository {
                             onSuccess.onEnriched(fileItems);
                         }
                     });
+        }
+    }
+
+    /**
+     * Stop listening to updates
+     */
+    public void cleanup() {
+        if (fileListener != null) {
+            fileListener.remove();
+            fileListener = null;
         }
     }
 
