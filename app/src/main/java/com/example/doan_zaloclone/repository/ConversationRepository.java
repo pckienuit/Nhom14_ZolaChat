@@ -41,6 +41,7 @@ public class ConversationRepository {
     private final ApiService apiService;
     private final SocketManager socketManager;
     private final Handler mainHandler;
+    private final java.util.concurrent.ExecutorService backgroundExecutor;
 
     // Cache conversations locally
     private final List<Conversation> cachedConversations = new ArrayList<>();
@@ -60,6 +61,7 @@ public class ConversationRepository {
         this.apiService = RetrofitClient.getApiService();
         this.socketManager = SocketManager.getInstance();
         this.mainHandler = new Handler(Looper.getMainLooper());
+        this.backgroundExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
         this.firestoreManager = FirestoreManager.getInstance();
 
         setupSocketListeners();
@@ -302,38 +304,35 @@ public class ConversationRepository {
         MutableLiveData<Resource<String>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        // Prepare request body
-        Map<String, Object> conversationData = new HashMap<>();
-        conversationData.put("participants", participants);
-        conversationData.put("isGroup", isGroup);
-        if (isGroup && groupName != null) {
-            conversationData.put("groupName", groupName);
-        }
+        backgroundExecutor.execute(() -> {
+            try {
+                // Prepare request body
+                Map<String, Object> conversationData = new HashMap<>();
+                conversationData.put("participants", participants);
+                conversationData.put("isGroup", isGroup);
+                if (isGroup && groupName != null) {
+                    conversationData.put("groupName", groupName);
+                }
 
-        // Call API
-        Call<Map<String, Object>> call = apiService.createConversation(conversationData);
+                // Call API
+                Call<Map<String, Object>> call = apiService.createConversation(conversationData);
+                Response<Map<String, Object>> response = call.execute();
 
-        call.enqueue(new Callback<Map<String, Object>>() {
-            @Override
-            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     Map<String, Object> responseBody = response.body();
                     String conversationId = (String) responseBody.get("conversationId");
 
                     Log.d(TAG, "Created conversation: " + conversationId);
-                    result.setValue(Resource.success(conversationId));
+                    mainHandler.post(() -> result.setValue(Resource.success(conversationId)));
                 } else {
                     String error = "HTTP " + response.code();
                     Log.e(TAG, "Failed to create conversation: " + error);
-                    result.setValue(Resource.error(error));
+                    mainHandler.post(() -> result.setValue(Resource.error(error)));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                String error = t.getMessage() != null ? t.getMessage() : "Network error";
-                Log.e(TAG, "Network error creating conversation", t);
-                result.setValue(Resource.error(error));
+            } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : "Network error";
+                Log.e(TAG, "Network error creating conversation", e);
+                mainHandler.post(() -> result.setValue(Resource.error(error)));
             }
         });
 
@@ -478,28 +477,25 @@ public class ConversationRepository {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        Log.d(TAG, "Updating group " + conversationId + " - fields: " + updates.keySet());
+        backgroundExecutor.execute(() -> {
+            try {
+                Log.d(TAG, "Updating group " + conversationId + " - fields: " + updates.keySet());
 
-        Call<Map<String, Object>> call = apiService.updateConversation(conversationId, updates);
+                Call<Map<String, Object>> call = apiService.updateConversation(conversationId, updates);
+                Response<Map<String, Object>> response = call.execute();
 
-        call.enqueue(new Callback<Map<String, Object>>() {
-            @Override
-            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     Log.d(TAG, "✅ Updated group info");
-                    result.setValue(Resource.success(null));
+                    mainHandler.post(() -> result.setValue(Resource.success(null)));
                 } else {
                     String error = "HTTP " + response.code();
                     Log.e(TAG, "Failed to update group: " + error);
-                    result.setValue(Resource.error(error));
+                    mainHandler.post(() -> result.setValue(Resource.error(error)));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                String error = t.getMessage() != null ? t.getMessage() : "Network error";
-                Log.e(TAG, "Network error updating group", t);
-                result.setValue(Resource.error(error));
+            } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : "Network error";
+                Log.e(TAG, "Network error updating group", e);
+                mainHandler.post(() -> result.setValue(Resource.error(error)));
             }
         });
 
@@ -520,32 +516,29 @@ public class ConversationRepository {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        Log.d(TAG, "Adding member " + userId + " to group " + conversationId);
+        backgroundExecutor.execute(() -> {
+            try {
+                Log.d(TAG, "Adding member " + userId + " to group " + conversationId);
 
-        Map<String, String> memberData = new HashMap<>();
-        memberData.put("userId", userId);
-        memberData.put("userName", userName);
+                Map<String, String> memberData = new HashMap<>();
+                memberData.put("userId", userId);
+                memberData.put("userName", userName);
 
-        Call<ApiResponse<Void>> call = apiService.addGroupMember(conversationId, memberData);
+                Call<ApiResponse<Void>> call = apiService.addGroupMember(conversationId, memberData);
+                Response<ApiResponse<Void>> response = call.execute();
 
-        call.enqueue(new Callback<ApiResponse<Void>>() {
-            @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
                     Log.d(TAG, "✅ Added member to group");
-                    result.setValue(Resource.success(null));
+                    mainHandler.post(() -> result.setValue(Resource.success(null)));
                 } else {
                     String error = "HTTP " + response.code();
                     Log.e(TAG, "Failed to add member: " + error);
-                    result.setValue(Resource.error(error));
+                    mainHandler.post(() -> result.setValue(Resource.error(error)));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
-                String error = t.getMessage() != null ? t.getMessage() : "Network error";
-                Log.e(TAG, "Network error adding member", t);
-                result.setValue(Resource.error(error));
+            } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : "Network error";
+                Log.e(TAG, "Network error adding member", e);
+                mainHandler.post(() -> result.setValue(Resource.error(error)));
             }
         });
 
@@ -564,28 +557,25 @@ public class ConversationRepository {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        Log.d(TAG, "Removing member " + userId + " from group " + conversationId);
+        backgroundExecutor.execute(() -> {
+            try {
+                Log.d(TAG, "Removing member " + userId + " from group " + conversationId);
 
-        Call<ApiResponse<Void>> call = apiService.removeGroupMember(conversationId, userId);
+                Call<ApiResponse<Void>> call = apiService.removeGroupMember(conversationId, userId);
+                Response<ApiResponse<Void>> response = call.execute();
 
-        call.enqueue(new Callback<ApiResponse<Void>>() {
-            @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
                     Log.d(TAG, "✅ Removed member from group");
-                    result.setValue(Resource.success(null));
+                    mainHandler.post(() -> result.setValue(Resource.success(null)));
                 } else {
                     String error = "HTTP " + response.code();
                     Log.e(TAG, "Failed to remove member: " + error);
-                    result.setValue(Resource.error(error));
+                    mainHandler.post(() -> result.setValue(Resource.error(error)));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
-                String error = t.getMessage() != null ? t.getMessage() : "Network error";
-                Log.e(TAG, "Network error removing member", t);
-                result.setValue(Resource.error(error));
+            } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : "Network error";
+                Log.e(TAG, "Network error removing member", e);
+                mainHandler.post(() -> result.setValue(Resource.error(error)));
             }
         });
 
@@ -602,28 +592,25 @@ public class ConversationRepository {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        Log.d(TAG, "Leaving group " + conversationId);
+        backgroundExecutor.execute(() -> {
+            try {
+                Log.d(TAG, "Leaving group " + conversationId);
 
-        Call<Map<String, Object>> call = apiService.leaveGroup(conversationId);
+                Call<Map<String, Object>> call = apiService.leaveGroup(conversationId);
+                Response<Map<String, Object>> response = call.execute();
 
-        call.enqueue(new Callback<Map<String, Object>>() {
-            @Override
-            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     Log.d(TAG, "✅ Left group");
-                    result.setValue(Resource.success(null));
+                    mainHandler.post(() -> result.setValue(Resource.success(null)));
                 } else {
                     String error = "HTTP " + response.code();
                     Log.e(TAG, "Failed to leave group: " + error);
-                    result.setValue(Resource.error(error));
+                    mainHandler.post(() -> result.setValue(Resource.error(error)));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                String error = t.getMessage() != null ? t.getMessage() : "Network error";
-                Log.e(TAG, "Network error leaving group", t);
-                result.setValue(Resource.error(error));
+            } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : "Network error";
+                Log.e(TAG, "Network error leaving group", e);
+                mainHandler.post(() -> result.setValue(Resource.error(error)));
             }
         });
 
@@ -640,13 +627,13 @@ public class ConversationRepository {
         MutableLiveData<Resource<Void>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        Log.d(TAG, "Deleting conversation " + conversationId);
+        backgroundExecutor.execute(() -> {
+            try {
+                Log.d(TAG, "Deleting conversation " + conversationId);
 
-        Call<Map<String, Object>> call = apiService.deleteConversation(conversationId);
+                Call<Map<String, Object>> call = apiService.deleteConversation(conversationId);
+                Response<Map<String, Object>> response = call.execute();
 
-        call.enqueue(new Callback<Map<String, Object>>() {
-            @Override
-            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
                 if (response.isSuccessful()) {
                     Log.d(TAG, "✅ Deleted conversation");
 
@@ -655,19 +642,16 @@ public class ConversationRepository {
                         cachedConversations.removeIf(c -> c.getId().equals(conversationId));
                     }
 
-                    result.setValue(Resource.success(null));
+                    mainHandler.post(() -> result.setValue(Resource.success(null)));
                 } else {
                     String error = "HTTP " + response.code();
                     Log.e(TAG, "Failed to delete conversation: " + error);
-                    result.setValue(Resource.error(error));
+                    mainHandler.post(() -> result.setValue(Resource.error(error)));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
-                String error = t.getMessage() != null ? t.getMessage() : "Network error";
-                Log.e(TAG, "Network error deleting conversation", t);
-                result.setValue(Resource.error(error));
+            } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : "Network error";
+                Log.e(TAG, "Network error deleting conversation", e);
+                mainHandler.post(() -> result.setValue(Resource.error(error)));
             }
         });
 

@@ -29,9 +29,24 @@ public class UserRepository {
 
     private static final String TAG = "UserRepository";
     private final ApiService apiService;
+    private final java.util.concurrent.ExecutorService backgroundExecutor;
+    private final android.os.Handler mainHandler;
+    private final com.example.doan_zaloclone.websocket.SocketManager socketManager;
+
+    private final MutableLiveData<Boolean> userRefreshNeeded = new MutableLiveData<>();
 
     public UserRepository() {
         this.apiService = RetrofitClient.getApiService();
+        this.backgroundExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        this.mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        this.socketManager = com.example.doan_zaloclone.websocket.SocketManager.getInstance();
+        
+        // Future: Listen for profile update events
+        // socketManager.addUserEventListener(...)
+    }
+
+    public LiveData<Boolean> getUserRefreshNeeded() {
+        return userRefreshNeeded;
     }
 
     /**
@@ -114,25 +129,26 @@ public class UserRepository {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        Call<ApiResponse<Void>> call = apiService.updateUser(userId, updates);
-        call.enqueue(new Callback<ApiResponse<Void>>() {
-            @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+        backgroundExecutor.execute(() -> {
+            try {
+                Call<ApiResponse<Void>> call = apiService.updateUser(userId, updates);
+                Response<ApiResponse<Void>> response = call.execute();
+
                 if (response.isSuccessful()) {
                     Log.d(TAG, "✅ User updated successfully");
-                    result.setValue(Resource.success(true));
+                    mainHandler.post(() -> {
+                        result.setValue(Resource.success(true));
+                        userRefreshNeeded.setValue(true); // Signal refresh
+                    });
                 } else {
                     String error = "HTTP " + response.code();
                     Log.e(TAG, "Failed to update user: " + error);
-                    result.setValue(Resource.error(error));
+                    mainHandler.post(() -> result.setValue(Resource.error(error)));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
-                String error = t.getMessage() != null ? t.getMessage() : "Network error";
-                Log.e(TAG, "Network error updating user", t);
-                result.setValue(Resource.error(error));
+            } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : "Network error";
+                Log.e(TAG, "Network error updating user", e);
+                mainHandler.post(() -> result.setValue(Resource.error(error)));
             }
         });
 
@@ -350,26 +366,24 @@ public class UserRepository {
      */
     public void updateUserStatus(@NonNull String userId, boolean isOnline,
                                  @NonNull OnUpdateListener listener) {
-        Map<String, Boolean> status = new HashMap<>();
-        status.put("isOnline", isOnline);
+        backgroundExecutor.execute(() -> {
+            try {
+                Map<String, Boolean> status = new HashMap<>();
+                status.put("isOnline", isOnline);
 
-        Call<ApiResponse<Void>> call = apiService.updateUserStatus(userId, status);
-        call.enqueue(new Callback<ApiResponse<Void>>() {
-            @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+                Call<ApiResponse<Void>> call = apiService.updateUserStatus(userId, status);
+                Response<ApiResponse<Void>> response = call.execute();
+
                 if (response.isSuccessful()) {
                     Log.d(TAG, "✅ User status updated: " + (isOnline ? "online" : "offline"));
-                    listener.onSuccess();
+                    mainHandler.post(listener::onSuccess);
                 } else {
                     Log.e(TAG, "Failed to update status: HTTP " + response.code());
-                    listener.onError("HTTP " + response.code());
+                    mainHandler.post(() -> listener.onError("HTTP " + response.code()));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
-                Log.e(TAG, "Network error updating status", t);
-                listener.onError(t.getMessage());
+            } catch (Exception e) {
+                Log.e(TAG, "Network error updating status", e);
+                mainHandler.post(() -> listener.onError(e.getMessage()));
             }
         });
     }

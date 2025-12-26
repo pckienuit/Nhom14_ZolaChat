@@ -30,9 +30,64 @@ public class FriendRepository {
 
     private static final String TAG = "FriendRepository";
     private final ApiService apiService;
+    private final java.util.concurrent.ExecutorService backgroundExecutor;
+    private final android.os.Handler mainHandler;
+    private final com.example.doan_zaloclone.websocket.SocketManager socketManager;
+
+    private final MutableLiveData<Boolean> friendListRefreshNeeded = new MutableLiveData<>();
+    private final MutableLiveData<Boolean> friendRequestRefreshNeeded = new MutableLiveData<>();
 
     public FriendRepository() {
         this.apiService = RetrofitClient.getApiService();
+        this.backgroundExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        this.mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        this.socketManager = com.example.doan_zaloclone.websocket.SocketManager.getInstance();
+        setupSocketListeners();
+    }
+
+    private void setupSocketListeners() {
+        socketManager.addFriendEventListener(new com.example.doan_zaloclone.websocket.SocketManager.OnFriendEventListener() {
+            @Override
+            public void onFriendRequestReceived(String senderId, String senderName) {
+                mainHandler.post(() -> friendRequestRefreshNeeded.setValue(true));
+            }
+
+            @Override
+            public void onFriendRequestAccepted(String userId) {
+                mainHandler.post(() -> {
+                    friendListRefreshNeeded.setValue(true);
+                    friendRequestRefreshNeeded.setValue(true);
+                });
+            }
+
+            @Override
+            public void onFriendRequestRejected(String userId) {
+                mainHandler.post(() -> friendRequestRefreshNeeded.setValue(true));
+            }
+
+            @Override
+            public void onFriendRequestCancelled(String senderId) {
+                mainHandler.post(() -> friendRequestRefreshNeeded.setValue(true));
+            }
+
+            @Override
+            public void onFriendAdded(String userId) {
+                mainHandler.post(() -> friendListRefreshNeeded.setValue(true));
+            }
+
+            @Override
+            public void onFriendRemoved(String userId) {
+                mainHandler.post(() -> friendListRefreshNeeded.setValue(true));
+            }
+        });
+    }
+
+    public LiveData<Boolean> getFriendListRefreshNeeded() {
+        return friendListRefreshNeeded;
+    }
+
+    public LiveData<Boolean> getFriendRequestRefreshNeeded() {
+        return friendRequestRefreshNeeded;
     }
 
     /**
@@ -92,28 +147,26 @@ public class FriendRepository {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        Map<String, String> requestData = new HashMap<>();
-        requestData.put("senderId", fromUserId);
-        requestData.put("receiverId", toUserId);
-        requestData.put("senderName", fromUserName);
+        backgroundExecutor.execute(() -> {
+            try {
+                Map<String, String> requestData = new HashMap<>();
+                requestData.put("senderId", fromUserId);
+                requestData.put("receiverId", toUserId);
+                requestData.put("senderName", fromUserName);
 
-        Call<ApiResponse<Void>> call = apiService.sendFriendRequest(requestData);
-        call.enqueue(new Callback<ApiResponse<Void>>() {
-            @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+                Call<ApiResponse<Void>> call = apiService.sendFriendRequest(requestData);
+                Response<ApiResponse<Void>> response = call.execute();
+
                 if (response.isSuccessful()) {
                     Log.d(TAG, "✅ Friend request sent");
-                    result.setValue(Resource.success(true));
+                    mainHandler.post(() -> result.setValue(Resource.success(true)));
                 } else {
                     Log.e(TAG, "Failed: HTTP " + response.code());
-                    result.setValue(Resource.error("HTTP " + response.code()));
+                    mainHandler.post(() -> result.setValue(Resource.error("HTTP " + response.code())));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
-                Log.e(TAG, "Network error", t);
-                result.setValue(Resource.error(t.getMessage()));
+            } catch (Exception e) {
+                Log.e(TAG, "Network error", e);
+                mainHandler.post(() -> result.setValue(Resource.error(e.getMessage())));
             }
         });
 
@@ -130,25 +183,23 @@ public class FriendRepository {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        Map<String, String> response = new HashMap<>();
-        response.put("action", "accept");
+        backgroundExecutor.execute(() -> {
+            try {
+                Map<String, String> responseBody = new HashMap<>();
+                responseBody.put("action", "accept");
 
-        Call<ApiResponse<Void>> call = apiService.respondToFriendRequest(request.getId(), response);
-        call.enqueue(new Callback<ApiResponse<Void>>() {
-            @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> resp) {
+                Call<ApiResponse<Void>> call = apiService.respondToFriendRequest(request.getId(), responseBody);
+                Response<ApiResponse<Void>> resp = call.execute();
+
                 if (resp.isSuccessful()) {
                     Log.d(TAG, "✅ Friend request accepted");
-                    result.setValue(Resource.success(true));
+                    mainHandler.post(() -> result.setValue(Resource.success(true)));
                 } else {
-                    result.setValue(Resource.error("HTTP " + resp.code()));
+                    mainHandler.post(() -> result.setValue(Resource.error("HTTP " + resp.code())));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
-                Log.e(TAG, "Accept failed", t);
-                result.setValue(Resource.error(t.getMessage()));
+            } catch (Exception e) {
+                Log.e(TAG, "Accept failed", e);
+                mainHandler.post(() -> result.setValue(Resource.error(e.getMessage())));
             }
         });
 
@@ -165,25 +216,23 @@ public class FriendRepository {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        Map<String, String> response = new HashMap<>();
-        response.put("action", "reject");
+        backgroundExecutor.execute(() -> {
+            try {
+                Map<String, String> responseBody = new HashMap<>();
+                responseBody.put("action", "reject");
 
-        Call<ApiResponse<Void>> call = apiService.respondToFriendRequest(request.getId(), response);
-        call.enqueue(new Callback<ApiResponse<Void>>() {
-            @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> resp) {
+                Call<ApiResponse<Void>> call = apiService.respondToFriendRequest(request.getId(), responseBody);
+                Response<ApiResponse<Void>> resp = call.execute();
+
                 if (resp.isSuccessful()) {
                     Log.d(TAG, "✅ Friend request rejected");
-                    result.setValue(Resource.success(true));
+                    mainHandler.post(() -> result.setValue(Resource.success(true)));
                 } else {
-                    result.setValue(Resource.error("HTTP " + resp.code()));
+                    mainHandler.post(() -> result.setValue(Resource.error("HTTP " + resp.code())));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
-                Log.e(TAG, "Reject failed", t);
-                result.setValue(Resource.error(t.getMessage()));
+            } catch (Exception e) {
+                Log.e(TAG, "Reject failed", e);
+                mainHandler.post(() -> result.setValue(Resource.error(e.getMessage())));
             }
         });
 
@@ -334,22 +383,20 @@ public class FriendRepository {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        Call<ApiResponse<Void>> call = apiService.unfriend(userId2);
-        call.enqueue(new Callback<ApiResponse<Void>>() {
-            @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+        backgroundExecutor.execute(() -> {
+            try {
+                Call<ApiResponse<Void>> call = apiService.unfriend(userId2);
+                Response<ApiResponse<Void>> response = call.execute();
+
                 if (response.isSuccessful()) {
                     Log.d(TAG, "✅ Friend removed");
-                    result.setValue(Resource.success(true));
+                    mainHandler.post(() -> result.setValue(Resource.success(true)));
                 } else {
-                    result.setValue(Resource.error("HTTP " + response.code()));
+                    mainHandler.post(() -> result.setValue(Resource.error("HTTP " + response.code())));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
-                Log.e(TAG, "Failed to remove friend", t);
-                result.setValue(Resource.error(t.getMessage()));
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to remove friend", e);
+                mainHandler.post(() -> result.setValue(Resource.error(e.getMessage())));
             }
         });
 
@@ -366,13 +413,14 @@ public class FriendRepository {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        Call<ApiResponse<Void>> call = apiService.cancelFriendRequest(requestId);
-        call.enqueue(new Callback<ApiResponse<Void>>() {
-            @Override
-            public void onResponse(Call<ApiResponse<Void>> call, Response<ApiResponse<Void>> response) {
+        backgroundExecutor.execute(() -> {
+            try {
+                Call<ApiResponse<Void>> call = apiService.cancelFriendRequest(requestId);
+                Response<ApiResponse<Void>> response = call.execute();
+
                 if (response.isSuccessful()) {
                     Log.d(TAG, "✅ Friend request cancelled: " + requestId);
-                    result.setValue(Resource.success(true));
+                    mainHandler.post(() -> result.setValue(Resource.success(true)));
                 } else {
                     String errorMsg = "HTTP " + response.code();
                     try {
@@ -382,15 +430,13 @@ public class FriendRepository {
                     } catch (Exception e) {
                         Log.e(TAG, "Error reading error body", e);
                     }
-                    Log.e(TAG, "Failed to cancel friend request: " + errorMsg);
-                    result.setValue(Resource.error(errorMsg));
+                    String finalErrorMsg = errorMsg;
+                    Log.e(TAG, "Failed to cancel friend request: " + finalErrorMsg);
+                    mainHandler.post(() -> result.setValue(Resource.error(finalErrorMsg)));
                 }
-            }
-
-            @Override
-            public void onFailure(Call<ApiResponse<Void>> call, Throwable t) {
-                Log.e(TAG, "Failed to cancel friend request", t);
-                result.setValue(Resource.error(t.getMessage()));
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to cancel friend request", e);
+                mainHandler.post(() -> result.setValue(Resource.error(e.getMessage())));
             }
         });
 

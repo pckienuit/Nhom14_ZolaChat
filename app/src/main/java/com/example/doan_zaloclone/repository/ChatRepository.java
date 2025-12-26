@@ -67,7 +67,10 @@ public class ChatRepository {
     // Track pending sent messages to prevent WebSocket duplicates
     private final Set<String> pendingSentMessageIds = new HashSet<>();
 
+    private final java.util.concurrent.ExecutorService backgroundExecutor;
+
     public ChatRepository() {
+        this.backgroundExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
         this.firestore = FirebaseFirestore.getInstance();
         this.firestoreManager = FirestoreManager.getInstance();
         this.apiService = RetrofitClient.getApiService();
@@ -114,15 +117,16 @@ public class ChatRepository {
      * @param callback Callback for success/error
      */
     public void sendMessage(String conversationId, Message message, SendMessageCallback callback) {
-        // Create API request from Message object
-        SendMessageRequest request = new SendMessageRequest(message);
-        
-        // Call API to send message
-        Call<ApiResponse<Message>> call = apiService.sendMessage(conversationId, request);
-        
-        call.enqueue(new Callback<ApiResponse<Message>>() {
-            @Override
-            public void onResponse(Call<ApiResponse<Message>> call, Response<ApiResponse<Message>> response) {
+        // Run in background queue to serialize requests
+        backgroundExecutor.execute(() -> {
+            try {
+                // Create API request from Message object
+                SendMessageRequest request = new SendMessageRequest(message);
+                
+                // Call API to send message (Synchronous execute)
+                Call<ApiResponse<Message>> call = apiService.sendMessage(conversationId, request);
+                Response<ApiResponse<Message>> response = call.execute(); // Blocking call
+                
                 if (response.isSuccessful() && response.body() != null) {
                     ApiResponse<Message> apiResponse = response.body();
                     
@@ -147,12 +151,12 @@ public class ChatRepository {
                         }, 5000);
                         
                         // IMMEDIATE UI UPDATE: Add message to cache NOW instead of waiting for WebSocket
-                        // This fixes the bug where sent messages don't show until you re-enter the chat
                         if (conversationId.equals(currentConversationId)) {
                             // Check if not already in cache (to prevent duplicates)
                             boolean exists = false;
+                            Message finalSavedMessage = savedMessage;
                             for (Message msg : cachedMessages) {
-                                if (msg.getId() != null && msg.getId().equals(messageId)) {
+                                if (msg.getId() != null && msg.getId().equals(finalSavedMessage.getId())) {
                                     exists = true;
                                     break;
                                 }
@@ -171,28 +175,24 @@ public class ChatRepository {
                             }
                         }
                         
-                        callback.onSuccess();
+                        mainHandler.post(callback::onSuccess);
                     } else {
                         String error = apiResponse.getMessage() != null 
                             ? apiResponse.getMessage() 
                             : "Failed to send message";
-                        callback.onError(error);
+                        mainHandler.post(() -> callback.onError(error));
                     }
                 } else {
                     String error = "HTTP " + response.code();
                     if (response.message() != null) {
                         error += ": " + response.message();
                     }
-                    callback.onError(error);
+                    String finalError = error;
+                    mainHandler.post(() -> callback.onError(finalError));
                 }
-            }
-            
-            @Override
-            public void onFailure(Call<ApiResponse<Message>> call, Throwable t) {
-                String error = t.getMessage() != null 
-                    ? t.getMessage() 
-                    : "Network error";
-                callback.onError(error);
+            } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : "Network error";
+                mainHandler.post(() -> callback.onError(error));
             }
         });
     }
