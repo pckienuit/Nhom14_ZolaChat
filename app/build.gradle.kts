@@ -99,6 +99,10 @@ dependencies {
     // UCrop for image cropping in sticker creation
     implementation("com.github.yalantis:ucrop:2.2.8")
     
+    // ZXing for QR code scanning
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    implementation("com.google.zxing:core:3.5.3")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

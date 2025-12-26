@@ -63,6 +63,57 @@ public class HomeFragment extends Fragment {
         conversationsRecyclerView = view.findViewById(R.id.conversationsRecyclerView);
         filterChipsContainer = view.findViewById(R.id.filterChipsContainer);
         setupFilterChips();
+        
+        // Bind header buttons
+        View btnSearch = view.findViewById(R.id.btn_search);
+        View btnQr = view.findViewById(R.id.btn_qr);
+        View btnAdd = view.findViewById(R.id.btn_add);
+        
+        // Search button - search conversations and messages
+        if (btnSearch != null) {
+            btnSearch.setOnClickListener(v -> {
+                // TODO: Open search activity for conversations/messages
+                Toast.makeText(getContext(), "Tìm kiếm cuộc trò chuyện (Đang phát triển)", Toast.LENGTH_SHORT).show();
+            });
+        }
+        
+        // QR button - scan QR code
+        if (btnQr != null) {
+            btnQr.setOnClickListener(v -> openQRScanner());
+        }
+        
+        // Add button - show menu for adding friend or creating group
+        if (btnAdd != null) {
+            btnAdd.setOnClickListener(v -> showAddMenu(v));
+        }
+    }
+    
+    private void openQRScanner() {
+        Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.qr.QRScanActivity.class);
+        startActivity(intent);
+    }
+    
+    private void showAddMenu(View anchor) {
+        android.widget.PopupMenu popup = new android.widget.PopupMenu(getContext(), anchor);
+        popup.getMenu().add("Thêm bạn bè");
+        popup.getMenu().add("Tạo nhóm");
+        
+        popup.setOnMenuItemClickListener(item -> {
+            String title = item.getTitle().toString();
+            if (title.equals("Thêm bạn bè")) {
+                // Open AddFriendActivity
+                Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.contact.AddFriendActivity.class);
+                startActivity(intent);
+                return true;
+            } else if (title.equals("Tạo nhóm")) {
+                // Open CreateGroupActivity
+                Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.group.CreateGroupActivity.class);
+                startActivity(intent);
+                return true;
+            }
+            return false;
+        });
+        popup.show();
     }
 
     private void setupRecyclerView() {
