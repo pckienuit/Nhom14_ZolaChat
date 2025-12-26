@@ -324,10 +324,89 @@ public class RoomActivity extends AppCompatActivity {
         // Initialize QuickActionManager
         quickActionManager = com.example.doan_zaloclone.ui.room.actions.QuickActionManager.getInstance();
 
+        // Setup voice record button (Phase 4A)
+        setupVoiceRecordButton();
+
         initPinnedMessagesViews();
         initReplyBarViews();
         
         setupInsets();
+    }
+    
+    // Phase 4A: Voice Record Button - Permission & Basic Setup
+    private static final int RECORD_AUDIO_PERMISSION_CODE = 1001;
+    private boolean isRecording = false;
+    
+    private void setupVoiceRecordButton() {
+        if (voiceRecordButton == null) return;
+        
+        voiceRecordButton.setOnClickListener(v -> {
+            if (!isRecording) {
+                // Check permission before recording
+                if (checkRecordAudioPermission()) {
+                    startVoiceRecording();
+                } else {
+                    requestRecordAudioPermission();
+                }
+            } else {
+                stopVoiceRecording();
+            }
+        });
+    }
+    
+    private boolean checkRecordAudioPermission() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+    
+    private void requestRecordAudioPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, RECORD_AUDIO_PERMISSION_CODE);
+        }
+    }
+    
+    private void startVoiceRecording() {
+        isRecording = true;
+        updateVoiceRecordButtonUI();
+        
+        // Phase 4A placeholder - will implement actual recording in Phase 4B
+        Toast.makeText(this, "🎤 Recording... (Phase 4A placeholder)", Toast.LENGTH_SHORT).show();
+    }
+    
+    private void stopVoiceRecording() {
+        isRecording = false;
+        updateVoiceRecordButtonUI();
+        
+        // Phase 4A placeholder
+        Toast.makeText(this, "⏹️ Stopped recording", Toast.LENGTH_SHORT).show();
+    }
+    
+    private void updateVoiceRecordButtonUI() {
+        if (voiceRecordButton == null) return;
+        
+        if (isRecording) {
+            // Show pause/stop icon and red tint
+            voiceRecordButton.setImageResource(android.R.drawable.ic_media_pause);
+            voiceRecordButton.setColorFilter(getResources().getColor(android.R.color.holo_red_dark, null));
+        } else {
+            // Show mic icon with normal tint
+            voiceRecordButton.setImageResource(R.drawable.ic_mic);
+            voiceRecordButton.setColorFilter(getResources().getColor(R.color.colorPrimary, null));
+        }
+    }
+    
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        
+        if (requestCode == RECORD_AUDIO_PERMISSION_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Quyền ghi âm đã được cấp", Toast.LENGTH_SHORT).show();
+                startVoiceRecording();
+            } else {
+                Toast.makeText(this, "Cần quyền ghi âm để gửi tin nhắn thoại", Toast.LENGTH_LONG).show();
+            }
+        }
     }
 
     private void setupInsets() {
