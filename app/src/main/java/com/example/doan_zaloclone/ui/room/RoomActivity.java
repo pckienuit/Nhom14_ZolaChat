@@ -70,6 +70,7 @@ public class RoomActivity extends AppCompatActivity {
     private List<Message> messages = new ArrayList<>();
     // Image picker UI
     private ImageButton attachImageButton;
+    private ImageButton voiceRecordButton;
     private FrameLayout imagePickerContainer;
     private LinearLayout normalInputLayout;
     private LinearLayout imageInputLayout;
@@ -306,6 +307,7 @@ public class RoomActivity extends AppCompatActivity {
 
         // Action menu views
         moreActionsButton = findViewById(R.id.moreActionsButton);
+        voiceRecordButton = findViewById(R.id.voiceRecordButton);
         actionMenuContainer = findViewById(R.id.actionMenuContainer);
 
         // Call buttons
@@ -331,7 +333,8 @@ public class RoomActivity extends AppCompatActivity {
     private void setupInsets() {
         if (inputContainer != null) {
             androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(inputContainer, (v, windowInsets) -> {
-                androidx.core.graphics.Insets insets = windowInsets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars());
+                int typeMask = androidx.core.view.WindowInsetsCompat.Type.systemBars() | androidx.core.view.WindowInsetsCompat.Type.ime();
+                androidx.core.graphics.Insets insets = windowInsets.getInsets(typeMask);
                 v.setPadding(0, 0, 0, insets.bottom);
                 return androidx.core.view.WindowInsetsCompat.CONSUMED;
             });
@@ -930,6 +933,32 @@ public class RoomActivity extends AppCompatActivity {
 
         // Sticker button
         stickerButton.setOnClickListener(v -> showStickerPicker());
+
+        // TextWatcher to toggle Send button visibility
+        messageEditText.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                if (s.toString().trim().length() > 0) {
+                    sendButton.setVisibility(View.VISIBLE);
+                    moreActionsButton.setVisibility(View.GONE);
+                    if (voiceRecordButton != null) voiceRecordButton.setVisibility(View.GONE);
+                    attachImageButton.setVisibility(View.GONE);
+                } else {
+                    sendButton.setVisibility(View.GONE);
+                    moreActionsButton.setVisibility(View.VISIBLE);
+                    if (voiceRecordButton != null) voiceRecordButton.setVisibility(View.VISIBLE);
+                    attachImageButton.setVisibility(View.VISIBLE);
+                }
+            }
+
+            @Override
+            public void afterTextChanged(android.text.Editable s) {
+            }
+        });
     }
 
     private void requestPermissionAndShowPicker() {
