@@ -333,24 +333,41 @@ public class RoomActivity extends AppCompatActivity {
         setupInsets();
     }
     
-    // Phase 4A: Voice Record Button - Permission & Basic Setup
+    // Phase 4A & 4B: Voice Record - Permission & Recording Logic
     private static final int RECORD_AUDIO_PERMISSION_CODE = 1001;
     private boolean isRecording = false;
+    private android.media.MediaRecorder mediaRecorder;
+    private String audioFilePath;
+    private long recordingStartTime = 0;
+    private Handler recordingTimerHandler = new Handler(Looper.getMainLooper());
+    private Runnable recordingTimerRunnable;
     
     private void setupVoiceRecordButton() {
         if (voiceRecordButton == null) return;
         
-        voiceRecordButton.setOnClickListener(v -> {
-            if (!isRecording) {
-                // Check permission before recording
-                if (checkRecordAudioPermission()) {
-                    startVoiceRecording();
-                } else {
-                    requestRecordAudioPermission();
-                }
-            } else {
-                stopVoiceRecording();
+        // Long-press to start recording, release to stop
+        voiceRecordButton.setOnTouchListener((v, event) -> {
+            switch (event.getAction()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    // Start recording on press
+                    if (!isRecording) {
+                        if (checkRecordAudioPermission()) {
+                            startVoiceRecording();
+                        } else {
+                            requestRecordAudioPermission();
+                        }
+                    }
+                    return true;
+                    
+                case android.view.MotionEvent.ACTION_UP:
+                case android.view.MotionEvent.ACTION_CANCEL:
+                    // Stop recording on release
+                    if (isRecording) {
+                        stopVoiceRecording();
+                    }
+                    return true;
             }
+            return false;
         });
     }
     
@@ -366,19 +383,135 @@ public class RoomActivity extends AppCompatActivity {
     }
     
     private void startVoiceRecording() {
-        isRecording = true;
-        updateVoiceRecordButtonUI();
-        
-        // Phase 4A placeholder - will implement actual recording in Phase 4B
-        Toast.makeText(this, "🎤 Recording... (Phase 4A placeholder)", Toast.LENGTH_SHORT).show();
+        try {
+            isRecording = true;
+            recordingStartTime = System.currentTimeMillis();
+            updateVoiceRecordButtonUI();
+            
+            // Create audio file in cache directory
+            String fileName = "voice_" + System.currentTimeMillis() + ".m4a";
+            audioFilePath = new java.io.File(getCacheDir(), fileName).getAbsolutePath();
+            
+            // Setup MediaRecorder
+            mediaRecorder = new android.media.MediaRecorder();
+            mediaRecorder.setAudioSource(android.media.MediaRecorder.AudioSource.MIC);
+            mediaRecorder.setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4);
+            mediaRecorder.setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC);
+            mediaRecorder.setAudioEncodingBitRate(128000);
+            mediaRecorder.setAudioSamplingRate(44100);
+            mediaRecorder.setOutputFile(audioFilePath);
+            
+            mediaRecorder.prepare();
+            mediaRecorder.start();
+            
+            // Start recording timer
+            startRecordingTimer();
+            
+            Toast.makeText(this, "🎤 Recording...", Toast.LENGTH_SHORT).show();
+            
+        } catch (Exception e) {
+            android.util.Log.e("RoomActivity", "Error starting recording", e);
+            Toast.makeText(this, "Lỗi khi ghi âm: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            cleanupRecording();
+        }
     }
     
     private void stopVoiceRecording() {
+        if (!isRecording) return;
+        
+        try {
+            // Stop timer
+            stopRecordingTimer();
+            
+            // Calculate duration
+            long duration = System.currentTimeMillis() - recordingStartTime;
+            
+            // Stop and release MediaRecorder
+            if (mediaRecorder != null) {
+                try {
+                    mediaRecorder.stop();
+                    mediaRecorder.release();
+                } catch (RuntimeException e) {
+                    android.util.Log.e("RoomActivity", "Error stopping MediaRecorder", e);
+                }
+                mediaRecorder = null;
+            }
+            
+            isRecording = false;
+            updateVoiceRecordButtonUI();
+            
+            // Check if recording is too short (less than 1 second)
+            if (duration < 1000) {
+                Toast.makeText(this, "Ghi âm quá ngắn", Toast.LENGTH_SHORT).show();
+                deleteAudioFile();
+                return;
+            }
+            
+            // Phase 4B completed - file is saved
+            // Phase 4C will upload and send this file
+            Toast.makeText(this, String.format("⏹️ Đã ghi %d giây (Phase 4C: Upload pending)", duration / 1000), 
+                Toast.LENGTH_SHORT).show();
+            
+            // TODO Phase 4C: Upload audioFilePath to Cloudinary and send message
+            
+        } catch (Exception e) {
+            android.util.Log.e("RoomActivity", "Error stopping recording", e);
+            Toast.makeText(this, "Lỗi khi dừng ghi âm", Toast.LENGTH_SHORT).show();
+        } finally {
+            cleanupRecording();
+        }
+    }
+    
+    private void startRecordingTimer() {
+        recordingTimerRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (isRecording) {
+                    long elapsed = System.currentTimeMillis() - recordingStartTime;
+                    int seconds = (int) (elapsed / 1000);
+                    
+                    // Update UI - could show in a TextView if available
+                    // For Phase 4B, we just log it
+                    android.util.Log.d("RoomActivity", "Recording: " + seconds + "s");
+                    
+                    // Schedule next update
+                    recordingTimerHandler.postDelayed(this, 1000);
+                }
+            }
+        };
+        recordingTimerHandler.post(recordingTimerRunnable);
+    }
+    
+    private void stopRecordingTimer() {
+        if (recordingTimerRunnable != null) {
+            recordingTimerHandler.removeCallbacks(recordingTimerRunnable);
+            recordingTimerRunnable = null;
+        }
+    }
+    
+    private void cleanupRecording() {
         isRecording = false;
         updateVoiceRecordButtonUI();
+        stopRecordingTimer();
         
-        // Phase 4A placeholder
-        Toast.makeText(this, "⏹️ Stopped recording", Toast.LENGTH_SHORT).show();
+        if (mediaRecorder != null) {
+            try {
+                mediaRecorder.release();
+            } catch (Exception e) {
+                // Ignore
+            }
+            mediaRecorder = null;
+        }
+    }
+    
+    private void deleteAudioFile() {
+        if (audioFilePath != null) {
+            java.io.File file = new java.io.File(audioFilePath);
+            if (file.exists()) {
+                file.delete();
+            }
+            audioFilePath = null;
+        }
     }
     
     private void updateVoiceRecordButtonUI() {
@@ -401,14 +534,13 @@ public class RoomActivity extends AppCompatActivity {
         
         if (requestCode == RECORD_AUDIO_PERMISSION_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Quyền ghi âm đã được cấp", Toast.LENGTH_SHORT).show();
-                startVoiceRecording();
+                Toast.makeText(this, "Quyền ghi âm đã được cấp. Nhấn giữ mic để ghi âm.", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(this, "Cần quyền ghi âm để gửi tin nhắn thoại", Toast.LENGTH_LONG).show();
             }
         }
     }
-
+    
     private void setupInsets() {
         if (inputContainer != null) {
             androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(inputContainer, (v, windowInsets) -> {
@@ -2491,6 +2623,18 @@ public class RoomActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        // Cleanup recording resources
+        cleanupRecording();
+        deleteAudioFile();
         // ViewModel will automatically clean up listeners
+    }
+    
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Stop recording if activity is paused
+        if (isRecording) {
+            stopVoiceRecording();
+        }
     }
 }
