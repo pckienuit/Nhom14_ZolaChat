@@ -367,6 +367,9 @@ public class RoomActivity extends AppCompatActivity {
     private android.media.MediaPlayer mediaPlayer;
     private boolean isPlaying = false;
     
+    // Phase 4D-3c: Playback speed
+    private float playbackSpeed = 1.0f; // Default 1x
+    
     private void setupVoiceRecordButton() {
         if (voiceRecordButton == null) return;
         
@@ -416,6 +419,20 @@ public class RoomActivity extends AppCompatActivity {
         // Phase 4D-3b: Play/Pause button
         if (playPauseButton != null) {
             playPauseButton.setOnClickListener(v -> togglePlayPause());
+        }
+        
+        // Phase 4D-3c: Speed buttons
+        if (speed05Button != null) {
+            speed05Button.setOnClickListener(v -> setPlaybackSpeed(0.5f));
+        }
+        if (speed10Button != null) {
+            speed10Button.setOnClickListener(v -> setPlaybackSpeed(1.0f));
+        }
+        if (speed15Button != null) {
+            speed15Button.setOnClickListener(v -> setPlaybackSpeed(1.5f));
+        }
+        if (speed20Button != null) {
+            speed20Button.setOnClickListener(v -> setPlaybackSpeed(2.0f));
         }
     }
     
@@ -534,6 +551,9 @@ public class RoomActivity extends AppCompatActivity {
             editorWaveformView.clear();
             // TODO: Could copy amplitude data from waveformView if needed
         }
+        
+        // Phase 4D-3c: Initialize speed buttons
+        updateSpeedButtons();
     }
     
     // Phase 4D-3b: Toggle play/pause
@@ -566,6 +586,17 @@ public class RoomActivity extends AppCompatActivity {
                 isPlaying = false;
                 updatePlayPauseButton();
             });
+            
+            // Phase 4D-3c: Apply playback speed (API 23+)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                try {
+                    android.media.PlaybackParams params = mediaPlayer.getPlaybackParams();
+                    params.setSpeed(playbackSpeed);
+                    mediaPlayer.setPlaybackParams(params);
+                } catch (Exception e) {
+                    android.util.Log.e("RoomActivity", "Error setting playback speed", e);
+                }
+            }
             
             // Start playing
             mediaPlayer.start();
@@ -614,6 +645,68 @@ public class RoomActivity extends AppCompatActivity {
             mediaPlayer = null;
         }
         isPlaying = false;
+    }
+    
+    // Phase 4D-3c: Set playback speed
+    private void setPlaybackSpeed(float speed) {
+        playbackSpeed = speed;
+        
+        // Update speed buttons UI
+        updateSpeedButtons();
+        
+        // Apply speed to currently playing audio
+        if (mediaPlayer != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            try {
+                android.media.PlaybackParams params = mediaPlayer.getPlaybackParams();
+                params.setSpeed(playbackSpeed);
+                mediaPlayer.setPlaybackParams(params);
+            } catch (Exception e) {
+                android.util.Log.e("RoomActivity", "Error updating playback speed", e);
+            }
+        }
+    }
+    
+    // Phase 4D-3c: Update speed button styles
+    private void updateSpeedButtons() {
+        // Reset all to normal (gray background, normal text)
+        int normalBgColor = 0xFFE0E0E0; // Light gray
+        int normalTextColor = 0xFF666666; // Dark gray
+        int activeBgColor = getResources().getColor(R.color.colorPrimary, null); // Blue
+        int activeTextColor = 0xFFFFFFFF; // White
+        
+        if (speed05Button != null) {
+            speed05Button.setBackgroundColor(normalBgColor);
+            speed05Button.setTextColor(normalTextColor);
+            speed05Button.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+        if (speed10Button != null) {
+            speed10Button.setBackgroundColor(normalBgColor);
+            speed10Button.setTextColor(normalTextColor);
+            speed10Button.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+        if (speed15Button != null) {
+            speed15Button.setBackgroundColor(normalBgColor);
+            speed15Button.setTextColor(normalTextColor);
+            speed15Button.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+        if (speed20Button != null) {
+            speed20Button.setBackgroundColor(normalBgColor);
+            speed20Button.setTextColor(normalTextColor);
+            speed20Button.setTypeface(null, android.graphics.Typeface.NORMAL);
+        }
+        
+        // Set active to bold with blue background
+        Button activeButton = null;
+        if (playbackSpeed == 0.5f) activeButton = speed05Button;
+        else if (playbackSpeed == 1.0f) activeButton = speed10Button;
+        else if (playbackSpeed == 1.5f) activeButton = speed15Button;
+        else if (playbackSpeed == 2.0f) activeButton = speed20Button;
+        
+        if (activeButton != null) {
+            activeButton.setBackgroundColor(activeBgColor);
+            activeButton.setTextColor(activeTextColor);
+            activeButton.setTypeface(null, android.graphics.Typeface.BOLD);
+        }
     }
     
     // Phase 4D-1: Cancel recording (delete button)
