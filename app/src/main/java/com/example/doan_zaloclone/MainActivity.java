@@ -697,6 +697,14 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        
+        // Disconnect WebSocket when activity is destroyed
+        // Note: This won't be called if app is force-killed, but server will detect disconnect anyway
+        if (isFinishing()) {
+            // Only disconnect if activity is truly finishing (not just rotating)
+            com.example.doan_zaloclone.websocket.SocketManager.getInstance().disconnect();
+        }
+        
         // Clean up incoming call listener
         if (incomingCallListener != null) {
             incomingCallListener.remove();
