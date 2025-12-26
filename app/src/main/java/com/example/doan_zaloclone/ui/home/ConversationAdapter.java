@@ -444,11 +444,20 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
                 displayedTagsEquals = oldConv.getDisplayedTags().equals(newConv.getDisplayedTags());
             }
 
+            // Compare unreadCounts for badge updates
+            boolean unreadCountsEquals = false;
+            if (oldConv.getUnreadCounts() == null && newConv.getUnreadCounts() == null) {
+                unreadCountsEquals = true;
+            } else if (oldConv.getUnreadCounts() != null && newConv.getUnreadCounts() != null) {
+                unreadCountsEquals = oldConv.getUnreadCounts().equals(newConv.getUnreadCounts());
+            }
+
             return nameEquals && lastMessageEquals &&
                     oldConv.getTimestamp() == newConv.getTimestamp() &&
                     pinnedEquals &&
                     tagsEquals &&
-                    displayedTagsEquals;
+                    displayedTagsEquals &&
+                    unreadCountsEquals;
         }
 
     }
