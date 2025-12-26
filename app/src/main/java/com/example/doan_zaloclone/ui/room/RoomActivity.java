@@ -683,34 +683,32 @@ public class RoomActivity extends AppCompatActivity {
     
     // Phase 4D-3c: Update speed button styles
     private void updateSpeedButtons() {
-        // Reset all to normal (gray background, normal text)
-        int normalBgColor = 0xFFE0E0E0; // Light gray
+        // Reset all to normal (transparent background, normal text)
         int normalTextColor = 0xFF666666; // Dark gray
-        int activeBgColor = getResources().getColor(R.color.colorPrimary, null); // Blue
         int activeTextColor = 0xFFFFFFFF; // White
         
         if (speed05Button != null) {
-            speed05Button.setBackgroundColor(normalBgColor);
+            speed05Button.setBackgroundResource(android.R.color.transparent);
             speed05Button.setTextColor(normalTextColor);
             speed05Button.setTypeface(null, android.graphics.Typeface.NORMAL);
         }
         if (speed10Button != null) {
-            speed10Button.setBackgroundColor(normalBgColor);
+            speed10Button.setBackgroundResource(android.R.color.transparent);
             speed10Button.setTextColor(normalTextColor);
             speed10Button.setTypeface(null, android.graphics.Typeface.NORMAL);
         }
         if (speed15Button != null) {
-            speed15Button.setBackgroundColor(normalBgColor);
+            speed15Button.setBackgroundResource(android.R.color.transparent);
             speed15Button.setTextColor(normalTextColor);
             speed15Button.setTypeface(null, android.graphics.Typeface.NORMAL);
         }
         if (speed20Button != null) {
-            speed20Button.setBackgroundColor(normalBgColor);
+            speed20Button.setBackgroundResource(android.R.color.transparent);
             speed20Button.setTextColor(normalTextColor);
             speed20Button.setTypeface(null, android.graphics.Typeface.NORMAL);
         }
         
-        // Set active to bold with blue background
+        // Set active to bold with rounded blue background
         Button activeButton = null;
         if (playbackSpeed == 0.5f) activeButton = speed05Button;
         else if (playbackSpeed == 1.0f) activeButton = speed10Button;
@@ -718,7 +716,7 @@ public class RoomActivity extends AppCompatActivity {
         else if (playbackSpeed == 2.0f) activeButton = speed20Button;
         
         if (activeButton != null) {
-            activeButton.setBackgroundColor(activeBgColor);
+            activeButton.setBackgroundResource(R.drawable.rounded_blue_bg_small);
             activeButton.setTextColor(activeTextColor);
             activeButton.setTypeface(null, android.graphics.Typeface.BOLD);
         }
