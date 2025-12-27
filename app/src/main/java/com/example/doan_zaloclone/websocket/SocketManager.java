@@ -271,7 +271,7 @@ public class SocketManager {
                         String userId = reactionData.optString("userId");
                         String reactionType = reactionData.optString("reactionType");
 
-                        // Parse reactions map from server
+                        // Parse reactions map from server (simple map: userId -> latestReactionType)
                         java.util.Map<String, String> reactions = new java.util.HashMap<>();
                         JSONObject reactionsJson = reactionData.optJSONObject("reactions");
                         if (reactionsJson != null) {
@@ -281,8 +281,28 @@ public class SocketManager {
                                 reactions.put(key, reactionsJson.optString(key));
                             }
                         }
+                        
+                        // Parse reactionsDetailed map from server (nested map: userId -> {reactionType: count})
+                        java.util.Map<String, java.util.Map<String, Object>> reactionsDetailed = new java.util.HashMap<>();
+                        JSONObject detailedJson = reactionData.optJSONObject("reactionsDetailed");
+                        if (detailedJson != null) {
+                            java.util.Iterator<String> userKeys = detailedJson.keys();
+                            while (userKeys.hasNext()) {
+                                String userKey = userKeys.next();
+                                JSONObject userReactions = detailedJson.optJSONObject(userKey);
+                                if (userReactions != null) {
+                                    java.util.Map<String, Object> userReactionMap = new java.util.HashMap<>();
+                                    java.util.Iterator<String> typeKeys = userReactions.keys();
+                                    while (typeKeys.hasNext()) {
+                                        String typeKey = typeKeys.next();
+                                        userReactionMap.put(typeKey, userReactions.optInt(typeKey, 0));
+                                    }
+                                    reactionsDetailed.put(userKey, userReactionMap);
+                                }
+                            }
+                        }
 
-                        // Parse reactionCounts map from server
+                        // Parse reactionCounts map from server (total counts: reactionType -> count)
                         java.util.Map<String, Integer> reactionCounts = new java.util.HashMap<>();
                         JSONObject countsJson = reactionData.optJSONObject("reactionCounts");
                         if (countsJson != null) {
@@ -294,7 +314,8 @@ public class SocketManager {
                         }
 
                         Log.d(TAG, "📤 Calling reactionListener.onReactionUpdated()");
-                        reactionListener.onReactionUpdated(conversationId, messageId, userId, reactionType, reactions, reactionCounts);
+                        reactionListener.onReactionUpdated(conversationId, messageId, userId, reactionType, 
+                                reactions, reactionsDetailed, reactionCounts);
                     } else {
                         Log.w(TAG, "⚠️ reactionListener is NULL! Event ignored.");
                     }
@@ -903,7 +924,9 @@ public class SocketManager {
 
     public interface OnReactionListener {
         void onReactionUpdated(String conversationId, String messageId, String userId, String reactionType,
-                               java.util.Map<String, String> reactions, java.util.Map<String, Integer> reactionCounts);
+                               java.util.Map<String, String> reactions, 
+                               java.util.Map<String, java.util.Map<String, Object>> reactionsDetailed,
+                               java.util.Map<String, Integer> reactionCounts);
     }
 
     public interface OnSeenListener {

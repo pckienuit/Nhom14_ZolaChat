@@ -522,7 +522,9 @@ public class ChatRepository {
         socketManager.setReactionListener(new SocketManager.OnReactionListener() {
             @Override
             public void onReactionUpdated(String convId, String messageId, String userId, String reactionType,
-                                          java.util.Map<String, String> reactions, java.util.Map<String, Integer> reactionCounts) {
+                                          java.util.Map<String, String> reactions,
+                                          java.util.Map<String, java.util.Map<String, Object>> reactionsDetailed,
+                                          java.util.Map<String, Integer> reactionCounts) {
                 try {
                     Log.d("ChatRepository", "🔔 Reaction update received: convId=" + convId 
                         + ", messageId=" + messageId + ", type=" + reactionType
@@ -562,9 +564,18 @@ public class ChatRepository {
                                 newCounts.putAll(reactionCounts);
                             }
                             
+                            // Deep copy reactionsDetailed
+                            java.util.Map<String, java.util.Map<String, Object>> newDetailed = new java.util.HashMap<>();
+                            if (reactionsDetailed != null) {
+                                for (java.util.Map.Entry<String, java.util.Map<String, Object>> entry : reactionsDetailed.entrySet()) {
+                                    newDetailed.put(entry.getKey(), new java.util.HashMap<>(entry.getValue()));
+                                }
+                            }
+                            
                             // Update cached message with new maps
                             msg.setReactions(newReactions);
                             msg.setReactionCounts(newCounts);
+                            msg.setReactionsDetailed(newDetailed);
                             
                             Log.d("ChatRepository", "📊 Updated message reactions: " + newReactions + ", counts: " + newCounts);
                             
@@ -1496,7 +1507,8 @@ public class ChatRepository {
     // ===================== MESSAGE REACTIONS METHODS =====================
     
     /**
-     * Add or update a reaction to a message
+     * Add a reaction to a message via API (increment count)
+     * NEW LOGIC: Each click adds one more reaction of that type for this user
      * @param conversationId ID of the conversation
      * @param messageId ID of the message to react to
      * @param userId ID of the user adding the reaction
@@ -1507,6 +1519,34 @@ public class ChatRepository {
                                                     @NonNull String messageId,
                                                     @NonNull String userId,
                                                     @NonNull String reactionType) {
+        return sendReactionRequest(conversationId, messageId, userId, reactionType, "add");
+    }
+    
+    /**
+     * Decrement a reaction from a message via API
+     * Removes one count of the specified reaction type for this user
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message
+     * @param userId ID of the user
+     * @param reactionType Type of reaction to decrement
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> decrementReaction(@NonNull String conversationId,
+                                                          @NonNull String messageId,
+                                                          @NonNull String userId,
+                                                          @NonNull String reactionType) {
+        return sendReactionRequest(conversationId, messageId, userId, reactionType, "remove");
+    }
+    
+    /**
+     * Send reaction request to API with specified action
+     * @param action "add" to increment, "remove" to decrement
+     */
+    private LiveData<Resource<Boolean>> sendReactionRequest(@NonNull String conversationId,
+                                                             @NonNull String messageId,
+                                                             @NonNull String userId,
+                                                             @NonNull String reactionType,
+                                                             @NonNull String action) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
         
@@ -1516,35 +1556,34 @@ public class ChatRepository {
             return result;
         }
         
-        // Prepare request body
+        // Prepare request body with action
         Map<String, String> reactionData = new HashMap<>();
         reactionData.put("userId", userId);
         reactionData.put("reactionType", reactionType);
+        reactionData.put("action", action); // "add" or "remove"
         
-        // Call API to add reaction
+        Log.d("ChatRepository", "Sending reaction request: action=" + action + ", type=" + reactionType + ", user=" + userId);
+        
+        // Call API to add/remove reaction
         Call<ApiResponse<Message>> call = apiService.addReaction(conversationId, messageId, reactionData);
         
         call.enqueue(new Callback<ApiResponse<Message>>() {
             @Override
             public void onResponse(Call<ApiResponse<Message>> call, Response<ApiResponse<Message>> response) {
-                Log.d("ChatRepository", "addReaction response code: " + response.code());
+                Log.d("ChatRepository", "Reaction response code: " + response.code());
                 
                 if (response.isSuccessful() && response.body() != null) {
                     ApiResponse<Message> apiResponse = response.body();
                     
                     if (apiResponse.isSuccess()) {
-                        Log.d("ChatRepository", "Reaction added via API: " + reactionType + " by user: " + userId);
-                        
-                        // Optimistic update: Update local cache immediately for responsive UI
-                        // WebSocket will also send update (which may correct any discrepancy)
-                        updateLocalReactionCache(messageId, userId, reactionType);
-                        
+                        Log.d("ChatRepository", "Reaction " + action + " successful: " + reactionType + " by user: " + userId);
                         result.setValue(Resource.success(true));
+                        // Note: WebSocket will push the update to refresh UI - no optimistic update needed
                     } else {
                         String error = apiResponse.getMessage() != null 
                             ? apiResponse.getMessage() 
-                            : "Failed to add reaction";
-                        Log.e("ChatRepository", "addReaction API error: " + error);
+                            : "Failed to " + action + " reaction";
+                        Log.e("ChatRepository", "Reaction API error: " + error);
                         result.setValue(Resource.error(error));
                     }
                 } else {
@@ -1556,7 +1595,7 @@ public class ChatRepository {
                     } catch (Exception e) {
                         errorBody = "Could not read error body";
                     }
-                    Log.e("ChatRepository", "addReaction HTTP error: " + response.code() + " - " + errorBody);
+                    Log.e("ChatRepository", "Reaction HTTP error: " + response.code() + " - " + errorBody);
                     result.setValue(Resource.error("HTTP " + response.code() + ": " + errorBody));
                 }
             }
