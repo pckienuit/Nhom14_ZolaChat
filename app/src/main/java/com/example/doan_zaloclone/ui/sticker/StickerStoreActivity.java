@@ -1,5 +1,6 @@
 package com.example.doan_zaloclone.ui.sticker;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.ImageView;
@@ -193,8 +194,8 @@ public class StickerStoreActivity extends AppCompatActivity {
     }
 
     private void openMyStickers() {
-        // TODO: Open MyStickerActivity
-        Toast.makeText(this, "Sticker của tôi đang phát triển", Toast.LENGTH_SHORT).show();
+        Intent intent = new Intent(this, MyStickerActivity.class);
+        startActivity(intent);
     }
 
     private void downloadPack(StickerPack pack) {

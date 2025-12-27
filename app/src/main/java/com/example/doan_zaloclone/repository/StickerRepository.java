@@ -755,7 +755,8 @@ public class StickerRepository {
      * Internal method to create "My Stickers" pack
      */
     private void createMyStickersPackInternal(@NonNull String userId, @NonNull PackCallback callback) {
-        String packId = db.collection(COLLECTION_STICKER_PACKS).document().getId();
+        // Use userId as packId for personal sticker pack
+        String packId = userId;
 
         StickerPack pack = new StickerPack();
         pack.setId(packId);
@@ -806,6 +807,36 @@ public class StickerRepository {
                             .addOnFailureListener(e -> Log.e(TAG, "Error updating count", e));
                 })
                 .addOnFailureListener(e -> Log.e(TAG, "Error adding sticker to pack", e));
+    }
+
+    /**
+     * Delete sticker from pack
+     */
+    public void deleteSticker(@NonNull String packId,
+                              @NonNull String stickerId,
+                              @NonNull Runnable onSuccess) {
+        db.collection(COLLECTION_STICKER_PACKS)
+                .document(packId)
+                .collection(COLLECTION_STICKERS)
+                .document(stickerId)
+                .delete()
+                .addOnSuccessListener(aVoid -> {
+                    // Decrement sticker count
+                    db.collection(COLLECTION_STICKER_PACKS)
+                            .document(packId)
+                            .update("stickerCount", com.google.firebase.firestore.FieldValue.increment(-1),
+                                    "updatedAt", System.currentTimeMillis())
+                            .addOnSuccessListener(v -> onSuccess.run())
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG, "Error updating count", e);
+                                onSuccess.run(); // Still call success as sticker was deleted
+                            });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error deleting sticker", e);
+                    // Call success anyway to avoid blocking UI
+                    onSuccess.run();
+                });
     }
 
     /**

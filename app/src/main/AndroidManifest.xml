@@ -136,6 +136,11 @@
             android:name=".ui.sticker.StickerStoreActivity"
             android:exported="false"
             android:parentActivityName=".ui.room.RoomActivity" />
+
+        <activity
+            android:name=".ui.sticker.MyStickerActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.sticker.StickerStoreActivity" />
             
                 <!-- Profile Card Activity -->
         <activity
