@@ -35,6 +35,7 @@ public class SocketManager {
     private OnSeenListener seenListener;
     private OnGroupEventListener groupEventListener;
     private final java.util.List<OnFriendEventListener> friendEventListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private OnNotificationListener notificationListener;
 
     private SocketManager() {
         // Private constructor for singleton
@@ -139,6 +140,11 @@ public class SocketManager {
                             Log.e(TAG, "Error in listener", e);
                         }
                     }
+                    
+                    // Trigger notification if listener is set
+                    if (notificationListener != null) {
+                        notificationListener.onNewMessage(messageData);
+                    }
                 } catch (Exception e) {
                     Log.e(TAG, "Error parsing new message", e);
                 }
@@ -158,6 +164,14 @@ public class SocketManager {
                          } catch (Exception e) {
                              Log.e(TAG, "Error in listener", e);
                          }
+                    }
+                    
+                    // Trigger notification if message is recalled
+                    if (notificationListener != null) {
+                        boolean isRecalled = messageData.optBoolean("isRecalled", false);
+                        if (isRecalled) {
+                            notificationListener.onMessageRecalled(messageData);
+                        }
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Error parsing updated message", e);
@@ -217,6 +231,14 @@ public class SocketManager {
                         }
 
                         reactionListener.onReactionUpdated(conversationId, messageId, userId, reactionType, reactions, reactionCounts);
+                    }
+                    
+                    // Trigger notification for reactions (optional)
+                    if (notificationListener != null && reactionData.has("reactionType")) {
+                        String reactionType = reactionData.optString("reactionType");
+                        if (reactionType != null && !reactionType.isEmpty()) {
+                            notificationListener.onMessageReaction(reactionData);
+                        }
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Error parsing reaction event", e);
@@ -369,6 +391,11 @@ public class SocketManager {
                     for (OnFriendEventListener listener : friendEventListeners) {
                         listener.onFriendRequestReceived(senderId, senderName);
                     }
+                    
+                    // Trigger notification
+                    if (notificationListener != null) {
+                        notificationListener.onFriendRequestReceived(senderId, senderName);
+                    }
                 } catch (JSONException e) {
                     Log.e(TAG, "Error parsing friend_request_received event", e);
                 }
@@ -386,6 +413,11 @@ public class SocketManager {
 
                     for (OnFriendEventListener listener : friendEventListeners) {
                         listener.onFriendRequestAccepted(userId);
+                    }
+                    
+                    // Trigger notification
+                    if (notificationListener != null) {
+                        notificationListener.onFriendRequestAccepted(userId);
                     }
                 } catch (JSONException e) {
                     Log.e(TAG, "Error parsing friend_request_accepted event", e);
@@ -700,6 +732,10 @@ public class SocketManager {
     public void setGroupEventListener(OnGroupEventListener listener) {
         this.groupEventListener = listener;
     }
+    
+    public void setNotificationListener(OnNotificationListener listener) {
+        this.notificationListener = listener;
+    }
 
     public void addFriendEventListener(OnFriendEventListener listener) {
         if (listener != null && !friendEventListeners.contains(listener)) {
@@ -807,5 +843,21 @@ public class SocketManager {
         void onFriendRemoved(String userId);
         
         void onFriendStatusChanged(String friendId, boolean isOnline);
+    }
+    
+    /**
+     * Listener for notification events
+     * Used to trigger system notifications when events occur
+     */
+    public interface OnNotificationListener {
+        void onNewMessage(org.json.JSONObject messageData);
+        
+        void onMessageRecalled(org.json.JSONObject messageData);
+        
+        void onMessageReaction(org.json.JSONObject reactionData);
+        
+        void onFriendRequestReceived(String senderId, String senderName);
+        
+        void onFriendRequestAccepted(String userId);
     }
 }

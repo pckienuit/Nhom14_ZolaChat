@@ -63,6 +63,9 @@ public class MainActivity extends AppCompatActivity {
     
     // Friend repository for badge updates
     private com.example.doan_zaloclone.repository.FriendRepository friendRepository;
+    
+    // Track active conversation to avoid notifications
+    private static String activeConversationId = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -98,6 +101,9 @@ public class MainActivity extends AppCompatActivity {
 
         // Setup friend events via WebSocket
         setupFriendEventListener();
+        
+        // Setup notification listener for messages and friend requests
+        setupNotificationListener();
 
         // Apply window insets for Edge-to-Edge Navigation Bar
         View bottomNav = findViewById(R.id.bottom_navigation_container);
@@ -673,6 +679,189 @@ public class MainActivity extends AppCompatActivity {
         }
 
         transaction.commit();
+    }
+    
+    /**
+     * Setup notification listener for WebSocket events
+     * Shows notifications for messages and friend requests
+     */
+    private void setupNotificationListener() {
+        com.example.doan_zaloclone.websocket.SocketManager socketManager =
+                com.example.doan_zaloclone.websocket.SocketManager.getInstance();
+        
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null) return;
+        
+        final String currentUserId = currentUser.getUid();
+        
+        socketManager.setNotificationListener(new com.example.doan_zaloclone.websocket.SocketManager.OnNotificationListener() {
+            @Override
+            public void onNewMessage(org.json.JSONObject messageData) {
+                try {
+                    String conversationId = messageData.optString("conversationId");
+                    String senderId = messageData.optString("senderId");
+                    String senderName = messageData.optString("senderName", "Unknown");
+                    String messageText = messageData.optString("text", "");
+                    String messageType = messageData.optString("type", "text");
+                    
+                    // Skip if from current user
+                    if (senderId.equals(currentUserId)) {
+                        return;
+                    }
+                    
+                    // Skip if user is viewing this conversation
+                    if (conversationId.equals(activeConversationId)) {
+                        Log.d("MainActivity", "Skipping notification - user is in this conversation");
+                        return;
+                    }
+                    
+                    // Format message text based on type
+                    String displayText = messageText;
+                    if ("image".equals(messageType)) {
+                        displayText = "\ud83d\uddbc\ufe0f Hình ảnh";
+                    } else if ("voice".equals(messageType)) {
+                        displayText = "\ud83c\udfa4 Tin nhắn thoại";
+                    } else if ("file".equals(messageType)) {
+                        displayText = "\ud83d\udcce Tệp tin";
+                    } else if ("sticker".equals(messageType)) {
+                        displayText = "\ud83d\ude00 Nhãn dán";
+                    } else if ("location".equals(messageType)) {
+                        displayText = "\ud83d\udccd Vị trí";
+                    } else if ("card".equals(messageType)) {
+                        displayText = "\ud83d\udcbc Danh thiếp";
+                    }
+                    
+                    // Show notification
+                    NotificationHelper.showMessageNotification(
+                            MainActivity.this, 
+                            senderName, 
+                            displayText, 
+                            conversationId, 
+                            null  // Avatar will be loaded async in future
+                    );
+                    
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error showing message notification", e);
+                }
+            }
+            
+            @Override
+            public void onMessageRecalled(org.json.JSONObject messageData) {
+                try {
+                    String conversationId = messageData.optString("conversationId");
+                    String senderId = messageData.optString("senderId");
+                    String senderName = messageData.optString("senderName", "Unknown");
+                    
+                    // Skip if from current user
+                    if (senderId.equals(currentUserId)) {
+                        return;
+                    }
+                    
+                    // Skip if user is viewing this conversation
+                    if (conversationId.equals(activeConversationId)) {
+                        return;
+                    }
+                    
+                    // Show recall notification
+                    NotificationHelper.showMessageRecallNotification(
+                            MainActivity.this,
+                            senderName,
+                            conversationId
+                    );
+                    
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error showing recall notification", e);
+                }
+            }
+            
+            @Override
+            public void onMessageReaction(org.json.JSONObject reactionData) {
+                try {
+                    String conversationId = reactionData.optString("conversationId");
+                    String userId = reactionData.optString("userId");
+                    String reactionType = reactionData.optString("reactionType");
+                    
+                    // Skip if from current user
+                    if (userId.equals(currentUserId)) {
+                        return;
+                    }
+                    
+                    // Skip if user is viewing this conversation
+                    if (conversationId.equals(activeConversationId)) {
+                        return;
+                    }
+                    
+                    // Fetch user name and show notification
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("users")
+                            .document(userId)
+                            .get()
+                            .addOnSuccessListener(doc -> {
+                                String userName = "Unknown";
+                                if (doc.exists() && doc.contains("name")) {
+                                    userName = doc.getString("name");
+                                }
+                                
+                                NotificationHelper.showMessageReactionNotification(
+                                        MainActivity.this,
+                                        userName,
+                                        reactionType,
+                                        conversationId
+                                );
+                            });
+                    
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error showing reaction notification", e);
+                }
+            }
+            
+            @Override
+            public void onFriendRequestReceived(String senderId, String senderName) {
+                // Show friend request notification
+                NotificationHelper.showFriendRequestNotification(
+                        MainActivity.this,
+                        senderName,
+                        senderId,
+                        null  // Avatar will be loaded async in future
+                );
+            }
+            
+            @Override
+            public void onFriendRequestAccepted(String userId) {
+                // Fetch user name and show notification
+                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .document(userId)
+                        .get()
+                        .addOnSuccessListener(doc -> {
+                            String userName = "Unknown";
+                            if (doc.exists() && doc.contains("name")) {
+                                userName = doc.getString("name");
+                            }
+                            
+                            NotificationHelper.showFriendAcceptedNotification(
+                                    MainActivity.this,
+                                    userName,
+                                    userId
+                            );
+                        });
+            }
+        });
+    }
+    
+    /**
+     * Set the active conversation ID (called from RoomActivity)
+     * Used to prevent notifications when user is viewing the conversation
+     */
+    public static void setActiveConversationId(String conversationId) {
+        activeConversationId = conversationId;
+    }
+    
+    /**
+     * Clear the active conversation ID (called when RoomActivity is destroyed)
+     */
+    public static void clearActiveConversationId() {
+        activeConversationId = null;
     }
 
     @Override

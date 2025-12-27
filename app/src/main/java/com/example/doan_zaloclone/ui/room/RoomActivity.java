@@ -265,6 +265,9 @@ public class RoomActivity extends AppCompatActivity {
 
         // Check if we should auto-start a call (from business card)
         checkAutoStartCall();
+        
+        // Set active conversation to prevent notifications
+        com.example.doan_zaloclone.MainActivity.setActiveConversationId(conversationId);
     }
 
     /**
@@ -3459,5 +3462,8 @@ public class RoomActivity extends AppCompatActivity {
         if (isPlaying) {
             pauseAudio();
         }
+        
+        // Clear active conversation to resume notifications
+        com.example.doan_zaloclone.MainActivity.clearActiveConversationId();
     }
 }
