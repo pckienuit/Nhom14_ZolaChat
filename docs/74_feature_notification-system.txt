@@ -1,0 +1,817 @@
+# 📱 Hệ Thống Thông Báo - ZaloClone
+
+**Version:** 1.0  
+**Last Updated:** 2025-12-27  
+**Author:** Development Team
+
+---
+
+## 📋 Mục Lục
+
+1. [Tổng Quan](#tổng-quan)
+2. [Kiến Trúc Hệ Thống](#kiến-trúc-hệ-thống)
+3. [Incoming Call Notifications](#incoming-call-notifications)
+4. [Chat Message Notifications](#chat-message-notifications)
+5. [Permissions Required](#permissions-required)
+6. [Cấu Hình](#cấu-hình)
+7. [Testing Guide](#testing-guide)
+8. [Troubleshooting](#troubleshooting)
+9. [Known Issues](#known-issues)
+
+---
+
+## Tổng Quan
+
+Hệ thống notification của ZaloClone cung cấp 3 loại thông báo chính:
+
+### 1. **Incoming Call Notifications** (Cuộc Gọi Đến)
+- ✅ Full-screen pop-up khi app background/killed
+- ✅ Ringtone + Vibration
+- ✅ Auto-launch CallActivity
+- ✅ Wake screen from sleep
+
+### 2. **Chat Message Notifications** (Tin Nhắn)
+- ✅ Banner notification với tên người gửi
+- ✅ Rich content preview (image, voice, file, sticker)
+- ✅ Filter out call-related messages
+
+### 3. **Friend Request Notifications** (Lời Mời Kết Bạn)
+- ✅ Notification khi nhận lời mời kết bạn
+- ✅ Action buttons: Accept/Decline
+
+---
+
+## Kiến Trúc Hệ Thống
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     USER DEVICE                              │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────┐        ┌──────────────┐                  │
+│  │ MainActivity │───────▶│PermissionMgr │                  │
+│  └──────────────┘        └──────────────┘                  │
+│         │                      │                            │
+│         │                      ├─ POST_NOTIFICATIONS        │
+│         │                      ├─ USE_FULL_SCREEN_INTENT    │
+│         │                      └─ SYSTEM_ALERT_WINDOW       │
+│         │                                                    │
+│         ▼                                                    │
+│  ┌──────────────────────────────────────┐                  │
+│  │     NotificationService              │                  │
+│  │  (Foreground, Background, Killed)    │                  │
+│  └──────────────────────────────────────┘                  │
+│         │                                                    │
+│         ├─────────┬─────────────┬────────────┐             │
+│         ▼         ▼             ▼            ▼             │
+│  ┌──────────┐ ┌────────┐  ┌───────────┐ ┌──────────┐     │
+│  │WebSocket │ │Firebase│  │CallRepo   │ │NotifMgr  │     │
+│  │ Manager  │ │ FCM    │  │           │ │          │     │
+│  └──────────┘ └────────┘  └───────────┘ └──────────┘     │
+│         │                        │                          │
+│         │ new_message            │ incoming_call            │
+│         │ reaction_updated       │                          │
+│         │ friend_request         │                          │
+│         ▼                        ▼                          │
+│  ┌─────────────────┐     ┌──────────────────┐             │
+│  │NotificationHelper│     │IncomingCallService│             │
+│  └─────────────────┘     └──────────────────┘             │
+│         │                        │                          │
+│         ▼                        ▼                          │
+│  ┌──────────────────────────────────────┐                  │
+│  │     Android Notification Manager      │                  │
+│  └──────────────────────────────────────┘                  │
+│         │                        │                          │
+│         ▼                        ▼                          │
+│  ┌─────────────┐         ┌─────────────┐                  │
+│  │   Banner    │         │ Full-Screen │                  │
+│  │Notification │         │ CallActivity│                  │
+│  └─────────────┘         └─────────────┘                  │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Incoming Call Notifications
+
+### Flow Diagram
+
+```
+[Call Initiated]
+      │
+      ▼
+[Firestore: calls collection]
+      │
+      ▼
+[NotificationService detects via CallRepository]
+      │
+      ▼
+[Launch IncomingCallService]
+      │
+      ├─► [Start Foreground Service]
+      ├─► [Play Ringtone]
+      ├─► [Start Vibration]
+      ├─► [Wake Screen]
+      │
+      ▼
+[Check SYSTEM_ALERT_WINDOW permission]
+      │
+      ├─► YES ──► [Auto-launch CallActivity]
+      │                    │
+      │                    ├─► [Replace notification → SILENT]
+      │                    └─► [Cancel notification when CallActivity opens]
+      │
+      └─► NO ───► [Show HIGH-PRIORITY notification]
+                         │
+                         └─► [User taps → Open CallActivity]
+```
+
+### Components
+
+#### 1. **IncomingCallService.java**
+- **Type:** Foreground Service
+- **Foreground Service Type:** 
+  - Android 14+: `FOREGROUND_SERVICE_TYPE_SPECIAL_USE`
+  - Android 10-13: `FOREGROUND_SERVICE_TYPE_PHONE_CALL`
+- **Responsibilities:**
+  - Play ringtone
+  - Vibrate device
+  - Wake screen
+  - Auto-launch CallActivity
+  - Manage notification lifecycle
+
+**Key Methods:**
+```java
+showIncomingCallNotification(Intent intent)
+launchCallActivity(String callerId, String callerName, String conversationId, String receiverId, boolean isVideo)
+playRingtone()
+startVibration()
+stopRingtoneAndVibration()
+```
+
+#### 2. **CallActivity.java**
+- **Responsibilities:**
+  - Display full-screen call UI
+  - Cancel incoming call notification on open
+  - Handle Accept/Reject actions
+
+**Notification Cleanup:**
+```java
+@Override
+protected void onCreate(Bundle savedInstanceState) {
+    // ...
+    if (isIncoming) {
+        CallNotificationHelper.cancelNotification(this, 1001);
+        Log.d(TAG, "Cancelled incoming call notification");
+    }
+}
+```
+
+#### 3. **NotificationService.java**
+- **Responsibilities:**
+  - Listen to Firestore `calls` collection
+  - Detect incoming calls
+  - Fetch caller information
+  - Launch IncomingCallService
+
+**Incoming Call Detection:**
+```java
+private void setupIncomingCallListener() {
+    callRepository.listenToIncomingCalls(receiverId, new OnIncomingCallListener() {
+        @Override
+        public void onIncomingCall(Call call) {
+            // Fetch caller info
+            // Launch IncomingCallService
+        }
+    });
+}
+```
+
+### Notification States
+
+| State | Notification Type | Visibility | Actions |
+|-------|------------------|-----------|---------|
+| **Ringing** | HIGH-PRIORITY | ✅ Banner + Sound + Vibration | Accept, Reject |
+| **Activity Launched (with permission)** | SILENT (PRIORITY_MIN) | ❌ Hidden | - |
+| **Activity Opened** | NONE | ❌ Cancelled | - |
+| **Call Connected** | OngoingCallService (LOW) | ❌ Hidden | - |
+| **Call Ended** | NONE | ❌ Cancelled | - |
+
+### Intent Extras (Lowercase Keys)
+
+```java
+// From NotificationService → IncomingCallService → CallActivity
+"call_id"          // String: Call ID
+"caller_id"        // String: Caller user ID
+"caller_name"      // String: Caller display name
+"receiver_id"      // String: Receiver user ID
+"conversation_id"  // String: Conversation ID
+"is_video"         // Boolean: true for video call
+"is_incoming"      // Boolean: true for incoming call
+```
+
+---
+
+## Chat Message Notifications
+
+### Flow Diagram
+
+```
+[Message Sent]
+      │
+      ▼
+[Server: POST /api/messages]
+      │
+      ├─► [Save to Firestore]
+      ├─► [Fetch sender name from users collection]
+      │
+      ▼
+[WebSocket emit: new_message]
+  {
+    "id": "msg123",
+    "conversationId": "conv456",
+    "senderId": "user789",
+    "senderName": "John Doe",  ◄── CRITICAL
+    "type": "text",
+    "content": "Hello!"
+  }
+      │
+      ▼
+[NotificationService receives via SocketManager]
+      │
+      ├─► [Filter: Skip if from currentUser]
+      ├─► [Filter: Skip if viewing conversation]
+      ├─► [Filter: Skip call-related messages]  ◄── NEW
+      │
+      ▼
+[NotificationHelper.showMessageNotification()]
+      │
+      ▼
+[Android Notification Manager]
+      │
+      ▼
+[Banner Notification with sender name]
+```
+
+### Message Filters
+
+```java
+// 1. Skip own messages
+if (senderId.equals(currentUserId)) return;
+
+// 2. Skip if viewing this conversation
+if (conversationId.equals(activeConversationId)) return;
+
+// 3. Skip call-related messages
+if ("call".equalsIgnoreCase(messageType) || 
+    messageText.contains("Cuộc gọi") ||
+    messageText.contains("Missed call") ||
+    messageText.contains("Incoming call") ||
+    messageText.contains("Outgoing call")) {
+    return;
+}
+```
+
+### Message Type Icons
+
+| Type | Display Text | Icon |
+|------|-------------|------|
+| `text` | Original text | - |
+| `image` | "🖼️ Hình ảnh" | 🖼️ |
+| `voice` | "🎤 Tin nhắn thoại" | 🎤 |
+| `file` | "📎 Tệp tin" | 📎 |
+| `sticker` | "😀 Nhãn dán" | 😀 |
+| `location` | "📍 Vị trí" | 📍 |
+| `card` | "💼 Danh thiếp" | 💼 |
+| `call` | **FILTERED** | ❌ |
+
+### Server-Side Changes (messages.js)
+
+**CRITICAL:** Server must include `senderName` in WebSocket events
+
+```javascript
+// Fetch sender name
+let senderName = 'Unknown';
+const senderDoc = await db.collection('users').doc(req.user.uid).get();
+if (senderDoc.exists) {
+  const senderData = senderDoc.data();
+  senderName = senderData.name || senderData.displayName || 'Unknown';
+}
+
+// Include in message
+const messageWithId = { ...message, id: messageRef.id, senderName };
+io.emit('new_message', messageWithId);
+```
+
+---
+
+## Permissions Required
+
+### AndroidManifest.xml
+
+```xml
+<!-- Notification Permissions -->
+<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+<uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+<!-- Call Permissions -->
+<uses-permission android:name="android.permission.VIBRATE" />
+
+<!-- Foreground Service Types -->
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+<uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+```
+
+### Runtime Permission Requests
+
+#### MainActivity.java
+
+```java
+// Android 13+ (API 33+)
+private void requestNotificationPermission() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) 
+            != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                new String[]{Manifest.permission.POST_NOTIFICATIONS}, 
+                REQUEST_CODE_NOTIFICATION
+            );
+        }
+    }
+}
+
+// Android 14+ (API 34+)
+private void requestFullScreenIntentPermission() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        NotificationManager nm = getSystemService(NotificationManager.class);
+        if (!nm.canUseFullScreenIntent()) {
+            Intent intent = new Intent(
+                Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT
+            );
+            intent.setData(Uri.parse("package:" + getPackageName()));
+            startActivity(intent);
+        }
+    }
+    requestOverlayPermission();
+}
+
+// Android 10+ (API 29+) - CRITICAL for background activity launch
+private void requestOverlayPermission() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (!Settings.canDrawOverlays(this)) {
+            Intent intent = new Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:" + getPackageName())
+            );
+            startActivity(intent);
+            Toast.makeText(this, 
+                "Vui lòng bật 'Hiển thị trên ứng dụng khác'", 
+                Toast.LENGTH_LONG).show();
+        }
+    }
+}
+```
+
+### Permission Flow
+
+```
+App Launch
+    │
+    ▼
+[Check POST_NOTIFICATIONS]
+    │
+    ├─► NOT GRANTED ──► [Request Permission Dialog]
+    │
+    ▼
+[Check USE_FULL_SCREEN_INTENT]
+    │
+    ├─► NOT GRANTED ──► [Open Settings]
+    │
+    ▼
+[Check SYSTEM_ALERT_WINDOW]
+    │
+    ├─► NOT GRANTED ──► [Open Settings]
+    │
+    ▼
+[All Permissions Granted] ✅
+```
+
+---
+
+## Cấu Hình
+
+### Notification Channels
+
+#### 1. Chat Channel
+```java
+// ID: "chat_channel"
+// Name: "Chat Messages"
+// Importance: HIGH
+// Sound: Default
+// Vibration: Enabled
+```
+
+#### 2. Call Channel (IncomingCallService)
+```java
+// ID: "call_channel"
+// Name: "Incoming Calls"
+// Importance: HIGH
+// Sound: Default ringtone
+// Vibration: Pattern [0, 1000, 1000]
+```
+
+#### 3. Ongoing Call Channel (OngoingCallService)
+```java
+// ID: "ongoing_call_channel"
+// Name: "Cuộc gọi đang diễn ra"
+// Importance: LOW  ◄── Hidden from tray
+// Sound: None
+// Vibration: None
+// Badge: false
+```
+
+### Service Configuration
+
+#### NotificationService
+```xml
+<service
+    android:name=".services.NotificationService"
+    android:enabled="true"
+    android:exported="false"
+    android:foregroundServiceType="dataSync" />
+```
+
+#### IncomingCallService
+```xml
+<service
+    android:name=".services.IncomingCallService"
+    android:enabled="true"
+    android:exported="false"
+    android:foregroundServiceType="specialUse">
+    <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="incomingCall" />
+</service>
+```
+
+#### OngoingCallService
+```xml
+<service
+    android:name=".services.OngoingCallService"
+    android:enabled="true"
+    android:exported="false"
+    android:foregroundServiceType="camera|microphone" />
+```
+
+---
+
+## Testing Guide
+
+### 1. Test Incoming Call (App Background)
+
+**Setup:**
+1. User A: Login
+2. User B: Login
+3. User B: Press Home (app to background)
+
+**Test:**
+1. User A → Call User B (video or voice)
+2. **Expected Results:**
+   - ✅ User B's screen wakes up
+   - ✅ CallActivity pops up full-screen
+   - ✅ Ringtone plays
+   - ✅ Device vibrates
+   - ✅ No banner notification (replaced with silent)
+   - ✅ Caller name displays correctly
+
+**Verify Logs:**
+```
+IncomingCallService: Started with foreground service type: specialUse
+IncomingCallService: Launched CallActivity successfully
+IncomingCallService: Notification replaced with silent version
+CallActivity: Cancelled incoming call notification
+```
+
+### 2. Test Incoming Call (App Killed)
+
+**Setup:**
+1. User B: Swipe away app from Recent Apps
+
+**Test:**
+1. User A → Call User B
+2. **Expected Results:**
+   - ✅ Same as background test
+   - ✅ App launches automatically
+
+### 3. Test Chat Notification
+
+**Setup:**
+1. User B: App in background or killed
+2. User B: NOT viewing conversation with User A
+
+**Test:**
+1. User A → Send message "Hello"
+2. **Expected Results:**
+   - ✅ Banner notification shows
+   - ✅ Sender name: "User A" (NOT "Unknown")
+   - ✅ Message content: "Hello"
+
+### 4. Test Call Message Filter
+
+**Setup:**
+1. User A calls User B
+2. Call ends (missed/rejected/completed)
+
+**Test:**
+1. Check notifications
+2. **Expected Results:**
+   - ❌ NO notification for "Cuộc gọi đến"
+   - ❌ NO notification for "Cuộc gọi đi"
+   - ❌ NO "Unknown" notification
+
+### 5. Test OngoingCallService Notification
+
+**Setup:**
+1. User A calls User B
+2. User B accepts
+3. Pull down notification shade
+
+**Test:**
+1. Check notifications
+2. **Expected Results:**
+   - ❌ NO visible notification in notification tray
+   - ✅ Service still running (check Settings → Apps → ZaloClone)
+
+---
+
+## Troubleshooting
+
+### Issue 1: "Unknown" Notification After Call
+
+**Symptom:**
+- Notification shows "Unknown • now" after call ends
+
+**Cause:**
+- Server not sending `senderName` in WebSocket event
+- OR call message not filtered
+
+**Solution:**
+```javascript
+// server/src/routes/messages.js
+let senderName = 'Unknown';
+const senderDoc = await db.collection('users').doc(req.user.uid).get();
+if (senderDoc.exists) {
+  senderName = senderDoc.data().name || senderDoc.data().displayName;
+}
+const messageWithId = { ...message, id: messageRef.id, senderName };
+```
+
+**AND**
+```java
+// NotificationService.java
+if ("call".equalsIgnoreCase(messageType) || 
+    messageText.contains("Cuộc gọi")) {
+    return;  // Skip
+}
+```
+
+### Issue 2: CallActivity Not Popping Up
+
+**Symptom:**
+- Only notification shows, no full-screen activity
+
+**Cause:**
+- Missing `SYSTEM_ALERT_WINDOW` permission
+
+**Solution:**
+1. Go to Settings → Apps → ZaloClone
+2. Enable "Display over other apps"
+3. OR run `requestOverlayPermission()` in MainActivity
+
+**Verify:**
+```java
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+    boolean canDraw = Settings.canDrawOverlays(context);
+    Log.d(TAG, "Can draw overlays: " + canDraw);
+}
+```
+
+### Issue 3: SecurityException - Foreground Service Type
+
+**Error:**
+```
+java.lang.SecurityException: Permission Denial: startForeground 
+requires android.permission.FOREGROUND_SERVICE_PHONE_CALL
+```
+
+**Cause:**
+- Wrong foreground service type for Android version
+
+**Solution:**
+Use `specialUse` for Android 14+:
+```xml
+<service
+    android:foregroundServiceType="specialUse">
+    <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="incomingCall" />
+</service>
+```
+
+```java
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+    startForeground(NOTIFICATION_ID, notification, 
+        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+}
+```
+
+### Issue 4: Ongoing Call Notification Visible
+
+**Symptom:**
+- "Cuộc gọi đang diễn ra" notification shows in tray
+
+**Cause:**
+- Channel importance too high
+
+**Solution:**
+```java
+NotificationChannel channel = new NotificationChannel(
+    CHANNEL_ID,
+    "Cuộc gọi đang diễn ra",
+    NotificationManager.IMPORTANCE_LOW  // ← LOW, not HIGH
+);
+channel.setShowBadge(false);
+```
+
+### Issue 5: Notification After Call Ended
+
+**Symptom:**
+- Silent notification persists after call ends
+
+**Cause:**
+- IncomingCallService not stopped properly
+
+**Solution:**
+```java
+// CallActivity.java
+@Override
+protected void onDestroy() {
+    super.onDestroy();
+    // Stop IncomingCallService
+    Intent serviceIntent = new Intent(this, IncomingCallService.class);
+    stopService(serviceIntent);
+}
+```
+
+---
+
+## Known Issues
+
+### 1. Android 10+ Background Restrictions
+
+**Platform:** Android 10 (API 29) and above
+
+**Description:**
+Starting activities from background is heavily restricted. Without `SYSTEM_ALERT_WINDOW`, CallActivity cannot pop up.
+
+**Workaround:**
+✅ Request `SYSTEM_ALERT_WINDOW` permission
+
+**Status:** Fixed
+
+---
+
+### 2. Notification Permission Dialog (Android 13+)
+
+**Platform:** Android 13 (API 33) and above
+
+**Description:**
+`POST_NOTIFICATIONS` is runtime permission. Users can deny.
+
+**Impact:**
+If denied, NO notifications will show (chat, calls, friend requests).
+
+**Workaround:**
+- Check permission on app start
+- Show educational UI explaining why needed
+- Deep link to Settings
+
+**Status:** Working as designed
+
+---
+
+### 3. Full-Screen Intent Suppressed by DND
+
+**Platform:** All Android versions
+
+**Description:**
+If device in Do Not Disturb mode, full-screen intents may not show.
+
+**Impact:**
+Incoming call may only show as notification (not full-screen).
+
+**Workaround:**
+None (OS limitation)
+
+**Status:** Expected behavior
+
+---
+
+### 4. Manufacturer-Specific Battery Optimization
+
+**Platform:** Xiaomi, Oppo, Vivo, etc.
+
+**Description:**
+Aggressive battery savers may kill `NotificationService` even when foreground.
+
+**Impact:**
+Notifications may not arrive when app killed.
+
+**Workaround:**
+- Guide users to disable battery optimization for ZaloClone
+- Use Firebase Cloud Messaging (FCM) as fallback
+
+**Status:** Out of scope (manufacturer limitation)
+
+---
+
+## Performance Considerations
+
+### Battery Impact
+
+| Component | Battery Usage | Mitigation |
+|-----------|--------------|-----------|
+| NotificationService | Low (WebSocket idle) | Use WakeLock only when needed |
+| IncomingCallService | Medium (Ringtone + Vibration) | Auto-stop after 60s |
+| OngoingCallService | Low (PARTIAL_WAKE_LOCK) | Release on call end |
+
+### Network Impact
+
+| Event | Frequency | Data Usage |
+|-------|----------|-----------|
+| WebSocket heartbeat | ~30s | <1KB per minute |
+| Incoming call detection | Real-time | ~500 bytes per call |
+| Message notification | Per message | ~1KB per message |
+
+### Memory Impact
+
+- **NotificationService:** ~5-10 MB RAM (persistent)
+- **IncomingCallService:** ~3-5 MB RAM (temporary)
+- **OngoingCallService:** ~2-3 MB RAM (during call)
+
+**Total:** ~10-18 MB additional RAM when all services active
+
+---
+
+## Future Improvements
+
+### Phase 1 (High Priority)
+- [ ] Add FCM fallback for when WebSocket disconnects
+- [ ] Implement notification grouping (multiple messages)
+- [ ] Add quick reply from notification
+- [ ] Support Android Auto
+
+### Phase 2 (Medium Priority)
+- [ ] Custom notification sounds per contact
+- [ ] Notification LED color customization
+- [ ] Notification scheduling (quiet hours)
+- [ ] Notification history
+
+### Phase 3 (Low Priority)
+- [ ] Notification analytics
+- [ ] A/B testing different notification styles
+- [ ] Machine learning for smart notification filtering
+
+---
+
+## References
+
+### Android Documentation
+- [Notifications Overview](https://developer.android.com/develop/ui/views/notifications)
+- [Foreground Services](https://developer.android.com/develop/background-work/services/foreground-services)
+- [Background Activity Launch Restrictions](https://developer.android.com/guide/components/activities/background-starts)
+
+### Code References
+- `NotificationService.java` - Main notification orchestrator
+- `IncomingCallService.java` - Incoming call handler
+- `CallNotificationHelper.java` - Notification creation utilities
+- `NotificationHelper.java` - Chat notification utilities
+- `MainActivity.java` - Permission requests
+
+---
+
+## Contact & Support
+
+**Team:** ZaloClone Development Team  
+**Documentation Maintained By:** AI Assistant  
+**Last Review:** 2025-12-27
+
+---
+
+**© 2025 ZaloClone - Notification System Documentation**

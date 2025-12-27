@@ -1,0 +1,197 @@
+# Firebase Integration Summary
+
+## ✅ Hoàn Thành
+
+### 1. Firebase Configuration
+- ✅ `google-services.json` đã được thêm vào `app/` folder (cần update với project thực tế)
+- ✅ Firebase plugins đã được config trong `build.gradle.kts`
+- ✅ Firebase dependencies: Auth, Firestore, Storage, Messaging (với BoM)
+
+### 2. AuthRepository Created
+**Location**: `app/src/main/java/com/example/doan_zaloclone/repository/AuthRepository.java`
+
+**Features**:
+- Login với Firebase Auth
+- Register user mới + lưu vào Firestore
+- Logout với update online status
+- Auto-login check
+- Callback pattern cho async operations
+
+**Firestore User Schema**:
+```json
+{
+  "userId": "firebase-uid",
+  "name": "User Name",
+  "email": "user@email.com",
+  "createdAt": 1234567890,
+  "isOnline": true,
+  "lastSeen": 1234567890
+}
+```
+
+### 3. LoginActivity Updated
+- ✅ Tích hợp Firebase Authentication
+- ✅ Auto-login nếu user đã authenticated
+- ✅ ProgressBar loading indicator
+- ✅ Error handling với Firebase messages
+- ✅ Navigate to MainActivity sau login
+
+### 4. SignUpActivity Updated
+- ✅ Create Firebase Auth account
+- ✅ Save user info to Firestore
+- ✅ ProgressBar loading indicator
+- ✅ Error handling
+- ✅ Navigate về LoginActivity
+
+### 5. MainActivity Enhanced
+- ✅ Added Toolbar với app name
+- ✅ Logout menu option
+- ✅ Clear task stack khi logout
+- ✅ Proper navigation flow
+
+### 6. UI Updates
+- ✅ ProgressBar thêm vào `activity_login.xml`
+- ✅ ProgressBar thêm vào `activity_signup.xml`
+- ✅ Toolbar thêm vào `activity_main.xml`
+- ✅ Menu `main_menu.xml` với logout option
+
+## 🔧 Cần Làm Tiếp
+
+### 1. Update google-services.json
+File hiện tại chỉ là placeholder. Cần:
+1. Tạo Firebase project
+2. Add Android app với package: `com.example.doan_zaloclone`
+3. Download `google-services.json` thật
+4. Replace file hiện tại
+
+### 2. Enable Firebase Services
+Trong Firebase Console:
+- ✅ Authentication → Enable Email/Password
+- ✅ Firestore → Create database (test mode)
+- ✅ Storage (optional - cho upload ảnh)
+- ✅ Cloud Messaging (optional - cho notifications)
+
+### 3. Test Flow
+```
+1. Sign Up → Creates Firebase account + Firestore user doc
+2. Login → Authenticates with Firebase
+3. Auto-login → Check isAuthenticated() on app start
+4. Logout → Sign out + update isOnline status
+```
+
+## 📁 Files Changed/Created
+
+### Created:
+- `app/src/main/java/com/example/doan_zaloclone/repository/AuthRepository.java`
+- `app/src/main/res/menu/main_menu.xml`
+- `FIREBASE_SETUP.md` (detailed guide)
+- `FIREBASE_SUMMARY.md` (this file)
+
+### Modified:
+- `app/src/main/java/com/example/doan_zaloclone/ui/login/LoginActivity.java`
+- `app/src/main/java/com/example/doan_zaloclone/ui/login/SignUpActivity.java`
+- `app/src/main/java/com/example/doan_zaloclone/MainActivity.java`
+- `app/src/main/res/layout/activity_login.xml`
+- `app/src/main/res/layout/activity_signup.xml`
+- `app/src/main/res/layout/activity_main.xml`
+
+## 🚀 Quick Start
+
+### Build & Run
+```bash
+# Clean and build
+.\gradlew clean
+.\gradlew build
+
+# Install to device/emulator
+.\gradlew installDebug
+```
+
+### First-time Setup
+1. Đọc `FIREBASE_SETUP.md` để setup Firebase Console
+2. Download và replace `google-services.json`
+3. Build project
+4. Run app và test Sign Up → Login flow
+
+## 📊 Architecture
+
+```
+┌─────────────────┐
+│  LoginActivity  │ ◄─── Check isAuthenticated()
+│  SignUpActivity │       on app start
+└────────┬────────┘
+         │
+         ▼
+   ┌──────────────┐
+   │ AuthRepository│
+   └──────┬───────┘
+          │
+    ┌─────┴─────┐
+    │           │
+    ▼           ▼
+┌─────────┐  ┌──────────┐
+│Firebase │  │Firestore │
+│  Auth   │  │   DB     │
+└─────────┘  └──────────┘
+```
+
+## 🔐 Security Notes
+
+### Current State (Development)
+- Firestore rules: test mode (public read/write)
+- Expire sau 30 ngày
+
+### Production Rules (Recommended)
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == userId;
+    }
+  }
+}
+```
+
+## 📝 Next Features
+
+### Priority 1 - Messaging
+- ConversationRepository (CRUD conversations)
+- MessageRepository (send/receive messages)
+- Real-time listeners cho new messages
+
+### Priority 2 - Contacts
+- FriendRequestRepository
+- Send/accept/reject friend requests
+- Search users by email
+
+### Priority 3 - Profile
+- Update user profile (name, avatar)
+- Upload avatar to Firebase Storage
+- Online/offline status real-time
+
+### Priority 4 - Advanced
+- Push notifications (FCM)
+- Password reset
+- Email verification
+- Google Sign-In
+
+## 🐛 Debugging Tips
+
+### Check Logcat tags:
+- `AuthRepository`: Auth operations
+- `LoginActivity`: Login flow
+- `SignUpActivity`: Registration flow
+- Firebase tags: `FirebaseAuth`, `FirebaseFirestore`
+
+### Common Issues:
+1. **"google-services.json not found"** → Kiểm tra file location
+2. **"Permission denied"** → Check Firestore rules
+3. **"Network error"** → Check internet connection
+4. **"Email already in use"** → User đã tồn tại, dùng login
+
+## 📚 Documentation
+- Full setup guide: `FIREBASE_SETUP.md`
+- Android app architecture: `ANDROID_APP.md`
+- Project conventions: `.github/copilot-instructions.md`

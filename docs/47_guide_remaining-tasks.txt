@@ -1,0 +1,373 @@
+# Remaining Tasks: Complete API Migration
+
+**Last Updated:** 2025-12-25  
+**Current Status:** Core features migrated, enhancements pending
+
+---
+
+## ✅ Already Migrated (Complete)
+
+| Feature | Backend | Android | Status |
+|---------|---------|---------|--------|
+| User Management | ✅ | ✅ | ✅ Done |
+| Friend Management | ✅ | ✅ | ✅ Done |
+| Send/Delete/Recall Messages | ✅ | ✅ | ✅ Done |
+| Message Reactions | ✅ | ✅ | ✅ Done |
+| Create Group | ✅ | ✅ | ✅ Done |
+| ApiService Endpoints | ✅ | ✅ | ✅ Done |
+
+**Total:** 28 backend endpoints + 14 Android endpoints = **100% Core Features**
+
+---
+
+## 🎯 Critical Tasks (Must Do for Production)
+
+### 1. WebSocket Event Listeners (Phase 4B)
+**Priority:** HIGH  
+**Effort:** 1 hour  
+**Status:** Not started
+
+**Tasks:**
+- Add `conversation_updated` listener in `SocketManager.java`
+- Add `member_added` listener
+- Add `member_removed` listener
+- Add `member_left` listener
+- Add `admin_updated` listener
+
+**Why Critical:**
+- Real-time group updates
+- Better UX
+- Consistent with other features
+
+**Implementation:**
+```java
+// In SocketManager.setupEventListeners()
+socket.on("conversation_updated", args -> {
+    JSONObject data = (JSONObject) args[0];
+    if (groupEventListener != null) {
+        groupEventListener.onConversationUpdated(
+            data.getString("conversationId"),
+            data.optString("name"),
+            data.optString("avatar")
+        );
+    }
+});
+
+socket.on("member_added", args -> {
+    JSONObject data = (JSONObject) args[0];
+    if (groupEventListener != null) {
+        groupEventListener.onMemberAdded(
+            data.getString("conversationId"),
+            data.getString("userId"),
+            data.getString("addedBy")
+        );
+    }
+});
+```
+
+---
+
+### 2. End-to-End Testing
+**Priority:** HIGH  
+**Effort:** 3-4 hours  
+**Status:** Not started
+
+**Test Cases:**
+
+#### Messages:
+- [ ] Send text message (2+ devices)
+- [ ] Send media message
+- [ ] Delete own message
+- [ ] Try delete other's message (should fail)
+- [ ] Recall message
+- [ ] Add reaction (click multiple times)
+- [ ] Remove reaction (X button)
+- [ ] Real-time delivery
+
+#### Groups:
+- [ ] Create group (≥2 members)
+- [ ] Update group name
+- [ ] Update group avatar
+- [ ] Add member (admin only)
+- [ ] Remove member (admin only)
+- [ ] Leave group (not last admin)
+- [ ] Promote admin
+- [ ] Demote admin (not last)
+- [ ] Real-time updates
+
+#### Friends:
+- [ ] Send friend request
+- [ ] Accept request
+- [ ] Reject request
+- [ ] Remove friend
+- [ ] Real-time notifications
+
+#### Search:
+- [ ] Search conversations by name
+- [ ] Search messages in conversation
+- [ ] Filter conversations (GROUP/PRIVATE)
+- [ ] Filter by archived status
+
+---
+
+### 3. Error Handling Enhancement
+**Priority:** MEDIUM  
+**Effort:** 2 hours  
+**Status:** Partial (basic handling exists)
+
+**Tasks:**
+- [ ] Add user-friendly error messages
+- [ ] Implement retry logic for network failures
+- [ ] Handle offline scenarios gracefully
+- [ ] Show loading states consistently
+- [ ] Add timeout handling
+
+**Example:**
+```java
+@Override
+public void onFailure(Call<Map> call, Throwable t) {
+    String userMessage;
+    if (t instanceof IOException) {
+        userMessage = "No internet connection. Please check your network.";
+    } else if (t instanceof SocketTimeoutException) {
+        userMessage = "Request timed out. Please try again.";
+    } else {
+        userMessage = "Something went wrong. Please try again.";
+    }
+    callback.onError(userMessage);
+    // TODO: Implement retry logic
+}
+```
+
+---
+
+## 🔧 Important Tasks (Should Do)
+
+### 4. Firestore Security Rules Update
+**Priority:** HIGH (for production)  
+**Effort:** 1 hour  
+**Status:** Partial
+
+**Tasks:**
+- [ ] Review all Firestore rules
+- [ ] Ensure rules match new API architecture
+- [ ] Test rules with Firebase emulator
+- [ ] Deploy updated rules
+
+**Why Important:**
+- Backend now handles most writes
+- Some client-side Firestore access may remain
+- Need to ensure security
+
+---
+
+### 5. Firestore Indexes
+**Priority:** MEDIUM  
+**Effort:** 30 minutes  
+**Status:** Some missing
+
+**Tasks:**
+- [ ] Create composite index: `conversations` where `memberIds` array-contains + order by `timestamp`
+- [ ] Create index: `messages` where `conversationId` order by `timestamp`
+- [ ] Review server logs for index warnings
+- [ ] Create all suggested indexes
+- [ ] Deploy to production
+
+**Why Important:**
+- Better query performance
+- Avoid Firestore errors
+- Production requirement
+
+---
+
+### 6. Repository Method Cleanup
+**Priority:** LOW  
+**Effort:** 1-2 hours  
+**Status:** Using old methods
+
+**Tasks:**
+- [ ] Update all repositories to use new API methods (not `...Old()`)
+- [ ] Remove old method declarations from `ApiService`
+- [ ] Test all affected features
+
+**Why Important:**
+- Cleaner code
+- Consistency
+- Remove technical debt
+
+**Example:**
+```java
+// Before
+Call<ApiResponse<Void>> call = apiService.updateConversationOld(id, updates);
+
+// After
+Call<Map<String, Object>> call = apiService.updateConversation(id, updates);
+// Update response parsing accordingly
+```
+
+---
+
+## 🎨 Enhancement Tasks (Nice to Have)
+
+### 7. Search UI Implementation
+**Priority:** LOW  
+**Effort:** 2-3 hours  
+**Status:** Backend ready, UI pending
+
+**Tasks:**
+- [ ] Add search bar in `HomeFragment`
+- [ ] Create `SearchActivity` for global search
+- [ ] Implement message search in `RoomActivity`
+- [ ] Add search results UI
+- [ ] Highlight search terms
+
+---
+
+### 8. Archive/Mute/Pin UI
+**Priority:** LOW  
+**Effort:** 2 hours  
+**Status:** Backend ready, UI pending
+
+**Tasks:**
+- [ ] Add archive option in conversation menu
+- [ ] Add mute option (with duration selector)
+- [ ] Add pin option
+- [ ] Show pinned conversations at top
+- [ ] Hide archived conversations
+- [ ] Settings screen for archived chats
+
+---
+
+### 9. Admin Management UI
+**Priority:** LOW  
+**Effort:** 1 hour  
+**Status:** Backend ready, UI pending
+
+**Tasks:**
+- [ ] Add "Promote to Admin" in `GroupInfoActivity`
+- [ ] Add "Remove Admin" option
+- [ ] Show admin badge in member list
+- [ ] Permission checks in UI
+
+---
+
+### 10. File Upload API
+**Priority:** MEDIUM  
+**Effort:** 2-3 hours  
+**Status:** Not started
+
+**Why Needed:**
+- Currently uploads happen client-side to Cloudinary
+- Backend should handle uploads for:
+  - Better control
+  - Image optimization
+  - Security
+  - Single upload endpoint
+
+**Tasks:**
+- [ ] Create `POST /api/upload` endpoint
+- [ ] Integrate Cloudinary or Firebase Storage
+- [ ] Add image resize/compress
+- [ ] Support multiple file types
+- [ ] Return media URL for messages
+
+---
+
+## 📊 Progress Summary
+
+### Completed:
+- ✅ Phase 3A: User Management (4 endpoints)
+- ✅ Phase 3B: Friend Management (5 endpoints)
+- ✅ Phase 3C: Messages & Reactions (5 endpoints)
+- ✅ Phase 3D: Group Management (6 endpoints)
+- ✅ Phase 3E: Conversation Operations (5 endpoints)
+- ✅ Phase 3F: Search & Filter (3 endpoints)
+- ✅ Phase 4A: ApiService Integration (14 endpoints)
+
+### Remaining:
+- 🔲 Phase 4B: WebSocket Listeners (1 hour)
+- 🔲 E2E Testing (3-4 hours)
+- 🔲 Error Handling (2 hours)
+- 🔲 Security Rules (1 hour)
+- 🔲 Firestore Indexes (30 min)
+- 🔲 Repository Cleanup (1-2 hours)
+
+**Total Remaining:** ~9-11 hours (critical + important)
+
+---
+
+## 🎯 Recommended Order
+
+### Week 1 (Critical):
+1. **WebSocket Listeners** (1 hour) - Better UX
+2. **E2E Testing** (4 hours) - Find bugs
+3. **Error Handling** (2 hours) - Production ready
+
+### Week 2 (Important):
+4. **Firestore Security** (1 hour) - Security
+5. **Firestore Indexes** (30 min) - Performance
+6. **Repository Cleanup** (2 hours) - Code quality
+
+### Week 3+ (Enhancements):
+7. **Search UI** (2-3 hours)
+8. **Archive/Mute/Pin UI** (2 hours)
+9. **Admin UI** (1 hour)
+10. **File Upload API** (2-3 hours)
+
+---
+
+## ✅ Definition of "Migration Complete"
+
+The application is considered **fully migrated** when:
+
+### Must Have:
+- [x] All core features use API (not direct Firestore)
+- [x] Backend endpoints complete
+- [x] Android ApiService has all endpoints
+- [ ] WebSocket listeners for all events
+- [ ] E2E testing passed
+- [ ] Error handling comprehensive
+- [ ] Firestore rules updated
+- [ ] Firestore indexes created
+
+### Should Have:
+- [ ] Repository using new methods (not `...Old()`)
+- [ ] No compilation warnings
+- [ ] All logs clean (no index warnings)
+
+### Nice to Have:
+- [ ] Search UI implemented
+- [ ] Archive/Mute/Pin UI
+- [ ] Admin management UI
+- [ ] File upload via API
+
+---
+
+## 🚀 Quick Start: What to Do Next?
+
+If you want to **ship quickly:**
+1. Do WebSocket listeners (1 hour)
+2. Basic testing (2 hours)
+3. Ship!
+
+If you want **production quality:**
+1. WebSocket listeners (1 hour)
+2. Full E2E testing (4 hours)
+3. Error handling (2 hours)
+4. Security & indexes (1.5 hours)
+5. Ship!
+
+If you want **complete system:**
+1. All critical tasks (7 hours)
+2. All important tasks (4 hours)
+3. All enhancements (8-10 hours)
+4. Ship!
+
+---
+
+**Current Progress:** ~88% migrated (critical features done)  
+**Time to MVP:** ~7 hours (critical tasks only)  
+**Time to Production:** ~11 hours (+ important tasks)  
+**Time to Complete:** ~20 hours (all tasks)
+
+Choose based on your timeline! 🚀

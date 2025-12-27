@@ -1,0 +1,265 @@
+# Hướng Dẫn Thiết Lập Firebase
+
+## Tổng Quan
+Firebase đã được tích hợp vào app với các tính năng:
+- ✅ Firebase Authentication (Email/Password)
+- ✅ Cloud Firestore Database
+- ✅ AuthRepository để xử lý Login/Register
+- ✅ Auto-login cho user đã đăng nhập
+- ✅ Logout functionality
+
+## Cấu Trúc Đã Tạo
+
+### 1. AuthRepository (`app/src/main/java/.../repository/AuthRepository.java`)
+Repository class xử lý tất cả Firebase Auth operations:
+
+**Methods:**
+- `login(email, password, callback)` - Đăng nhập với Firebase Auth
+- `register(name, email, password, callback)` - Đăng ký user mới
+- `logout()` - Đăng xuất và cập nhật status
+- `getCurrentUser()` - Lấy thông tin user hiện tại
+- `isAuthenticated()` - Kiểm tra trạng thái đăng nhập
+
+**Firestore Structure:**
+```
+users/
+  └─ {userId}/
+      ├─ userId: string
+      ├─ name: string
+      ├─ email: string
+      ├─ createdAt: timestamp
+      ├─ isOnline: boolean
+      └─ lastSeen: timestamp
+```
+
+### 2. LoginActivity (Updated)
+- ✅ Tích hợp Firebase Authentication
+- ✅ Auto-login nếu user đã đăng nhập
+- ✅ Loading indicator (ProgressBar)
+- ✅ Error handling với Firebase error messages
+- ✅ Navigate to MainActivity sau khi login thành công
+
+### 3. SignUpActivity (Updated)
+- ✅ Tạo tài khoản Firebase Auth
+- ✅ Lưu user info vào Firestore
+- ✅ Loading indicator (ProgressBar)
+- ✅ Error handling
+- ✅ Navigate về LoginActivity sau khi đăng ký thành công
+
+### 4. MainActivity (Updated)
+- ✅ Thêm Toolbar với menu
+- ✅ Logout button trong menu
+- ✅ Clear task stack khi logout
+
+## Cách Thiết Lập Firebase Console
+
+### Bước 1: Tạo Firebase Project
+1. Truy cập [Firebase Console](https://console.firebase.google.com/)
+2. Click "Add project"
+3. Đặt tên project: "Zalo Clone" hoặc tên bạn muốn
+4. Disable Google Analytics (optional)
+5. Click "Create project"
+
+### Bước 2: Add Android App
+1. Trong Firebase Console, click icon Android
+2. **Package name**: `com.example.doan_zaloclone`
+3. **App nickname**: "Zalo Clone Android"
+4. **SHA-1**: (Optional - dùng cho Google Sign-In sau này)
+   ```bash
+   # Windows - lấy SHA-1
+   cd android
+   .\gradlew signingReport
+   ```
+5. Click "Register app"
+
+### Bước 3: Download google-services.json
+1. Download file `google-services.json`
+2. **QUAN TRỌNG**: Copy file này vào `app/` folder
+3. Replace file hiện tại đang có placeholder values
+
+**File location:**
+```
+DoAn_ZaloClone/
+  └─ app/
+      └─ google-services.json  <-- ĐẶT FILE VÀO ĐÂY
+```
+
+### Bước 4: Enable Authentication
+1. Trong Firebase Console, vào **Authentication**
+2. Click tab **Sign-in method**
+3. Enable **Email/Password**:
+   - Click "Email/Password"
+   - Toggle "Enable"
+   - Click "Save"
+
+### Bước 5: Create Firestore Database
+1. Trong Firebase Console, vào **Firestore Database**
+2. Click "Create database"
+3. Chọn **Start in test mode** (cho development)
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /{document=**} {
+         allow read, write: if request.time < timestamp.date(2025, 2, 1);
+       }
+     }
+   }
+   ```
+4. Chọn location: `asia-southeast1` (Singapore)
+5. Click "Enable"
+
+### Bước 6: Setup Firestore Rules (Production)
+Khi deploy production, thay đổi rules:
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Conversations collection
+    match /conversations/{conversationId} {
+      allow read, write: if request.auth != null;
+    }
+    
+    // Messages collection
+    match /messages/{messageId} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}
+```
+
+## Build & Run
+
+### Sync Project
+```bash
+# Windows
+.\gradlew clean
+.\gradlew build
+```
+
+### Run on Emulator/Device
+1. Open Android Studio
+2. Click "Run" → "Run 'app'"
+3. Hoặc dùng command:
+   ```bash
+   .\gradlew installDebug
+   ```
+
+## Testing Flow
+
+### 1. Test Sign Up
+1. Launch app → Click "Sign Up"
+2. Nhập:
+   - Name: "Test User"
+   - Email: "test@example.com"
+   - Password: "123456"
+   - Confirm: "123456"
+3. Click "Sign Up"
+4. **Kiểm tra Firebase Console → Authentication → Users** (sẽ thấy user mới)
+5. **Kiểm tra Firestore → users collection** (sẽ thấy user document)
+
+### 2. Test Login
+1. Từ Login screen, nhập:
+   - Email: "test@example.com"
+   - Password: "123456"
+2. Click "Login"
+3. Sẽ navigate to MainActivity
+
+### 3. Test Auto-Login
+1. Close app (không logout)
+2. Reopen app
+3. Sẽ tự động vào MainActivity (không cần login lại)
+
+### 4. Test Logout
+1. Trong MainActivity, click menu (3 dots) → "Logout"
+2. Sẽ về LoginActivity
+3. Check Firestore → user document → `isOnline = false`
+
+## Error Messages
+
+Firebase Auth sẽ trả về các error messages:
+
+| Error Code | Message | Solution |
+|------------|---------|----------|
+| `ERROR_INVALID_EMAIL` | Email không hợp lệ | Kiểm tra format email |
+| `ERROR_WRONG_PASSWORD` | Password sai | Nhập đúng password |
+| `ERROR_USER_NOT_FOUND` | User không tồn tại | Đăng ký account mới |
+| `ERROR_EMAIL_ALREADY_IN_USE` | Email đã được dùng | Dùng email khác hoặc login |
+| `ERROR_WEAK_PASSWORD` | Password yếu | Dùng password >= 6 ký tự |
+| `ERROR_NETWORK_REQUEST_FAILED` | Lỗi network | Kiểm tra internet |
+
+## Next Steps
+
+### 1. Thêm User Profile
+```java
+// UserRepository.java
+public void updateProfile(String userId, Map<String, Object> updates, Callback callback) {
+    firestore.collection("users").document(userId)
+        .update(updates)
+        .addOnSuccessListener(aVoid -> callback.onSuccess())
+        .addOnFailureListener(e -> callback.onError(e.getMessage()));
+}
+```
+
+### 2. Thêm Password Reset
+```java
+// AuthRepository.java
+public void resetPassword(String email, Callback callback) {
+    firebaseAuth.sendPasswordResetEmail(email)
+        .addOnSuccessListener(aVoid -> callback.onSuccess())
+        .addOnFailureListener(e -> callback.onError(e.getMessage()));
+}
+```
+
+### 3. Thêm Email Verification
+```java
+// Sau khi register
+FirebaseUser user = firebaseAuth.getCurrentUser();
+if (user != null) {
+    user.sendEmailVerification()
+        .addOnSuccessListener(aVoid -> {
+            // Email verification sent
+        });
+}
+```
+
+### 4. Real-time User Status
+```java
+// MainActivity.java - trong onCreate
+DatabaseReference presenceRef = FirebaseDatabase.getInstance()
+    .getReference("status/" + userId);
+    
+presenceRef.onDisconnect().setValue("offline");
+presenceRef.setValue("online");
+```
+
+## Troubleshooting
+
+### App không build
+- Kiểm tra `google-services.json` đã copy đúng vị trí
+- Run `.\gradlew clean` và rebuild
+
+### Login/Register không hoạt động
+- Kiểm tra Firebase Console → Authentication đã enable Email/Password
+- Kiểm tra internet connection
+- Xem Logcat để debug
+
+### Firestore permission denied
+- Kiểm tra Firestore rules đã setup đúng
+- Đảm bảo user đã authenticated
+
+### Auto-login không hoạt động
+- Clear app data và test lại
+- Kiểm tra `authRepository.isAuthenticated()` logic
+
+## Resources
+
+- [Firebase Android Setup](https://firebase.google.com/docs/android/setup)
+- [Firebase Auth Docs](https://firebase.google.com/docs/auth/android/start)
+- [Firestore Docs](https://firebase.google.com/docs/firestore/quickstart)

@@ -1,0 +1,337 @@
+# Phase 4 - Group Management (Hoàn thành)
+
+## Tổng quan
+Phase 4 bổ sung đầy đủ chức năng quản lý nhóm chat, cho phép admin và thành viên thực hiện các thao tác quản lý nhóm.
+
+## Các tính năng đã triển khai
+
+### 1. Xem thông tin nhóm (GroupInfoActivity)
+**Màn hình chính hiển thị:**
+- Avatar nhóm (icon nhóm hoặc ảnh tùy chỉnh)
+- Tên nhóm (có thể chỉnh sửa nếu là admin)
+- Số lượng thành viên
+- Danh sách tất cả thành viên với badge "Quản trị viên" cho admin
+- Các nút hành động (Rời nhóm, Xóa nhóm cho admin)
+
+**Cách truy cập:**
+- Từ màn hình chat (RoomActivity), click vào tên nhóm trên toolbar
+
+### 2. Quản lý thành viên
+
+#### A. Xem danh sách thành viên
+- Hiển thị avatar, tên, email của từng thành viên
+- Admin được hiển thị với badge "Quản trị viên"
+- Sắp xếp: Admin ở đầu danh sách, sau đó theo alphabet
+
+#### B. Thêm thành viên (Chỉ Admin)
+**Tính năng:**
+- Mở màn hình AddGroupMemberActivity
+- Chọn nhiều bạn bè để thêm vào nhóm
+- Tự động lọc bỏ những người đã là thành viên
+- Hiển thị số lượng đã chọn
+- Nút "Thêm thành viên" để xác nhận
+
+**Cách sử dụng:**
+1. Vào GroupInfoActivity
+2. Click nút "Thêm thành viên" (chỉ hiển thị với admin)
+3. Chọn bạn bè từ danh sách
+4. Click "Thêm thành viên"
+
+#### C. Xóa thành viên (Chỉ Admin)
+**Quy tắc:**
+- Admin không thể xóa chính mình
+- Admin không thể xóa admin khác (trong nhóm chỉ có 1 admin)
+- Thành viên thường có nút X màu đỏ để xóa
+
+**Cách sử dụng:**
+1. Vào GroupInfoActivity (với tư cách admin)
+2. Click nút X bên cạnh tên thành viên muốn xóa
+3. Xác nhận trong dialog
+
+### 3. Chỉnh sửa thông tin nhóm
+
+#### A. Đổi tên nhóm (Chỉ Admin)
+**Tính năng:**
+- Click icon edit bên cạnh tên nhóm
+- Nhập tên mới trong dialog
+- Validation: Tên không được để trống
+- Cập nhật tên ngay lập tức
+
+#### B. Đổi avatar nhóm (Chỉ Admin)
+**Trạng thái:** Đang phát triển
+- UI đã có nút camera overlay trên avatar
+- Chức năng upload ảnh sẽ được triển khai sau
+
+### 4. Rời nhóm
+**Tính năng:**
+- Mọi thành viên đều có thể rời nhóm
+- Hiển thị dialog xác nhận
+- Sau khi rời, người dùng không còn xem được tin nhắn trong nhóm
+
+**Lưu ý đặc biệt:**
+- Nếu admin rời nhóm, cần transfer quyền admin cho thành viên khác (chưa implement)
+- Hiện tại admin có thể rời nhưng nhóm vẫn tồn tại
+
+### 5. Xóa nhóm (Chỉ Admin)
+**Tính năng:**
+- Chỉ admin mới thấy nút "Xóa nhóm" (màu đỏ)
+- Hiển thị dialog cảnh báo
+- Xóa toàn bộ conversation khỏi Firestore
+- Tất cả thành viên sẽ không còn thấy nhóm trong danh sách
+
+## Cấu trúc code
+
+### Models
+```
+models/
+├── Conversation.java (đã có từ Phase 1)
+│   └── Các field: type, adminId, avatarUrl, memberIds
+└── GroupMember.java (mới)
+    └── Thông tin thành viên: userId, name, email, avatarUrl, isAdmin
+```
+
+### UI Components
+```
+ui/group/
+├── GroupInfoActivity.java - Màn hình chính quản lý nhóm
+├── GroupMemberAdapter.java - Adapter hiển thị danh sách thành viên
+├── AddGroupMemberActivity.java - Màn hình thêm thành viên
+└── SelectableFriendsAdapter.java (đã có từ Phase 2)
+```
+
+### Layouts
+```
+res/layout/
+├── activity_group_info.xml - Layout màn hình thông tin nhóm
+├── item_group_member.xml - Layout item thành viên
+├── activity_add_group_member.xml - Layout thêm thành viên
+└── dialog_edit_text.xml - Dialog chỉnh sửa tên
+```
+
+### Drawables
+```
+res/drawable/
+├── ic_camera.xml - Icon camera cho đổi avatar
+├── ic_edit.xml - Icon edit cho đổi tên
+├── ic_add.xml - Icon thêm thành viên
+├── ic_close.xml - Icon xóa thành viên
+└── badge_background.xml - Background cho badge admin
+```
+
+### Backend (FirestoreManager.java)
+**Các method mới:**
+```java
+// Cập nhật tên nhóm
+void updateGroupName(String conversationId, String newName, OnGroupUpdatedListener listener)
+
+// Cập nhật avatar nhóm
+void updateGroupAvatar(String conversationId, String avatarUrl, OnGroupUpdatedListener listener)
+
+// Thêm thành viên
+void addGroupMembers(String conversationId, List<String> memberIds, OnGroupUpdatedListener listener)
+
+// Xóa thành viên
+void removeGroupMember(String conversationId, String memberId, OnGroupUpdatedListener listener)
+
+// Rời nhóm
+void leaveGroup(String conversationId, String userId, OnGroupUpdatedListener listener)
+
+// Xóa nhóm
+void deleteGroup(String conversationId, OnGroupUpdatedListener listener)
+```
+
+### Repository (ChatRepository.java)
+**Các method mới trả về LiveData:**
+```java
+LiveData<Resource<Boolean>> updateGroupName(String conversationId, String newName)
+LiveData<Resource<Boolean>> updateGroupAvatar(String conversationId, String avatarUrl)
+LiveData<Resource<Boolean>> addGroupMembers(String conversationId, List<String> memberIds)
+LiveData<Resource<Boolean>> removeGroupMember(String conversationId, String memberId)
+LiveData<Resource<Boolean>> leaveGroup(String conversationId, String userId)
+LiveData<Resource<Boolean>> deleteGroup(String conversationId)
+```
+
+### ViewModel (GroupViewModel.java)
+**Các method mới:**
+- Tất cả các method quản lý nhóm
+- LiveData `updateResult` để observe kết quả các thao tác
+
+### Cập nhật RoomActivity
+**Thêm chức năng:**
+- Click tên nhóm trên toolbar → Mở GroupInfoActivity
+- Method `openGroupInfo()` để navigate
+
+## Firestore Structure
+
+### Conversation Document (Group)
+```json
+{
+  "id": "conversation_id",
+  "type": "GROUP",
+  "name": "Tên nhóm",
+  "adminId": "user_id_of_admin",
+  "memberIds": ["user1", "user2", "user3"],
+  "avatarUrl": "url_to_avatar_image",
+  "lastMessage": "Tin nhắn cuối",
+  "timestamp": 1234567890
+}
+```
+
+## Quy tắc phân quyền
+
+### Admin có thể:
+✅ Đổi tên nhóm
+✅ Đổi avatar nhóm
+✅ Thêm thành viên mới
+✅ Xóa thành viên (trừ chính mình và admin khác)
+✅ Xóa nhóm hoàn toàn
+✅ Rời nhóm (nhưng nên transfer quyền admin trước)
+
+### Thành viên thường có thể:
+✅ Xem thông tin nhóm
+✅ Xem danh sách thành viên
+✅ Rời nhóm
+❌ Không thể thêm/xóa thành viên
+❌ Không thể đổi tên/avatar
+❌ Không thể xóa nhóm
+
+## Workflow sử dụng
+
+### 1. Xem thông tin nhóm
+```
+RoomActivity (Group Chat)
+    ↓ Click tên nhóm
+GroupInfoActivity
+    ↓ Hiển thị thông tin đầy đủ
+```
+
+### 2. Thêm thành viên (Admin)
+```
+GroupInfoActivity
+    ↓ Click "Thêm thành viên"
+AddGroupMemberActivity
+    ↓ Chọn bạn bè
+    ↓ Click "Thêm thành viên"
+GroupInfoActivity (cập nhật danh sách)
+```
+
+### 3. Xóa thành viên (Admin)
+```
+GroupInfoActivity
+    ↓ Click nút X bên cạnh thành viên
+Dialog xác nhận
+    ↓ Click "Xóa"
+Cập nhật danh sách
+```
+
+### 4. Đổi tên nhóm (Admin)
+```
+GroupInfoActivity
+    ↓ Click icon edit
+Dialog nhập tên mới
+    ↓ Click "Lưu"
+Cập nhật tên ngay lập tức
+```
+
+### 5. Rời nhóm
+```
+GroupInfoActivity
+    ↓ Click "Rời nhóm"
+Dialog xác nhận
+    ↓ Click "Rời nhóm"
+Về MainActivity (nhóm biến mất khỏi danh sách)
+```
+
+### 6. Xóa nhóm (Admin)
+```
+GroupInfoActivity
+    ↓ Click "Xóa nhóm"
+Dialog cảnh báo
+    ↓ Click "Xóa"
+Về MainActivity (nhóm bị xóa với tất cả thành viên)
+```
+
+## Testing checklist
+
+### Kiểm tra với vai trò Admin:
+- [ ] Xem đầy đủ thông tin nhóm với badge "Quản trị viên"
+- [ ] Thấy nút "Thêm thành viên", "Xóa nhóm"
+- [ ] Thấy icon edit bên cạnh tên nhóm
+- [ ] Thêm thành viên thành công
+- [ ] Xóa thành viên (không phải admin) thành công
+- [ ] Đổi tên nhóm thành công
+- [ ] Xóa nhóm → Nhóm biến mất với tất cả thành viên
+- [ ] Rời nhóm thành công
+
+### Kiểm tra với vai trò Thành viên thường:
+- [ ] Xem được thông tin nhóm
+- [ ] Không thấy nút "Thêm thành viên", "Xóa nhóm"
+- [ ] Không thấy icon edit tên nhóm
+- [ ] Không thấy nút X để xóa thành viên
+- [ ] Rời nhóm thành công
+
+### Kiểm tra Navigation:
+- [ ] Từ RoomActivity click tên nhóm → Mở GroupInfoActivity
+- [ ] Từ GroupInfoActivity click "Thêm thành viên" → Mở AddGroupMemberActivity
+- [ ] Back button hoạt động đúng ở mọi màn hình
+- [ ] Sau khi thêm thành viên, quay lại GroupInfoActivity tự động refresh
+
+### Kiểm tra dữ liệu:
+- [ ] Danh sách thành viên cập nhật realtime
+- [ ] Tên nhóm cập nhật ngay lập tức
+- [ ] Số lượng thành viên hiển thị đúng
+- [ ] Avatar mặc định (icon nhóm) hiển thị khi chưa có ảnh
+
+## Tính năng chưa hoàn thành
+
+### 1. Upload avatar nhóm
+**Trạng thái:** UI đã sẵn sàng, cần implement logic
+**Cần làm:**
+- Tích hợp image picker
+- Upload lên Firebase Storage
+- Cập nhật URL vào Firestore
+
+### 2. Transfer quyền admin
+**Trạng thái:** Chưa implement
+**Use case:** Khi admin rời nhóm
+**Cần làm:**
+- Dialog chọn thành viên mới làm admin
+- Cập nhật adminId trong Firestore
+
+### 3. Admin notification
+**Trạng thái:** Chưa implement
+**Ý tưởng:** Thông báo cho thành viên khi:
+- Được thêm vào nhóm
+- Bị xóa khỏi nhóm
+- Nhóm bị xóa
+- Có admin mới
+
+## Lỗi đã fix
+
+1. ✅ Stream API không tương thích với Java 8
+   - Fix: Thay thế stream().filter().collect() bằng vòng lặp for
+
+2. ✅ Missing ViewBinding imports
+   - Fix: Đã thêm đầy đủ import cho ActivityGroupInfoBinding và ActivityAddGroupMemberBinding
+
+3. ✅ GroupInfoActivity missing in AndroidManifest
+   - Fix: Đã đăng ký cả GroupInfoActivity và AddGroupMemberActivity
+
+4. ✅ Click tên nhóm không có phản hồi
+   - Fix: Thêm OnClickListener cho titleTextView trong RoomActivity
+
+## Dependencies không thay đổi
+Không cần thêm dependencies mới cho Phase 4.
+
+## Tổng kết
+Phase 4 đã hoàn thành đầy đủ các chức năng quản lý nhóm cơ bản:
+- ✅ Xem thông tin nhóm
+- ✅ Quản lý thành viên (thêm/xóa)
+- ✅ Đổi tên nhóm
+- ✅ Rời nhóm
+- ✅ Xóa nhóm
+- ✅ Phân quyền admin/member rõ ràng
+- ⏳ Upload avatar (UI sẵn sàng)
+- ⏳ Transfer admin (tính năng nâng cao)
+
+Tất cả các tính năng cốt lõi đã sẵn sàng để test và sử dụng!

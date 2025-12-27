@@ -1,0 +1,35 @@
+## Temporary Code to Launch API Test Activity
+
+Add this to `MainActivity.java` in `onCreate()` method (after setContentView):
+
+```java
+// TEMPORARY: API Test Button - Remove after testing
+if (BuildConfig.DEBUG) {  // Only show in debug builds
+    Button btnApiTest = new Button(this);
+    btnApiTest.setText("🔧 API Test");
+    btnApiTest.setBackgroundColor(0xFF4CAF50);
+    btnApiTest.setTextColor(0xFFFFFFFF);
+    btnApiTest.setPadding(32, 16, 32, 16);
+    btnApiTest.setOnClickListener(v -> {
+        Intent intent = new Intent(this, ApiTestActivity.class);
+        startActivity(intent);
+    });
+    
+    // Find a layout to add button (adjust as needed)
+    ViewGroup rootLayout = findViewById(android.R.id.content);
+    if (rootLayout instanceof FrameLayout) {
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        );
+        params.gravity = Gravity.TOP | Gravity.END;
+        params.setMargins(0, 200, 32, 0);
+        btnApiTest.setLayoutParams(params);
+        rootLayout.addView(btnApiTest);
+    }
+}
+```
+
+This adds a floating green button in top-right corner that only appears in DEBUG builds.
+
+**Remember to remove this code after testing!**

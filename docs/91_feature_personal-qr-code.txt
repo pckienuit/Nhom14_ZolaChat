@@ -1,0 +1,424 @@
+# Feature: Personal QR Code
+
+**Date:** December 27, 2025  
+**Type:** Feature  
+**Priority:** Medium  
+**Status:** ✅ Completed
+
+## Overview
+
+Tính năng tạo và quét mã QR trang cá nhân cho phép người dùng:
+- Tạo mã QR chứa liên kết đến trang cá nhân
+- Chia sẻ mã QR cho bạn bè
+- Lưu mã QR vào thư viện ảnh
+- Quét mã QR để xem trang cá nhân người khác
+
+---
+
+## Features
+
+### 1. QR Code Generation
+- Tạo QR code với định dạng: `zalo://user/{userId}`
+- Màu QR code: Primary color (#0068FF)
+- Kích thước: 512x512 pixels (full view), 256x256 (preview)
+- Hiển thị thông tin user (avatar, tên, bio)
+
+### 2. QR Wallet (Ví QR)
+- Truy cập từ tab "Cá nhân" → menu "Ví QR"
+- Xem preview mã QR của mình
+- Nút "Quét mã QR" để mở scanner
+- Nút "Chia sẻ" và "Lưu QR"
+
+### 3. My QR Code Activity
+- Hiển thị mã QR đầy đủ với profile card
+- 3 action buttons: Chia sẻ, Lưu ảnh, Quét mã
+- Gradient background (#0068FF → #00C4FF)
+- Pull-to-refresh để tạo lại mã
+
+### 4. QR Scanner Integration
+- Quét mã `zalo://user/{userId}` → mở ProfileCardActivity
+- Quét link web → dialog confirm mở browser
+- Quét số điện thoại → dialog confirm gọi điện
+- Quét text → dialog copy to clipboard
+
+---
+
+## QR Code Format
+
+```
+Deep Link Format: zalo://user/{firebase_user_id}
+
+Example: zalo://user/abc123xyz789
+
+Khi quét sẽ mở ProfileCardActivity với:
+- EXTRA_USER_ID = "abc123xyz789"
+- EXTRA_IS_EDITABLE = false
+```
+
+---
+
+## User Flows
+
+### Flow 1: Tạo và Chia sẻ QR
+
+```
+PersonalFragment 
+    → Click "Ví QR" menu
+    → QrWalletFragment (xem preview QR)
+    → Click card QR hoặc nút Chia sẻ
+    → MyQRCodeActivity (full QR)
+    → Click "Chia sẻ"
+    → Intent chooser (Messenger, Zalo, Email, etc.)
+```
+
+### Flow 2: Quét QR để Thêm Bạn
+
+```
+QrWalletFragment / MyQRCodeActivity
+    → Click "Quét mã"
+    → QRScanActivity (camera scanner)
+    → Quét mã zalo://user/xxx
+    → Dialog confirm "Mở trang cá nhân?"
+    → ProfileCardActivity (view profile)
+    → Có thể gửi kết bạn từ đây
+```
+
+### Flow 3: Lưu QR vào Thư viện
+
+```
+MyQRCodeActivity
+    → Click "Lưu ảnh"
+    → Request permission (Android 9-)
+    → Save to Pictures/ZaloQR/
+    → Toast "Đã lưu QR code vào thư viện ảnh"
+```
+
+---
+
+## Files Structure
+
+### New Files Created
+
+**Layouts:**
+- `res/layout/fragment_qr_wallet.xml` - QR Wallet Fragment layout
+- `res/layout/activity_my_qr_code.xml` - Full QR Code Activity layout
+
+**Drawables:**
+- `res/drawable/bg_qr_frame.xml` - QR preview frame
+- `res/drawable/bg_gradient_qr.xml` - Profile card gradient
+- `res/drawable/bg_avatar_circle_white.xml` - Avatar border
+- `res/drawable/bg_circle_light_blue.xml` - Action button background
+- `res/drawable/bg_circle_white.xml` - Logo background
+- `res/drawable/ic_qr_scan.xml` - Scan QR icon
+- `res/drawable/ic_download.xml` - Download icon
+- `res/drawable/ic_share.xml` - Share icon
+- `res/drawable/ic_refresh.xml` - Refresh icon
+- `res/drawable/ic_app_logo_qr.xml` - App logo for QR center
+
+**Menu:**
+- `res/menu/menu_my_qr.xml` - MyQRCodeActivity toolbar menu
+
+**Java:**
+- `ui/qr/MyQRCodeActivity.java` - Full QR display and actions
+
+### Modified Files
+
+**Java:**
+- `ui/personal/QrWalletFragment.java` - Complete rewrite từ placeholder
+- `ui/personal/ProfileCardActivity.java` - Connect shareQRCode() → MyQRCodeActivity
+
+**XML:**
+- `AndroidManifest.xml` - Add MyQRCodeActivity declaration
+- `res/xml/file_paths.xml` - Add cache/images path for FileProvider
+
+---
+
+## Technical Implementation
+
+### QR Code Generation (ZXing)
+
+```java
+private void generateQRCode() {
+    String qrContent = "zalo://user/" + currentUserId;
+    
+    QRCodeWriter writer = new QRCodeWriter();
+    int size = 512;
+    BitMatrix bitMatrix = writer.encode(qrContent, BarcodeFormat.QR_CODE, size, size);
+
+    Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+    
+    int primaryColor = ContextCompat.getColor(this, R.color.primary);
+    int whiteColor = ContextCompat.getColor(this, R.color.white);
+    
+    for (int x = 0; x < size; x++) {
+        for (int y = 0; y < size; y++) {
+            bitmap.setPixel(x, y, bitMatrix.get(x, y) ? primaryColor : whiteColor);
+        }
+    }
+    
+    ivQrCode.setImageBitmap(bitmap);
+}
+```
+
+### QR Scanning Handler
+
+```java
+private void handleScanResult(String scannedData) {
+    if (scannedData.startsWith("zalo://user/")) {
+        String userId = scannedData.replace("zalo://user/", "");
+        showOpenAppDialog(
+            "Zalo Profile",
+            "Mở trang cá nhân người dùng?",
+            R.drawable.ic_avatar,
+            () -> openUserProfile(userId)
+        );
+    }
+    // ... other handlers for web links, phone numbers, etc.
+}
+```
+
+### Save QR to Gallery
+
+```java
+private void saveQRToGallery() {
+    String fileName = "ZaloQR_" + System.currentTimeMillis() + ".png";
+    
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        // Android 10+ - Use MediaStore
+        ContentValues values = new ContentValues();
+        values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
+        values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+        values.put(MediaStore.Images.Media.RELATIVE_PATH, 
+            Environment.DIRECTORY_PICTURES + "/ZaloQR");
+        
+        Uri uri = getContentResolver().insert(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+        OutputStream outputStream = getContentResolver().openOutputStream(uri);
+        qrCodeBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream);
+    } else {
+        // Android 9 and below - Direct file write
+        File directory = new File(Environment.getExternalStoragePublicDirectory(
+            Environment.DIRECTORY_PICTURES), "ZaloQR");
+        File file = new File(directory, fileName);
+        FileOutputStream outputStream = new FileOutputStream(file);
+        qrCodeBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream);
+    }
+}
+```
+
+### Share QR via FileProvider
+
+```java
+private void shareQRCode() {
+    // Save to cache
+    File cachePath = new File(getCacheDir(), "images");
+    cachePath.mkdirs();
+    File file = new File(cachePath, "qr_code.png");
+    
+    FileOutputStream stream = new FileOutputStream(file);
+    qrCodeBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
+    stream.close();
+
+    // Get URI via FileProvider
+    Uri contentUri = FileProvider.getUriForFile(this,
+        getPackageName() + ".fileprovider", file);
+
+    // Share intent
+    Intent shareIntent = new Intent(Intent.ACTION_SEND);
+    shareIntent.setType("image/png");
+    shareIntent.putExtra(Intent.EXTRA_STREAM, contentUri);
+    shareIntent.putExtra(Intent.EXTRA_TEXT, 
+        "Quét mã QR để xem trang cá nhân của " + userName + " trên Zalo");
+    shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+    
+    startActivity(Intent.createChooser(shareIntent, "Chia sẻ QR code"));
+}
+```
+
+---
+
+## Dependencies
+
+Đã có sẵn trong `build.gradle.kts`:
+
+```kotlin
+// ZXing for QR code scanning & generation
+implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+implementation("com.google.zxing:core:3.5.3")
+```
+
+---
+
+## Permissions
+
+```xml
+<!-- Camera for QR scanning (already declared) -->
+<uses-permission android:name="android.permission.CAMERA"/>
+
+<!-- Storage for saving QR (Android 9 and below) -->
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+    android:maxSdkVersion="28" />
+```
+
+**Runtime Permission Handling:**
+- Camera: Requested in QRScanActivity
+- Storage (Android ≤9): Requested in MyQRCodeActivity before save
+- Storage (Android 10+): No permission needed (Scoped Storage)
+
+---
+
+## UI/UX Design
+
+### QR Wallet Fragment
+
+```
+┌──────────────────────────────────────┐
+│ ← Ví QR                              │ ← Toolbar
+├──────────────────────────────────────┤
+│ ┌────────────────────────────────┐   │
+│ │ 🔲 QR của tôi           →      │   │
+│ │    Quét mã để thêm bạn         │   │
+│ │                                │   │
+│ │    ┌──────────────┐            │   │
+│ │    │   QR Code    │            │   │
+│ │    │   Preview    │            │   │
+│ │    └──────────────┘            │   │
+│ │    ○ Avatar  Tên User          │   │
+│ └────────────────────────────────┘   │
+│                                      │
+│ ┌────────────────────────────────┐   │
+│ │ 📷 Quét mã QR           →      │   │
+│ │    Quét để thêm bạn hoặc mở... │   │
+│ └────────────────────────────────┘   │
+│                                      │
+│ [  Chia sẻ QR  ] [   Lưu QR    ]    │
+│                                      │
+│ Mã QR của bạn chứa liên kết đến...  │
+└──────────────────────────────────────┘
+```
+
+### My QR Code Activity
+
+```
+┌──────────────────────────────────────┐
+│ ← QR của tôi                    🔄   │ ← Toolbar + Refresh
+├──────────────────────────────────────┤
+│         ┌──────────────────────┐     │
+│         │  ░░░░░ Gradient ░░░░ │     │
+│         │         ○            │     │ ← Avatar (80dp)
+│         │     Tên User         │     │
+│         │    (Optional Bio)    │     │
+│         │  ┌──────────────┐    │     │
+│         │  │              │    │     │
+│         │  │   QR Code    │    │     │
+│         │  │   (200dp)    │    │     │
+│         │  │              │    │     │
+│         │  └──────────────┘    │     │
+│         │ Quét mã để xem...    │     │
+│         └──────────────────────┘     │
+│                                      │
+│    ⬆️        📥        📷          │
+│  Chia sẻ    Lưu ảnh   Quét mã       │
+│                                      │
+│ Mã QR này chứa liên kết đến...      │
+└──────────────────────────────────────┘
+```
+
+---
+
+## Colors & Styling
+
+| Element | Color |
+|---------|-------|
+| Primary (QR dots) | `#0068FF` |
+| Gradient Start | `#0068FF` |
+| Gradient Center | `#0084FF` |
+| Gradient End | `#00C4FF` |
+| Text Primary | `#000000` |
+| Text Secondary | `#757575` |
+| Action Button BG | `#E8F4FD` |
+| Card Background | `#FFFFFF` |
+
+---
+
+## Testing Checklist
+
+### QR Generation
+- [ ] QR code tạo đúng với userId hiện tại
+- [ ] QR hiển thị đúng màu primary
+- [ ] Preview QR trong QrWalletFragment
+- [ ] Full QR trong MyQRCodeActivity
+- [ ] User info (name, avatar, bio) hiển thị đúng
+
+### QR Sharing
+- [ ] Chia sẻ qua Messenger
+- [ ] Chia sẻ qua Zalo
+- [ ] Chia sẻ qua Email
+- [ ] Share text kèm theo ảnh
+
+### QR Saving
+- [ ] Lưu trên Android 10+ (Scoped Storage)
+- [ ] Lưu trên Android 9- (với permission request)
+- [ ] Ảnh xuất hiện trong thư viện Photos
+- [ ] Folder ZaloQR được tạo
+
+### QR Scanning
+- [ ] Quét mã zalo://user/xxx → mở ProfileCardActivity
+- [ ] Quét link http/https → mở browser
+- [ ] Quét số điện thoại → mở dialer
+- [ ] Quét text khác → hiện nội dung + copy
+
+### Navigation
+- [ ] PersonalFragment → QrWalletFragment
+- [ ] QrWalletFragment → MyQRCodeActivity
+- [ ] QrWalletFragment → QRScanActivity
+- [ ] ProfileCardActivity → MyQRCodeActivity (menu)
+- [ ] Back navigation từ tất cả screens
+
+---
+
+## Known Limitations
+
+1. **No Logo in QR Center**
+   - Logo center trong QR code hiện đang ẩn (có thể implement thêm)
+   - Cần tạo QR với error correction level H để đặt logo
+
+2. **Static QR**
+   - QR không có timestamp/expiry
+   - Một userId = một QR vĩnh viễn
+
+3. **Offline Limitation**
+   - Không thể quét QR khi offline (cần mở ProfileCardActivity với data)
+
+---
+
+## Future Enhancements
+
+1. **QR với Logo**
+   - Đặt app logo ở giữa QR code
+   - Sử dụng error correction level H
+
+2. **QR Animations**
+   - Hiệu ứng scan line trong QRScanActivity
+   - Fade-in animation khi QR được tạo
+
+3. **QR History**
+   - Lưu lại các QR đã quét
+   - Quick access từ QR Wallet
+
+4. **Multiple QR Types**
+   - QR cho group invite
+   - QR cho payment (nếu có)
+   - QR cho business card
+
+5. **QR Customization**
+   - Chọn màu QR
+   - Chọn style (dots, rounded, etc.)
+   - Thêm frame/border decorative
+
+---
+
+## Related Documentation
+
+- [26_feature_personal-tab-profile.txt](26_feature_personal-tab-profile.txt) - Personal Tab & Profile
+- [VOICE_MESSAGE_INTEGRATION_GUIDE.md](../VOICE_MESSAGE_INTEGRATION_GUIDE.md) - Media sharing patterns

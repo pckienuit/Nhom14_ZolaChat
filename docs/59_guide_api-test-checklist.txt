@@ -1,0 +1,105 @@
+# ✅ API Test Ready Checklist
+
+## Pre-Test Setup
+
+- [ ] Backend server running: `cd server && npm start`
+- [ ] Android Studio Gradle synced
+- [ ] Emulator/device running
+- [ ] Logged into app with Firebase account
+
+## Test Steps
+
+### 1. Launch App
+- [ ] App opens successfully
+- [ ] See green "🔧 API Test" button in top-right corner
+
+### 2. Open API Test Activity
+- [ ] Tap "🔧 API Test" button
+- [ ] ApiTestActivity opens
+- [ ] See initialization logs:
+  ```
+  === API Test Activity ===
+  Base URL: http://10.0.2.2:3000/api/
+  Firebase User: [your-email]
+  User ID: [your-uid]
+  ✅ Authenticated
+  ```
+
+### 3. Test Auth Verify
+- [ ] Tap "Test Auth Verify" button
+- [ ] See success response:
+  ```
+  Testing /api/auth/verify...
+  ✅ Success! Response:
+  Valid: true
+  UID: [your-uid]
+  Response code: 200
+  ```
+
+### 4. Test Get User
+- [ ] Tap "Test Get Current User" button
+- [ ] See user data response:
+  ```
+  ✅ Success! User data:
+  ID: [your-uid]
+  Name: [your-name]
+  Email: [your-email]
+  Online: true
+  Response code: 200
+  ```
+
+## Troubleshooting
+
+### If button doesn't appear:
+- Check you're running DEBUG build (not RELEASE)
+- Check BuildConfig.DEBUG in code
+- Rebuild app: Build → Rebuild Project
+
+### If "Network Error":
+- Verify server running: `http://localhost:3000/health`
+- Check emulator using 10.0.2.2 (not localhost)
+- Check AndroidManifest has `usesCleartextTraffic="true"`
+
+### If "401 Unauthorized":
+- Logout and login again
+- Check Firebase user exists
+- Check Logcat for "Firebase token retrieved"
+
+## Success Criteria
+
+✅ All 3 tests pass with HTTP 200
+✅ No network errors
+✅ Firebase token working
+✅ Server responding correctly
+
+## Next Steps After Success
+
+1. Document test results (screenshot)
+2. Migrate ChatRepository to use API
+3. Implement WebSocket for real-time
+4. Remove test button code (search "TEMPORARY")
+
+## Quick Commands
+
+Start server:
+```bash
+cd D:\DoAn_ZaloClone\server
+npm start
+```
+
+View logs:
+```bash
+adb logcat | findstr "ApiTestActivity RetrofitClient OkHttp"
+```
+
+Rebuild app:
+```
+Build → Rebuild Project
+```
+
+## Removing Test Button Later
+
+Search for "TEMPORARY" in MainActivity.java and delete:
+1. `addApiTestButton()` method call
+2. Entire `addApiTestButton()` method
+3. Build → Clean Project
