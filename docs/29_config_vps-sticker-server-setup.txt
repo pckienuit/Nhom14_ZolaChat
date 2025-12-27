@@ -1,0 +1,233 @@
+# Hướng Dẫn Setup VPS cho Sticker Server
+
+Tài liệu này hướng dẫn setup VPS để host sticker files và AI background removal service.
+
+## Thông tin VPS
+- **IP**: 163.61.182.20
+- **RAM**: 2GB
+- **SSD**: 16GB
+- **OS**: Ubuntu/Debian (khuyến nghị)
+
+## Bước 1: Upload script lên VPS
+
+Từ máy local (Windows), mở Command Prompt hoặc PowerShell:
+
+```bash
+# SSH vào VPS (nhập password khi được hỏi)
+ssh root@163.61.182.20
+
+# Nếu chưa có SSH key, upload script bằng SCP
+# Từ máy local trong thư mục DoAn_ZaloClone:
+scp scripts/setup_vps_sticker_server.sh root@163.61.182.20:/root/
+```
+
+## Bước 2: Chạy script setup
+
+Trong SSH session trên VPS:
+
+```bash
+# Di chuyển vào thư mục root
+cd /root
+
+# Cấp quyền thực thi cho script
+chmod +x setup_vps_sticker_server.sh
+
+# Chạy script (sẽ mất 5-10 phút)
+./setup_vps_sticker_server.sh
+```
+
+Script sẽ tự động:
+1. Cài đặt Apache2, PHP, Node.js, Python
+2. Tạo cấu trúc thư mục `/var/www/stickers/`
+3. Setup Node.js upload service (port 3001)
+4. Setup Python rembg service (port 5000)
+5. Cấu hình Apache proxy và CORS
+6. Tạo systemd services để tự khởi động
+
+## Bước 3: Kiểm tra services
+
+```bash
+# Kiểm tra Apache
+systemctl status apache2
+
+# Kiểm tra upload service
+systemctl status sticker-upload
+
+# Kiểm tra rembg service
+systemctl status rembg
+
+# Test API endpoints
+curl http://163.61.182.20/api/stickers/health
+curl http://163.61.182.20/api/rembg/health
+```
+
+Kết quả mong đợi:
+```json
+// Upload service health
+{"status":"ok","timestamp":"2025-12-22T..."}
+
+// Rembg health
+{"status":"ok","model":"u2netp","memory_used_percent":45.2,"memory_available_mb":1100}
+```
+
+## Bước 4: Test upload sticker
+
+Từ Android app hoặc dùng Postman:
+
+```bash
+# Test upload sticker
+curl -X POST http://163.61.182.20/api/stickers/upload \
+  -F "sticker=@test_image.png" \
+  -F "userId=test_user_123"
+  
+# Test background removal
+curl -X POST http://163.61.182.20/api/rembg \
+  -F "image=@photo.jpg" \
+  --output result.png
+```
+
+## Bước 5: Upload sample sticker packs (optional)
+
+Tạo thư mục sample pack:
+
+```bash
+cd /var/www/stickers/official
+
+# Tạo sample pack
+mkdir pack_001
+cd pack_001
+
+# Download hoặc upload các sticker files vào đây
+# Có thể dùng wget hoặc scp
+wget https://example.com/sticker_001.webp
+# hoặc từ local:
+# scp sticker_001.webp root@163.61.182.20:/var/www/stickers/official/pack_001/
+
+# Set permissions
+chown -R www-data:www-data /var/www/stickers/
+chmod -R 755 /var/www/stickers/
+```
+
+## Troubleshooting
+
+### Lỗi: Apache không start
+
+```bash
+# Kiểm tra logs
+journalctl -u apache2 -n 50
+
+# Kiểm tra syntax config
+apachectl configtest
+
+# Restart Apache
+systemctl restart apache2
+```
+
+### Lỗi: rembg service out of memory
+
+```bash
+# Giảm memory limit hoặc dùng model nhẹ hơn
+# Edit service file
+nano /etc/systemd/system/rembg.service
+
+# Thay đổi Environment=REMBG_MODEL=u2netp thành silueta (nhẹ hơn)
+Environment=REMBG_MODEL=silueta
+
+# Reload và restart
+systemctl daemon-reload
+systemctl restart rembg
+```
+
+### Lỗi: Upload Service connection refused
+
+```bash
+# Kiểm tra service status
+systemctl status sticker-upload
+
+# Kiểm tra logs để debug
+journalctl -u sticker-upload -f
+
+# Restart service
+systemctl restart sticker-upload
+```
+
+### Kiểm tra disk space
+
+```bash
+# Kiểm tra dung lượng còn lại
+df -h
+
+# Kiểm tra dung lượng sticker folder
+du -sh /var/www/stickers/
+
+# Xóa temp files nếu cần
+rm -rf /var/www/stickers/temp/*
+```
+
+## Firewall & Security
+
+Nếu VPS có firewall, cần mở port 80:
+
+```bash
+# UFW (Ubuntu Firewall)
+ufw allow 80/tcp
+ufw allow 22/tcp  # SSH
+ufw enable
+
+# hoặc iptables
+iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+iptables-save
+```
+
+## Monitoring
+
+```bash
+# Kiểm tra resource usage
+htop
+
+# Hoặc basic
+top
+
+# Memory usage
+free -h
+
+# Disk I/O
+iotop
+```
+
+## Backup
+
+Định kỳ backup sticker files:
+
+```bash
+# Nén và lưu
+tar -czf stickers_backup_$(date +%Y%m%d).tar.gz /var/www/stickers/
+
+# Copy về local hoặc cloud storage
+scp stickers_backup_*.tar.gz user@backup-server:/backups/
+```
+
+## Cập nhật khi có thay đổi
+
+Nếu cần update code service:
+
+```bash
+# Node.js service
+cd /opt/sticker-upload-service
+nano server.js  # Edit
+systemctl restart sticker-upload
+
+# Python rembg service
+cd /opt/rembg-service
+source venv/bin/activate
+nano main.py  # Edit
+deactivate
+systemctl restart rembg
+```
+
+## Liên hệ
+
+Nếu gặp vấn đề, check logs ở:
+- Apache: `/var/log/apache2/sticker_error.log`
+- Upload service: `journalctl -u sticker-upload`
+- Rembg service: `journalctl -u rembg`

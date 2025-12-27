@@ -1,0 +1,302 @@
+# API Server Deployment Complete! 🎉
+
+**Date:** December 25, 2025  
+**Status:** ✅ SUCCESSFUL
+
+---
+
+## 📊 Deployment Summary
+
+### ✅ Components Deployed
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| **Node.js** | ✅ Running | v18.20.8 |
+| **PM2** | ✅ Running | Process: zaloclone-api (PID: 16359) |
+| **API Server** | ✅ Online | Port 3000, Uptime: 3+ minutes |
+| **Nginx** | ✅ Active | Reverse proxy configured |
+| **Dependencies** | ✅ Installed | 278 npm packages |
+| **Environment** | ✅ Configured | .env + Firebase key |
+
+---
+
+## 🌐 Endpoints
+
+### Internal (VPS)
+```
+http://localhost:3000/health
+```
+
+### External (via Nginx)
+```
+http://api.zolachat.site/health (HTTP only for now)
+```
+
+⚠️ **SSL Note:** Certificate setup needs DNS resolution for `api.zolachat.site` → `163.61.182.20`
+
+---
+
+## 📁 Deployment Paths
+
+```
+API Server:     /opt/zaloclone-api/
+Main File:      /opt/zaloclone-api/src/index.js
+Config:         /opt/zaloclone-api/.env
+Firebase Key:   /opt/zaloclone-api/serviceAccountKey.json
+Nginx Config:   /etc/nginx/sites-enabled/zaloclone-api
+Logs:           /var/log/nginx/zaloclone-api-*.log
+```
+
+---
+
+## 🔧 Server Status
+
+### PM2 Process
+```
+┌────┬───────────────┬─────────┬────────┬────────┐
+│ id │ name          │ status  │ uptime │ memory │
+├────┼───────────────┼─────────┼────────┼────────┤
+│ 0  │ zaloclone-api │ online  │ 3m     │ 70.3mb │
+└────┴───────────────┴─────────┴────────┴────────┘
+```
+
+### Health Check Response
+```json
+{
+  "status": "ok",
+  "timestamp": 1766636714313,
+  "uptime": 212.09,
+  "memory": {
+    "rss": "70 MB",
+    "heapUsed": "21 MB",
+    "heapTotal": "23 MB"
+  },
+  "websocket": {
+    "connected": 0
+  },
+  "routes": {
+    "auth": "/api/auth",
+    "users": "/api/users",
+    "chats": "/api/chats",
+    "conversations": "/api/conversations",
+    "calls": "/api/calls",
+    "friends": "/api/friends",
+    "stickers": "/api/stickers",
+    "messages": "/api/messages"
+  },
+  "version": "1.0.0"
+}
+```
+
+---
+
+## 📝 What Was Deployed
+
+### 1. **Improved index.js**
+- ✅ Enhanced `/health` endpoint with metrics
+- ✅ Memory usage tracking
+- ✅ WebSocket connection count
+- ✅ Route listing
+- ✅ Server uptime
+
+### 2. **Complete Server Code**
+- All routes (auth, users, chats, conversations, calls, friends, stickers, messages)
+- WebSocket support
+- Firebase integration
+- Rate limiting
+- CORS configuration
+
+### 3. **Infrastructure**
+- PM2 process manager
+- Nginx reverse proxy
+- Security headers
+- Logging configured
+
+---
+
+## ⚠️ Known Issues
+
+### 1. **SSL Certificate**
+**Issue:** SSL not configured yet  
+**Reason:** DNS `api.zolachat.site` not resolving to VPS  
+**Solution:** Setup DNS A record first, then run:
+```bash
+ssh root@163.61.182.20
+certbot --nginx -d api.zolachat.site
+```
+
+### 2. **Apache2 Conflict**
+**Issue:** Apache2 was using port 80  
+**Solution:** ✅ Disabled Apache2, using Nginx now
+
+### 3. **Node Version Warning**
+**Issue:** Some Firebase packages prefer Node 20+  
+**Current:** Node 18.20.8  
+**Impact:** Minor - packages still work, just warnings
+
+---
+
+## 🚀 Next Steps
+
+### Immediate (Required for HTTPS)
+
+1. **Setup DNS**
+   ```
+   Type: A
+   Name: api
+   Value: 163.61.182.20
+   TTL: Auto
+   ```
+
+2. **Get SSL Certificate** (after DNS propagates)
+   ```bash
+   ssh root@163.61.182.20
+   certbot --nginx -d api.zolachat.site
+   ```
+
+3. **Test HTTPS**
+   ```bash
+   curl https://api.zolachat.site/health
+   ```
+
+### Optional Improvements
+
+4. **Setup PM2 Startup**
+   ```bash
+   pm2 startup systemd
+   # Run the command it outputs
+   pm2 save
+   ```
+
+5. **Enable Monitoring**
+   ```bash
+   pm2 install pm2-logrotate
+   pm2 set pm2-logrotate:max_size 10M
+   ```
+
+6. **Setup Firewall** (if not already)
+   ```bash
+   ufw allow 80/tcp
+   ufw allow 443/tcp
+   ufw enable
+   ```
+
+---
+
+## 📊 Useful Commands
+
+### PM2 Management
+```bash
+ssh root@163.61.182.20
+
+# View logs
+pm2 logs zaloclone-api
+
+# Restart server
+pm2 restart zaloclone-api
+
+# Monitor performance
+pm2 monit
+
+# Check status
+pm2 status
+```
+
+### Nginx Management
+```bash
+# Test config
+nginx -t
+
+# Reload config
+systemctl reload nginx
+
+# View logs
+tail -f /var/log/nginx/zaloclone-api-access.log
+tail -f /var/log/nginx/zaloclone-api-error.log
+```
+
+### Update Server Code
+```bash
+# From Windows
+cd D:\DoAn_ZaloClone
+.\scripts\upload-and-update-api.ps1
+```
+
+---
+
+## 🔍 Verification Checklist
+
+- [x] Server code uploaded to `/opt/zaloclone-api/`
+- [x] npm packages installed
+- [x] .env file configured
+- [x] Firebase serviceAccountKey.json uploaded
+- [x] PM2 installed and running
+- [x] API server started (port 3000)
+- [x] Nginx installed and configured
+- [x] Reverse proxy working
+- [x] Health endpoint responding
+- [ ] DNS configured for api.zolachat.site
+- [ ] SSL certificate obtained
+- [ ] HTTPS working
+
+---
+
+## 📈 Performance Metrics
+
+**Current:**
+- **Memory Usage:** 70 MB
+- **Uptime:** Stable
+- **Response Time:** Fast (local)
+- **Connections:** 0 WebSocket clients
+
+**Limits Configured:**
+- **Rate Limit:** 100 requests per 15 minutes
+- **Request Size:** 10MB max
+- **Timeout:** 60 seconds
+
+---
+
+## 🎯 Success Criteria
+
+✅ **All Met:**
+1. Server accessible on localhost:3000 ✅
+2. PM2 managing process ✅
+3. Nginx reverse proxy working ✅
+4. Health endpoint returning metrics ✅
+5. All routes available ✅
+
+⏳ **Pending DNS:**
+6. HTTPS access via api.zolachat.site ⏳
+
+---
+
+## 📞 Troubleshooting
+
+### If server stops responding:
+```bash
+ssh root@163.61.182.20
+pm2 logs zaloclone-api --lines 100
+pm2 restart zaloclone-api
+```
+
+### If Nginx issues:
+```bash
+nginx -t
+systemctl status nginx
+tail -f /var/log/nginx/error.log
+```
+
+### If need to rollback:
+```bash
+cd /opt/zaloclone-api/backups
+ls -la
+# Find backup file
+cp index.js.backup.TIMESTAMP /opt/zaloclone-api/src/index.js
+pm2 restart zaloclone-api
+```
+
+---
+
+**Deployment completed successfully! 🚀**
+
+The API server is now running and ready to serve requests. Complete DNS setup and SSL for full production readiness.

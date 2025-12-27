@@ -1,0 +1,46 @@
+# Real-time Message Preview Implementation
+
+## 1. Problem Description
+The application failed to update the conversation preview on the Home screen in real-time when a new message was received. Users had to manually refresh or restart the app to see the latest message content in the conversation list.
+
+## 2. Root Cause Analysis
+
+### 2.1 Server-Side Issues
+- **Missing WebSocket Notification for Offline/Home Screen Users:** The server only emitted `new_message` events to the specific conversation room (`conversation:{id}`). Users on the Home screen are not joined to these rooms (they only join when opening the chat).
+- **Incorrect Endpoint Modification:** Initial fixes were applied to `/api/messages`, but the mobile app actually uses `/api/chats/:id/messages` for sending messages.
+- **Field Name Mismatch:** The server code attempted to access `conversationDoc.data().members`, but the Firestore data schema uses `memberIds`. This caused an empty recipient list, resulting in zero notifications being sent.
+
+### 2.2 Client-Side Issues
+- **Single Listener Limitation:** The `SocketManager` previously supported only one message listener, causing conflicts between `ChatRepository` (chat screen) and `ConversationRepository` (home screen).
+- **Missing Interface Method:** `ConversationRepository`'s anonymous `OnMessageListener` lacked the `onMessageDeleted` method implementation, causing compilation errors.
+- **Race Conditions:** `HomeFragment` sometimes refreshed the conversation list *before* Firestore had finished indexing the new message, resulting in stale data being fetched from the API.
+
+## 3. Implementation Details
+
+### 3.1 Server-Side Fixes (`server/src/routes/chats.js`)
+- Added logic to fetch conversation members when a new message is sent.
+- Implemented a robust member field check supporting legacy and new schemas:
+  ```javascript
+  const members = data.memberIds || data.participantIds || data.participants || [];
+  ```
+- Emitted `new_message` event to individual user rooms (`user:{userId}`) in addition to the conversation room.
+
+### 3.2 Client-Side Fixes
+- **SocketManager:** Refactored to support multiple listeners using `CopyOnWriteArrayList`.
+- **ConversationRepository:**
+    - Registered a global `OnMessageListener` to trigger UI updates.
+    - Implemented `onMessageDeleted` to comply with the interface.
+- **HomeFragment:**
+    - implemented an observer for `conversationRefreshNeeded`.
+    - Added a **1000ms delay** before calling the refresh API to allow for Firestore indexing latency.
+    - Added socket connection checks in `onResume` to ensure reliable connectivity.
+
+## 4. Verification
+- **Test:** Use a separate client or API tool to send a message to a user currently on the Home screen.
+- **Result:** The Home screen displays a "🔔 New message! Updating..." toast (debug) and automatically refreshes the conversation list to show the new message preview within 1 second.
+
+## 5. Related Files
+- `server/src/routes/chats.js`: Message creation and notification logic.
+- `app/.../websocket/SocketManager.java`: Client-side socket management.
+- `app/.../repository/ConversationRepository.java`: Global message listening.
+- `app/.../ui/home/HomeFragment.java`: UI observation and refresh logic.

@@ -6,6 +6,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     
+    <!-- Permission to display over other apps (for incoming calls) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    
     <!-- Location permissions for location sharing -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -27,6 +30,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -40,6 +46,7 @@
     <application
         android:name=".ZaloApplication"
         android:allowBackup="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -75,6 +82,7 @@
         <activity
             android:name=".ui.room.RoomActivity"
             android:exported="false"
+            android:windowSoftInputMode="adjustResize"
             android:parentActivityName=".MainActivity" />
             
         <!-- Create Group Activity -->
@@ -115,6 +123,7 @@
             android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="adjustResize" />
             
+<<<<<<< HEAD
         <!-- Comments Activity -->
         <activity
             android:name=".activities.CommentsActivity"
@@ -123,6 +132,35 @@
             android:windowSoftInputMode="adjustResize" />
             
         <!-- Profile Card Activity -->
+=======
+        <!-- Create Sticker Activity -->
+        <activity
+            android:name=".ui.sticker.CreateStickerActivity"
+            android:exported="false"
+            android:hardwareAccelerated="true"
+            android:parentActivityName=".ui.room.RoomActivity"
+            android:windowSoftInputMode="adjustResize" />
+            
+        <!-- UCrop Activity - for image cropping in sticker creation -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+            
+        <!-- Sticker Store Activity -->
+        <activity
+            android:name=".ui.sticker.StickerStoreActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.room.RoomActivity" />
+
+        <activity
+            android:name=".ui.sticker.MyStickerActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.sticker.StickerStoreActivity" />
+            
+                <!-- Profile Card Activity -->
+>>>>>>> main
         <activity
             android:name=".ui.personal.ProfileCardActivity"
             android:exported="false"
@@ -142,6 +180,55 @@
             android:hardwareAccelerated="true"
             android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
             
+        <!-- API Test Activity -->
+        <activity
+            android:name=".ApiTestActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:label="API Test" />
+            
+        <!-- WebSocket Test Activity -->
+        <activity
+            android:name=".WebSocketTestActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:label="WebSocket Test" />
+            
+        <!-- Friend Request Activity -->
+        <activity
+            android:name=".ui.contact.FriendRequestActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+            
+        <!-- Add Friend Activity -->
+        <activity
+            android:name=".ui.contact.AddFriendActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+            
+        <!-- QR Scan Activity -->
+        <activity
+            android:name=".ui.qr.QRScanActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+            
+        <!-- My QR Code Activity -->
+        <activity
+            android:name=".ui.qr.MyQRCodeActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+            
+        <!-- Birthday List Activity -->
+        <activity
+            android:name=".ui.contact.BirthdayListActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+
         <!-- Call Activity -->
         <activity
             android:name=".ui.call.CallActivity"
@@ -157,7 +244,11 @@
         <service
             android:name=".services.IncomingCallService"
             android:exported="false"
-            android:foregroundServiceType="camera|microphone" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="incomingCall" />
+        </service>
             
         <!-- Ongoing Call Service -->
         <service
@@ -170,6 +261,12 @@
             android:name=".services.LocationSharingService"
             android:exported="false"
             android:foregroundServiceType="location" />
+            
+        <!-- Notification Service - Maintains WebSocket connection in background -->
+        <service
+            android:name=".services.NotificationService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
             
         <!-- FileProvider for sharing downloaded files -->
         <provider

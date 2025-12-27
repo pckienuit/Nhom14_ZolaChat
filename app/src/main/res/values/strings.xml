@@ -1,5 +1,5 @@
-<resources>
-    <string name="app_name">DoAn_ZaloClone</string>
+﻿<resources>
+    <string name="app_name">Zola</string>
     <string name="no_files">Không có file nào</string>
     
     <!-- File Management Strings -->
@@ -97,4 +97,10 @@
     <string name="dialog_send_contact_search_hint">Tìm kiếm bạn bè...</string>
     <string name="button_call">Gọi điện</string>
     <string name="error_load_contact">Không thể tải thông tin danh thiếp</string>
+    
+    <!-- Sticker Strings -->
+    <string name="back">Quay lại</string>
+    <string name="create_sticker">Tạo sticker</string>
+    <string name="sticker">Sticker</string>
+    <string name="delete">Xóa</string>
 </resources>

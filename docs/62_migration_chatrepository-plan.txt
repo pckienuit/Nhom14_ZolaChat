@@ -1,0 +1,167 @@
+# ChatRepository Migration Plan
+
+## Current Status
+ChatRepository has 1603 lines with extensive features:
+- Text messages, images, files, stickers
+- Location sharing (static & live)
+- Contact cards (business cards)
+- Polls
+- Message reactions
+- Reply/Forward
+- Edit/Recall/Delete
+- Message pinning
+
+## Migration Strategy: **Incremental Hybrid Approach**
+
+### Phase 1: Core Migration (NOW)
+Migrate ONLY essential read/write operations to API + WebSocket:
+
+**1. sendMessage() → API Call**
+- Change from Firestore write → POST /api/chats/:conversationId/messages
+- Keep all existing logic (file uploads, reply, forward, etc.)
+- API will broadcast to WebSocket automatically
+
+**2. listenToMessages() → WebSocket Listener**
+- Change from Firestore snapshot → WebSocket "new_message" event
+- Initial load via API: GET /api/chats/:conversationId/messages
+- Real-time updates via Socket.IO
+
+### Phase 2: Keep Hybrid for Complex Features (LATER)
+These will remain Firestore for now (migrate later if needed):
+- ❌ updateMessage() - message edits
+- ❌ deleteMessage() - message deletions
+- ❌ addReaction() - reactions
+- ❌ votePoll() - poll voting
+- ❌ pinMessage() - message pinning
+
+**Why hybrid?**
+- These features have complex Firestore transactions
+- Backend API endpoints exist but not tested
+- Safer to migrate core features first, verify, then extend
+
+## Implementation Plan
+
+### Step 1: Update sendMessage()
+```java
+// OLD: Firestore write
+messageRef.set(messageData)
+    .addOnSuccessListener(...)
+
+// NEW: API call
+Call<ApiResponse<Message>> call = apiService.sendMessage(
+    conversationId,
+    new SendMessageRequest(message)
+);
+call.enqueue(new Callback<>() {
+    @Override
+    public void onResponse(...) {
+        // Message sent successfully
+        // Backend will broadcast via WebSocket
+    }
+});
+```
+
+### Step 2: Update listenToMessages()
+```java
+// OLD: Firestore listener
+firestore.collection("conversations")
+    .document(conversationId)
+    .collection("messages")
+    .orderBy("timestamp")
+    .addSnapshotListener(...)
+
+// NEW: Initial load + WebSocket
+// 1. Load initial messages via API
+apiService.getMessages(conversationId, limit, lastMessageId)
+    .enqueue(...);
+
+// 2. Listen for new messages via WebSocket
+socketManager.setMessageListener(messageData -> {
+    // Parse and add to message list
+});
+socketManager.joinConversation(conversationId);
+```
+
+### Step 3: Update updateConversationLastMessage()
+```java
+// May need API call or keep Firestore for now
+// Backend updates this automatically when message sent
+// Consider removing this method entirely
+```
+
+## Files to Modify
+
+1. **ChatRepository.java**
+   - Inject ApiService
+   - Inject SocketManager
+   - Update sendMessage()
+   - Update listenToMessages()
+   - Add hybrid flag/comments
+
+2. **RoomActivity.java** (if needed)
+   - Ensure WebSocket connected
+   - Join conversation on open
+   - Leave conversation on close
+
+## Testing Strategy
+
+### Before Migration:
+- ✅ Send message works (Firestore)
+- ✅ Messages display real-time (Firestore listener)
+
+### After Migration:
+- ✅ Send message via API works
+- ✅ Message appears in sender's chat immediately
+- ✅ Message appears in receiver's chat via WebSocket
+- ✅ Typing indicators work
+- ✅ All message types still work (text, image, file, etc.)
+
+### Rollback Plan:
+Keep old Firestore code commented, easy to revert if issues.
+
+## Risk Mitigation
+
+**Low Risk:**
+- sendMessage() - Simple API call
+- Backend already tested and working
+
+**Medium Risk:**
+- listenToMessages() - Need to handle initial load + real-time
+- Message ordering must be correct
+- WebSocket reconnection must re-sync
+
+**Mitigation:**
+- Feature flag to toggle API vs Firestore
+- Extensive logging
+- Keep old code available for quick rollback
+
+## Success Criteria
+
+Phase 1 migration successful if:
+1. ✅ Can send text message via API
+2. ✅ Message saved to Firestore (by backend)
+3. ✅ Sender sees message immediately
+4. ✅ Receiver gets message via WebSocket in real-time
+5. ✅ All existing message types still work
+6. ✅ No regressions in UI/UX
+
+## Timeline
+
+- **sendMessage() migration**: 30 mins
+- **listenToMessages() migration**: 45 mins
+- **Testing**: 30 mins
+- **Bug fixes**: 30 mins
+- **Total**: ~2-2.5 hours
+
+## Next Phases (Future)
+
+After core migration stable:
+- Phase 2: Migrate updateMessage, deleteMessage
+- Phase 3: Migrate reactions
+- Phase 4: Migrate polls
+- Phase 5: Remove all Firestore direct access
+- Phase 6: Tighten Firestore security rules
+
+---
+
+**Current Focus: Migrate sendMessage() and listenToMessages() ONLY**

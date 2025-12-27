@@ -23,24 +23,24 @@ public class LoginActivity extends AppCompatActivity {
     private Button loginButton;
     private TextView signUpTextView;
     private ProgressBar progressBar;
-    
+
     private AuthRepository authRepository;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
+
         authRepository = new AuthRepository();
         boolean fromLogout = getIntent().getBooleanExtra("FROM_LOGOUT", false);
-        
+
         if (!fromLogout && authRepository.isAuthenticated()) {
             navigateToMain();
             return;
         }
-        
+
         initializeLoginScreen();
     }
-    
+
     private void initializeLoginScreen() {
         setContentView(R.layout.activity_login);
         initViews();
@@ -53,7 +53,7 @@ public class LoginActivity extends AppCompatActivity {
         loginButton = findViewById(R.id.loginButton);
         signUpTextView = findViewById(R.id.signUpTextView);
         progressBar = findViewById(R.id.progressBar);
-        
+
         if (progressBar != null) {
             progressBar.setVisibility(View.GONE);
         }
@@ -61,7 +61,7 @@ public class LoginActivity extends AppCompatActivity {
 
     private void setupListeners() {
         loginButton.setOnClickListener(v -> handleLogin());
-        
+
         signUpTextView.setOnClickListener(v -> {
             Intent intent = new Intent(LoginActivity.this, SignUpActivity.class);
             startActivity(intent);
@@ -104,7 +104,7 @@ public class LoginActivity extends AppCompatActivity {
             }
         });
     }
-    
+
     private void showLoading(boolean isLoading) {
         if (progressBar != null) {
             progressBar.setVisibility(isLoading ? View.VISIBLE : View.GONE);
@@ -113,7 +113,7 @@ public class LoginActivity extends AppCompatActivity {
         emailEditText.setEnabled(!isLoading);
         passwordEditText.setEnabled(!isLoading);
     }
-    
+
     private void navigateToMain() {
         Intent intent = new Intent(LoginActivity.this, MainActivity.class);
         startActivity(intent);

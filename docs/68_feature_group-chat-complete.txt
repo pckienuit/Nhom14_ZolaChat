@@ -1,0 +1,443 @@
+# Tính Năng Nhóm Chat - Tổng Hợp Đầy Đủ
+
+## Tổng quan 4 Phases
+
+### ✅ Phase 1: Backend & Data Models (Hoàn thành)
+- Mở rộng model Conversation hỗ trợ nhóm chat
+- Thêm FirestoreManager.createGroupConversation()
+- Thêm ChatRepository.createGroup()
+
+### ✅ Phase 2: Group Creation UI (Hoàn thành)
+- CreateGroupActivity - Tạo nhóm mới
+- SelectableFriendsAdapter - Chọn nhiều bạn bè
+- GroupViewModel - Xử lý logic tạo nhóm
+- Navigation từ ContactFragment
+
+### ✅ Phase 3: Chat Interface for Groups (Hoàn thành)
+- ConversationAdapter hiển thị icon nhóm và số thành viên
+- MessageAdapter hiển thị tên người gửi trong nhóm
+- RoomActivity phân biệt 1-1 chat và group chat
+- Logic giới hạn tin nhắn chỉ áp dụng cho 1-1 chat
+
+### ✅ Phase 4: Group Management (Hoàn thành)
+- GroupInfoActivity - Xem và quản lý thông tin nhóm
+- Thêm/xóa thành viên (admin only)
+- Đổi tên nhóm (admin only)
+- Rời nhóm / Xóa nhóm
+
+## Cấu trúc file tổng thể
+
+```
+app/src/main/
+├── java/com/example/doan_zaloclone/
+│   ├── models/
+│   │   ├── Conversation.java ⭐ (updated)
+│   │   └── GroupMember.java ⭐ (new)
+│   │
+│   ├── services/
+│   │   └── FirestoreManager.java ⭐ (updated)
+│   │
+│   ├── repository/
+│   │   └── ChatRepository.java ⭐ (updated)
+│   │
+│   ├── viewmodel/
+│   │   └── GroupViewModel.java ⭐ (updated)
+│   │
+│   └── ui/
+│       ├── group/ ⭐ (new package)
+│       │   ├── CreateGroupActivity.java
+│       │   ├── SelectableFriendsAdapter.java
+│       │   ├── GroupInfoActivity.java
+│       │   ├── GroupMemberAdapter.java
+│       │   └── AddGroupMemberActivity.java
+│       │
+│       ├── home/
+│       │   └── ConversationAdapter.java ⭐ (updated)
+│       │
+│       └── room/
+│           ├── RoomActivity.java ⭐ (updated)
+│           └── MessageAdapter.java ⭐ (updated)
+│
+└── res/
+    ├── layout/
+    │   ├── activity_create_group.xml ⭐
+    │   ├── activity_group_info.xml ⭐
+    │   ├── activity_add_group_member.xml ⭐
+    │   ├── item_selectable_friend.xml ⭐
+    │   ├── item_group_member.xml ⭐
+    │   ├── item_conversation.xml ⭐ (updated)
+    │   ├── item_message_received.xml ⭐ (updated)
+    │   ├── item_message_image_received.xml ⭐ (updated)
+    │   └── dialog_edit_text.xml ⭐
+    │
+    └── drawable/
+        ├── ic_group.xml ⭐
+        ├── ic_camera.xml ⭐
+        ├── ic_edit.xml ⭐
+        ├── ic_add.xml ⭐
+        ├── ic_close.xml ⭐
+        └── badge_background.xml ⭐
+```
+
+## Firestore Data Structure
+
+### Conversation Document (Group Chat)
+```json
+{
+  "id": "conv_123",
+  "type": "GROUP",
+  "name": "Nhóm Bạn Thân",
+  "adminId": "user_abc",
+  "memberIds": ["user_abc", "user_def", "user_ghi"],
+  "memberNames": {
+    "user_abc": "Nguyễn Văn A",
+    "user_def": "Trần Thị B",
+    "user_ghi": "Lê Văn C"
+  },
+  "avatarUrl": "https://...",
+  "lastMessage": "Hẹn gặp lúc 5h nhé!",
+  "timestamp": 1702468800000
+}
+```
+
+### Messages Subcollection
+```json
+{
+  "id": "msg_456",
+  "senderId": "user_def",
+  "content": "Chào mọi người!",
+  "type": "TEXT",
+  "timestamp": 1702468800000
+}
+```
+
+## API Methods
+
+### FirestoreManager
+```java
+// Phase 1
+void createGroupConversation(String adminId, String groupName, 
+    List<String> memberIds, OnConversationCreatedListener listener)
+
+// Phase 4
+void updateGroupName(String conversationId, String newName, 
+    OnGroupUpdatedListener listener)
+    
+void updateGroupAvatar(String conversationId, String avatarUrl, 
+    OnGroupUpdatedListener listener)
+    
+void addGroupMembers(String conversationId, List<String> memberIds, 
+    OnGroupUpdatedListener listener)
+    
+void removeGroupMember(String conversationId, String memberId, 
+    OnGroupUpdatedListener listener)
+    
+void leaveGroup(String conversationId, String userId, 
+    OnGroupUpdatedListener listener)
+    
+void deleteGroup(String conversationId, 
+    OnGroupUpdatedListener listener)
+```
+
+### ChatRepository
+```java
+// Phase 1
+LiveData<Resource<Conversation>> createGroup(String adminId, 
+    String groupName, List<String> memberIds)
+
+// Phase 4
+LiveData<Resource<Boolean>> updateGroupName(String conversationId, String newName)
+LiveData<Resource<Boolean>> updateGroupAvatar(String conversationId, String avatarUrl)
+LiveData<Resource<Boolean>> addGroupMembers(String conversationId, List<String> memberIds)
+LiveData<Resource<Boolean>> removeGroupMember(String conversationId, String memberId)
+LiveData<Resource<Boolean>> leaveGroup(String conversationId, String userId)
+LiveData<Resource<Boolean>> deleteGroup(String conversationId)
+```
+
+### GroupViewModel
+```java
+// Phase 2
+void createGroup(String adminId, String groupName, List<String> memberIds)
+LiveData<Resource<Conversation>> getCreateGroupResult()
+
+// Phase 4
+void updateGroupName(String conversationId, String newName)
+void updateGroupAvatar(String conversationId, String avatarUrl)
+void addGroupMembers(String conversationId, List<String> memberIds)
+void removeGroupMember(String conversationId, String memberId)
+void leaveGroup(String conversationId, String userId)
+void deleteGroup(String conversationId)
+LiveData<Resource<Boolean>> getUpdateResult()
+```
+
+## User Flows
+
+### 1. Tạo nhóm mới
+```
+ContactFragment
+    ↓ Click "Tạo nhóm"
+CreateGroupActivity
+    ↓ Nhập tên nhóm
+    ↓ Chọn thành viên (min 2)
+    ↓ Click "Tạo nhóm"
+RoomActivity (Group Chat)
+    ↓ Tự động mở phòng chat mới
+```
+
+### 2. Chat trong nhóm
+```
+HomeFragment
+    ↓ Click group conversation (có icon 👥)
+RoomActivity
+    ↓ Hiển thị tên người gửi trên mỗi tin nhắn
+    ↓ Toolbar: "Tên Nhóm (5)"
+    ↓ Gửi tin nhắn không giới hạn
+```
+
+### 3. Quản lý nhóm
+```
+RoomActivity (Group)
+    ↓ Click tên nhóm
+GroupInfoActivity
+    ↓ Admin: Thấy đầy đủ quyền
+    ↓ Member: Chỉ xem và rời nhóm
+    
+Admin actions:
+    - Đổi tên nhóm
+    - Thêm thành viên
+    - Xóa thành viên
+    - Xóa nhóm
+    
+Member actions:
+    - Xem thông tin
+    - Rời nhóm
+```
+
+## UI/UX Highlights
+
+### Conversation List (Phase 3)
+- **Group Icon**: Icon 👥 overlay trên avatar (20dp)
+- **Member Count**: Hiển thị "(N)" bên cạnh tên nhóm
+- **Group Name**: Tên nhóm do admin đặt
+
+### Chat Screen (Phase 3)
+- **Toolbar**: "Tên Nhóm (N thành viên)"
+- **Sender Name**: Tên người gửi màu primary, bold 12sp
+- **Message Layout**: Text và Image đều có sender name
+- **Click Behavior**: Click tên nhóm → Mở GroupInfoActivity
+
+### Group Info Screen (Phase 4)
+- **Header**: Avatar lớn 100dp, tên nhóm, số thành viên
+- **Admin Badge**: Badge "Quản trị viên" màu primary
+- **Member List**: Sắp xếp admin đầu tiên
+- **Action Buttons**: 
+  - Rời nhóm (màu gray)
+  - Xóa nhóm (màu đỏ, admin only)
+
+### Create Group Screen (Phase 2)
+- **Name Input**: TextInputLayout với hint "Tên nhóm"
+- **Friend List**: Checkbox multi-select
+- **Counter**: "N đã chọn" realtime update
+- **Create Button**: Disabled khi tên trống hoặc < 2 members
+
+## Quy tắc Business Logic
+
+### Tạo nhóm:
+- ✅ Tên nhóm không được để trống
+- ✅ Phải có ít nhất 2 thành viên
+- ✅ Admin phải nằm trong danh sách thành viên
+- ✅ Tự động tạo conversationId unique
+
+### Gửi tin nhắn:
+- ✅ Không giới hạn tin nhắn trong nhóm
+- ✅ Giới hạn 3 tin nhắn chỉ áp dụng cho 1-1 chat với non-friend
+- ✅ Hiển thị sender name trong group, không hiển thị trong 1-1
+
+### Quản lý thành viên:
+- ✅ Admin có thể thêm/xóa thành viên
+- ✅ Admin không thể xóa chính mình
+- ✅ Chỉ có 1 admin trong nhóm
+- ✅ Member thường chỉ có thể rời nhóm
+
+### Xóa nhóm:
+- ✅ Chỉ admin có quyền xóa
+- ✅ Xóa conversation document → Tất cả member không thấy nhóm
+- ✅ Messages subcollection vẫn tồn tại (có thể cleanup sau)
+
+## Testing Scenarios
+
+### Scenario 1: Tạo nhóm thành công
+```
+Given: Người dùng đang ở ContactFragment
+And: Có ít nhất 2 bạn bè
+When: Click "Tạo nhóm"
+And: Nhập tên "Nhóm Test"
+And: Chọn 2 bạn bè
+And: Click "Tạo nhóm"
+Then: Chuyển đến RoomActivity
+And: Hiển thị "Nhóm Test (3)" trên toolbar
+And: Có thể gửi tin nhắn ngay lập tức
+```
+
+### Scenario 2: Hiển thị sender name trong group
+```
+Given: Đang ở trong group chat
+When: User A gửi tin "Hello"
+Then: Tin nhắn hiển thị với "Nguyễn Văn A" ở trên
+When: User B gửi ảnh
+Then: Ảnh hiển thị với "Trần Thị B" ở trên
+```
+
+### Scenario 3: Admin xóa thành viên
+```
+Given: Đang ở GroupInfoActivity với vai trò admin
+And: Nhóm có 4 thành viên
+When: Click nút X bên cạnh member C
+And: Xác nhận "Xóa"
+Then: Member C biến mất khỏi danh sách
+And: Số thành viên cập nhật thành "(3)"
+And: Member C không thấy nhóm trong danh sách nữa
+```
+
+### Scenario 4: Member rời nhóm
+```
+Given: Đang ở GroupInfoActivity với vai trò member
+When: Click "Rời nhóm"
+And: Xác nhận "Rời nhóm"
+Then: Quay về MainActivity
+And: Nhóm biến mất khỏi danh sách conversations
+```
+
+### Scenario 5: Phân biệt 1-1 và Group
+```
+Given: Đang ở HomeFragment
+When: Click group conversation (có icon 👥)
+Then: RoomActivity hiển thị sender names
+And: Không có giới hạn tin nhắn
+When: Quay lại và click 1-1 conversation (không có icon 👥)
+Then: RoomActivity không hiển thị sender names
+And: Có giới hạn 3 tin nhắn nếu không phải bạn bè
+```
+
+## Performance Considerations
+
+### Tối ưu hóa đã áp dụng:
+1. **DiffUtil**: Trong GroupMemberAdapter và MessageAdapter
+2. **ViewHolder Pattern**: Tất cả RecyclerView Adapters
+3. **Batch Firestore Reads**: Load members song song, cập nhật 1 lần
+4. **Realtime Listeners**: Chỉ attach khi cần, remove trong onDestroy
+5. **Image Loading**: Glide với placeholder, tránh load lại
+
+### Cải thiện có thể làm:
+- [ ] Pagination cho danh sách thành viên (nếu nhóm > 100 người)
+- [ ] Cache member info trong memory
+- [ ] Debounce search trong AddGroupMemberActivity
+- [ ] Lazy load messages (hiện tại load tất cả)
+
+## Security Rules (Firestore)
+
+```javascript
+// Recommended Firestore Security Rules
+match /conversations/{conversationId} {
+  // Allow read if user is member
+  allow read: if request.auth.uid in resource.data.memberIds;
+  
+  // Allow create if user is in memberIds and is admin
+  allow create: if request.auth.uid == request.resource.data.adminId
+                && request.auth.uid in request.resource.data.memberIds;
+  
+  // Allow update if user is admin (for group management)
+  allow update: if request.auth.uid == resource.data.adminId;
+  
+  // Allow delete if user is admin
+  allow delete: if request.auth.uid == resource.data.adminId;
+  
+  match /messages/{messageId} {
+    // Allow read if user is member of conversation
+    allow read: if request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.memberIds;
+    
+    // Allow create if user is member
+    allow create: if request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.memberIds
+                  && request.auth.uid == request.resource.data.senderId;
+  }
+}
+```
+
+## Troubleshooting
+
+### Lỗi thường gặp:
+
+1. **"Nhóm phải có ít nhất 2 thành viên"**
+   - Nguyên nhân: Chọn < 2 bạn bè khi tạo nhóm
+   - Giải pháp: Chọn ít nhất 2 người
+
+2. **"Admin phải là thành viên của nhóm"**
+   - Nguyên nhân: Bug logic, admin không có trong memberIds
+   - Giải pháp: Đã fix - admin tự động được thêm vào
+
+3. **Sender name không hiển thị**
+   - Nguyên nhân: isGroupChat không được set
+   - Giải pháp: Kiểm tra RoomActivity.extractOtherUserIdAndCheckFriendship()
+
+4. **Group icon không hiển thị**
+   - Nguyên nhân: Conversation.type không phải "GROUP"
+   - Giải pháp: Kiểm tra FirestoreManager.createGroupConversation()
+
+5. **Không thấy nút admin**
+   - Nguyên nhân: isAdmin check sai
+   - Giải pháp: Verify Conversation.isAdmin(currentUserId)
+
+## Future Enhancements
+
+### Tính năng mở rộng (không triển khai trong 4 phases):
+
+1. **Transfer Admin**
+   - Cho phép admin chỉ định admin mới trước khi rời nhóm
+   - UI: Dialog chọn member
+
+2. **Group Notifications**
+   - Push notification khi được thêm vào nhóm
+   - Push notification khi bị xóa khỏi nhóm
+   - Push notification khi có tin nhắn mới
+
+3. **Group Avatar Upload**
+   - UI đã sẵn sàng
+   - Cần implement image picker + Firebase Storage upload
+
+4. **Group Settings**
+   - Cho phép member send messages hay chỉ admin
+   - Ai có thể add members (chỉ admin hay mọi người)
+   - Group description
+
+5. **Member Roles**
+   - Thêm role "Moderator" giữa Admin và Member
+   - Moderator có thể xóa tin nhắn, kick member
+
+6. **Search Messages**
+   - Tìm kiếm tin nhắn trong group
+   - Filter by sender, date, type
+
+7. **Pin Messages**
+   - Admin/Moderator pin tin nhắn quan trọng
+   - Hiển thị pinned messages ở đầu chat
+
+8. **Group Analytics**
+   - Số tin nhắn gửi/nhận
+   - Active members
+   - Storage usage
+
+## Kết luận
+
+Tính năng Group Chat đã được triển khai hoàn chỉnh qua 4 phases:
+- ✅ **Backend infrastructure** sẵn sàng
+- ✅ **UI/UX** đầy đủ và trực quan
+- ✅ **Permission system** rõ ràng (Admin vs Member)
+- ✅ **Integration** với toàn bộ app
+- ✅ **Testing** có thể bắt đầu ngay
+
+**Tổng số files mới/updated**: 25+ files
+**Tổng số methods mới**: 15+ methods
+**Thời gian triển khai**: 4 phases (Phase 1-4)
+**Test coverage**: 5 main scenarios documented
+
+Ứng dụng Zalo Clone đã có đầy đủ chức năng Group Chat chuyên nghiệp! 🎉

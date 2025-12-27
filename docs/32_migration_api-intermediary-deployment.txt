@@ -1,0 +1,330 @@
+================================================================================
+HƯỚNG DẪN TRIỂN KHAI API TRUNG GIAN (API Intermediary Deployment Guide)
+================================================================================
+
+NGÀY TẠO: 24/12/2024
+MỤC ĐÍCH: Hướng dẫn chi tiết deploy backend API server lên VPS
+
+================================================================================
+1. CHUẨN BỊ VPS
+================================================================================
+
+VPS Specs đã xác nhận:
+- IP: 163.61.182.20
+- CPU: 2 cores
+- RAM: 4GB
+- OS: Ubuntu 20.04/22.04 LTS
+- Subdomain: api.zolachat.site
+
+1.1. SSH VÀO VPS
+----------------
+```bash
+ssh root@163.61.182.20
+```
+
+1.2. CHẠY SETUP SCRIPT
+----------------------
+Upload file `server/setup-vps.sh` lên VPS và chạy:
+
+```bash
+chmod +x setup-vps.sh
+./setup-vps.sh
+```
+
+Script sẽ tự động cài:
+- Node.js 18 LTS
+- Nginx
+- PM2
+- Redis
+- Certbot (SSL)
+
+================================================================================
+2. DEPLOY API SERVER
+================================================================================
+
+2.1. CLONE CODE
+---------------
+```bash
+cd /opt
+git clone https://github.com/your-username/DoAn_ZaloClone.git zaloclone-api
+cd zaloclone-api/server
+```
+
+2.2. CÀI DEPENDENCIES
+--------------------
+```bash
+npm install
+```
+
+2.3. COPY FIREBASE SERVICE ACCOUNT KEY
+--------------------------------------
+Upload `serviceAccountKey.json` từ Firebase Console lên VPS:
+
+**Từ máy local:**
+```bash
+scp serviceAccountKey.json root@163.61.182.20:/opt/zaloclone-api/server/
+```
+
+**Trên VPS:**
+```bash
+cd /opt/zaloclone-api/server
+chmod 600 serviceAccountKey.json  # Bảo mật file
+```
+
+2.4. TẠO FILE .ENV
+------------------
+```bash
+cp .env.example .env
+nano .env
+```
+
+Chỉnh sửa các giá trị:
+```bash
+PORT=3000
+NODE_ENV=production
+ALLOWED_ORIGINS=https://zolachat.site,https://www.zolachat.site
+FIREBASE_SERVICE_ACCOUNT_PATH=./serviceAccountKey.json
+```
+
+Lưu lại (Ctrl+X, Y, Enter)
+
+2.5. TEST CHẠY SERVER
+---------------------
+```bash
+npm start
+```
+
+Mở tab mới SSH vào VPS và test:
+```bash
+curl http://localhost:3000/health
+```
+
+Nếu thấy response {"status":"ok",...} là OK. Dừng server (Ctrl+C).
+
+2.6. CHẠY VỚI PM2
+-----------------
+```bash
+pm2 start src/index.js --name zaloclone-api
+pm2 logs zaloclone-api  # Xem logs
+pm2 save               # Lưu config
+pm2 startup            # Auto start on reboot
+```
+
+Chạy command mà PM2 print ra (thường là systemctl enable pm2-root)
+
+================================================================================
+3. CẤU HÌNH NGINX
+================================================================================
+
+3.1. COPY NGINX CONFIG
+----------------------
+```bash
+cp /opt/zaloclone-api/server/nginx-api.conf /etc/nginx/sites-available/zaloclone-api
+ln -s /etc/nginx/sites-available/zaloclone-api /etc/nginx/sites-enabled/
+```
+
+3.2. TEST NGINX CONFIG
+----------------------
+```bash
+nginx -t
+```
+
+Phải thấy "syntax is ok" và "test is successful"
+
+3.3. RELOAD NGINX
+-----------------
+```bash
+systemctl reload nginx
+```
+
+================================================================================
+4. CẤU HÌNH DNS
+================================================================================
+
+Vào DNS provider (Cloudflare, etc.) và thêm A record:
+
+**Type:** A
+**Name:** api
+**Value:** 163.61.182.20
+**TTL:** Auto
+
+Đợi DNS propagate (5-10 phút), test:
+```bash
+ping api.zolachat.site
+```
+
+================================================================================
+5. CÀI ĐẶT SSL (HTTPS)
+================================================================================
+
+5.1. GET SSL CERTIFICATE
+-------------------------
+```bash
+certbot --nginx -d api.zolachat.site
+```
+
+Nhập email và đồng ý Terms of Service.
+
+Certbot sẽ tự động update Nginx config để dùng SSL.
+
+5.2. TEST HTTPS
+---------------
+```bash
+curl https://api.zolachat.site/health
+```
+
+Phải thấy response JSON.
+
+5.3. AUTO-RENEW SSL
+-------------------
+Certbot đã tự động setup cron job để renew. Test:
+```bash
+certbot renew --dry-run
+```
+
+================================================================================
+6. VERIFICATION
+================================================================================
+
+6.1. TEST API ENDPOINTS
+-----------------------
+
+**Health check:**
+```bash
+curl https://api.zolachat.site/health
+```
+
+**Auth verify (với Firebase token):**
+```bash
+curl -H "Authorization: Bearer YOUR_FIREBASE_TOKEN" \
+     https://api.zolachat.site/api/auth/verify
+```
+
+6.2. TEST WEBSOCKET
+-------------------
+Dùng tool như `wscat` hoặc test từ browser console.
+
+6.3. MONITOR LOGS
+-----------------
+```bash
+pm2 logs zaloclone-api
+tail -f /var/log/nginx/zaloclone-api-access.log
+tail -f /var/log/nginx/zaloclone-api-error.log
+```
+
+================================================================================
+7. BẢO MẬT
+================================================================================
+
+7.1. FIREWALL
+-------------
+Đã setup trong script, verify:
+```bash
+ufw status
+```
+
+7.2. FAIL2BAN (Optional)
+------------------------
+Cài Fail2Ban để chống brute force:
+```bash
+apt-get install -y fail2ban
+systemctl enable fail2ban
+systemctl start fail2ban
+```
+
+================================================================================
+8. MONITORING & MAINTENANCE
+================================================================================
+
+8.1. KIỂM TRA SERVER STATUS
+---------------------------
+```bash
+pm2 status
+pm2 monit  # Real-time monitoring
+```
+
+8.2. RESTART SERVER
+-------------------
+```bash
+pm2 restart zaloclone-api
+```
+
+8.3. XEM RESOURCE USAGE
+-----------------------
+```bash
+htop
+```
+
+8.4. REDIS STATUS
+-----------------
+```bash
+redis-cli ping  # Should return PONG
+```
+
+================================================================================
+9. TROUBLESHOOTING
+================================================================================
+
+9.1. Server không start
+-----------------------
+```bash
+pm2 logs zaloclone-api --lines 100
+```
+
+Kiểm tra:
+- serviceAccountKey.json có đúng path không
+- .env có đầy đủ config không
+- Port 3000 có conflict không: `netstat -tulpn | grep 3000`
+
+9.2. Nginx 502 Bad Gateway
+--------------------------
+- Kiểm tra Node.js server có chạy không: `pm2 status`
+- Kiểm tra port: `curl http://localhost:3000/health`
+- Xem Nginx error log: `tail -f /var/log/nginx/error.log`
+
+9.3. SSL certificate issue
+---------------------------
+```bash
+certbot certificates
+certbot renew --force-renewal
+```
+
+================================================================================
+10. UPDATE & DEPLOY CHANGES
+================================================================================
+
+Khi có code mới:
+
+```bash
+cd /opt/zaloclone-api
+git pull origin main
+cd server
+npm install  # Nếu có dependencies mới
+pm2 restart zaloclone-api
+```
+
+Hoặc dùng PM2 ecosystem file cho zero-downtime deployment.
+
+================================================================================
+11. BACKUP STRATEGY
+================================================================================
+
+11.1. Backup Firebase Service Account Key
+-----------------------------------------
+```bash
+cp /opt/zaloclone-api/server/serviceAccountKey.json ~/backups/
+```
+
+11.2. Backup .env
+-----------------
+```bash
+cp /opt/zaloclone-api/server/.env ~/backups/
+```
+
+================================================================================
+DONE! 🎉
+================================================================================
+
+API Server should now be running at: https://api.zolachat.site
+
+Next step: Migrate Android app to use this API (Phase 3)

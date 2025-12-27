@@ -1,0 +1,93 @@
+# UI Theme Updates - Zalo Clone
+
+## Overview
+Updated the ZaloClone application and web interfaces to use a consistent light theme with Zalo blue primary colors.
+
+## Changes Made
+
+### 1. Android App - Disabled Dark Theme
+**Files Modified:**
+- `app/src/main/res/values/themes.xml`
+- `app/src/main/res/values-night/themes.xml`
+
+**Changes:**
+- Changed parent theme from `Theme.Material3.DayNight.NoActionBar` to `Theme.Material3.Light.NoActionBar`
+- This forces the app to always use light theme regardless of system settings
+
+### 2. Admin Web - Light Theme
+**Files Modified:**
+- `admin-web/css/style.css`
+- `admin-web/css/dashboard.css`
+
+**Color Scheme Updated:**
+```css
+/* OLD (Dark Theme) */
+--primary: #6366f1;
+--bg-dark: #0f172a;
+--bg-card: #1e293b;
+--text-primary: #f1f5f9;
+
+/* NEW (Light Theme - Zalo Blue) */
+--primary: #0068FF;
+--bg-light: #FFFFFF;
+--bg-card: #FFFFFF;
+--text-primary: #000000;
+```
+
+**Specific Updates:**
+- Login page background: Changed from dark gradient to light blue gradient (#E5F7FF)
+- Input fields: Changed background from dark to white
+- Cards and containers: Updated to white background with light gray borders
+- Active navigation: Updated to use Zalo blue with 10% opacity
+- Focus states: Updated box-shadow to use Zalo blue
+- List items: Changed from dark background to light gray (#F2F4F7)
+
+### 3. Landing Page - Zalo Blue
+**File Modified:**
+- `landing-page/index.html`
+
+**Changes:**
+- Updated primary color from `#0088cc` to `#0068FF` (Zalo blue)
+- Updated secondary color from `#006699` to `#0055CC`
+- Updated accent color from `#00aaff` to `#258AF5`
+
+## Color Palette - Zalo Theme
+
+### Primary Colors
+- **Primary Blue**: `#0068FF` - Main brand color
+- **Primary Dark**: `#0055CC` - Darker variant for hovers
+- **Primary Light**: `#258AF5` - Lighter variant for accents
+- **Background**: `#FFFFFF` - Pure white
+- **Background Gray**: `#F2F4F7` - Light gray for sections
+
+### Text Colors  
+- **Primary Text**: `#000000` - Black for main text
+- **Secondary Text**: `#757575` - Gray for secondary info
+- **Muted Text**: `#9ca3af` - Lighter gray for hints
+
+### UI Elements
+- **Border**: `#E0E0E0` - Light gray borders
+- **Success**: `#10b981` - Green for success states
+- **Warning**: `#f59e0b` - Orange for warnings
+- **Danger**: `#ef4444` - Red for errors/destructive actions
+
+## Benefits
+
+1. **Consistency**: All interfaces now share the same color scheme and theme
+2. **Brand Identity**: Strong Zalo blue (#0068FF) creates recognizable brand identity
+3. **Accessibility**: Light theme with proper contrast ratios
+4. **User Experience**: No jarring theme switches, consistent experience across app and web
+
+## Testing Recommendations
+
+1. **Android App**: Test that dark theme is properly disabled in system settings
+2. **Admin Web**: Verify all pages (login, dashboard, users, stickers, API docs)
+3. **Landing Page**: Check hero section, features, and footer
+4. **Cross-browser**: Test on Chrome, Firefox, Safari
+5. **Responsive**: Test on mobile, tablet, and desktop viewports
+
+## Future Considerations
+
+- If dark theme support is needed later, create a proper dark mode with inverted colors
+- Consider adding theme toggle option for accessibility
+- Maintain color variables for easy future theme updates

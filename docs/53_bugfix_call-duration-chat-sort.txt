@@ -1,0 +1,57 @@
+# Bug Fix: Call Duration Discrepancy & Chat Sorting
+
+## 1. Call Duration Discrepancy
+
+### 1.1 Problem Description
+During a voice or video call, the call duration timer displayed on the caller's and receiver's devices showed different values, sometimes varying by several seconds. This discrepancy was caused by each device starting its local timer independently upon entering the `CONNECTED` state.
+
+### 1.2 Root Cause Analysis
+- **Local Timer Initiation:** The `CallActivity` started the duration timer based on the exact moment the local device received the `STATUS_CONNECTED` update.
+- **Network Latency:** Due to network conditions and the nature of WebRTC ICE handshaking, the `CONNECTED` state is reached at slightly different times for each peer.
+- **Lack of Synchronization:** There was no shared "start time" reference in the Firestore `Call` document used for synchronization.
+
+### 1.3 Implementation Details
+To resolve this, we implemented a synchronized start time mechanism:
+
+1.  **Model Update (`Call.java`):**
+    - Added a `connectedAt` field (long timestamp) to the `Call` model.
+
+2.  **Repository Update (`CallRepository.java`):**
+    - Added `updateCallStatusWithTimestamp` to atomically update the call status and the `connectedAt` timestamp.
+
+3.  **ViewModel Logic (`CallViewModel.java`):**
+    - Modified the `onConnected` callback.
+    - When the WebRTC connection is established, the app checks if `connectedAt` is already set on the server.
+    - If not set, the first device to connect updates the status to `ONGOING` and sets `connectedAt` to the current server time (approximated by `System.currentTimeMillis()` of the first peer).
+
+4.  **UI Synchronization (`CallActivity.java`):**
+    - Creating a "Sync" mechanism in `setupObservers`. When the `Call` object is updated from Firestore, the activity checks for a non-zero `connectedAt` value.
+    - If `connectedAt` exists, the local `callStartTime` is updated to match the server's `connectedAt`.
+    - The timer now calculates duration as `CurrentTime - SharedConnectedAt`, ensuring both devices display the same duration regardless of when they locally started the timer.
+
+## 2. Chat Sorting Issue
+
+### 2.1 Problem Description
+Conversations with new messages were not moving to the top of the conversation list in real-time. They remained in their original position based on creation time.
+
+### 2.2 Root Cause Analysis
+- **Sorting Logic:** The `conversations` query on the server (and potentially client) sorts results by the `timestamp` field.
+- **Update Logic:** When a new message was sent, the server code (`chats.js`) updated `lastMessage` and `lastMessageTime`, but **failed to update the `timestamp` field** of the conversation document.
+- **Result:** Since `timestamp` (conversation creation time) remained unchanged, the sort order did not change.
+
+### 2.3 Implementation Details
+- **Server Update (`server/src/routes/chats.js`):**
+    - Modified the conversation update implementation to explicitly set `timestamp: message.timestamp` whenever a new message is added.
+    - This ensures that the conversation with the most recent activity always has the highest timestamp value, placing it at the top of the descending sort order.
+
+```javascript
+    await db.collection('conversations').doc(conversationId).update({
+      lastMessage: content || `[${type}]`,
+      lastMessageTime: message.timestamp,
+      timestamp: message.timestamp // Added: Update timestamp for sorting
+    });
+```
+
+## 3. Verification
+- **Call Timer:** Start a call between two devices. Wait for connection. Verify that the seconds counter stays synchronized (allowing for minor refresh rate differences).
+- **Chat Sort:** Send a message to an old conversation. Verify that conversation moves to the top of the Home screen list immediately after refresh.

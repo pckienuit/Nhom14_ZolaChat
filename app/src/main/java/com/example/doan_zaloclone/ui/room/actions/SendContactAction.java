@@ -9,17 +9,22 @@ import com.example.doan_zaloclone.R;
  * Allows users to share friend profiles in chat
  */
 public class SendContactAction implements QuickAction {
-    
+
     @Override
     public int getIconResId() {
         return R.drawable.ic_contact_card;
     }
-    
-   @Override
+
+    @Override
     public String getLabel() {
         return "Danh thiếp";
     }
-    
+
+    @Override
+    public int getBackgroundColor() {
+        return android.graphics.Color.parseColor("#00BCD4"); // Cyan
+    }
+
     @Override
     public void execute(Context context, QuickActionCallback callback) {
         // Trigger UI to show contact selection dialog

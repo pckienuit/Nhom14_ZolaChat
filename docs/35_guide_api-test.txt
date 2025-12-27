@@ -1,0 +1,269 @@
+================================================================================
+HƯỚNG DẪN TEST API LAYER
+================================================================================
+
+Ngày: 24/12/2024
+Mục đích: Verify API connectivity và authentication trước khi migrate repositories
+
+================================================================================
+CHUẨN BỊ
+================================================================================
+
+1. **Đảm bảo Backend Server đang chạy:**
+   ```bash
+   cd D:\DoAn_ZaloClone\server
+   npm start
+   ```
+   
+   Kết quả mong đợi:
+   ```
+   ✅ Firebase Admin SDK initialized
+   ✅ WebSocket server initialized
+   ==========================================
+   ZaloClone API Server
+   HTTP Server: http://localhost:3000
+   ==========================================
+   ```
+
+2. **Sync Gradle:**
+   - Open Android Studio
+   - File → Sync Project with Gradle Files
+   - Đợi dependencies download (Retrofit, Gson, OkHttp, Socket.IO)
+
+3. **Đăng nhập vào app:**
+   - Chạy app trên emulator
+   - Login bằng account Firebase test
+   - Đảm bảo có Firebase user authenticated
+
+================================================================================
+CÁCH MỞ API TEST ACTIVITY
+================================================================================
+
+Option 1: Từ Code (Recommended)
+-------------------------------
+Tạm thời add button vào MainActivity hoặc HomeFragment:
+
+```java
+// In MainActivity onCreate() or HomeFragment onViewCreated()
+Button btnApiTest = new Button(this);
+btnApiTest.setText("API Test");
+btnApiTest.setOnClickListener(v -> {
+    Intent intent = new Intent(this, ApiTestActivity.class);
+    startActivity(intent);
+});
+// Add button to layout manually
+```
+
+Option 2: Từ ADB Command
+-------------------------
+```bash
+adb shell am start -n com.example.doan_zaloclone/.ApiTestActivity
+```
+
+Option 3: Temporary Launcher (Quick Test)
+------------------------------------------
+Tạm thời thay đổi AndroidManifest để ApiTestActivity làm LAUNCHER:
+(ĐỂ Test một lần rồi revert lại ngay!)
+
+================================================================================
+CÁC BƯỚC TEST
+================================================================================
+
+Khi ApiTestActivity mở ra:
+
+Step 1: Kiểm tra thông tin hiển thị
+------------------------------------
+Màn hình sẽ hiển thị:
+```
+=== API Test Activity ===
+
+Base URL: http://10.0.2.2:3000/api/
+Firebase User: [your-email]
+User ID: [your-uid]
+✅ Authenticated
+
+--- Ready to test ---
+```
+
+Verify:
+- ✅ Base URL đúng (10.0.2.2 cho emulator)
+- ✅ Firebase User có hiển thị email
+- ✅ ✅ Authenticated xuất hiện
+
+Step 2: Test Auth Verify Endpoint
+----------------------------------
+1. Nhấn button "Test Auth Verify"
+2. Xem logs hiển thị:
+
+KẾT QUẢ MONG ĐỢI:
+```
+Testing /api/auth/verify...
+✅ Success! Response:
+Valid: true
+UID: [your-uid]
+Response code: 200
+```
+
+KẾT QUẢ LỖI (nếu có):
+```
+❌ Failed: HTTP 401
+Message: Unauthorized
+```
+→ Lý do: Firebase token invalid hoặc expired
+→ Giải pháp: Logout và login lại app
+
+```
+❌ Network Error: Failed to connect to /10.0.2.2:3000
+```
+→ Lý do: Backend server không chạy
+→ Giải pháp: Start server: npm start
+
+Step 3: Test Get User Endpoint
+-------------------------------
+1. Nhấn button "Test Get Current User"
+2. Xem logs hiển thị:
+
+KẾT QUẢ MONG ĐỢI:
+```
+Testing /api/users/:userId...
+Fetching user: [your-uid]
+✅ Success! User data:
+ID: [your-uid]
+Name: [your-name]
+Email: [your-email]
+Online: true
+Response code: 200
+```
+
+KẾT QUẢ LỖI (nếu có):
+```
+❌ Failed: HTTP 404
+Message: User not found
+```
+→ Lý do: User chưa tồn tại trong Firestore
+→ Giải pháp: Login lần đầu sẽ tự tạo user document
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Problem 1: "Network Error: Failed to connect"
+----------------------------------------------
+CAUSE: Backend server không chạy hoặc emulator không connect được
+
+SOLUTIONS:
+a) Verify server running:
+   - Check terminal có log "HTTP Server: http://localhost:3000"
+   - Test browser: http://localhost:3000/health
+
+b) Verify emulator network:
+   - Emulator dùng 10.0.2.2 thay vì localhost
+   - Real device cần WiFi cùng network + đổi BASE_URL
+
+c) Check Android usesCleartextTraffic:
+   - AndroidManifest.xml có android:usesCleartextTraffic="true"
+   - Đã có! (line 43)
+
+Problem 2: "HTTP 401 Unauthorized"
+-----------------------------------
+CAUSE: Firebase token invalid/expired
+
+SOLUTIONS:
+a) Logout và login lại app
+b) Check Logcat: "Firebase token retrieved successfully"
+c) Verify Firebase user: FirebaseAuth.getInstance().getCurrentUser()
+
+Problem 3: "HTTP 404 User not found"
+-------------------------------------
+CAUSE: User document chưa tồn tại trong Firestore
+
+SOLUTIONS:
+a) Login app lần đầu (AuthRepository tự tạo user)
+b) Hoặc tạo manual qua Firebase Console
+c) Check Firestore: collection "users" có document với user UID
+
+Problem 4: Gradle Sync Failed
+------------------------------
+CAUSE: Dependencies conflicts
+
+SOLUTIONS:
+a) File → Invalidate Caches → Restart
+b) Delete .gradle folder và sync lại
+c) Check internet connection
+
+================================================================================
+KIỂM TRA LOGS CHI TIẾT
+================================================================================
+
+Android Studio Logcat Filter:
+```
+ApiTestActivity
+RetrofitClient
+OkHttp
+```
+
+Backend Server Console:
+```
+[timestamp] GET /api/auth/verify        → Should see this
+[timestamp] GET /api/users/:userId      → Should see this
+```
+
+Firebase Token trong Logcat:
+```
+D/RetrofitClient: Firebase token retrieved successfully
+D/OkHttp: Authorization: Bearer eyJhbGc...
+```
+
+================================================================================
+KẾT QUẢ THÀNH CÔNG
+================================================================================
+
+Nếu ALL 3 tests PASS:
+✅ API layer hoạt động đúng
+✅ Firebase authentication working
+✅ Network connectivity OK
+✅ Server responding correctly
+
+→ SẴN SÀNG migrate repositories!
+
+================================================================================
+NEXT STEPS AFTER TESTING
+================================================================================
+
+1. Document test results
+2. Screenshot test activity (for reference)
+3. Begin ChatRepository migration
+4. Implement WebSocket for real-time messaging
+5. Test send/receive messages
+
+================================================================================
+QUICK COMMAND REFERENCE
+================================================================================
+
+Start Backend Server:
+$ cd D:\DoAn_ZaloClone\server && npm start
+
+Launch API Test Activity (ADB):
+$ adb shell am start -n com.example.doan_zaloclone/.ApiTestActivity
+
+View Logcat:
+$ adb logcat | findstr "ApiTestActivity RetrofitClient"
+
+Check Server Health:
+$ curl http://localhost:3000/health
+OR
+$ powershell -Command "Invoke-WebRequest http://localhost:3000/health"
+
+Kill Server:
+Ctrl+C in server terminal
+
+================================================================================
+NOTES
+================================================================================
+
+- Test activity là temporary tool, có thể remove sau khi migration xong
+- BASE_URL hiện đang hardcode, sau này có thể move vào BuildConfig
+- Logging level đang BODY (full logs), production nên giảm xuống BASIC
+- Emulator PHẢI dùng 10.0.2.2 (không dùng localhost hay 127.0.0.1)
+
+================================================================================

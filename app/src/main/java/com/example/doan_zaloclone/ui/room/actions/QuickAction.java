@@ -7,22 +7,32 @@ import android.content.Context;
  * Extensible design allows adding new actions easily
  */
 public interface QuickAction {
-    
+
     /**
      * Get the icon resource ID for this action
+     *
      * @return Drawable resource ID
      */
     int getIconResId();
-    
+
     /**
      * Get the label text for this action
+     *
      * @return Label string
      */
     String getLabel();
-    
+
+    /**
+     * Get the background color resource ID for this action
+     *
+     * @return Color resource ID or HEX color as int
+     */
+    int getBackgroundColor();
+
     /**
      * Execute this action
-     * @param context Android context
+     *
+     * @param context  Android context
      * @param callback Callback for action results
      */
     void execute(Context context, QuickActionCallback callback);

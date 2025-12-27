@@ -1,0 +1,50 @@
+================================================================================
+QUY ƯỚC ĐẶT TÊN FILE TÀI LIỆU ADMIN WEB (Documentation Naming Convention)
+================================================================================
+
+MỤC ĐÍCH
+--------
+Thống nhất cách đặt tên các file documentation (.txt) trong thư mục admin-web/docs/,
+giúp dễ quản lý, tìm kiếm và sắp xếp theo logic.
+
+
+NGUYÊN TẮC ĐẶT TÊN
+------------------
+
+Format: [số thứ tự]_[loại]_[tên-mô-tả].txt
+
+1. SỐ THỨ TỰ (2 chữ số: 01, 02, 03...)
+   - Giúp sắp xếp file theo thứ tự ưu tiên/thời gian
+   - File này (naming convention) là 00
+
+2. LOẠI TÀI LIỆU (category)
+   - feature: Tài liệu về tính năng mới
+   - architecture: Kiến trúc, design pattern
+   - config: Cấu hình, setup, deployment
+   - guide: Hướng dẫn sử dụng
+   - api: Tài liệu API endpoints
+
+3. TÊN MÔ TẢ
+   - Viết thường, không dấu
+   - Dùng dấu gạch ngang (-) thay khoảng trắng
+   - Ngắn gọn, mô tả rõ nội dung
+
+
+DANH SÁCH FILE HIỆN TẠI
+-----------------------
+
+00_NAMING_CONVENTION.txt           - File này (quy tắc đặt tên)
+01_architecture_project-structure.txt   - Cấu trúc dự án Admin Web
+02_config_deployment-guide.txt     - Hướng dẫn deploy lên VPS
+03_feature_authentication.txt      - Tính năng Authentication
+04_feature_sticker-management.txt  - Quản lý Sticker Packs
+05_feature_user-management.txt     - Quản lý người dùng
+06_api_sticker-upload.txt          - API upload stickers lên VPS
+
+
+CẬP NHẬT
+--------
+
+Tạo ngày: 23/12/2025
+Cập nhật lần cuối: 23/12/2025
+Tổng số file tài liệu: 7 files (bao gồm file này)

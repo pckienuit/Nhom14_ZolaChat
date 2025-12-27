@@ -1,0 +1,504 @@
+================================================================================
+QUẢN LÝ NGƯỜI DÙNG & TRẠNG THÁI REAL-TIME (User Management & Presence Tracking)
+================================================================================
+
+NGÀY TẠO: 23/12/2025
+NGÀY CẬP NHẬT: 24/12/2025
+LOẠI: Feature
+MÔ TẢ: Tính năng quản lý người dùng và theo dõi trạng thái online/offline real-time
+
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Tính năng cho phép Admin quản lý người dùng ứng dụng:
+- Xem danh sách tất cả users real-time
+- Theo dõi trạng thái online/offline
+- Tìm kiếm theo tên, email, số điện thoại
+- Lọc theo trạng thái (online, offline, banned)
+- Xem chi tiết user & thời gian hoạt động cuối
+- Ban/Unban user (tự động logout)
+- Force Logout từ xa
+- Reset password qua email
+- Chỉnh sửa thông tin user
+
+
+================================================================================
+2. GIAO DIỆN
+================================================================================
+
+2.1. LAYOUT CHÍNH
+-----------------
+- Sidebar navigation (bên trái)
+- Action bar (search, filter)
+- Data table hiển thị users real-time
+- Modal xem chi tiết user
+
+
+2.2. DATA TABLE
+---------------
+Các cột hiển thị:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Cột              │ Mô tả                                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Người dùng       │ Avatar + Tên (display name)                             │
+│ Email            │ Email đăng ký                                           │
+│ Số điện thoại    │ Số điện thoại (N/A nếu không có)                        │
+│ Trạng thái       │ Badge: Online / Offline (+ thời gian) / Bị khóa         │
+│ Ngày tham gia    │ Timestamp đăng ký                                       │
+│ Hoạt động cuối   │ "Đang hoạt động" hoặc timestamp + relative time         │
+│ Hành động        │ Nút: View details                                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+2.3. STATUS BADGES
+------------------
+- Online (green): User đang trực tuyến
+- Offline (gray): User offline + "5 phút trước", "2 giờ trước", etc.
+- Banned (red): User bị cấm
+
+
+2.4. MODAL CHI TIẾT USER
+------------------------
+Hiển thị:
+- Avatar lớn
+- ID, Tên, Email, Số điện thoại
+- Trạng thái (Online/Offline/Banned)
+- Ngày tham gia
+- Hoạt động cuối (timestamp chi tiết + relative time)
+
+Các nút hành động (buttons có kích thước bằng nhau):
+- Reset: Gửi email reset password
+- Sửa: Chỉnh sửa tên, email, số điện thoại
+- Logout: Force logout từ xa (đăng xuất khỏi mọi thiết bị)
+- Khóa/Mở khóa: Ban/Unban user + tự động logout
+
+
+================================================================================
+3. CHỨC NĂNG
+================================================================================
+
+3.1. TÌM KIẾM
+-------------
+- Search box tìm theo: name, email, phoneNumber
+- Realtime search với debounce 300ms
+- Không phân biệt hoa thường
+
+
+3.2. LỌC THEO TRẠNG THÁI
+------------------------
+- Tất cả
+- Online (hiện đang hoạt động)
+- Offline (không hoạt động)
+- Bị khóa
+
+
+3.3. XEM CHI TIẾT USER
+----------------------
+Click icon View → Modal hiển thị đầy đủ thông tin user và các hành động
+
+
+3.4. RESET PASSWORD
+-------------------
+- Click nút "Reset"
+- Confirm dialog
+- Gửi email reset password qua Firebase Auth
+- Alert thành công/thất bại
+
+
+3.5. CHỈNH SỬA THÔNG TIN
+------------------------
+- Click nút "Sửa" → Chế độ edit
+- Các field có thể chỉnh sửa:
+  * Tên (name)
+  * Email (email)
+  * Số điện thoại (phone)
+- Click "Lưu" để cập nhật Firestore
+- Click "Hủy" để rollback
+
+
+3.6. FORCE LOGOUT TỪ XA
+-----------------------
+**Chức năng mới - Đăng xuất từ xa**
+
+- Click nút "Logout" (màu đỏ)
+- Confirm dialog
+- Set field `forceLogoutAt: timestamp` vào Firestore
+- Android app tự động detect và logout ngay lập tức
+- Hiển thị toast thành công
+
+Cơ chế hoạt động:
+1. Admin click "Logout" → Update `forceLogoutAt` field
+2. Android app có listener realtime theo dõi user document
+3. Khi `forceLogoutAt > loginTimestamp` → Tự động sign out
+4. Hiển thị Toast: "Bạn đã bị đăng xuất bởi quản trị viên"
+5. Redirect về màn hình Login
+
+
+3.7. BAN USER (CẢI TIẾN)
+------------------------
+**Tính năng cải tiến - Tự động logout khi ban**
+
+- Click nút "Khóa" (màu vàng)
+- Confirm dialog
+- Thực hiện đồng thời:
+  * Set field `isBanned: true`
+  * Set field `bannedAt: timestamp`
+  * Set field `forceLogoutAt: timestamp` (để logout ngay)
+- User bị đăng xuất tức thì khỏi mọi thiết bị
+- User không thể đăng nhập lại (check tại AuthRepository)
+
+
+3.8. UNBAN USER
+---------------
+- Click nút "Mở khóa" (màu xanh)
+- Set field `isBanned: false`
+- Set field `bannedAt: null`
+- User có thể đăng nhập lại
+
+
+================================================================================
+4. TRẠNG THÁI ONLINE/OFFLINE REAL-TIME
+================================================================================
+
+4.1. HEARTBEAT MECHANISM (Android App)
+--------------------------------------
+**File:** AppLifecycleObserver.java
+
+Cơ chế hoạt động:
+1. Khi app vào foreground (onStart):
+   - Set `isOnline: true`
+   - Bắt đầu gửi heartbeat mỗi 2 phút
+
+2. Heartbeat task:
+   - Update `lastSeen: timestamp` mỗi 2 phút
+   - Giữ cho `isOnline: true`
+   - Ngăn tình trạng "kẹt online" khi app crash
+
+3. Khi app vào background (onStop):
+   - Stop heartbeat
+   - Set `isOnline: false`
+   - Update `lastSeen: timestamp`
+
+4. Khi login thành công:
+   - Set `isOnline: true` ngay lập tức
+
+5. Khi logout:
+   - Set `isOnline: false` trước khi sign out
+
+
+4.2. STALE STATUS CHECK (Web Admin)
+-----------------------------------
+**File:** users.js - Hàm getStatusBadge()
+
+Cơ chế chống "kẹt online":
+```javascript
+const OFFLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 phút
+const isStale = user.isOnline && user.lastSeen && 
+                (now - user.lastSeen > OFFLINE_THRESHOLD_MS);
+
+if (user.isOnline && !isStale) {
+    return 'Online';
+} else {
+    return 'Offline - ' + getRelativeTime(lastSeen);
+}
+```
+
+Logic:
+- Nếu `isOnline = true` NHƯNG `lastSeen` > 5 phút → Coi như Offline
+- Hiển thị thời gian tương đối: "5 phút trước", "2 giờ trước"
+
+
+4.3. REALTIME UPDATE
+--------------------
+**File:** users.js - Hàm loadUsers()
+
+- Sử dụng Firestore `onSnapshot()` listener
+- Tự động cập nhật khi có thay đổi trong collection 'users'
+- Không cần refresh trang để thấy status mới
+
+
+================================================================================
+5. DATA MODEL (CẬP NHẬT)
+================================================================================
+
+FIRESTORE COLLECTION: users
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Field           │ Type      │ Mô tả                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ userId          │ string    │ Firebase Auth UID                            │
+│ name            │ string    │ Tên hiển thị                                 │
+│ email           │ string    │ Email đăng ký (lowercase)                    │
+│ phone           │ string    │ Số điện thoại                                │
+│ photoUrl        │ string    │ URL ảnh đại diện                             │
+│ bio             │ string    │ Mô tả bản thân                               │
+│ isBanned        │ boolean   │ Trạng thái bị cấm                            │
+│ bannedAt        │ number    │ Timestamp bị ban (null nếu không bị ban)     │
+│ isOnline        │ boolean   │ Trạng thái online (QUAN TRỌNG)               │
+│ lastSeen        │ number    │ Timestamp hoạt động cuối (QUAN TRỌNG)        │
+│ forceLogoutAt   │ number    │ Timestamp lệnh logout từ xa (NEW)            │
+│ createdAt       │ number    │ Timestamp tạo tài khoản                      │
+│ fcmToken        │ string    │ Token push notification                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+6. LUỒNG XỬ LÝ
+================================================================================
+
+6.1. LOAD USERS (REALTIME)
+--------------------------
+1. Query Firestore collection 'users'
+2. Setup onSnapshot listener
+3. Order by createdAt desc
+4. Render vào data table
+5. Auto-update khi có thay đổi
+
+
+6.2. HIỂN THỊ TRẠNG THÁI ONLINE
+-------------------------------
+1. Lấy `isOnline` và `lastSeen` từ Firestore
+2. Check stale status (lastSeen > 5 phút)
+3. Hiển thị badge:
+   - "Online" (xanh) nếu isOnline=true và lastSeen mới
+   - "Offline - X phút trước" (xám) nếu offline hoặc stale
+4. Cột "Hoạt động cuối":
+   - "Đang hoạt động" nếu online
+   - Timestamp + relative time nếu offline
+
+
+6.3. BAN USER (LUỒNG MỚI)
+-------------------------
+1. User click "Khóa" button
+2. Hiển thị confirm dialog
+3. Update Firestore:
+   ```javascript
+   {
+       isBanned: true,
+       bannedAt: Date.now(),
+       forceLogoutAt: Date.now()  // Force logout ngay
+   }
+   ```
+4. Android app nhận event → Sign out tức thì
+5. Reload user list
+6. Hiển thị toast success
+
+
+6.4. FORCE LOGOUT
+-----------------
+1. User click "Logout" button
+2. Hiển thị confirm dialog
+3. Update Firestore:
+   ```javascript
+   { forceLogoutAt: Date.now() }
+   ```
+4. Android app `setupForceLogoutListener()` detect change
+5. Check: `forceLogoutAt > loginTimestamp` → Sign out
+6. Redirect về LoginActivity
+
+
+6.5. KIỂM TRA BAN KHI ĐĂNG NHẬP (Android)
+-----------------------------------------
+**File:** AuthRepository.java - Hàm checkBannedStatus()
+
+1. User đăng nhập qua Firebase Auth
+2. Auth thành công → Query Firestore để lấy user document
+3. Check field `isBanned`:
+   - Nếu `isBanned = true`:
+     * Sign out ngay lập tức
+     * Callback error: "Tài khoản của bạn đã bị khóa"
+   - Nếu `isBanned = false`:
+     * Set isOnline = true
+     * Callback success
+
+
+6.6. LISTENER FORCE LOGOUT (Android)
+------------------------------------
+**File:** MainActivity.java - Hàm setupForceLogoutListener()
+
+1. Khi MainActivity onCreate, lưu `loginTimestamp`
+2. Setup Firestore listener theo dõi user document hiện tại
+3. Khi có thay đổi, check:
+   a. `isBanned = true` → performForceLogout("Tài khoản bị khóa")
+   b. `forceLogoutAt > loginTimestamp` → performForceLogout("Bị đăng xuất bởi admin")
+4. performForceLogout():
+   - Remove listeners
+   - Firebase signOut()
+   - Show Toast
+   - Intent to LoginActivity (clear task stack)
+
+
+================================================================================
+7. FILES LIÊN QUAN
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ File                                    │ Chức năng                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ADMIN WEB:                                                                  │
+│ admin-web/users.html                    │ Trang quản lý users               │
+│ admin-web/js/users.js                   │ Logic load, search, filter, ban   │
+│ admin-web/css/components.css            │ Styles cho table, modals          │
+│ admin-web/css/dashboard.css             │ Layout chung                      │
+│                                                                              │
+│ ANDROID APP:                                                                 │
+│ app/.../repository/AuthRepository.java  │ Login + Ban check                 │
+│ app/.../utils/AppLifecycleObserver.java │ Heartbeat + Presence tracking     │
+│ app/.../repository/UserRepository.java  │ updateUserStatus()                │
+│ app/.../ZaloApplication.java            │ Register lifecycle observer       │
+│ app/.../MainActivity.java               │ Force logout listener             │
+│ app/build.gradle.kts                    │ Lifecycle process dependency      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+8. DEPENDENCIES
+================================================================================
+
+8.1. ANDROID APP
+----------------
+build.gradle.kts:
+```kotlin
+implementation("androidx.lifecycle:lifecycle-process:2.6.2")
+```
+
+Cần thiết cho ProcessLifecycleOwner để track app lifecycle globally.
+
+
+================================================================================
+9. FIRESTORE SECURITY RULES
+================================================================================
+
+```javascript
+// Users collection - Users can read all, but only update their own
+match /users/{userId} {
+    allow read: if request.auth != null;
+    allow update: if request.auth != null && request.auth.uid == userId;
+    allow create: if request.auth != null && request.auth.uid == userId;
+}
+
+// Admin full access (trong admin web với service account)
+// Lưu ý: Admin web sử dụng service account nên có full permission
+```
+
+
+================================================================================
+10. LƯU Ý QUAN TRỌNG
+================================================================================
+
+10.1. BẢO MẬT
+-------------
+- Chỉ Admin mới có quyền ban/unban/force logout users
+- Admin web dùng Firebase Admin SDK (service account)
+- Android app check ban status mỗi lần login
+- Realtime listener đảm bảo logout tức thì
+
+
+10.2. HIỆU NĂNG
+--------------
+- Heartbeat mỗi 2 phút (không quá thường xuyên)
+- Stale check 5 phút (cân bằng giữa real-time và tolerance)
+- Debounce search 300ms để tránh query liên tục
+- onSnapshot chỉ update thay đổi, không reload toàn bộ
+
+
+10.3. XỬ LÝ LỖI
+---------------
+- Nếu không check được ban status → Cho phép login (fallback safe)
+- Nếu heartbeat fail → Không crash app, chỉ log error
+- Nếu force logout listener fail → Vẫn có ban check khi login lần sau
+
+
+10.4. EDGE CASES
+----------------
+- App crash mà không gọi onStop:
+  → Heartbeat timeout + Stale check sẽ hiển thị Offline sau 5 phút
+  
+- User bị ban trong khi đang dùng app:
+  → Realtime listener detect và logout ngay
+  
+- User đăng nhập trên nhiều thiết bị:
+  → Force logout sẽ đăng xuất tất cả (check forceLogoutAt > loginTimestamp)
+  
+- Network issue khi update status:
+  → Firestore có offline persistence, sẽ sync khi reconnect
+
+
+================================================================================
+11. TESTING & VERIFICATION
+================================================================================
+
+11.1. TEST CASE - PRESENCE TRACKING
+-----------------------------------
+1. Đăng nhập app → Check web admin thấy "Online"
+2. Background app → Check web admin thấy "Offline - vừa mới"
+3. Foreground app → Check web admin thấy "Online" lại
+4. Kill app đột ngột → Đợi 5 phút, check web thấy "Offline"
+
+
+11.2. TEST CASE - BAN USER
+--------------------------
+1. User đang dùng app
+2. Admin ban user
+3. Kiểm tra:
+   - App logout tự động trong vòng vài giây
+   - Toast hiển thị "Tài khoản đã bị khóa"
+   - Redirect về Login
+   - Thử login lại → Báo lỗi "Tài khoản đã bị khóa"
+
+
+11.3. TEST CASE - FORCE LOGOUT
+------------------------------
+1. User đang dùng app
+2. Admin click "Logout"
+3. Kiểm tra:
+   - App logout tự động
+   - Toast hiển thị "Bị đăng xuất bởi admin"
+   - Redirect về Login
+   - User có thể login lại bình thường
+
+
+================================================================================
+12. TROUBLESHOOTING
+================================================================================
+
+Vấn đề: Trạng thái kẹt "Online" dù user đã thoát app
+Giải pháp:
+- Check heartbeat có chạy không (Logcat: "Heartbeat sent")
+- Check onStop có được gọi không
+- Verify stale check logic trong web (>5 phút)
+
+Vấn đề: Force logout không hoạt động
+Giải pháp:
+- Check listener có setup không (MainActivity onCreate)
+- Check `forceLogoutAt` field có update không (Firebase Console)
+- Check loginTimestamp có được lưu không
+- Verify network connection
+
+Vấn đề: User bị ban vẫn login được
+Giải pháp:
+- Check checkBannedStatus() có được gọi không
+- Verify field `isBanned` trong Firestore
+- Check Firebase Rules có block không
+- Build lại app với code mới nhất
+
+
+================================================================================
+CẬP NHẬT
+================================================================================
+Ngày tạo: 23/12/2025
+Ngày cập nhật: 24/12/2025
+Phiên bản: 2.0
+
+CHANGELOG (24/12/2025):
+- Thêm tính năng Real-time Presence Tracking
+- Thêm Heartbeat mechanism (2 phút)
+- Thêm Stale status check (5 phút)
+- Thêm Force Logout từ xa
+- Cải tiến Ban User: Tự động logout khi ban
+- Thêm Ban check khi login
+- Thêm cột "Hoạt động cuối" trong bảng
+- UI improvements: Equal-width buttons, relative time display
+- Loại bỏ tính năng Verify (không cần thiết)

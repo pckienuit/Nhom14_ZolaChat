@@ -1,0 +1,215 @@
+# Refactoring Quick Reference
+
+Quick guide for using the new utilities created during code cleanup.
+
+---
+
+## ApiCallbackHelper
+
+**File:** `utils/ApiCallbackHelper.java`
+
+### Basic Usage
+```java
+Call<Map<String, Object>> call = apiService.someOperation();
+call.enqueue(ApiCallbackHelper.createMapCallback(TAG, "Operation name", result));
+```
+
+### Custom Success Handler
+```java
+call.enqueue(ApiCallbackHelper.createCallback(TAG, "Custom operation", result, 
+    (body, res) -> {
+        // Custom logic here
+        String id = (String) body.get("id");
+        res.setValue(Resource.success(true));
+    }
+));
+```
+
+---
+
+## ErrorMessages
+
+**File:** `utils/ErrorMessages.java`
+
+### HTTP Error to Vietnamese
+```java
+String message = ErrorMessages.fromHttpCode(404);
+// Returns: "Không tìm thấy dữ liệu."
+```
+
+### Exception to Vietnamese
+```java
+String message = ErrorMessages.fromException(exception);
+// Returns user-friendly message
+```
+
+### Check if Retryable
+```java
+if (ErrorMessages.isRetryable(exception)) {
+    // Retry the operation
+}
+```
+
+---
+
+## RetryHandler
+
+**File:** `utils/RetryHandler.java`
+
+### Basic Retry
+```java
+RetryHandler retryHandler = new RetryHandler();
+
+retryHandler.execute(
+    callback -> {
+        // Your API call here
+        apiService.call().enqueue(new Callback<>() {
+            @Override
+            public void onResponse(...) {
+                if (success) callback.onSuccess();
+                else callback.onFailure(new Exception("Failed"));
+            }
+            @Override
+            public void onFailure(..., Throwable t) {
+                callback.onFailure(t);
+            }
+        });
+    },
+    () -> showSuccess(),
+    error -> showError(error)
+);
+```
+
+### Custom Configuration
+```java
+// 5 retries, initial 2s delay, 3x backoff
+RetryHandler retryHandler = new RetryHandler(5, 2000, 3);
+```
+
+---
+
+## Common Patterns
+
+### Standard API Call with Error Handling
+```java
+public LiveData<Resource<Boolean>> someOperation() {
+    MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+    result.setValue(Resource.loading());
+    
+    Call<Map<String, Object>> call = apiService.someMethod();
+    call.enqueue(ApiCallbackHelper.createMapCallback(TAG, "Operation", result));
+    
+    return result;
+}
+```
+
+### API Call with Retry
+```java
+public LiveData<Resource<Boolean>> criticalOperation() {
+    MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+    result.setValue(Resource.loading());
+    
+    RetryHandler retryHandler = new RetryHandler();
+    retryHandler.execute(
+        callback -> {
+            Call<Map<String, Object>> call = apiService.criticalMethod();
+            call.enqueue(new Callback<Map<String, Object>>() {
+                @Override
+                public void onResponse(Call<Map<String, Object>> call, 
+                                     Response<Map<String, Object>> response) {
+                    if (response.isSuccessful() && response.body() != null) {
+                        callback.onSuccess();
+                    } else {
+                        callback.onFailure(new Exception(
+                            ErrorMessages.fromHttpCode(response.code())
+                        ));
+                    }
+                }
+                
+                @Override
+                public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                    callback.onFailure(t);
+                }
+            });
+        },
+        () -> result.setValue(Resource.success(true)),
+        error -> result.setValue(Resource.error(error))
+    );
+    
+    return result;
+}
+```
+
+### Display Error in UI
+```java
+viewModel.someOperation().observe(this, resource -> {
+    if (resource.getStatus() == Resource.Status.ERROR) {
+        // Error message is already in Vietnamese
+        Toast.makeText(this, resource.getMessage(), Toast.LENGTH_LONG).show();
+    }
+});
+```
+
+---
+
+## Error Message Constants
+
+Quick reference for common errors:
+
+| Constant | Message |
+|----------|---------|
+| `NETWORK_ERROR` | "Không có kết nối mạng..." |
+| `TIMEOUT_ERROR` | "Kết nối quá chậm..." |
+| `SERVER_ERROR` | "Lỗi máy chủ..." |
+| `AUTH_ERROR` | "Phiên đăng nhập đã hết hạn..." |
+| `NOT_FOUND` | "Không tìm thấy dữ liệu." |
+| `SEND_FAILED` | "Gửi tin nhắn thất bại..." |
+
+---
+
+## HTTP Code Mapping
+
+| Code | Message |
+|------|---------|
+| 400 | "Dữ liệu không hợp lệ." |
+| 401/403 | "Phiên đăng nhập đã hết hạn..." |
+| 404 | "Không tìm thấy dữ liệu." |
+| 408 | "Kết nối quá chậm..." |
+| 500+ | "Lỗi máy chủ..." |
+
+---
+
+## When to Use What
+
+### Use ApiCallbackHelper when:
+- ✅ Creating new API calls
+- ✅ Refactoring existing callbacks
+- ✅ Want consistent error handling
+
+### Use RetryHandler when:
+- ✅ Operation is critical (send message, upload)
+- ✅ Network reliability is a concern
+- ✅ Temporary failures are expected
+
+### Use ErrorMessages when:
+- ✅ Displaying errors to users
+- ✅ Need Vietnamese messages
+- ✅ Converting HTTP codes or exceptions
+
+---
+
+## Migration Checklist
+
+For converting existing code:
+
+- [ ] Identify callback pattern
+- [ ] Replace with `ApiCallbackHelper.createMapCallback()`
+- [ ] Test success case
+- [ ] Test error case (network off)
+- [ ] Verify Vietnamese error shows
+- [ ] (Optional) Add retry logic if critical
+- [ ] Update tests
+
+---
+
+**See Full Documentation:** `docs/51_refactoring-complete.md`

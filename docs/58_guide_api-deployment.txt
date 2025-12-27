@@ -1,0 +1,1047 @@
+# API Server Deployment Guide - Full Documentation
+
+**Project:** ZaloClone API Server  
+**Date:** December 25, 2025  
+**Version:** 1.0
+
+---
+
+## 📑 Table of Contents
+
+1. [Overview](#overview)
+2. [Prerequisites](#prerequisites)
+3. [Method 1: Automated Deployment (Khuyên Dùng)](#method-1-automated-deployment)
+4. [Method 2: Manual Deployment](#method-2-manual-deployment)
+5. [Post-Deployment Configuration](#post-deployment-configuration)
+6. [Update & Maintenance](#update--maintenance)
+7. [Troubleshooting](#troubleshooting)
+
+---
+
+## Overview
+
+Hướng dẫn này giúp bạn deploy ZaloClone API Server lên VPS Ubuntu 22.04 với:
+- **Node.js 18 LTS** - Runtime environment
+- **PM2** - Process manager
+- **Apache2** - Web server & reverse proxy
+- **SSL/HTTPS** - Secure connections
+
+### Architecture
+
+```
+Client → Apache (Port 80/443)
+           ↓
+     [Reverse Proxy]
+           ↓
+  ┌────────┴────────┐
+  ↓                 ↓
+API Server      Stickers API
+(Port 3000)     (Port 3001)
+[PM2]
+```
+
+---
+
+## Prerequisites
+
+### 1. VPS Requirements
+
+| Requirement | Specification |
+|-------------|---------------|
+| OS | Ubuntu 20.04/22.04 LTS |
+| RAM | 2GB+ (khuyên 4GB) |
+| CPU | 2 cores+ |
+| Disk | 16GB+ |
+| IP | Public IP address |
+
+**VPS hiện tại:**
+- IP: `163.61.182.20`
+- Domain: `zolachat.site`
+
+### 2. Local Requirements
+
+**Windows:**
+- PowerShell 5.1+
+- SSH client (OpenSSH)
+- SCP support
+
+**Tools:**
+```powershell
+# Kiểm tra SSH
+ssh -V
+
+# Kiểm tra SCP
+scp
+```
+
+### 3. Files Cần Có
+
+```
+D:\DoAn_ZaloClone\
+├── server/
+│   ├── src/
+│   │   └── index.js           # Main API file
+│   ├── package.json
+│   ├── .env.example
+│   └── serviceAccountKey.json # Firebase key
+└── scripts/
+    ├── deploy-api-server.ps1
+    ├── upload-and-update-api.ps1
+    └── setup-nginx-ssl.sh
+```
+
+### 4. Permissions
+
+- Root access hoặc sudo privileges
+- SSH password hoặc SSH key
+
+---
+
+## Method 1: Automated Deployment
+
+### ⭐ Khuyên Dùng - Deploy Hoàn Toàn Tự Động
+
+### 📋 Preparation
+
+1. **Mở PowerShell trong project folder:**
+   ```powershell
+   cd D:\DoAn_ZaloClone
+   ```
+
+2. **Enable script execution** (chỉ cần 1 lần):
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   ```
+
+3. **Verify files exist:**
+   ```powershell
+   Test-Path server\src\index.js
+   Test-Path server\package.json
+   Test-Path server\serviceAccountKey.json
+   Test-Path scripts\deploy-api-server.ps1
+   ```
+
+### 🚀 Full Deployment (Lần Đầu)
+
+**Deploy API server từ đầu:**
+
+```powershell
+.\scripts\deploy-api-server.ps1
+```
+
+**Script sẽ tự động:**
+- ✅ Cài Node.js 18 LTS
+- ✅ Cài PM2 process manager
+- ✅ Upload toàn bộ server code
+- ✅ Install npm packages (278 packages)
+- ✅ Tạo .env configuration
+- ✅ Upload Firebase serviceAccountKey.json
+- ✅ Start server với PM2
+- ✅ Test health endpoint
+
+**Thời gian:** ~5-10 phút
+
+**Yêu cầu:** Nhập password VPS 4-6 lần
+
+**Output:**
+```
+=========================================
+API Server Update Script
+=========================================
+[OK] Project root: D:\DoAn_ZaloClone
+[OK] Found index.js: D:\DoAn_ZaloClone\server\src\index.js
+[INFO] File size: 3679 bytes
+...
+[OK] Server started with PM2
+[OK] Deployment complete!
+```
+
+### 🔄 Update Code (Sau Khi Deploy)
+
+**Upload file mới sau khi sửa code:**
+
+```powershell
+.\scripts\upload-and-update-api.ps1
+```
+
+**Script sẽ:**
+- ✅ Tìm API server path tự động
+- ✅ Backup file cũ
+- ✅ Upload file index.js mới
+- ✅ Restart PM2 process
+- ✅ Verify health check
+
+**Thời gian:** ~1-2 phút
+
+### 🌐 Setup Web Server (Apache)
+
+**Sau khi deploy API, setup reverse proxy:**
+
+```powershell
+# Upload script
+scp scripts\setup-nginx-ssl.sh root@163.61.182.20:/tmp/
+
+# SSH và chạy
+ssh root@163.61.182.20
+chmod +x /tmp/setup-nginx-ssl.sh
+bash /tmp/setup-nginx-ssl.sh
+```
+
+**⚠️ Lưu ý:** Nếu VPS đã có Apache (như hiện tại), không cần chạy script này. Apache đã được config sẵn.
+
+### 📊 Script Options
+
+#### deploy-api-server.ps1
+
+```powershell
+# Default deployment
+.\scripts\deploy-api-server.ps1
+
+# Custom VPS IP
+.\scripts\deploy-api-server.ps1 -VpsIp 192.168.1.100 -VpsUser ubuntu
+
+# Skip dependency installation (nếu đã cài)
+.\scripts\deploy-api-server.ps1 -SkipDependencies
+
+# Custom deployment path
+.\scripts\deploy-api-server.ps1 -DeployPath /opt/my-api
+
+# Show help
+.\scripts\deploy-api-server.ps1 -Help
+```
+
+#### upload-and-update-api.ps1
+
+```powershell
+# Default update
+.\scripts\upload-and-update-api.ps1
+
+# Skip file upload (chỉ chạy diagnostic)
+.\scripts\upload-and-update-api.ps1 -SkipUpload
+
+# Custom VPS
+.\scripts\upload-and-update-api.ps1 -VpsIp 163.61.182.20 -VpsUser root
+```
+
+### ✅ Verification
+
+**Test deployment thành công:**
+
+```powershell
+# Test từ Windows
+Invoke-RestMethod -Uri "https://zolachat.site/health"
+
+# Hoặc SSH vào VPS
+ssh root@163.61.182.20
+pm2 status
+curl http://localhost:3000/health
+```
+
+---
+
+## Method 2: Manual Deployment
+
+### 📝 Step-by-Step Manual Deployment
+
+### STEP 1: SSH vào VPS
+
+```bash
+ssh root@163.61.182.20
+```
+
+### STEP 2: Install Node.js 18
+
+```bash
+# Update system
+apt-get update
+apt-get upgrade -y
+
+# Install Node.js 18 LTS
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+apt-get install -y nodejs
+
+# Verify
+node -v  # Should show v18.x.x
+npm -v   # Should show 10.x.x
+```
+
+### STEP 3: Install PM2
+
+```bash
+# Install PM2 globally
+npm install -g pm2
+
+# Verify
+pm2 -v
+
+# Setup PM2 startup
+pm2 startup systemd
+# Copy và chạy command mà PM2 print ra
+```
+
+### STEP 4: Create Deployment Directory
+
+```bash
+# Create directory
+mkdir -p /opt/zaloclone-api
+cd /opt/zaloclone-api
+
+# Set permissions
+chown -R root:root /opt/zaloclone-api
+```
+
+### STEP 5: Upload Server Code
+
+**Từ máy Windows (PowerShell):**
+
+```powershell
+# Upload toàn bộ thư mục server
+scp -r server\* root@163.61.182.20:/opt/zaloclone-api/
+
+# Hoặc upload từng file quan trọng
+scp server\package.json root@163.61.182.20:/opt/zaloclone-api/
+scp server\package-lock.json root@163.61.182.20:/opt/zaloclone-api/
+scp -r server\src root@163.61.182.20:/opt/zaloclone-api/
+scp -r server\routes root@163.61.182.20:/opt/zaloclone-api/
+scp -r server\middleware root@163.61.182.20:/opt/zaloclone-api/
+```
+
+**Verify upload:**
+
+```bash
+# Trên VPS
+ls -la /opt/zaloclone-api/
+ls -la /opt/zaloclone-api/src/
+```
+
+### STEP 6: Install NPM Packages
+
+```bash
+cd /opt/zaloclone-api
+
+# Install production dependencies
+npm install --production
+
+# Verify
+ls -la node_modules/ | wc -l  # Should show ~278 packages
+```
+
+### STEP 7: Configure Environment
+
+**Tạo file .env:**
+
+```bash
+cat > /opt/zaloclone-api/.env << 'EOF'
+# Server Configuration
+PORT=3000
+NODE_ENV=production
+
+# CORS Origins
+ALLOWED_ORIGINS=https://zolachat.site,https://www.zolachat.site,https://api.zolachat.site
+
+# Firebase
+FIREBASE_SERVICE_ACCOUNT_PATH=./serviceAccountKey.json
+
+# Rate Limiting
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX_REQUESTS=100
+
+# Logging
+LOG_LEVEL=info
+EOF
+
+# Set permissions
+chmod 600 /opt/zaloclone-api/.env
+```
+
+### STEP 8: Upload Firebase Key
+
+**Từ Windows:**
+
+```powershell
+scp server\serviceAccountKey.json root@163.61.182.20:/opt/zaloclone-api/
+```
+
+**Trên VPS, set permissions:**
+
+```bash
+chmod 600 /opt/zaloclone-api/serviceAccountKey.json
+ls -la /opt/zaloclone-api/serviceAccountKey.json
+```
+
+### STEP 9: Start Server with PM2
+
+```bash
+cd /opt/zaloclone-api
+
+# Start server
+pm2 start src/index.js --name zaloclone-api
+
+# View logs
+pm2 logs zaloclone-api
+
+# Save PM2 config
+pm2 save
+
+# Verify
+pm2 status
+```
+
+**Expected output:**
+
+```
+┌────┬────────────────┬─────────┬──────┬─────────┐
+│ id │ name           │ status  │ cpu  │ memory  │
+├────┼────────────────┼─────────┼──────┼─────────┤
+│ 0  │ zaloclone-api  │ online  │ 0%   │ 70.0mb  │
+└────┴────────────────┴─────────┴──────┴─────────┘
+```
+
+### STEP 10: Test Server
+
+```bash
+# Test localhost
+curl http://localhost:3000/health
+
+# Expected response
+{
+  "status": "ok",
+  "timestamp": 1766637080014,
+  "uptime": 577.79,
+  "memory": {
+    "rss": "70 MB",
+    "heapUsed": "21 MB",
+    "heapTotal": "24 MB"
+  },
+  "websocket": {
+    "connected": 0
+  },
+  "routes": { ... },
+  "version": "1.0.0"
+}
+```
+
+### STEP 11: Configure Apache Proxy
+
+**VPS hiện tại đã có Apache. Cần thêm proxy rules:**
+
+```bash
+# Backup config hiện tại
+cp /etc/apache2/sites-available/zolachat.site-le-ssl.conf \
+   /etc/apache2/sites-available/zolachat.site-le-ssl.conf.backup
+
+# Edit config
+nano /etc/apache2/sites-available/zolachat.site-le-ssl.conf
+```
+
+**Thêm vào VirtualHost *:443:**
+
+```apache
+# Health check endpoint
+ProxyPass /health http://localhost:3000/health
+ProxyPassReverse /health http://localhost:3000/health
+
+# Main API (generic route - must be last)
+ProxyPass /api http://localhost:3000/api
+ProxyPassReverse /api http://localhost:3000/api
+```
+
+**Enable proxy modules:**
+
+```bash
+a2enmod proxy proxy_http
+```
+
+**Test và reload:**
+
+```bash
+# Test config
+apache2ctl configtest
+
+# Reload Apache
+systemctl reload apache2
+```
+
+### STEP 12: Verify Public Access
+
+```bash
+# Test qua Apache
+curl https://zolachat.site/health
+
+# Test API routes
+curl https://zolachat.site/api/auth/verify
+```
+
+---
+
+## Post-Deployment Configuration
+
+### 🔥 Firewall (Optional)
+
+```bash
+# Install UFW nếu chưa có
+apt-get install -y ufw
+
+# Allow SSH, HTTP, HTTPS
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
+
+# Enable firewall
+ufw enable
+
+# Check status
+ufw status
+```
+
+### 📊 Monitoring Setup
+
+**PM2 Log Rotation:**
+
+```bash
+pm2 install pm2-logrotate
+pm2 set pm2-logrotate:max_size 10M
+pm2 set pm2-logrotate:retain 7
+```
+
+**PM2 Monitoring Dashboard:**
+
+```bash
+pm2 monitor
+# Follow instructions to create account
+```
+
+### 🔐 Security Hardening
+
+**1. Restrict .env file:**
+
+```bash
+chmod 600 /opt/zaloclone-api/.env
+chown root:root /opt/zaloclone-api/.env
+```
+
+**2. Disable directory listing:**
+
+Đã có trong Apache config:
+```apache
+Options -Indexes
+```
+
+**3. Setup Fail2Ban (optional):**
+
+```bash
+apt-get install -y fail2ban
+systemctl enable fail2ban
+systemctl start fail2ban
+```
+
+---
+
+## Update & Maintenance
+
+### 🔄 Update Server Code
+
+#### Option 1: Script (Khuyên dùng)
+
+```powershell
+# Từ Windows
+cd D:\DoAn_ZaloClone
+.\scripts\upload-and-update-api.ps1
+```
+
+#### Option 2: Manual
+
+```powershell
+# Upload file mới
+scp server\src\index.js root@163.61.182.20:/opt/zaloclone-api/src/
+```
+
+```bash
+# Trên VPS
+cd /opt/zaloclone-api
+
+# Backup current version
+cp src/index.js src/index.js.backup.$(date +%Y%m%d_%H%M%S)
+
+# Restart server
+pm2 restart zaloclone-api
+
+# Check logs
+pm2 logs zaloclone-api --lines 50
+```
+
+### 📦 Update Dependencies
+
+```bash
+cd /opt/zaloclone-api
+
+# Update packages
+npm update
+
+# Hoặc cài package mới
+npm install new-package
+
+# Restart
+pm2 restart zaloclone-api
+```
+
+### 🗄️ Backup Strategy
+
+**Manual backup:**
+
+```bash
+# Create backup directory
+mkdir -p ~/backups/zaloclone-api
+
+# Backup code
+tar -czf ~/backups/zaloclone-api/code-$(date +%Y%m%d).tar.gz \
+  /opt/zaloclone-api/src \
+  /opt/zaloclone-api/routes \
+  /opt/zaloclone-api/middleware
+
+# Backup config
+cp /opt/zaloclone-api/.env ~/backups/zaloclone-api/.env.$(date +%Y%m%d)
+cp /opt/zaloclone-api/serviceAccountKey.json ~/backups/zaloclone-api/
+
+# Backup Apache config
+cp /etc/apache2/sites-available/zolachat.site-le-ssl.conf \
+   ~/backups/zaloclone-api/apache-$(date +%Y%m%d).conf
+```
+
+**Automated backup (crontab):**
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add daily backup at 2 AM
+0 2 * * * /usr/local/bin/backup-zaloclone-api.sh
+```
+
+**Backup script:**
+
+```bash
+cat > /usr/local/bin/backup-zaloclone-api.sh << 'EOF'
+#!/bin/bash
+BACKUP_DIR=~/backups/zaloclone-api
+DATE=$(date +%Y%m%d)
+
+mkdir -p $BACKUP_DIR
+
+# Backup code
+tar -czf $BACKUP_DIR/code-$DATE.tar.gz /opt/zaloclone-api/src
+
+# Backup configs
+cp /opt/zaloclone-api/.env $BACKUP_DIR/.env.$DATE
+
+# Keep only last 7 days
+find $BACKUP_DIR -name "*.tar.gz" -mtime +7 -delete
+find $BACKUP_DIR -name ".env.*" -mtime +7 -delete
+EOF
+
+chmod +x /usr/local/bin/backup-zaloclone-api.sh
+```
+
+### 🔍 View Logs
+
+**PM2 logs:**
+
+```bash
+# Real-time logs
+pm2 logs zaloclone-api
+
+# Last 100 lines
+pm2 logs zaloclone-api --lines 100
+
+# Only errors
+pm2 logs zaloclone-api --err
+
+# Clear logs
+pm2 flush zaloclone-api
+```
+
+**Apache logs:**
+
+```bash
+# Access log
+tail -f /var/log/apache2/zolachat.site_access.log
+
+# Error log
+tail -f /var/log/apache2/zolachat.site_error.log
+
+# Search for errors
+grep "error" /var/log/apache2/zolachat.site_error.log | tail -20
+```
+
+**System logs:**
+
+```bash
+# PM2 systemd logs
+journalctl -u pm2-root -f
+
+# Apache systemd logs
+journalctl -u apache2 -f
+```
+
+### 📊 Monitor Performance
+
+```bash
+# PM2 monitoring
+pm2 monit
+
+# Server resources
+htop
+
+# Disk usage
+df -h
+
+# Memory usage
+free -h
+
+# Network connections
+netstat -tulpn | grep :3000
+```
+
+---
+
+## Troubleshooting
+
+### ❌ Server Not Starting
+
+**Check PM2 logs:**
+
+```bash
+pm2 logs zaloclone-api --lines 100
+```
+
+**Common issues:**
+
+1. **Port already in use:**
+   ```bash
+   netstat -tulpn | grep :3000
+   # Kill process using port
+   kill -9 <PID>
+   ```
+
+2. **Missing .env file:**
+   ```bash
+   ls -la /opt/zaloclone-api/.env
+   # Recreate if missing (see STEP 7)
+   ```
+
+3. **Missing Firebase key:**
+   ```bash
+   ls -la /opt/zaloclone-api/serviceAccountKey.json
+   # Re-upload if missing
+   ```
+
+4. **Wrong permissions:**
+   ```bash
+   chmod 644 /opt/zaloclone-api/src/index.js
+   chmod 600 /opt/zaloclone-api/.env
+   chmod 600 /opt/zaloclone-api/serviceAccountKey.json
+   ```
+
+### ❌ 502 Bad Gateway
+
+**Check if server is running:**
+
+```bash
+pm2 status
+curl http://localhost:3000/health
+```
+
+**Check Apache proxy:**
+
+```bash
+# Test Apache config
+apache2ctl configtest
+
+# Check Apache is running
+systemctl status apache2
+
+# Check proxy modules
+apache2ctl -M | grep proxy
+```
+
+**Restart services:**
+
+```bash
+pm2 restart zaloclone-api
+systemctl reload apache2
+```
+
+### ❌ API Returns 404
+
+**Check proxy rules order:**
+
+```bash
+cat /etc/apache2/sites-available/zolachat.site-le-ssl.conf | grep ProxyPass
+```
+
+**Correct order:**
+```apache
+# Specific routes FIRST
+ProxyPass /api/stickers http://localhost:3001/api/stickers
+ProxyPass /api/rembg http://localhost:5000/api/rembg
+
+# Generic routes LAST
+ProxyPass /api http://localhost:3000/api
+```
+
+### ❌ PM2 Command Not Found
+
+```bash
+# Find PM2
+which pm2
+
+# Add to PATH
+export PATH=$PATH:/usr/local/bin
+
+# Or reload shell
+source ~/.bashrc
+```
+
+### ❌ Out of Memory
+
+```bash
+# Check memory
+free -h
+
+# Restart PM2
+pm2 restart zaloclone-api
+
+# Check memory usage
+pm2 monit
+```
+
+**If persistent, add swap:**
+
+```bash
+# Create 2GB swap
+fallocate -l 2G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+
+# Make permanent
+echo '/swapfile none swap sw 0 0' >> /etc/fstab
+```
+
+### ❌ SSL Certificate Issues
+
+```bash
+# Check certificate
+certbot certificates
+
+# Renew certificate
+certbot renew --force-renewal
+
+# Check Apache SSL config
+cat /etc/apache2/sites-available/zolachat.site-le-ssl.conf | grep SSL
+```
+
+### 🔧 Emergency Recovery
+
+**Restore from backup:**
+
+```bash
+# Stop server
+pm2 stop zaloclone-api
+
+# Restore code
+cd /opt/zaloclone-api
+cp src/index.js.backup.TIMESTAMP src/index.js
+
+# Restart
+pm2 restart zaloclone-api
+pm2 logs zaloclone-api
+```
+
+**Complete reset:**
+
+```bash
+# Stop and delete PM2 process
+pm2 delete zaloclone-api
+
+# Remove directory
+rm -rf /opt/zaloclone-api
+
+# Redeploy from scratch
+# (See Manual Deployment section)
+```
+
+---
+
+## Useful Commands Reference
+
+### PM2 Commands
+
+```bash
+# Process management
+pm2 start src/index.js --name zaloclone-api
+pm2 stop zaloclone-api
+pm2 restart zaloclone-api
+pm2 delete zaloclone-api
+pm2 reload zaloclone-api  # Zero-downtime restart
+
+# Monitoring
+pm2 status
+pm2 list
+pm2 info zaloclone-api
+pm2 monit
+
+# Logs
+pm2 logs
+pm2 logs zaloclone-api
+pm2 logs zaloclone-api --lines 100
+pm2 logs zaloclone-api --err
+pm2 flush  # Clear logs
+
+# Startup
+pm2 startup
+pm2 save
+pm2 unstartup
+```
+
+### Apache Commands
+
+```bash
+# Service management
+systemctl start apache2
+systemctl stop apache2
+systemctl restart apache2
+systemctl reload apache2
+systemctl status apache2
+
+# Configuration
+apache2ctl configtest
+apache2ctl -t
+apache2ctl -S  # Show vhosts
+apache2ctl -M  # Show modules
+
+# Modules
+a2enmod proxy proxy_http ssl rewrite headers
+a2dismod module_name
+
+# Sites
+a2ensite zolachat.site-le-ssl
+a2dissite zolachat.site-le-ssl
+```
+
+### System Commands
+
+```bash
+# Process management
+ps aux | grep node
+pgrep -a node
+kill -9 <PID>
+pkill -f zaloclone-api
+
+# Network
+netstat -tulpn
+ss -tulpn
+netstat -tulpn | grep :3000
+lsof -i :3000
+
+# Resources
+htop
+top
+free -h
+df -h
+du -sh /opt/zaloclone-api
+
+# Logs
+tail -f /var/log/apache2/error.log
+journalctl -u apache2 -f
+journalctl -u pm2-root -f
+```
+
+---
+
+## Quick Reference
+
+### Server Information
+
+| Item | Value |
+|------|-------|
+| **VPS IP** | 163.61.182.20 |
+| **Domain** | zolachat.site |
+| **API Path** | /opt/zaloclone-api |
+| **Main File** | /opt/zaloclone-api/src/index.js |
+| **PM2 Name** | zaloclone-api |
+| **Port** | 3000 (internal) |
+
+### Endpoints
+
+```
+https://zolachat.site/              → Web Admin
+https://zolachat.site/health        → API Health Check
+https://zolachat.site/api/*         → Main API (port 3000)
+https://zolachat.site/api/stickers  → Stickers API (port 3001)
+https://zolachat.site/api/rembg     → Rembg API (port 5000)
+```
+
+### Important Files
+
+```
+/opt/zaloclone-api/src/index.js                      # Main API file
+/opt/zaloclone-api/.env                              # Environment config
+/opt/zaloclone-api/serviceAccountKey.json            # Firebase key
+/etc/apache2/sites-available/zolachat.site-le-ssl.conf   # Apache SSL config
+/var/log/apache2/zolachat.site_*.log                 # Apache logs
+~/.pm2/logs/zaloclone-api-*.log                      # PM2 logs
+```
+
+### SSH Quick Connect
+
+```bash
+# From Windows
+ssh root@163.61.182.20
+
+# With password
+ssh root@163.61.182.20
+
+# One-liner commands
+ssh root@163.61.182.20 "pm2 status"
+ssh root@163.61.182.20 "curl http://localhost:3000/health"
+```
+
+---
+
+## Support & Resources
+
+### Documentation
+
+- **Node.js:** https://nodejs.org/docs/
+- **PM2:** https://pm2.keymetrics.io/docs/
+- **Apache:** https://httpd.apache.org/docs/2.4/
+- **Express:** https://expressjs.com/
+
+### Health Check
+
+```bash
+# Quick health check script
+ssh root@163.61.182.20 << 'EOF'
+echo "=== PM2 Status ==="
+pm2 status
+
+echo -e "\n=== Server Health ==="
+curl -s http://localhost:3000/health | python3 -m json.tool
+
+echo -e "\n=== Apache Status ==="
+systemctl status apache2 --no-pager | head -5
+
+echo -e "\n=== Disk Usage ==="
+df -h | grep -E '(Filesystem|/dev/vda)'
+
+echo -e "\n=== Memory Usage ==="
+free -h
+EOF
+```
+
+---
+
+**Document Version:** 1.0  
+**Last Updated:** December 25, 2025  
+**Maintained By:** ZaloClone Team
