@@ -282,4 +282,70 @@ public class PersonalViewModel extends ViewModel {
             uploadImageState.setValue(Resource.error("Failed to start upload: " + e.getMessage()));
         }
     }
+
+    /**
+     * Remove avatar (set to null/default)
+     */
+    public void removeAvatar() {
+        FirebaseUser firebaseUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (firebaseUser == null) {
+            uploadImageState.setValue(Resource.error("User not logged in"));
+            return;
+        }
+
+        uploadImageState.setValue(Resource.loading());
+        String userId = firebaseUser.getUid();
+
+        // Update avatar URL to null/empty
+        userRepository.updateUserAvatar(userId, "", new UserRepository.OnUpdateListener() {
+            @Override
+            public void onSuccess() {
+                uploadImageState.setValue(Resource.success(""));
+                // Reload the user that was last loaded
+                if (lastLoadedUserId != null) {
+                    loadUser(lastLoadedUserId);
+                } else {
+                    loadCurrentUser();
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                uploadImageState.setValue(Resource.error("Failed to remove avatar: " + error));
+            }
+        });
+    }
+
+    /**
+     * Remove cover image (set to null/default)
+     */
+    public void removeCover() {
+        FirebaseUser firebaseUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (firebaseUser == null) {
+            uploadImageState.setValue(Resource.error("User not logged in"));
+            return;
+        }
+
+        uploadImageState.setValue(Resource.loading());
+        String userId = firebaseUser.getUid();
+
+        // Update cover URL to null/empty
+        userRepository.updateUserCover(userId, "", new UserRepository.OnUpdateListener() {
+            @Override
+            public void onSuccess() {
+                uploadImageState.setValue(Resource.success(""));
+                // Reload the user that was last loaded
+                if (lastLoadedUserId != null) {
+                    loadUser(lastLoadedUserId);
+                } else {
+                    loadCurrentUser();
+                }
+            }
+
+            @Override
+            public void onError(String error) {
+                uploadImageState.setValue(Resource.error("Failed to remove cover: " + error));
+            }
+        });
+    }
 }

@@ -23,8 +23,8 @@ router.put('/:userId', authenticateUser, async (req, res) => {
     const updates = {};
     if (name) updates.name = name;
     if (bio !== undefined) updates.bio = bio;
-    if (avatarUrl) updates.avatarUrl = avatarUrl;
-    if (coverUrl) updates.coverUrl = coverUrl;
+    if (avatarUrl !== undefined) updates.avatarUrl = avatarUrl; // Allow empty string to remove avatar
+    if (coverUrl !== undefined) updates.coverUrl = coverUrl; // Allow empty string to remove cover
     if (phone) updates.phone = phone;
     await db.collection('users').doc(userId).update(updates);
     res.json({ success: true });

@@ -412,6 +412,16 @@ public class ProfileCardActivity extends AppCompatActivity {
             // Allow clicking images to edit
             avatarImage.setOnClickListener(v -> pickAvatarImage());
             coverImage.setOnClickListener(v -> pickCoverImage());
+            
+            // Long press to show remove option
+            avatarImage.setOnLongClickListener(v -> {
+                showAvatarOptions();
+                return true;
+            });
+            coverImage.setOnLongClickListener(v -> {
+                showCoverOptions();
+                return true;
+            });
         }
 
         // Add friend button click listener
@@ -588,6 +598,88 @@ public class ProfileCardActivity extends AppCompatActivity {
 
     private void uploadCover(Uri imageUri) {
         viewModel.uploadCover(imageUri);
+    }
+
+    private void showAvatarOptions() {
+        // Get current user to check if has avatar
+        viewModel.getCurrentUser().observe(this, resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                User user = resource.getData();
+                boolean hasAvatar = user.getAvatarUrl() != null && !user.getAvatarUrl().isEmpty();
+                
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                builder.setTitle("Ảnh đại diện");
+                
+                if (hasAvatar) {
+                    builder.setItems(new CharSequence[]{"Thay đổi ảnh", "Gỡ ảnh đại diện"}, (dialog, which) -> {
+                        if (which == 0) {
+                            pickAvatarImage();
+                        } else if (which == 1) {
+                            confirmRemoveAvatar();
+                        }
+                    });
+                } else {
+                    builder.setItems(new CharSequence[]{"Thêm ảnh đại diện"}, (dialog, which) -> {
+                        pickAvatarImage();
+                    });
+                }
+                
+                builder.setNegativeButton("Hủy", null);
+                builder.show();
+            }
+        });
+    }
+
+    private void showCoverOptions() {
+        // Get current user to check if has cover
+        viewModel.getCurrentUser().observe(this, resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                User user = resource.getData();
+                boolean hasCover = user.getCoverUrl() != null && !user.getCoverUrl().isEmpty();
+                
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                builder.setTitle("Ảnh bìa");
+                
+                if (hasCover) {
+                    builder.setItems(new CharSequence[]{"Thay đổi ảnh bìa", "Gỡ ảnh bìa"}, (dialog, which) -> {
+                        if (which == 0) {
+                            pickCoverImage();
+                        } else if (which == 1) {
+                            confirmRemoveCover();
+                        }
+                    });
+                } else {
+                    builder.setItems(new CharSequence[]{"Thêm ảnh bìa"}, (dialog, which) -> {
+                        pickCoverImage();
+                    });
+                }
+                
+                builder.setNegativeButton("Hủy", null);
+                builder.show();
+            }
+        });
+    }
+
+    private void confirmRemoveAvatar() {
+        new AlertDialog.Builder(this)
+                .setTitle("Gỡ ảnh đại diện")
+                .setMessage("Bạn có chắc chắn muốn gỡ ảnh đại diện?")
+                .setPositiveButton("Gỡ", (dialog, which) -> {
+                    viewModel.removeAvatar();
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+
+    private void confirmRemoveCover() {
+        new AlertDialog.Builder(this)
+                .setTitle("Gỡ ảnh bìa")
+                .setMessage("Bạn có chắc chắn muốn gỡ ảnh bìa?")
+                .setPositiveButton("Gỡ", (dialog, which) -> {
+                    viewModel.removeCover();
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
     }
 
     private void showProgress(String message) {
