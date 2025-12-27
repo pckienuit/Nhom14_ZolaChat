@@ -298,7 +298,7 @@ public class AddFriendActivity extends AppCompatActivity {
             tvPhone.setText(foundUser.getEmail());
             
             if (foundUser.getAvatarUrl() != null && !foundUser.getAvatarUrl().isEmpty()) {
-                Glide.with(this).load(foundUser.getAvatarUrl()).into(imgAvatar);
+                Glide.with(this).load(foundUser.getAvatarUrl()).circleCrop().into(imgAvatar);
             } else {
                 imgAvatar.setImageResource(R.drawable.ic_avatar);
             }

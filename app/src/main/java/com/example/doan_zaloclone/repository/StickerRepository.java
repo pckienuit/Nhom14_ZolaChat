@@ -623,16 +623,37 @@ public class StickerRepository {
     public void uploadCustomSticker(@NonNull Uri imageUri,
                                     @NonNull String userId,
                                     @NonNull String fileName,
+                                    @NonNull Context context,
                                     @NonNull UploadCallback callback) {
         uploadExecutor.execute(() -> {
             try {
-                // Convert URI to File (using content resolver)
-                File imageFile = new File(imageUri.getPath());
+                Log.d(TAG, "=== Starting sticker upload ===");
+                Log.d(TAG, "URI: " + imageUri);
+                Log.d(TAG, "FileName: " + fileName);
+                Log.d(TAG, "userId: " + userId);
+                Log.d(TAG, "Upload URL: " + VPS_UPLOAD_URL);
+                
+                // Convert URI to File using content resolver (handles content:// URIs properly)
+                File imageFile = uriToFile(imageUri, context);
+                
+                if (imageFile == null) {
+                    Log.e(TAG, "Failed to convert URI to file");
+                    callback.onError("Không thể đọc file ảnh");
+                    return;
+                }
+                
+                Log.d(TAG, "File created: " + imageFile.getAbsolutePath());
+                Log.d(TAG, "File size: " + imageFile.length() + " bytes");
+                Log.d(TAG, "File exists: " + imageFile.exists());
+
+                // Detect MIME type from file extension
+                String mimeType = getMimeType(fileName);
+                Log.d(TAG, "MIME type: " + mimeType);
 
                 RequestBody requestBody = new MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
                         .addFormDataPart("sticker", fileName,
-                                RequestBody.create(imageFile, MediaType.parse("image/*")))
+                                RequestBody.create(imageFile, MediaType.parse(mimeType)))
                         .addFormDataPart("userId", userId)
                         .build();
 
@@ -641,22 +662,50 @@ public class StickerRepository {
                         .post(requestBody)
                         .build();
 
+                Log.d(TAG, "Sending request to server...");
                 callback.onProgress(50); // Simulated progress
 
                 Response response = httpClient.newCall(request).execute();
+                
+                Log.d(TAG, "Response code: " + response.code());
+                Log.d(TAG, "Response successful: " + response.isSuccessful());
 
                 if (response.isSuccessful() && response.body() != null) {
                     String responseBody = response.body().string();
-                    // Expected VPS response: {"success": true, "url": "http://..."}
-                    // Parse JSON to get URL
-                    // Note: In real app, proper JSON parsing is needed here.
-                    String stickerUrl = VPS_BASE_URL + "/stickers/" + fileName;
-                    // For improved reliability, we should ideally parse the response
+                    Log.d(TAG, "Response body: " + responseBody);
                     
-                    callback.onProgress(100);
-                    callback.onSuccess(stickerUrl);
+                    // Try to parse JSON response
+                    try {
+                        org.json.JSONObject json = new org.json.JSONObject(responseBody);
+                        if (json.has("sticker")) {
+                            org.json.JSONObject stickerObj = json.getJSONObject("sticker");
+                            String stickerUrl = stickerObj.getString("url");
+                            Log.d(TAG, "Upload success! URL: " + stickerUrl);
+                            callback.onProgress(100);
+                            callback.onSuccess(stickerUrl);
+                        } else {
+                            Log.w(TAG, "No sticker URL in response, using fallback");
+                            String stickerUrl = VPS_BASE_URL + "/uploads/stickers/" + fileName;
+                            callback.onProgress(100);
+                            callback.onSuccess(stickerUrl);
+                        }
+                    } catch (org.json.JSONException e) {
+                        Log.w(TAG, "Failed to parse JSON, using fallback URL", e);
+                        String stickerUrl = VPS_BASE_URL + "/uploads/stickers/" + fileName;
+                        callback.onProgress(100);
+                        callback.onSuccess(stickerUrl);
+                    }
                 } else {
-                    callback.onError("Upload failed: " + response.code());
+                    String errorBody = "";
+                    try {
+                        if (response.body() != null) {
+                            errorBody = response.body().string();
+                            Log.e(TAG, "Error response body: " + errorBody);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to read error body", e);
+                    }
+                    callback.onError("Upload failed: " + response.code() + " - " + errorBody);
                 }
                 response.close();
 
@@ -666,25 +715,30 @@ public class StickerRepository {
             }
         });
     }
+    
+    private String getMimeType(String fileName) {
+        if (fileName.toLowerCase().endsWith(".png")) return "image/png";
+        if (fileName.toLowerCase().endsWith(".jpg") || fileName.toLowerCase().endsWith(".jpeg")) return "image/jpeg";
+        if (fileName.toLowerCase().endsWith(".gif")) return "image/gif";
+        if (fileName.toLowerCase().endsWith(".webp")) return "image/webp";
+        return "image/*";
+    }
 
     /**
      * Get or create "My Stickers" pack for user
+     * Pack ID = User ID for personal stickers
      */
     public void getOrCreateUserStickerPack(@NonNull String userId, @NonNull PackCallback callback) {
-        // Check if user already has "My Stickers" pack
+        // Pack ID must be userId - check if it exists
         db.collection(COLLECTION_STICKER_PACKS)
-                .whereEqualTo("creatorId", userId)
-                .whereEqualTo("type", StickerPack.TYPE_USER)
-                .whereEqualTo("name", "My Stickers")
-                .limit(1)
+                .document(userId)
                 .get()
-                .addOnSuccessListener(querySnapshot -> {
-                    if (!querySnapshot.isEmpty()) {
-                        // Pack exists
-                        String packId = querySnapshot.getDocuments().get(0).getId();
-                        callback.onSuccess(packId);
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        // Pack with userId as packId exists
+                        callback.onSuccess(userId);
                     } else {
-                        // Create new pack
+                        // Create new pack with userId as packId
                         createMyStickersPackInternal(userId, callback);
                     }
                 })
@@ -695,15 +749,16 @@ public class StickerRepository {
     }
 
     /**
-     * Internal method to create "My Stickers" pack
+     * Internal method to create personal sticker pack with userId as packId
      */
     private void createMyStickersPackInternal(@NonNull String userId, @NonNull PackCallback callback) {
-        String packId = db.collection(COLLECTION_STICKER_PACKS).document().getId();
+        // Use userId as packId for personal sticker pack
+        String packId = userId;
 
         StickerPack pack = new StickerPack();
         pack.setId(packId);
-        pack.setName("My Stickers");
-        pack.setDescription("Sticker do tôi tạo");
+        pack.setName("Sticker của tôi");  // Personal sticker pack name
+        pack.setDescription("Bộ sticker cá nhân");
         pack.setCreatorId(userId);
         pack.setType(StickerPack.TYPE_USER);
         pack.setCreatedAt(System.currentTimeMillis());
@@ -749,6 +804,36 @@ public class StickerRepository {
                             .addOnFailureListener(e -> Log.e(TAG, "Error updating count", e));
                 })
                 .addOnFailureListener(e -> Log.e(TAG, "Error adding sticker to pack", e));
+    }
+
+    /**
+     * Delete sticker from pack
+     */
+    public void deleteSticker(@NonNull String packId,
+                              @NonNull String stickerId,
+                              @NonNull Runnable onSuccess) {
+        db.collection(COLLECTION_STICKER_PACKS)
+                .document(packId)
+                .collection(COLLECTION_STICKERS)
+                .document(stickerId)
+                .delete()
+                .addOnSuccessListener(aVoid -> {
+                    // Decrement sticker count
+                    db.collection(COLLECTION_STICKER_PACKS)
+                            .document(packId)
+                            .update("stickerCount", com.google.firebase.firestore.FieldValue.increment(-1),
+                                    "updatedAt", System.currentTimeMillis())
+                            .addOnSuccessListener(v -> onSuccess.run())
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG, "Error updating count", e);
+                                onSuccess.run(); // Still call success as sticker was deleted
+                            });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error deleting sticker", e);
+                    // Call success anyway to avoid blocking UI
+                    onSuccess.run();
+                });
     }
 
     /**

@@ -78,6 +78,7 @@ public class ContactSelectionAdapter extends RecyclerView.Adapter<ContactSelecti
             if (user.getAvatarUrl() != null && !user.getAvatarUrl().isEmpty()) {
                 Glide.with(context)
                         .load(user.getAvatarUrl())
+                        .circleCrop()
                         .placeholder(R.drawable.ic_avatar)
                         .into(avatarImage);
             } else {

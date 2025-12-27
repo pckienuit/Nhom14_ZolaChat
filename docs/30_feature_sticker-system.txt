@@ -84,8 +84,9 @@ StickerRepository.java:
 - getStickersInPack(packId): LiveData<Resource<List<Sticker>>>
 - getRecentStickers(userId): LiveData<Resource<List<Sticker>>>
 - uploadCustomSticker(uri, userId, fileName, callback): void
-- getOrCreateUserStickerPack(userId, callback): void
+- getOrCreateUserStickerPack(userId, callback): void  ← packId = userId
 - addStickerToPack(packId, sticker, onSuccess): void
+- deleteSticker(packId, stickerId, onSuccess): void   ← MỚI
 - getFeaturedPacks(): LiveData<Resource<List<StickerPack>>>
 - getTrendingPacks(): LiveData<Resource<List<StickerPack>>>
 - getNewPacks(): LiveData<Resource<List<StickerPack>>>
@@ -123,14 +124,27 @@ StickerRepository.java:
 │ StickerStoreActivity                                                        │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Sections:                                                                   │
+│ - 📁 Sticker của tôi (click → MyStickerActivity)                           │
 │ - ⭐ Featured (horizontal scroll)                                           │
 │ - 🔥 Trending (grid, sorted by downloads)                                  │
 │ - 🆕 New (grid, sorted by createdAt)                                        │
 │                                                                             │
 │ Features:                                                                   │
+│ - Gradient blue header với SwipeRefreshLayout                               │
 │ - Download pack → Add to user collection                                    │
 │ - Pack click → Preview detail (planned)                                     │
 │ - Auto increment download count                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ MyStickerActivity (MỚI - 27/12/2024)                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ - Hiển thị sticker cá nhân (packId = userId)                                │
+│ - Grid layout 4 cột với SwipeRefreshLayout                                  │
+│ - Edit mode (long-press) với nút xóa                                        │
+│ - Nút tạo sticker mới → CreateStickerActivity                              │
+│ - Empty state khi chưa có sticker                                           │
+│ - Gradient blue header phù hợp UI Zalo                                      │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -235,50 +249,180 @@ sudo systemctl status rembg  # If enabled
 4. FIRESTORE SECURITY RULES
 ================================================================================
 
-Collection: stickerPacks
+4.1. PERSONAL STICKER PACK (MỚI - 27/12/2024)
+----------------------------------------------
+
+THIẾT KẾ:
+- Mỗi user có 1 pack sticker cá nhân duy nhất
+- Pack ID = User ID (dễ truy vấn, không cần query)
+- Đường dẫn: stickerPacks/{userId}/stickers/{stickerId}
+
+LOGIC TẠO PACK:
+1. Kiểm tra document stickerPacks/{userId} có tồn tại không
+2. Nếu có → dùng pack đó
+3. Nếu không → tạo pack mới với packId = userId
+
+BẢO MẬT:
+- User chỉ có thể đọc/ghi pack của chính mình
+- User KHÔNG thể truy cập pack cá nhân của người khác
+- Admin có quyền đọc/ghi tất cả packs
+
+4.2. SECURITY RULES CHI TIẾT
+-----------------------------
+
+```javascript
+// Admin check function
+function isAdmin() {
+    return request.auth.token.admin == true;
+}
+
+match /stickerPacks/{packId} {
+    // READ RULES:
+    // - Official packs (type != 'user'): anyone authenticated can read
+    // - Personal packs (packId = userId): only owner OR admin can read
+    allow read: if request.auth != null && 
+                (resource.data.type != 'user' || 
+                 resource.data.creatorId == request.auth.uid ||
+                 packId == request.auth.uid ||
+                 isAdmin());
+    
+    // CREATE RULES:
+    // - Personal packs: packId MUST equal userId
+    // - Official packs: admin only
+    allow create: if request.auth != null && 
+                  ((request.resource.data.type == 'user' &&
+                    request.resource.data.creatorId == request.auth.uid &&
+                    packId == request.auth.uid) ||
+                   isAdmin());
+    
+    // UPDATE/DELETE RULES:
+    // - Owner can update/delete their pack
+    // - Admin can update/delete any pack
+    allow update, delete: if request.auth != null && 
+                          (resource.data.creatorId == request.auth.uid ||
+                           packId == request.auth.uid ||
+                           isAdmin());
+    
+    // STICKERS SUBCOLLECTION
+    match /stickers/{stickerId} {
+        // Read: only owner OR admin can read stickers in personal pack
+        allow read: if request.auth != null && 
+                    (get(/databases/$(database)/documents/stickerPacks/$(packId)).data.type != 'user' ||
+                     get(/databases/$(database)/documents/stickerPacks/$(packId)).data.creatorId == request.auth.uid ||
+                     packId == request.auth.uid ||
+                     isAdmin());
+        
+        // Write: only owner OR admin can write stickers in personal pack
+        allow write: if request.auth != null && 
+                     (packId == request.auth.uid ||
+                      get(/databases/$(database)/documents/stickerPacks/$(packId)).data.creatorId == request.auth.uid ||
+                      isAdmin());
+    }
+}
+```
+
+4.3. BẢNG TÓM TẮT QUYỀN
 ------------------------
 
-Rules:
-```javascript
-match /stickerPacks/{packId} {
-  // Anyone can read published packs
-  allow read: if resource.data.isPublished == true || 
-                 request.auth.uid == resource.data.creatorId;
-  
-  // Only creator can write
-  allow create, update: if request.auth.uid == request.resource.data.creatorId;
-  allow delete: if request.auth.uid == resource.data.creatorId;
-  
-  // Stickers subcollection
-  match /stickers/{stickerId} {
-    allow read: if true;
-    allow write: if request.auth.uid == get(/databases/$(database)/documents/stickerPacks/$(packId)).data.creatorId;
-  }
-}
-```
+┌────────────────────┬─────────────────┬─────────────────┬─────────────────┐
+│ Loại Pack          │ User thường     │ Owner           │ Admin           │
+├────────────────────┼─────────────────┼─────────────────┼─────────────────┤
+│ Official packs     │ ✅ Read         │ ✅ Read         │ ✅ Full         │
+│ Personal pack      │ ❌ Blocked      │ ✅ Full         │ ✅ Full         │
+└────────────────────┴─────────────────┴─────────────────┴─────────────────┘
 
-Collection: users/{userId}/savedStickerPacks
----------------------------------------------
+4.4. USER SAVED PACKS & RECENT STICKERS
+----------------------------------------
 
-Rules:
 ```javascript
 match /users/{userId}/savedStickerPacks/{packId} {
-  allow read, write: if request.auth.uid == userId;
+    allow read, write: if request.auth.uid == userId;
+}
+
+match /users/{userId}/recentStickers/{stickerId} {
+    allow read, write: if request.auth.uid == userId;
 }
 ```
 
-Collection: users/{userId}/recentStickers
-------------------------------------------
+4.5. SET ADMIN CLAIM
+--------------------
 
-Rules:
+Để cấp quyền admin cho user (chạy trên server với Firebase Admin SDK):
+
 ```javascript
-match /users/{userId}/recentStickers/{stickerId} {
-  allow read, write: if request.auth.uid == userId;
-}
+const admin = require('firebase-admin');
+admin.auth().setCustomUserClaims(uid, { admin: true });
 ```
 
 ================================================================================
-5. HƯỚNG DẪN ADMIN - UPLOAD STICKER PACKS
+5. MY STICKER ACTIVITY (MỚI - 27/12/2024)
+================================================================================
+
+5.1. TỔNG QUAN
+--------------
+
+MyStickerActivity hiển thị sticker cá nhân của user hiện tại.
+
+Đường dẫn files:
+- Activity: ui/sticker/MyStickerActivity.java
+- Adapter: ui/sticker/MyStickerAdapter.java
+- Layout: res/layout/activity_my_sticker.xml
+- Item Layout: res/layout/item_my_sticker.xml
+
+5.2. TÍNH NĂNG
+--------------
+
+1. Hiển thị sticker cá nhân (packId = userId)
+2. Pull-to-refresh
+3. Grid layout 4 cột
+4. Edit mode với long-press để xóa sticker
+5. Nút tạo sticker mới (mở CreateStickerActivity)
+6. Empty state khi chưa có sticker
+7. Đếm số lượng sticker
+
+5.3. UI DESIGN
+--------------
+
+- Header: Gradient blue (#0084FF) với nút back, title, nút tạo
+- Background: Light gray (#F5F5F5)
+- Cards: White với corner radius 8dp
+- Delete button: Red circle (#F44336) với icon delete
+
+5.4. LUỒNG HOẠT ĐỘNG
+--------------------
+
+1. User mở MyStickerActivity từ StickerStoreActivity hoặc StickerPickerFragment
+2. Activity load stickers từ stickerPacks/{userId}/stickers
+3. Hiển thị grid sticker hoặc empty state
+4. User long-press để vào edit mode → hiện nút xóa
+5. User click nút xóa → confirm dialog → xóa sticker
+6. User click nút + → mở CreateStickerActivity
+7. Sau khi tạo sticker, quay lại và reload list
+
+5.5. CODE SNIPPETS
+------------------
+
+Load stickers (chỉ load pack của user hiện tại):
+```java
+// Use userId as packId for personal stickers
+stickerRepository.getStickersInPack(currentUserId).observe(this, resource -> {
+    if (resource.isSuccess()) {
+        List<Sticker> stickers = resource.getData();
+        adapter.updateStickers(stickers);
+    }
+});
+```
+
+Delete sticker:
+```java
+stickerRepository.deleteSticker(currentUserId, sticker.getId(), () -> {
+    Toast.makeText(this, "Đã xóa sticker", Toast.LENGTH_SHORT).show();
+    loadMyStickers(); // Reload
+});
+```
+
+================================================================================
+6. HƯỚNG DẪN ADMIN - UPLOAD STICKER PACKS
 ================================================================================
 
 5.1. CÀI ĐẶT DEPENDENCIES

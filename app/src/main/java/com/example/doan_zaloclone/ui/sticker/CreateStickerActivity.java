@@ -234,7 +234,7 @@ public class CreateStickerActivity extends AppCompatActivity {
 
         String fileName = "sticker_" + System.currentTimeMillis() + (backgroundRemoved ? ".png" : ".jpg");
 
-        stickerRepository.uploadCustomSticker(processedImageUri, currentUserId, fileName,
+        stickerRepository.uploadCustomSticker(processedImageUri, currentUserId, fileName, this,
                 new StickerRepository.UploadCallback() {
                     @Override
                     public void onProgress(int progress) {

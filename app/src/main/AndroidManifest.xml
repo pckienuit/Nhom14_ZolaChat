@@ -124,11 +124,23 @@
             android:parentActivityName=".ui.room.RoomActivity"
             android:windowSoftInputMode="adjustResize" />
             
+        <!-- UCrop Activity - for image cropping in sticker creation -->
+        <activity
+            android:name="com.yalantis.ucrop.UCropActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+            
         <!-- Sticker Store Activity -->
         <activity
             android:name=".ui.sticker.StickerStoreActivity"
             android:exported="false"
             android:parentActivityName=".ui.room.RoomActivity" />
+
+        <activity
+            android:name=".ui.sticker.MyStickerActivity"
+            android:exported="false"
+            android:parentActivityName=".ui.sticker.StickerStoreActivity" />
             
                 <!-- Profile Card Activity -->
         <activity
