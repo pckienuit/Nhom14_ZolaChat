@@ -114,6 +114,7 @@ public class OngoingCallService extends Service {
 
     /**
      * Create notification for ongoing call
+     * Hidden from notification tray but keeps service alive
      */
     private Notification createOngoingCallNotification(String duration) {
         // Intent to return to CallActivity when notification is tapped
@@ -129,38 +130,17 @@ public class OngoingCallService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
-        // Build notification
-        String title = isVideo ? "Video call đang diễn ra" : "Cuộc gọi đang diễn ra";
-        String text = "với " + (callerName != null ? callerName : "Unknown") + " • " + duration;
-
+        // Build minimal silent notification (hidden from notification tray)
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle(title)
-                .setContentText(text)
+                .setContentTitle("Cuộc gọi")
+                .setContentText("Đang kết nối...")
                 .setSmallIcon(R.drawable.ic_call)
-                .setOngoing(true)  // Cannot be dismissed by user
-                .setCategory(NotificationCompat.CATEGORY_CALL)
-                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setOngoing(true)
+                .setPriority(NotificationCompat.PRIORITY_MIN)  // Minimal priority
+                .setSound(null)
+                .setVibrate(null)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(false);
-
-        // Add action buttons for Android 12+ (required for foreground service types)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // End call action
-            Intent endCallIntent = new Intent(this, CallActivity.class);
-            endCallIntent.setAction("ACTION_END_CALL");
-            PendingIntent endCallPendingIntent = PendingIntent.getActivity(
-                    this,
-                    1,
-                    endCallIntent,
-                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-            );
-
-            builder.addAction(
-                    R.drawable.ic_call_end,
-                    "Kết thúc",
-                    endCallPendingIntent
-            );
-        }
 
         return builder.build();
     }
@@ -185,11 +165,12 @@ public class OngoingCallService extends Service {
             NotificationChannel channel = new NotificationChannel(
                     CHANNEL_ID,
                     "Cuộc gọi đang diễn ra",
-                    NotificationManager.IMPORTANCE_HIGH
+                    NotificationManager.IMPORTANCE_LOW  // Low importance = hidden from notification tray
             );
-            channel.setDescription("Hiển thị thông báo khi đang trong cuộc gọi");
+            channel.setDescription("Duy trì kết nối cuộc gọi");
             channel.setSound(null, null);  // No sound for this channel
             channel.enableVibration(false);
+            channel.setShowBadge(false);  // No badge
 
             NotificationManager notificationManager = getSystemService(NotificationManager.class);
             notificationManager.createNotificationChannel(channel);

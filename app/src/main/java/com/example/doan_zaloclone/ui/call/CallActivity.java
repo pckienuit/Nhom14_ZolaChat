@@ -226,6 +226,12 @@ public class CallActivity extends AppCompatActivity {
         if (callerNameStr != null) {
             callerName.setText(callerNameStr);
         }
+        
+        // Cancel incoming call notification since user is now viewing the call screen
+        if (isIncoming) {
+            com.example.doan_zaloclone.utils.CallNotificationHelper.cancelNotification(this, 1001);
+            Log.d(TAG, "Cancelled incoming call notification - user is viewing call screen");
+        }
 
         // Check permissions
         if (!PermissionHelper.checkCallPermissions(this, isVideo)) {
