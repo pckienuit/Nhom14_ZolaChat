@@ -185,6 +185,13 @@
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
             
+        <!-- My QR Code Activity -->
+        <activity
+            android:name=".ui.qr.MyQRCodeActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+            
         <!-- Birthday List Activity -->
         <activity
             android:name=".ui.contact.BirthdayListActivity"

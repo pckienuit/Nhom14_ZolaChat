@@ -254,8 +254,10 @@ public class ProfileCardActivity extends AppCompatActivity {
      * Share QR code (for own profile)
      */
     private void shareQRCode() {
-        // TODO: Generate QR code image and share
-        Toast.makeText(this, "Tính năng chia sẻ QR code đang phát triển", Toast.LENGTH_SHORT).show();
+        // Open MyQRCodeActivity for full QR experience
+        android.content.Intent intent = new android.content.Intent(this, 
+            com.example.doan_zaloclone.ui.qr.MyQRCodeActivity.class);
+        startActivity(intent);
     }
 
     /**
