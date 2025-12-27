@@ -151,6 +151,7 @@ public class SendMessageRequest {
         if (Message.TYPE_VOICE.equals(message.getType())) {
             this.voiceUrl = message.getVoiceUrl();
             this.voiceDuration = message.getVoiceDuration() > 0 ? message.getVoiceDuration() : null;
+            android.util.Log.d("SendMessageRequest", "Voice message - URL: " + this.voiceUrl + ", Duration: " + this.voiceDuration);
         }
     }
 

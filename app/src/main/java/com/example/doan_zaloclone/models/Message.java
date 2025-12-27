@@ -125,6 +125,9 @@ public class Message {
         this.stickerPackId = other.stickerPackId;
         this.stickerUrl = other.stickerUrl;
         this.isStickerAnimated = other.isStickerAnimated;
+        // Voice message fields
+        this.voiceUrl = other.voiceUrl;
+        this.voiceDuration = other.voiceDuration;
     }
 
     // Constructor cũ (backward compatible) - mặc định type là TEXT

@@ -137,6 +137,11 @@ public class ChatRepository {
                 // Create API request from Message object
                 SendMessageRequest request = new SendMessageRequest(message);
                 
+                // Debug log for voice message
+                if (Message.TYPE_VOICE.equals(message.getType())) {
+                    Log.d("ChatRepository", "Sending VOICE message - voiceUrl: " + message.getVoiceUrl() + ", duration: " + message.getVoiceDuration());
+                }
+                
                 // Call API to send message (Synchronous execute)
                 Call<ApiResponse<Message>> call = apiService.sendMessage(conversationId, request);
                 Response<ApiResponse<Message>> response = call.execute(); // Blocking call
@@ -149,7 +154,7 @@ public class ChatRepository {
                         Message savedMessage = apiResponse.getData();
                         String messageId = savedMessage.getId();
                         
-                        Log.d("ChatRepository", "Message sent successfully - ID: " + messageId);
+                        Log.d("ChatRepository", "Message sent successfully - ID: " + messageId + ", Type: " + savedMessage.getType() + ", VoiceUrl: " + savedMessage.getVoiceUrl() + ", VoiceDuration: " + savedMessage.getVoiceDuration());
                         
                         // Add to pending set - to prevent WebSocket duplicate
                         synchronized (pendingSentMessageIds) {
@@ -164,19 +169,33 @@ public class ChatRepository {
                             }
                         }, 5000);
                         
-                        // IMMEDIATE UI UPDATE: Add message to cache NOW instead of waiting for WebSocket
+                        // IMMEDIATE UI UPDATE: Add or update message in cache
                         if (conversationId.equals(currentConversationId)) {
-                            // Check if not already in cache (to prevent duplicates)
-                            boolean exists = false;
+                            // Check if already in cache
                             Message finalSavedMessage = savedMessage;
-                            for (Message msg : cachedMessages) {
+                            int existingIndex = -1;
+                            for (int i = 0; i < cachedMessages.size(); i++) {
+                                Message msg = cachedMessages.get(i);
                                 if (msg.getId() != null && msg.getId().equals(finalSavedMessage.getId())) {
-                                    exists = true;
+                                    existingIndex = i;
                                     break;
                                 }
                             }
                             
-                            if (!exists) {
+                            if (existingIndex >= 0) {
+                                // UPDATE existing message with full data from API response
+                                // (WebSocket message may be missing some fields like voiceUrl)
+                                Log.d("ChatRepository", "Updating existing message in cache with API data: " + messageId);
+                                cachedMessages.set(existingIndex, savedMessage);
+                                
+                                // Notify UI on main thread to refresh
+                                if (activeMessagesLiveData != null) {
+                                    mainHandler.post(() -> {
+                                        activeMessagesLiveData.setValue(Resource.success(new ArrayList<>(cachedMessages)));
+                                    });
+                                }
+                            } else {
+                                // Add new message
                                 Log.d("ChatRepository", "Adding sent message to cache immediately: " + messageId);
                                 cachedMessages.add(savedMessage);
                                 
@@ -709,6 +728,12 @@ public class ChatRepository {
      * Helper: Parse Message from WebSocket JSON data
      */
     private Message parseMessageFromJson(org.json.JSONObject messageData) {
+        // Debug log raw JSON data for voice messages
+        String type = messageData.optString("type", Message.TYPE_TEXT);
+        if (Message.TYPE_VOICE.equals(type)) {
+            Log.d("ChatRepository", "parseMessageFromJson VOICE - raw JSON: " + messageData.toString());
+        }
+        
         Message message = new Message();
         message.setId(messageData.optString("id", null));
         message.setSenderId(messageData.optString("senderId", null));
@@ -808,9 +833,11 @@ public class ChatRepository {
         // Voice fields
         if (messageData.has("voiceUrl")) {
             message.setVoiceUrl(messageData.optString("voiceUrl"));
+            Log.d("ChatRepository", "parseMessageFromJson - voiceUrl parsed: " + message.getVoiceUrl());
         }
         if (messageData.has("voiceDuration")) {
             message.setVoiceDuration(messageData.optInt("voiceDuration", 0));
+            Log.d("ChatRepository", "parseMessageFromJson - voiceDuration parsed: " + message.getVoiceDuration());
         }
         
         return message;
