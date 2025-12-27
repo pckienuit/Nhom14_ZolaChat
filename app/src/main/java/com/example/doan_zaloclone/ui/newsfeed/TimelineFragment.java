@@ -19,7 +19,8 @@ import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.activities.CommentsActivity;
 import com.example.doan_zaloclone.activities.CreatePostActivity;
 import com.example.doan_zaloclone.adapters.PostAdapter;
-import com.example.doan_zaloclone.models.FireBasePost;
+import com.example.doan_zaloclone.models.Post;
+import com.example.doan_zaloclone.utils.Resource;
 import com.example.doan_zaloclone.viewmodel.PostViewModel;
 
 import java.util.ArrayList;
@@ -30,7 +31,7 @@ public class TimelineFragment extends Fragment implements PostAdapter.OnPostInte
     private RecyclerView rvTimeline;
     private SwipeRefreshLayout swipeRefresh;
     private PostAdapter postAdapter;
-    private List<FireBasePost> postList;
+    private List<Post> postList;
     private PostViewModel viewModel;
 
     @Nullable
@@ -59,7 +60,6 @@ public class TimelineFragment extends Fragment implements PostAdapter.OnPostInte
 
     private void setupRecyclerView() {
         rvTimeline.setLayoutManager(new LinearLayoutManager(getContext()));
-        // Truyền 'this' làm listener để xử lý click like/comment
         postAdapter = new PostAdapter(getContext(), postList, this);
         rvTimeline.setAdapter(postAdapter);
     }
@@ -67,14 +67,14 @@ public class TimelineFragment extends Fragment implements PostAdapter.OnPostInte
     private void loadPosts() {
         swipeRefresh.setRefreshing(true);
         viewModel.getPosts().observe(getViewLifecycleOwner(), resource -> {
-            if (resource.status == com.example.doan_zaloclone.utils.Status.SUCCESS) {
+            if (resource.getStatus() == Resource.Status.SUCCESS) {
                 postList.clear();
-                if (resource.data != null) {
-                    postList.addAll(resource.data);
+                if (resource.getData() != null) {
+                    postList.addAll(resource.getData());
                 }
                 postAdapter.notifyDataSetChanged();
-            } else if (resource.status == com.example.doan_zaloclone.utils.Status.ERROR) {
-                Toast.makeText(getContext(), "Không thể tải bài viết: " + resource.message, Toast.LENGTH_SHORT).show();
+            } else if (resource.getStatus() == Resource.Status.ERROR) {
+                Toast.makeText(getContext(), "Không thể tải bài viết: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
             }
             swipeRefresh.setRefreshing(false);
         });
@@ -83,17 +83,13 @@ public class TimelineFragment extends Fragment implements PostAdapter.OnPostInte
     @Override
     public void onResume() {
         super.onResume();
-        // Không cần gọi loadPosts() ở đây nữa vì đã dùng addSnapshotListener trong Repository
-        // Dữ liệu sẽ tự động cập nhật realtime
     }
 
-    // Xử lý sự kiện Like
     @Override
     public void onLikeClick(String postId) {
         viewModel.toggleLike(postId);
     }
 
-    // Xử lý sự kiện Comment
     @Override
     public void onCommentClick(String postId) {
         Intent intent = new Intent(getActivity(), CommentsActivity.class);

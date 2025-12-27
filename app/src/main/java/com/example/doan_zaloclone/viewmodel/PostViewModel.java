@@ -4,7 +4,7 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.ViewModel;
 
 import com.example.doan_zaloclone.models.Comment;
-import com.example.doan_zaloclone.models.FireBasePost;
+import com.example.doan_zaloclone.models.Post;
 import com.example.doan_zaloclone.repository.PostRepository;
 import com.example.doan_zaloclone.utils.Resource;
 
@@ -15,25 +15,30 @@ public class PostViewModel extends ViewModel {
     private final PostRepository repository;
 
     public PostViewModel() {
-        this.repository = new PostRepository();
+        this.repository = PostRepository.getInstance();
     }
 
-    public LiveData<Resource<Boolean>> createPost(String content) {
-        return repository.createPost(content);
+    // Sửa lại để nhận vào một đối tượng Post
+    public LiveData<Resource<Void>> createPost(Post post) {
+        return repository.createPost(post);
     }
 
-    public LiveData<Resource<List<FireBasePost>>> getPosts() {
+    // Lấy danh sách bài đăng
+    public LiveData<Resource<List<Post>>> getPosts() {
         return repository.getPosts();
     }
 
+    // Xử lý like
     public void toggleLike(String postId) {
         repository.toggleLike(postId);
     }
 
+    // Gửi comment
     public LiveData<Resource<Boolean>> sendComment(String postId, String content) {
         return repository.sendComment(postId, content);
     }
 
+    // Lấy danh sách comment
     public LiveData<Resource<List<Comment>>> getComments(String postId) {
         return repository.getComments(postId);
     }

@@ -748,6 +748,7 @@ public class MainActivity extends AppCompatActivity {
         // Hide all fragments first
         if (homeFragment != null) transaction.hide(homeFragment);
         if (contactFragment != null) transaction.hide(contactFragment);
+        if (newsfeedFragment != null) transaction.hide(newsfeedFragment);
         if (personalFragment != null) transaction.hide(personalFragment);
         
         // Update UI
@@ -778,7 +779,12 @@ public class MainActivity extends AppCompatActivity {
                  // Ideally create a placeholder fragment.
                 break;
             case 3: // Timeline - Placeholder
-                 Toast.makeText(this, "Timeline Coming Soon", Toast.LENGTH_SHORT).show();
+                if (newsfeedFragment == null) {
+                    newsfeedFragment = new NewsfeedFragment();
+                    transaction.add(R.id.fragmentContainer, newsfeedFragment, "TIMELINE");
+                } else {
+                    transaction.show(newsfeedFragment);
+                }
                 break;
             case 4: // Personal
                 if (personalFragment == null) {

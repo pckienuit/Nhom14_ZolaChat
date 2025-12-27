@@ -70,8 +70,6 @@ public class VideoShortsFragment extends Fragment {
                     rvVideoShorts.setVisibility(View.VISIBLE);
                     if (resource.getData() != null && !resource.getData().isEmpty()) {
                         adapter.updateVideos(resource.getData());
-                    } else if (BuildConfig.YOUTUBE_API_KEY.isEmpty() || BuildConfig.YOUTUBE_API_KEY.equals("YOUR_YOUTUBE_API_KEY_HERE")) {
-                        Toast.makeText(getContext(), "Vui lòng thêm YouTube API Key", Toast.LENGTH_LONG).show();
                     } else {
                         Toast.makeText(getContext(), "Không tìm thấy video nào", Toast.LENGTH_SHORT).show();
                     }

@@ -2,7 +2,7 @@ package com.example.doan_zaloclone.viewmodel;
 
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.ViewModel;
-import com.example.doan_zaloclone.data.repository.YoutubeRepository;
+import com.example.doan_zaloclone.repository.YoutubeRepository;
 import com.example.doan_zaloclone.models.VideoItem;
 import com.example.doan_zaloclone.utils.Resource;
 import java.util.List;

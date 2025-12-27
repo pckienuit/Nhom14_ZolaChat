@@ -15,35 +15,38 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.doan_zaloclone.R;
-// Import đúng đường dẫn Activity (Nếu báo đỏ xem Phần 2 bên dưới)
 import com.example.doan_zaloclone.activities.CreatePostActivity;
-import com.example.doan_zaloclone.models.FireBasePost;
+import com.example.doan_zaloclone.activities.CommentsActivity;
+import com.example.doan_zaloclone.models.Post;
 import com.example.doan_zaloclone.adapters.PostAdapter;
 
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
-public class NewsFeedFragment extends Fragment {
+public class PostsFragment extends Fragment implements PostAdapter.OnPostInteractionListener {
 
     private RecyclerView rvPosts;
     private PostAdapter postAdapter;
-    private List<FireBasePost> postList;
+    private List<Post> postList;
     private FirebaseFirestore db;
     private LinearLayout layoutPostInput;
-
     private ListenerRegistration postListener;
 
-    public NewsFeedFragment() { }
+    public PostsFragment() { }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.recycler_view, container, false);
+        // Sử dụng layout cũ của NewsFeedFragment, giờ là layout của PostsFragment
+        return inflater.inflate(R.layout.fragment_posts, container, false);
     }
 
     @Override
@@ -58,13 +61,11 @@ public class NewsFeedFragment extends Fragment {
         rvPosts.setLayoutManager(new LinearLayoutManager(requireContext()));
         postList = new ArrayList<>();
 
-        // Khởi tạo Adapter
-        postAdapter = new PostAdapter(requireContext(), postList);
+        postAdapter = new PostAdapter(requireContext(), postList, this);
         rvPosts.setAdapter(postAdapter);
 
         if (layoutPostInput != null) {
             layoutPostInput.setOnClickListener(v -> {
-                // Đã sửa lỗi: Gọi trực tiếp class, không cần viết dài dòng package
                 Intent intent = new Intent(requireContext(), CreatePostActivity.class);
                 startActivity(intent);
             });
@@ -86,17 +87,42 @@ public class NewsFeedFragment extends Fragment {
                         postList.clear();
                         for (DocumentSnapshot doc : value.getDocuments()) {
                             try {
-                                FireBasePost post = doc.toObject(FireBasePost.class);
+                                Post post = doc.toObject(Post.class);
                                 if (post != null) {
                                     postList.add(post);
                                 }
                             } catch (Exception e) {
-                                Log.e("NewsFeed", "Lỗi convert data: " + e.getMessage());
+                                Log.e("PostsFragment", "Lỗi convert data: " + e.getMessage());
                             }
                         }
                         postAdapter.notifyDataSetChanged();
                     }
                 });
+    }
+
+    @Override
+    public void onLikeClick(String postId) {
+        String currentUserId = FirebaseAuth.getInstance().getUid();
+        if (postId == null || currentUserId == null) return;
+
+        db.collection("posts").document(postId).get().addOnSuccessListener(documentSnapshot -> {
+            Post post = documentSnapshot.toObject(Post.class);
+            if (post != null) {
+                Map<String, Boolean> likes = post.getLikes();
+                if (likes.containsKey(currentUserId)) {
+                    db.collection("posts").document(postId).update("likes."+currentUserId, FieldValue.delete());
+                } else {
+                    db.collection("posts").document(postId).update("likes."+currentUserId, true);
+                }
+            }
+        });
+    }
+
+    @Override
+    public void onCommentClick(String postId) {
+        Intent intent = new Intent(requireContext(), CommentsActivity.class);
+        intent.putExtra(CommentsActivity.EXTRA_POST_ID, postId);
+        startActivity(intent);
     }
 
     @Override
@@ -107,4 +133,3 @@ public class NewsFeedFragment extends Fragment {
         }
     }
 }
-

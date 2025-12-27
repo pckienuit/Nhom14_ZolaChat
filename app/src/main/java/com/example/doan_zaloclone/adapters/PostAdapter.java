@@ -13,7 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 import com.example.doan_zaloclone.R;
-import com.example.doan_zaloclone.models.FireBasePost;
+import com.example.doan_zaloclone.models.Post;
 import com.google.firebase.auth.FirebaseAuth;
 
 import org.ocpsoft.prettytime.PrettyTime;
@@ -27,7 +27,7 @@ import de.hdodenhof.circleimageview.CircleImageView;
 public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder> {
 
     private Context context;
-    private List<FireBasePost> postList;
+    private List<Post> postList;
     private PrettyTime prettyTime;
     private String currentUserId;
     private OnPostInteractionListener listener;
@@ -38,12 +38,12 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
     }
 
     // Constructor
-    public PostAdapter(Context context, List<FireBasePost> postList, OnPostInteractionListener listener) {
+    public PostAdapter(Context context, List<Post> postList, OnPostInteractionListener listener) {
         this.context = context;
         this.postList = postList;
         this.listener = listener;
         this.prettyTime = new PrettyTime(new Locale("vi"));
-        
+
         if (FirebaseAuth.getInstance().getCurrentUser() != null) {
             this.currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
         }
@@ -59,7 +59,7 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
 
     @Override
     public void onBindViewHolder(@NonNull PostViewHolder holder, int position) {
-        FireBasePost post = postList.get(position);
+        Post post = postList.get(position);
 
         // 1. Gán Tên User
         if (post.getUserName() != null) {
@@ -72,8 +72,8 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
         holder.tvContent.setText(post.getContent());
 
         // 3. Xử lý thời gian (ví dụ: "10 phút trước")
-        if (post.getTimestamp() > 0) {
-            String timeAgo = prettyTime.format(new Date(post.getTimestamp()));
+        if (post.getTimestamp() != null) {
+            String timeAgo = prettyTime.format(post.getTimestamp());
             holder.tvTime.setText(timeAgo);
         } else {
             holder.tvTime.setText("Vừa xong");

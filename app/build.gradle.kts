@@ -18,10 +18,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Lấy API key từ properties và tạo build config field
-        val youtubeApiKey = localProperties.getProperty("YOUTUBE_API_KEY", "") // Cung cấp giá trị mặc định
-        buildConfigField("String", "YOUTUBE_API_KEY", "\"$youtubeApiKey\"")
         
         // Support for 16KB page size devices
         ndk {

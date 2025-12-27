@@ -47,9 +47,11 @@ public class CommentAdapter extends RecyclerView.Adapter<CommentAdapter.CommentV
         holder.tvUserName.setText(comment.getUserName());
         holder.tvContent.setText(comment.getContent());
 
-        if (comment.getTimestamp() > 0) {
-            String timeAgo = prettyTime.format(new Date(comment.getTimestamp()));
+        if (comment.getTimestamp() != null) {
+            String timeAgo = prettyTime.format(comment.getTimestamp());
             holder.tvTime.setText(timeAgo);
+        } else {
+            holder.tvTime.setText("Vừa xong");
         }
 
         if (comment.getUserAvatar() != null && !comment.getUserAvatar().isEmpty()) {

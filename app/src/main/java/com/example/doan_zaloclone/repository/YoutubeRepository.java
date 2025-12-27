@@ -1,4 +1,4 @@
-package com.example.doan_zaloclone.data.repository;
+package com.example.doan_zaloclone.repository;
 
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
@@ -45,7 +45,7 @@ public class YoutubeRepository {
             try {
                 YouTube.Search.List search = youtubeService.search().list(Collections.singletonList("snippet"));
                 
-                search.setKey(BuildConfig.YOUTUBE_API_KEY);
+                search.setKey("AIzaSyAswbPiGp-UJkz1LHsT_GeiHkgLdWzq6KI");
                 search.setQ(query + " #shorts");
                 // SỬA LỖI: Truyền vào một List<String> cho setType theo yêu cầu của trình biên dịch
                 search.setType(Collections.singletonList("video"));

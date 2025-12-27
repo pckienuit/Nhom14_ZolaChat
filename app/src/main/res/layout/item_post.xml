@@ -97,10 +97,9 @@
             android:layout_height="24dp"
             android:layout_marginTop="12dp"
             android:layout_marginStart="16dp"
-            android:src="@android:drawable/btn_star_big_off"
+            android:src="@drawable/ic_like"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/divider"
-            app:tint="#616161" />
+            app:layout_constraintTop_toBottomOf="@id/divider" />
 
         <!-- 7. Số lượng Like (ID: tvLikeCount) -->
         <TextView
@@ -110,7 +109,7 @@
             android:layout_marginStart="8dp"
             android:text="0"
             android:gravity="center_vertical"
-            app:layout_bottom_toBottomOf="@id/btnLike"
+            app:layout_constraintBottom_toBottomOf="@id/btnLike"
             app:layout_constraintStart_toEndOf="@id/btnLike"
             app:layout_constraintTop_toTopOf="@id/btnLike" />
 
@@ -120,11 +119,10 @@
             android:layout_width="24dp"
             android:layout_height="24dp"
             android:layout_marginStart="32dp"
-            android:src="@android:drawable/stat_notify_chat"
-            app:layout_bottom_toBottomOf="@id/btnLike"
+            android:src="@drawable/ic_comment"
+            app:layout_constraintBottom_toBottomOf="@id/btnLike"
             app:layout_constraintStart_toEndOf="@id/tvLikeCount"
-            app:layout_constraintTop_toTopOf="@id/btnLike"
-            app:tint="#616161" />
+            app:layout_constraintTop_toTopOf="@id/btnLike" />
 
         <!-- 9. Số lượng Bình luận (ID: tvCommentCount) -->
         <TextView
@@ -134,7 +132,7 @@
             android:layout_marginStart="8dp"
             android:text="Bình luận"
             android:gravity="center_vertical"
-            app:layout_bottom_toBottomOf="@id/btnComment"
+            app:layout_constraintBottom_toBottomOf="@id/btnComment"
             app:layout_constraintStart_toEndOf="@id/btnComment"
             app:layout_constraintTop_toTopOf="@id/btnComment" />
 

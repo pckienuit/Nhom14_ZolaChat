@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.adapters.CommentAdapter;
 import com.example.doan_zaloclone.models.Comment;
+import com.example.doan_zaloclone.utils.Resource;
 import com.example.doan_zaloclone.viewmodel.PostViewModel;
 
 import java.util.ArrayList;
@@ -76,10 +77,10 @@ public class CommentsActivity extends AppCompatActivity {
 
     private void observeComments() {
         viewModel.getComments(postId).observe(this, resource -> {
-            if (resource.status == com.example.doan_zaloclone.utils.Status.SUCCESS) {
+            if (resource.getStatus() == Resource.Status.SUCCESS) {
                 commentList.clear();
-                if (resource.data != null) {
-                    commentList.addAll(resource.data);
+                if (resource.getData() != null) {
+                    commentList.addAll(resource.getData());
                 }
                 adapter.notifyDataSetChanged();
                 
@@ -87,8 +88,8 @@ public class CommentsActivity extends AppCompatActivity {
                 if (!commentList.isEmpty()) {
                     rvComments.smoothScrollToPosition(commentList.size() - 1);
                 }
-            } else if (resource.status == com.example.doan_zaloclone.utils.Status.ERROR) {
-                Toast.makeText(this, "Lỗi tải bình luận: " + resource.message, Toast.LENGTH_SHORT).show();
+            } else if (resource.getStatus() == Resource.Status.ERROR) {
+                Toast.makeText(this, "Lỗi tải bình luận: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -100,8 +101,8 @@ public class CommentsActivity extends AppCompatActivity {
         etContent.setText(""); // Clear input
         
         viewModel.sendComment(postId, content).observe(this, resource -> {
-            if (resource.status == com.example.doan_zaloclone.utils.Status.ERROR) {
-                Toast.makeText(this, "Gửi bình luận thất bại: " + resource.message, Toast.LENGTH_SHORT).show();
+            if (resource.getStatus() == Resource.Status.ERROR) {
+                Toast.makeText(this, "Gửi bình luận thất bại: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
     }
