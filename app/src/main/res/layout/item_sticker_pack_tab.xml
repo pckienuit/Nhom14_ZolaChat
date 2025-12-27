@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/packTabContainer"
+    android:layout_width="48dp"
+    android:layout_height="48dp"
+    android:padding="6dp"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackgroundBorderless">
+
+    <ImageView
+        android:id="@+id/packIcon"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:contentDescription="Sticker pack" />
+
+    <!-- Selection indicator -->
+    <View
+        android:id="@+id/selectionIndicator"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_gravity="bottom"
+        android:background="#0068FF"
+        android:visibility="gone" />
+
+</FrameLayout>

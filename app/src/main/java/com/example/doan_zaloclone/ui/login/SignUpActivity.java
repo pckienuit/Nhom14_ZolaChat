@@ -23,7 +23,7 @@ public class SignUpActivity extends AppCompatActivity {
     private Button signUpButton;
     private TextView loginTextView;
     private ProgressBar progressBar;
-    
+
     private AuthRepository authRepository;
 
     @Override
@@ -44,7 +44,7 @@ public class SignUpActivity extends AppCompatActivity {
         signUpButton = findViewById(R.id.signUpButton);
         loginTextView = findViewById(R.id.loginTextView);
         progressBar = findViewById(R.id.progressBar);
-        
+
         if (progressBar != null) {
             progressBar.setVisibility(View.GONE);
         }
@@ -92,8 +92,8 @@ public class SignUpActivity extends AppCompatActivity {
             @Override
             public void onSuccess(FirebaseUser user) {
                 showLoading(false);
-                Toast.makeText(SignUpActivity.this, 
-                        "Sign up successful! Please login.", 
+                Toast.makeText(SignUpActivity.this,
+                        "Sign up successful! Please login.",
                         Toast.LENGTH_SHORT).show();
                 finish();
             }
@@ -101,13 +101,13 @@ public class SignUpActivity extends AppCompatActivity {
             @Override
             public void onError(String error) {
                 showLoading(false);
-                Toast.makeText(SignUpActivity.this, 
-                        "Sign up failed: " + error, 
+                Toast.makeText(SignUpActivity.this,
+                        "Sign up failed: " + error,
                         Toast.LENGTH_LONG).show();
             }
         });
     }
-    
+
     private void showLoading(boolean isLoading) {
         if (progressBar != null) {
             progressBar.setVisibility(isLoading ? View.VISIBLE : View.GONE);

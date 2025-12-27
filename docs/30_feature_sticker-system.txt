@@ -1,0 +1,818 @@
+================================================================================
+TÍNH NĂNG STICKER SYSTEM (Sticker System Feature)
+================================================================================
+
+NGÀY TẠO: 23/12/2024
+LOẠI: Feature
+TÍNH NĂNG: Hệ thống sticker với AI background removal, store, và custom creation
+KIẾN TRÚC: MVVM + Repository Pattern
+DEPENDENCIES: UCrop, OkHttp, Glide, Firebase Firestore
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Hệ thống sticker toàn diện cho phép:
+- Gửi/nhận sticker trong chat
+- Tạo custom sticker từ ảnh (với AI xóa nền)
+- Browse và download sticker packs từ store
+- Quản lý sticker cá nhân
+
+LUỒNG HOẠT ĐỘNG CHÍNH:
+1. User → Sticker Picker → Chọn sticker → Gửi trong chat
+2. User → Create Sticker → Pick ảnh → AI remove BG → Upload VPS → Lưu Firestore
+3. User → Sticker Store → Browse packs → Download → Dùng trong picker
+
+================================================================================
+2. KIẾN TRÚC VÀ COMPONENTS
+================================================================================
+
+2.1. DATA LAYER
+---------------
+
+Models:
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Sticker.java                                                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ - id: String                                                                │
+│ - packId: String                                                            │
+│ - imageUrl: String                                                          │
+│ - thumbnailUrl: String                                                      │
+│ - isAnimated: boolean (supports WebP/GIF)                                   │
+│ - format: String (PNG/JPEG/WEBP/GIF)                                        │
+│ - creatorId: String                                                         │
+│ - tags: List<String>                                                        │
+│ - createdAt: long                                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ StickerPack.java                                                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ - id: String                                                                │
+│ - name: String                                                              │
+│ - description: String                                                       │
+│ - iconUrl: String                                                           │
+│ - type: String (OFFICIAL/USER/TRENDING)                                     │
+│ - creatorId: String                                                         │
+│ - stickerCount: int                                                         │
+│ - downloadCount: long                                                       │
+│ - isPublished: boolean                                                      │
+│ - isFree: boolean                                                           │
+│ - price: double                                                             │
+│ - createdAt: long                                                           │
+│ - updatedAt: long                                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Message.java (Extended)                                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ + TYPE_STICKER: String = "sticker"                                          │
+│ + stickerId: String                                                         │
+│ + stickerPackId: String                                                     │
+│ + stickerUrl: String                                                        │
+│ + isStickerAnimated: boolean                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+2.2. REPOSITORY LAYER
+---------------------
+
+StickerRepository.java:
+- getInstance(): Singleton pattern
+- getOfficialPacks(): LiveData<Resource<List<StickerPack>>>
+- getUserSavedPacks(userId): LiveData<Resource<List<StickerPack>>>
+- getStickersInPack(packId): LiveData<Resource<List<Sticker>>>
+- getRecentStickers(userId): LiveData<Resource<List<Sticker>>>
+- uploadCustomSticker(uri, userId, fileName, callback): void
+- getOrCreateUserStickerPack(userId, callback): void  ← packId = userId
+- addStickerToPack(packId, sticker, onSuccess): void
+- deleteSticker(packId, stickerId, onSuccess): void   ← MỚI
+- getFeaturedPacks(): LiveData<Resource<List<StickerPack>>>
+- getTrendingPacks(): LiveData<Resource<List<StickerPack>>>
+- getNewPacks(): LiveData<Resource<List<StickerPack>>>
+
+
+2.3. UI LAYER
+-------------
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ StickerPickerFragment (BottomSheet)                                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ - Horizontal pack tabs với selection indicator                              │
+│ - ViewPager2 cho swipeable sticker grids                                   │
+│ - Recent stickers tab (history icon)                                        │
+│ - Action buttons: Add Sticker, Store, My Stickers                           │
+│                                                                             │
+│ Adapters:                                                                   │
+│ - StickerPackTabAdapter: Pack tabs                                         │
+│ - StickerGridAdapter: 4-column grid                                        │
+│ - StickerPagerAdapter: ViewPager2 pages                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ CreateStickerActivity                                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ - Image picker (Android 13+ permissions)                                    │
+│ - UCrop integration (1:1 square crop, max 512x512)                         │
+│ - AI background removal (Clipdrop + rembg fallback)                        │
+│ - Checkerboard preview for transparency                                     │
+│ - Upload to VPS với progress callback                                       │
+│ - Auto-create "My Stickers" pack                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ StickerStoreActivity                                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Sections:                                                                   │
+│ - 📁 Sticker của tôi (click → MyStickerActivity)                           │
+│ - ⭐ Featured (horizontal scroll)                                           │
+│ - 🔥 Trending (grid, sorted by downloads)                                  │
+│ - 🆕 New (grid, sorted by createdAt)                                        │
+│                                                                             │
+│ Features:                                                                   │
+│ - Gradient blue header với SwipeRefreshLayout                               │
+│ - Download pack → Add to user collection                                    │
+│ - Pack click → Preview detail (planned)                                     │
+│ - Auto increment download count                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ MyStickerActivity (MỚI - 27/12/2024)                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ - Hiển thị sticker cá nhân (packId = userId)                                │
+│ - Grid layout 4 cột với SwipeRefreshLayout                                  │
+│ - Edit mode (long-press) với nút xóa                                        │
+│ - Nút tạo sticker mới → CreateStickerActivity                              │
+│ - Empty state khi chưa có sticker                                           │
+│ - Gradient blue header phù hợp UI Zalo                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ MessageAdapter - StickerMessageViewHolder                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ - VIEW_TYPE_STICKER_SENT (18)                                               │
+│ - VIEW_TYPE_STICKER_RECEIVED (19)                                           │
+│ - Glide loading with animated support (WebP/GIF)                            │
+│ - Pin indicator                                                             │
+│ - Context menu (pin, reply, forward, recall)                                │
+│ - Sender name in group chats                                                │
+│ - Size: 180x180dp                                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+2.4. SERVICES
+-------------
+
+BackgroundRemovalService.java:
+- Primary: Clipdrop API (100 free requests/month)
+- Fallback: rembg self-hosted on VPS
+- API Key: 4a4976c484431ca4a89cb1ab2a8f3ea278228d9aef74327cb898f302fee92a332197087247ed23badd193ec852e709b2
+- removeBackground(uri, context, callback): void
+- Callbacks: onSuccess(Bitmap, String), onError(String), onProgress(int)
+
+================================================================================
+3. VPS CONFIGURATION
+================================================================================
+
+3.1. SERVER DETAILS
+-------------------
+
+IP: 163.61.182.20
+OS: Ubuntu 20.04 LTS
+RAM: 2GB
+Storage: 50GB SSD
+
+Services Running:
+1. Apache2 - Static file serving (port 80)
+2. Node.js Upload Service (port 3000)
+3. rembg AI Service (port 5000) - Optional
+
+3.2. ENDPOINTS
+--------------
+
+Static Files:
+GET http://163.61.182.20/stickers/[filename]
+→ Serve sticker images
+
+Upload API:
+POST http://163.61.182.20/api/stickers/upload
+→ Body: multipart/form-data
+   - sticker: File
+   - userId: String
+→ Response: {"success": true, "url": "http://..."}
+
+Health Check:
+GET http://163.61.182.20/api/stickers/health
+→ Response: {"status": "ok", "timestamp": ...}
+
+Background Removal (Fallback):
+POST http://163.61.182.20/api/rembg/remove-background
+→ Body: multipart/form-data
+   - image: File
+→ Response: PNG file with transparent background
+
+
+3.3. DIRECTORY STRUCTURE
+------------------------
+
+/var/www/html/stickers/    # Static sticker files
+/opt/sticker-upload/       # Node.js upload service
+/opt/rembg/                # Python rembg service (optional)
+
+
+3.4. SETUP SCRIPT
+-----------------
+
+File: scripts/setup_vps_sticker_server.sh
+
+Chức năng:
+- Install Apache2, Node.js, Python3
+- Configure upload service (Express.js)
+- Setup rembg service (FastAPI)
+- Configure memory limits (2GB RAM optimization)
+- Create systemd services
+
+Chạy script:
+```bash
+chmod +x scripts/setup_vps_sticker_server.sh
+sudo ./scripts/setup_vps_sticker_server.sh
+```
+
+Kiểm tra services:
+```bash
+sudo systemctl status apache2
+sudo systemctl status sticker-upload
+sudo systemctl status rembg  # If enabled
+```
+
+================================================================================
+4. FIRESTORE SECURITY RULES
+================================================================================
+
+4.1. PERSONAL STICKER PACK (MỚI - 27/12/2024)
+----------------------------------------------
+
+THIẾT KẾ:
+- Mỗi user có 1 pack sticker cá nhân duy nhất
+- Pack ID = User ID (dễ truy vấn, không cần query)
+- Đường dẫn: stickerPacks/{userId}/stickers/{stickerId}
+
+LOGIC TẠO PACK:
+1. Kiểm tra document stickerPacks/{userId} có tồn tại không
+2. Nếu có → dùng pack đó
+3. Nếu không → tạo pack mới với packId = userId
+
+BẢO MẬT:
+- User chỉ có thể đọc/ghi pack của chính mình
+- User KHÔNG thể truy cập pack cá nhân của người khác
+- Admin có quyền đọc/ghi tất cả packs
+
+4.2. SECURITY RULES CHI TIẾT
+-----------------------------
+
+```javascript
+// Admin check function
+function isAdmin() {
+    return request.auth.token.admin == true;
+}
+
+match /stickerPacks/{packId} {
+    // READ RULES:
+    // - Official packs (type != 'user'): anyone authenticated can read
+    // - Personal packs (packId = userId): only owner OR admin can read
+    allow read: if request.auth != null && 
+                (resource.data.type != 'user' || 
+                 resource.data.creatorId == request.auth.uid ||
+                 packId == request.auth.uid ||
+                 isAdmin());
+    
+    // CREATE RULES:
+    // - Personal packs: packId MUST equal userId
+    // - Official packs: admin only
+    allow create: if request.auth != null && 
+                  ((request.resource.data.type == 'user' &&
+                    request.resource.data.creatorId == request.auth.uid &&
+                    packId == request.auth.uid) ||
+                   isAdmin());
+    
+    // UPDATE/DELETE RULES:
+    // - Owner can update/delete their pack
+    // - Admin can update/delete any pack
+    allow update, delete: if request.auth != null && 
+                          (resource.data.creatorId == request.auth.uid ||
+                           packId == request.auth.uid ||
+                           isAdmin());
+    
+    // STICKERS SUBCOLLECTION
+    match /stickers/{stickerId} {
+        // Read: only owner OR admin can read stickers in personal pack
+        allow read: if request.auth != null && 
+                    (get(/databases/$(database)/documents/stickerPacks/$(packId)).data.type != 'user' ||
+                     get(/databases/$(database)/documents/stickerPacks/$(packId)).data.creatorId == request.auth.uid ||
+                     packId == request.auth.uid ||
+                     isAdmin());
+        
+        // Write: only owner OR admin can write stickers in personal pack
+        allow write: if request.auth != null && 
+                     (packId == request.auth.uid ||
+                      get(/databases/$(database)/documents/stickerPacks/$(packId)).data.creatorId == request.auth.uid ||
+                      isAdmin());
+    }
+}
+```
+
+4.3. BẢNG TÓM TẮT QUYỀN
+------------------------
+
+┌────────────────────┬─────────────────┬─────────────────┬─────────────────┐
+│ Loại Pack          │ User thường     │ Owner           │ Admin           │
+├────────────────────┼─────────────────┼─────────────────┼─────────────────┤
+│ Official packs     │ ✅ Read         │ ✅ Read         │ ✅ Full         │
+│ Personal pack      │ ❌ Blocked      │ ✅ Full         │ ✅ Full         │
+└────────────────────┴─────────────────┴─────────────────┴─────────────────┘
+
+4.4. USER SAVED PACKS & RECENT STICKERS
+----------------------------------------
+
+```javascript
+match /users/{userId}/savedStickerPacks/{packId} {
+    allow read, write: if request.auth.uid == userId;
+}
+
+match /users/{userId}/recentStickers/{stickerId} {
+    allow read, write: if request.auth.uid == userId;
+}
+```
+
+4.5. SET ADMIN CLAIM
+--------------------
+
+Để cấp quyền admin cho user (chạy trên server với Firebase Admin SDK):
+
+```javascript
+const admin = require('firebase-admin');
+admin.auth().setCustomUserClaims(uid, { admin: true });
+```
+
+================================================================================
+5. MY STICKER ACTIVITY (MỚI - 27/12/2024)
+================================================================================
+
+5.1. TỔNG QUAN
+--------------
+
+MyStickerActivity hiển thị sticker cá nhân của user hiện tại.
+
+Đường dẫn files:
+- Activity: ui/sticker/MyStickerActivity.java
+- Adapter: ui/sticker/MyStickerAdapter.java
+- Layout: res/layout/activity_my_sticker.xml
+- Item Layout: res/layout/item_my_sticker.xml
+
+5.2. TÍNH NĂNG
+--------------
+
+1. Hiển thị sticker cá nhân (packId = userId)
+2. Pull-to-refresh
+3. Grid layout 4 cột
+4. Edit mode với long-press để xóa sticker
+5. Nút tạo sticker mới (mở CreateStickerActivity)
+6. Empty state khi chưa có sticker
+7. Đếm số lượng sticker
+
+5.3. UI DESIGN
+--------------
+
+- Header: Gradient blue (#0084FF) với nút back, title, nút tạo
+- Background: Light gray (#F5F5F5)
+- Cards: White với corner radius 8dp
+- Delete button: Red circle (#F44336) với icon delete
+
+5.4. LUỒNG HOẠT ĐỘNG
+--------------------
+
+1. User mở MyStickerActivity từ StickerStoreActivity hoặc StickerPickerFragment
+2. Activity load stickers từ stickerPacks/{userId}/stickers
+3. Hiển thị grid sticker hoặc empty state
+4. User long-press để vào edit mode → hiện nút xóa
+5. User click nút xóa → confirm dialog → xóa sticker
+6. User click nút + → mở CreateStickerActivity
+7. Sau khi tạo sticker, quay lại và reload list
+
+5.5. CODE SNIPPETS
+------------------
+
+Load stickers (chỉ load pack của user hiện tại):
+```java
+// Use userId as packId for personal stickers
+stickerRepository.getStickersInPack(currentUserId).observe(this, resource -> {
+    if (resource.isSuccess()) {
+        List<Sticker> stickers = resource.getData();
+        adapter.updateStickers(stickers);
+    }
+});
+```
+
+Delete sticker:
+```java
+stickerRepository.deleteSticker(currentUserId, sticker.getId(), () -> {
+    Toast.makeText(this, "Đã xóa sticker", Toast.LENGTH_SHORT).show();
+    loadMyStickers(); // Reload
+});
+```
+
+================================================================================
+6. HƯỚNG DẪN ADMIN - UPLOAD STICKER PACKS
+================================================================================
+
+5.1. CÀI ĐẶT DEPENDENCIES
+--------------------------
+
+Install Python requirements:
+```bash
+pip install firebase-admin requests pillow
+```
+
+5.2. ADMIN SCRIPT
+-----------------
+
+File: scripts/admin_upload_sticker_pack.py
+
+Chức năng:
+- Upload batch stickers lên VPS
+- Tạo sticker pack trong Firestore
+- Auto-generate thumbnails
+- Set pack metadata
+
+Usage:
+```bash
+python scripts/admin_upload_sticker_pack.py \
+  --pack-name "Cute Animals" \
+  --description "Adorable animal stickers" \
+  --type official \
+  --stickers-dir ./sticker_images/ \
+  --icon ./pack_icon.png
+```
+
+Parameters:
+- --pack-name: Tên gói sticker
+- --description: Mô tả
+- --type: official/user/trending
+- --stickers-dir: Thư mục chứa sticker images
+- --icon: Icon cho pack (512x512 recommended)
+- --tags: Tags (comma-separated)
+
+Output:
+- Upload stickers → VPS
+- Create pack document → Firestore
+- Create sticker documents → Firestore subcollection
+- Print pack ID và URLs
+
+
+5.3. MANUAL UPLOAD QUA FIRESTORE CONSOLE
+-----------------------------------------
+
+Bước 1: Upload Images to VPS
+```bash
+# Using curl
+for file in sticker_images/*.png; do
+  curl -X POST http://163.61.182.20/api/stickers/upload \
+    -F "sticker=@$file" \
+    -F "userId=admin_upload"
+done
+```
+
+Bước 2: Create Pack Document
+
+Collection: stickerPacks
+Document ID: [auto-generated hoặc custom]
+
+Fields:
+```
+{
+  "id": "pack_001",
+  "name": "Pack Name",
+  "description": "Pack description",
+  "type": "official",
+  "iconUrl": "http://163.61.182.20/stickers/pack_icon.png",
+  "creatorId": "admin",
+  "stickerCount": 24,
+  "downloadCount": 0,
+  "isPublished": true,
+  "isFree": true,
+  "price": 0,
+  "createdAt": [timestamp],
+  "updatedAt": [timestamp]
+}
+```
+
+Bước 3: Create Sticker Documents
+
+Subcollection: stickerPacks/{packId}/stickers
+Document ID: [auto-generated]
+
+Fields (for each sticker):
+```
+{
+  "id": "sticker_001",
+  "packId": "pack_001",
+  "imageUrl": "http://163.61.182.20/stickers/sticker1.png",
+  "thumbnailUrl": "http://163.61.182.20/stickers/thumb/sticker1.png",
+  "isAnimated": false,
+  "format": "PNG",
+  "creatorId": "admin",
+  "tags": ["happy", "cute"],
+  "createdAt": [timestamp]
+}
+```
+
+
+5.4. BULK IMPORT SCRIPT
+-----------------------
+
+File: scripts/bulk_import_stickers.py
+
+Cho phép import nhiều packs từ JSON config:
+
+Example config.json:
+```json
+{
+  "packs": [
+    {
+      "name": "Cute Animals",
+      "description": "Adorable animals",
+      "type": "official",
+      "icon": "./icons/animals.png",
+      "stickers": [
+        {"file": "./animals/cat1.png", "tags": ["cat", "cute"]},
+        {"file": "./animals/dog1.png", "tags": ["dog", "happy"]}
+      ]
+    }
+  ]
+}
+```
+
+Usage:
+```bash
+python scripts/bulk_import_stickers.py --config config.json
+```
+
+================================================================================
+6. USER GUIDE - SỬ DỤNG STICKER
+================================================================================
+
+6.1. GỬI STICKER
+----------------
+
+1. Mở chat room
+2. Click nút 😊 Sticker (bên cạnh attach image)
+3. Chọn pack từ tabs (hoặc Recent)
+4. Click sticker muốn gửi
+5. Sticker tự động gửi trong chat
+
+Tips:
+- Swipe left/right để đổi pack
+- Long-press sticker để preview lớn hơn
+
+
+6.2. TẠO CUSTOM STICKER
+------------------------
+
+1. Mở sticker picker
+2. Click "➕ Tạo sticker"
+3. Chọn ảnh từ gallery
+4. (Optional) Cắt ảnh thành hình vuông
+5. (Optional) Click "🎨 Xóa nền" để AI remove background
+6. Click "💾 Lưu sticker"
+7. Sticker được thêm vào pack "My Stickers"
+
+Lưu ý:
+- Ảnh nên có kích thước nhỏ hơn 5MB
+- Format hỗ trợ: PNG, JPEG
+- AI background removal dùng Clipdrop API (có giới hạn 100 requests/month)
+
+
+6.3. DOWNLOAD STICKER PACK
+---------------------------
+
+1. Mở sticker picker
+2. Click "🛒 Store"
+3. Browse các sections:
+   - ⭐ Featured: Packs nổi bật
+   - 🔥 Trending: Packs được tải nhiều nhất
+   - 🆕 New: Packs mới nhất
+4. Click "Tải xuống" trên pack muốn có
+5. Pack được thêm vào collection của user
+6. Dùng ngay trong picker
+
+
+6.4. QUẢN LÝ STICKER CỦA TÔI
+----------------------------
+
+1. Mở sticker picker
+2. Click "📁 My Stickers"
+3. Xem tất cả stickers đã tạo
+4. Click sticker để gửi
+5. (Planned) Long-press để delete
+
+================================================================================
+7. TESTING & VERIFICATION
+================================================================================
+
+7.1. UNIT TESTS
+---------------
+
+Test StickerRepository:
+- ✓ Upload sticker to VPS
+- ✓ Create user sticker pack
+- ✓ Add sticker to pack
+- ✓ Get stickers from pack
+- ✓ Recent stickers tracking
+
+Test BackgroundRemovalService:
+- ✓ Clipdrop API integration
+- ✓ Fallback to rembg
+- ✓ Bitmap compression
+- ✓ Error handling
+
+
+7.2. INTEGRATION TESTS
+----------------------
+
+Test Sticker Sending:
+1. ✓ Pick sticker từ picker
+2. ✓ Send sticker message
+3. ✓ Display in chat (sent)
+4. ✓ Display in chat (received)
+5. ✓ Animated sticker playback
+
+Test Custom Creation:
+1. ✓ Pick image from gallery
+2. ✓ Crop image
+3. ✓ Remove background
+4. ✓ Upload to VPS
+5. ✓ Save to Firestore
+6. ✓ Appear in My Stickers
+
+Test Store:
+1. ✓ Load featured packs
+2. ✓ Load trending packs
+3. ✓ Load new packs
+4. ✓ Download pack
+5. ✓ Use downloaded pack
+
+
+7.3. MANUAL TEST CASES
+----------------------
+
+[✓] TC01: Gửi sticker từ official pack
+[✓] TC02: Gửi sticker từ My Stickers
+[✓] TC03: Tạo sticker với background removal
+[✓] TC04: Download pack từ store
+[✓] TC05: Pin sticker message
+[✓] TC06: Reply to sticker message
+[✓] TC07: Forward sticker message
+[✓] TC08: Recall sticker message
+[✓] TC09: React to sticker message
+[✓] TC10: View sticker in pinned message preview
+
+================================================================================
+8. KNOWN ISSUES & LIMITATIONS
+================================================================================
+
+8.1. CURRENT LIMITATIONS
+------------------------
+
+1. Clipdrop API: 100 requests/month limit
+   → Solution: Setup rembg on VPS as fallback
+
+2. VPS Storage: 50GB limit
+   → Monitor usage, implement cleanup old stickers
+
+3. No sticker preview in store
+   → Planned: Pack detail view with grid preview
+
+4. No sticker search
+   → Planned: Tag-based search
+
+5. No sticker editing after creation
+   → Planned: Edit/delete custom stickers
+
+
+8.2. PERFORMANCE NOTES
+----------------------
+
+- Sticker images should be < 512x512 for optimal loading
+- Animated stickers (WebP/GIF) may be larger files
+- Use Glide caching to minimize network requests
+- Recent stickers limited to 20 items
+
+
+8.3. FUTURE IMPROVEMENTS
+------------------------
+
+[ ] Sticker pack preview in store
+[ ] Search stickers by tag
+[ ] Edit/delete custom stickers
+[ ] Share sticker packs with friends
+[ ] Sticker usage analytics
+[ ] Premium sticker packs (paid)
+[ ] Sticker pack creator tools
+[ ] Animated sticker creation (GIF maker)
+
+================================================================================
+9. TROUBLESHOOTING
+================================================================================
+
+9.1. UPLOAD FAILED
+------------------
+
+Error: "Upload failed: 500"
+Cause: VPS service down
+Fix:
+```bash
+ssh root@163.61.182.20
+sudo systemctl restart sticker-upload
+sudo systemctl status sticker-upload
+```
+
+Error: "Upload failed: Network error"
+Cause: No internet connection
+Fix: Check device internet connection
+
+
+9.2. BACKGROUND REMOVAL FAILED
+-------------------------------
+
+Error: "Clipdrop quota exceeded"
+Cause: 100 requests/month limit reached
+Fix: 
+- Wait until next month
+- Setup rembg on VPS
+- Use without background removal
+
+
+9.3. STICKER NOT LOADING
+-------------------------
+
+Error: Sticker shows placeholder icon
+Cause: Invalid URL or VPS down
+Fix:
+1. Check VPS status
+2. Verify URL in Firestore
+3. Check Apache2 service
+
+
+9.4. VPS SERVICES NOT STARTING
+-------------------------------
+
+Error: Service failed to start
+Fix:
+```bash
+# Check logs
+sudo journalctl -u sticker-upload -n 50
+sudo journalctl -u apache2 -n 50
+
+# Restart services
+sudo systemctl restart apache2
+sudo systemctl restart sticker-upload
+
+# Check ports
+sudo netstat -tlnp | grep -E '(80|3000|5000)'
+```
+
+================================================================================
+10. CHANGELOG
+================================================================================
+
+[23/12/2024] - Initial Release
+- ✅ Implemented sticker picker UI
+- ✅ Implemented sticker message display
+- ✅ Implemented custom sticker creation
+- ✅ Integrated AI background removal
+- ✅ Implemented sticker store
+- ✅ Setup VPS infrastructure
+- ✅ Configured Firestore security rules
+
+================================================================================
+11. REFERENCES
+================================================================================
+
+Documentation:
+- Firebase Firestore: https://firebase.google.com/docs/firestore
+- Clipdrop API: https://clipdrop.co/apis/docs/remove-background
+- UCrop Library: https://github.com/Yalantis/uCrop
+- Glide: https://github.com/bumptech/glide
+
+VPS Setup:
+- Apache2: https://httpd.apache.org/docs/
+- Node.js Express: https://expressjs.com/
+- rembg: https://github.com/danielgatis/rembg
+
+Related Docs:
+- 04_config_firestore-security-rules.txt
+- 29_config_vps-sticker-server-setup.txt
+
+================================================================================
+KẾT THÚC DOCUMENT
+================================================================================

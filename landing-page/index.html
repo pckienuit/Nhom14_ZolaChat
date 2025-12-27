@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZaloClone - Kết Nối Yêu Thương, Nhắn Tin Siêu Tốc</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --primary: #0068FF;
+            --secondary: #0055CC;
+            --accent: #258AF5;
+            --text-dark: #1f2937;
+            --text-light: #6b7280;
+            --bg-light: #f3f4f6;
+            --white: #ffffff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            color: var(--text-dark);
+            background: var(--white);
+            line-height: 1.6;
+        }
+
+        /* Navbar */
+        nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--text-dark);
+            margin-left: 2rem;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .nav-btn {
+            background: var(--primary);
+            color: white !important;
+            padding: 0.6rem 1.25rem;
+            border-radius: 99px;
+            transition: transform 0.2s;
+        }
+
+        .nav-btn:hover {
+            background: var(--secondary);
+            transform: translateY(-2px);
+        }
+
+        /* Hero */
+        .hero {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            min-height: 80vh;
+        }
+
+        .hero-content {
+            max-width: 600px;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            line-height: 1.2;
+            margin-bottom: 1.5rem;
+            color: #111827;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-light);
+            margin-bottom: 2.5rem;
+        }
+
+        .cta-group {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 2rem;
+            border-radius: 99px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            box-shadow: 0 4px 14px rgba(0, 136, 204, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 136, 204, 0.4);
+        }
+
+        .btn-outline {
+            border: 2px solid var(--text-dark);
+            color: var(--text-dark);
+        }
+
+        .btn-outline:hover {
+            background: var(--text-dark);
+            color: white;
+            transform: translateY(-3px);
+        }
+
+        .hero-image {
+            position: relative;
+            width: 450px;
+        }
+
+        .phone-mockup {
+            width: 300px;
+            height: 600px;
+            background: #111827;
+            border-radius: 40px;
+            margin: 0 auto;
+            position: relative;
+            border: 8px solid #374151;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+
+        .phone-screen {
+            width: 100%;
+            height: 100%;
+            background: #ffffff;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Message UI Mockup */
+        .msg-bubble {
+            padding: 0.75rem 1rem;
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            max-width: 80%;
+            font-size: 0.9rem;
+        }
+
+        .msg-left {
+            background: #f3f4f6;
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+        }
+
+        .msg-right {
+            background: #e0f2fe;
+            color: #0369a1;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+
+        /* Features */
+        .features {
+            background: var(--bg-light);
+            padding: 5rem 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            margin-bottom: 4rem;
+        }
+
+        .section-title h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .icon-box {
+            width: 60px;
+            height: 60px;
+            background: #e0f2fe;
+            color: var(--primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .card p {
+            color: var(--text-light);
+        }
+
+        /* Footer */
+        footer {
+            background: #111827;
+            color: white;
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+
+        .social-links {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .social-links a {
+            color: #9ca3af;
+            font-size: 1.5rem;
+            transition: color 0.3s;
+        }
+
+        .social-links a:hover {
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .hero {
+                flex-direction: column;
+                text-align: center;
+                padding-top: 2rem;
+            }
+
+            .hero h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero-image {
+                margin-top: 3rem;
+                width: 100%;
+            }
+
+            .cta-group {
+                justify-content: center;
+            }
+
+            nav {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .nav-links {
+                margin-top: 1rem;
+                text-align: center;
+            }
+
+            .nav-links a {
+                margin: 0 1rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav>
+        <div class="logo">
+            <i class="fas fa-comment-dots"></i> ZaloClone
+        </div>
+        <div class="nav-links">
+            <a href="#features">Tính năng</a>
+            <a href="#download">Tải ứng dụng</a>
+            <a href="/admin/dashboard.html" class="nav-btn">Admin Portal</a>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content">
+            <h1>Nhắn Gửi Yêu Thương <br><span style="color: var(--primary)">Siêu Tốc Độ</span></h1>
+            <p>Ứng dụng nhắn tin ZaloClone giúp bạn kết nối với bạn bè và người thân mọi lúc, mọi nơi với trải nghiệm
+                mượt mà, ổn định và đầy thú vị.</p>
+            <div class="cta-group">
+                <a href="#download" class="btn btn-primary">
+                    <i class="fab fa-android"></i> Tải Android App
+                </a>
+                <a href="#learn-more" class="btn btn-outline">
+                    Tìm hiểu thêm
+                </a>
+            </div>
+        </div>
+        <div class="hero-image">
+            <div class="phone-mockup">
+                <div class="phone-screen">
+                    <div style="text-align: center; padding: 1rem; font-weight: bold; border-bottom: 1px solid #eee;">
+                        Nhóm Bạn Thân 🤩
+                    </div>
+                    <div style="flex: 1; padding: 1rem 0; display: flex; flex-direction: column;">
+                        <div class="msg-bubble msg-left">Alo cả nhà ơi, tối nay 7h cà phê không? ☕️</div>
+                        <div class="msg-bubble msg-right">Ok chốt đơn nha! 👌</div>
+                        <div class="msg-bubble msg-left">
+                            <img src="https://media.giphy.com/media/l0HlHFRbmaZtBRhXG/giphy.gif"
+                                style="width: 100%; border-radius: 8px;">
+                        </div>
+                        <div class="msg-bubble msg-right">Chỗ cũ nhé, mình qua đón Lan luôn 🛵</div>
+                        <div class="msg-bubble msg-left">Tuyệt vời ông mặt trời! ❤️</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <section id="features" class="features">
+        <div class="container">
+            <div class="section-title">
+                <h2>Tại sao chọn ZaloClone?</h2>
+                <p>Đơn giản, nhanh chóng và đầy đủ tính năng bạn cần</p>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <div class="icon-box"><i class="fas fa-bolt"></i></div>
+                    <h3>Tốc độ cực nhanh</h3>
+                    <p>Hệ thống máy chủ tối ưu giúp tin nhắn được gửi và nhận ngay lập tức, không độ trễ.</p>
+                </div>
+                <div class="card">
+                    <div class="icon-box"><i class="fas fa-face-smile-wink"></i></div>
+                    <h3>Sticker vui nhộn</h3>
+                    <p>Kho sticker phong phú, đa dạng chủ đề giúp cuộc trò chuyện thêm phần sinh động.</p>
+                </div>
+                <div class="card">
+                    <div class="icon-box"><i class="fas fa-shield-alt"></i></div>
+                    <h3>Bảo mật an toàn</h3>
+                    <p>Dữ liệu của bạn được mã hóa an toàn. Chúng tôi tôn trọng quyền riêng tư tuyệt đối.</p>
+                </div>
+                <div class="card">
+                    <div class="icon-box"><i class="fas fa-video"></i></div>
+                    <h3>Video Call HD</h3>
+                    <p>Gọi điện video sắc nét, âm thanh rõ ràng như đang nói chuyện trực tiếp.</p>
+                </div>
+                <div class="card">
+                    <div class="icon-box"><i class="fas fa-file-alt"></i></div>
+                    <h3>Gửi file dễ dàng</h3>
+                    <p>Hỗ trợ gửi ảnh, video, tài liệu dung lượng lớn cực nhanh chóng.</p>
+                </div>
+                <div class="card">
+                    <div class="icon-box"><i class="fas fa-users"></i></div>
+                    <h3>Chat nhóm tiện lợi</h3>
+                    <p>Tạo nhóm chat không giới hạn, dễ dàng quản lý và tương tác với nhiều người.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <h3>ZaloClone - Kết Nối Yêu Thương</h3>
+            <p style="margin-top: 1rem; color: #9ca3af;">Đồ án môn học Phát triển ứng dụng di động</p>
+            <div class="social-links">
+                <a href="#"><i class="fab fa-facebook"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+                <a href="#"><i class="fab fa-github"></i></a>
+            </div>
+            <p>&copy; 2025 ZaloClone Team. All rights reserved.</p>
+        </div>
+    </footer>
+
+</body>
+
+</html>

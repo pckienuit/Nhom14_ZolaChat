@@ -1,0 +1,251 @@
+# Production API URLs Configuration
+
+**Date**: 2025-12-25  
+**Type**: Configuration Update  
+**Status**: ✅ Complete
+
+---
+
+## Overview
+
+Updated Android app to use production VPS API server (`https://zolachat.site`) instead of localhost development URLs.
+
+## Changes Made
+
+### 1. RetrofitClient.java
+**File**: `app/src/main/java/com/example/doan_zaloclone/api/RetrofitClient.java`
+
+```java
+// Before
+private static final String BASE_URL = "http://10.0.2.2:3000/api/";  // Localhost
+
+// After  
+private static final String BASE_URL = "https://zolachat.site/api/";  // Production VPS
+```
+
+**Impact**: All REST API calls (auth, messages, users, friends) now go to production server
+
+---
+
+### 2. SocketManager.java
+**File**: `app/src/main/java/com/example/doan_zaloclone/websocket/SocketManager.java`
+
+```java
+// Before
+private static final String SOCKET_URL = "http://10.0.2.2:3000";  // Localhost
+
+// After
+private static final String SOCKET_URL = "https://zolachat.site";  // Production VPS
+```
+
+**Impact**: WebSocket real-time messaging now connects to production server
+
+---
+
+### 3. StickerRepository.java
+**File**: `app/src/main/java/com/example/doan_zaloclone/repository/StickerRepository.java`
+
+```java
+// Before
+private static final String VPS_BASE_URL = "http://163.61.182.20";  // IP address
+
+// After
+private static final String VPS_BASE_URL = "https://zolachat.site";  // HTTPS domain
+```
+
+**Impact**: Sticker upload/download uses HTTPS with SSL
+
+---
+
+### 4. ApiTestActivity.java
+**File**: `app/src/main/java/com/example/doan_zaloclone/ApiTestActivity.java`
+
+```java
+// Before
+return "http://10.0.2.2:3000/api/";
+
+// After
+return "https://zolachat.site/api/";
+```
+
+**Impact**: Test activity displays correct production URL
+
+---
+
+### 5. WebSocketTestActivity.java
+**File**: `app/src/main/java/com/example/doan_zaloclone/WebSocketTestActivity.java`
+
+```java
+// Before
+info.append("Server: http://10.0.2.2:3000\n");
+
+// After
+info.append("Server: https://zolachat.site\n");
+```
+
+**Impact**: Test UI shows correct server address
+
+---
+
+## Testing Checklist
+
+After rebuild, verify:
+
+- [ ] Login/SignUp works with production server
+- [ ] Real-time messaging connects via WebSocket
+- [ ] API calls return data (conversations, contacts)
+- [ ] Sticker upload/download works with HTTPS
+- [ ] No SSL certificate errors
+- [ ] Network traffic inspector shows `https://zolachat.site` requests
+
+## Network Security
+
+### SSL/TLS Configuration
+
+App now uses HTTPS with Let's Encrypt SSL certificate:
+- **Certificate**: Valid for `zolachat.site`, `www.zolachat.site`
+- **Expires**: Check with `openssl s_client -connect zolachat.site:443 -servername zolachat.site`
+- **Auto-renew**: Certbot configured on VPS
+
+### Android Network Security Config
+
+If using self-signed certificates or custom CA, add to `res/xml/network_security_config.xml`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Allow specific domain -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">zolachat.site</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+</network-security-config>
+```
+
+**Note**: Not needed for Let's Encrypt certificates (already trusted by Android)
+
+---
+
+## Switching Back to Development
+
+To test with local server during development:
+
+### Method 1: Manual Edit (Quick)
+
+1. Open [RetrofitClient.java](../app/src/main/java/com/example/doan_zaloclone/api/RetrofitClient.java)
+2. Swap comments:
+   ```java
+   // private static final String BASE_URL = "https://zolachat.site/api/";
+   private static final String BASE_URL = "http://10.0.2.2:3000/api/";
+   ```
+
+3. Open [SocketManager.java](../app/src/main/java/com/example/doan_zaloclone/websocket/SocketManager.java)
+4. Swap comments:
+   ```java
+   // private static final String SOCKET_URL = "https://zolachat.site";
+   private static final String SOCKET_URL = "http://10.0.2.2:3000";
+   ```
+
+5. Rebuild app
+
+### Method 2: Build Variants (Recommended for future)
+
+Create separate build flavors in `app/build.gradle.kts`:
+
+```kotlin
+android {
+    flavorDimensions += "environment"
+    
+    productFlavors {
+        create("development") {
+            dimension = "environment"
+            applicationIdSuffix = ".dev"
+            buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:3000/api/\"")
+            buildConfigField("String", "SOCKET_URL", "\"http://10.0.2.2:3000\"")
+        }
+        
+        create("production") {
+            dimension = "environment"
+            buildConfigField("String", "BASE_URL", "\"https://zolachat.site/api/\"")
+            buildConfigField("String", "SOCKET_URL", "\"https://zolachat.site\"")
+        }
+    }
+}
+```
+
+Then in code:
+```java
+private static final String BASE_URL = BuildConfig.BASE_URL;
+private static final String SOCKET_URL = BuildConfig.SOCKET_URL;
+```
+
+---
+
+## Troubleshooting
+
+### Issue: "Unable to resolve host"
+
+**Cause**: Device not connected to internet  
+**Fix**: Enable WiFi or mobile data
+
+### Issue: "SSL handshake failed"
+
+**Cause**: Old Android version or certificate mismatch  
+**Fix**: 
+1. Check Min SDK (should be 28+)
+2. Verify certificate: `curl -v https://zolachat.site/health`
+3. Update VPS certificate if expired
+
+### Issue: "Connection refused"
+
+**Cause**: API server not running on VPS  
+**Fix**: 
+```bash
+ssh root@163.61.182.20
+pm2 status zaloclone-api
+pm2 restart zaloclone-api  # If stopped
+```
+
+### Issue: "WebSocket connection failed"
+
+**Cause**: Socket.IO not handling HTTPS correctly  
+**Fix**: Check [SocketManager.java](../app/src/main/java/com/example/doan_zaloclone/websocket/SocketManager.java) options:
+```java
+IO.Options options = new IO.Options();
+options.transports = new String[]{"websocket"};
+options.secure = true;  // Enable for HTTPS
+```
+
+---
+
+## Related Documentation
+
+- [API Deployment Guide](API_DEPLOYMENT_GUIDE.md) - Full server deployment
+- [Quick Start](QUICK_START.md) - 5-minute deployment
+- Server health check: https://zolachat.site/health
+- Admin web: https://zolachat.site/
+
+---
+
+## Notes
+
+- **Development URLs commented out** (not deleted) for easy switching
+- All URLs changed from `http://` to `https://` for security
+- Used domain name (`zolachat.site`) instead of IP address for SSL compatibility
+- WebSocket uses secure connection (wss://) automatically with https:// URL
+
+**Previous localhost IPs removed:**
+- ❌ `10.0.2.2:3000` (Android emulator localhost)
+- ❌ `127.0.0.1:3000` (localhost)
+- ❌ `http://163.61.182.20` (HTTP IP, no SSL)
+
+**Now using:**
+- ✅ `https://zolachat.site` (HTTPS domain with SSL)

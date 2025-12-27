@@ -1,0 +1,149 @@
+================================================================================
+PHÂN TÍCH TRUY CẬP DỮ LIỆU & ĐỀ XUẤT ADMIN WEB (Data Access Audit & Admin Web Proposal)
+================================================================================
+
+NGÀY TẠO: 23/12/2024
+LOẠI: Architecture / Audit
+MỤC ĐÍCH: Liệt kê các vị trí truy cập DB trực tiếp và đề xuất tính năng cho Admin Web.
+
+================================================================================
+1. TỔNG QUAN VỀ HIỆN TRẠNG QUẢN LÝ DỮ LIỆU
+================================================================================
+
+Hiện tại, ứng dụng DoAn_ZaloClone đang sử dụng mô hình kết hợp (Hybrid):
+- **Repository Pattern**: Đã được áp dụng cho Auth, Call, Chat, User, Sticker (tốt).
+- **Direct Database Access**: Vẫn còn tồn tại nhiều trong UI Layer (Activity/Fragment/Adapter), đặc biệt là MessageAdapter và RoomActivity.
+- **Admin Management**: Chưa có giao diện quản lý tập trung. Việc quản lý Sticker đang dùng Script Python. Quản lý User/Content chưa có.
+
+Sự tồn tại của Direct DB Access trong UI gây ra các vấn đề:
+1. **Khó bảo trì**: Logic truy vấn phân tán khắp nơi.
+2. **Khó test**: Gắn chặt với Firestore SDK.
+3. **Bảo mật**: Logic nghiệp vụ (như filter block user) nằm ở client dễ bị bypass.
+
+================================================================================
+2. CÁC VỊ TRÍ TRUY CẬP DATABASE TRỰC TIẾP (DIRECT DB ACCESS)
+================================================================================
+
+Dưới đây là danh sách các class đang gọi `FirebaseFirestore.getInstance()` hoặc `.collection(...)` trực tiếp thay vì qua Repository:
+
+2.1. UI COMPONENTS (Cần Refactor gấp)
+--------------------------------------
+
+1. **MessageAdapter.java** (Nghiêm trọng nhất)
+   - Truy cập: `users`, `friendRequests`, `liveLocations`
+   - Mục đích: Lấy tên/avatar người gửi, check friend status, live location
+   - Đề xuất: Chuyển logic sang `UserRepository` và `ContactRepository`. Cache thông tin user vào Room Database hoặc Memory Cache.
+
+2. **RoomActivity.java**
+   - Truy cập: `conversations`, `users`
+   - Mục đích: Lấy thông tin room, check online status.
+   - Đề xuất: Sử dụng `ChatRepository` và `UserRepository`.
+
+3. **ConversationAdapter.java**
+   - Truy cập: `users`
+   - Mục đích: Lấy thông tin người chat cùng để hiển thị avatar/tên conversation.
+   - Đề xuất: `ChatRepository` nên trả về model đã populate đủ thông tin, hoặc dùng `UserRepository` để fetch data.
+
+4. **HomeFragment.java**
+   - Truy cập: `users`, `conversations`
+   - Mục đích: Load danh sách chat, user info.
+   - Đề xuất: Hoàn toàn nên dùng `ChatRepository`.
+
+5. **GroupInfoActivity.java**
+   - Truy cập: `conversations`, `users`
+   - Mục đích: Lấy thành viên nhóm, đổi tên nhóm.
+   - Đề xuất: Chuyển vào `GroupRepository` (cần tạo mới hoặc gộp vào ChatRepository).
+
+6. **LiveLocationViewActivity.java**
+   - Truy cập: `liveLocations`
+   - Mục đích: Listen realtime location updates.
+   - Đề xuất: Chuyển vào `MapRepository` hoặc `LocationRepository`.
+
+7. **ContactFragment.java**
+   - Truy cập: `users`
+   - Mục đích: Load danh sách bạn bè.
+   - Đề xuất: Chuyển vào `UserRepository` hoặc `ContactRepository`.
+
+================================================================================
+3. CÁC DỮ LIỆU & TÍNH NĂNG CẦN ĐƯA VÀO ADMIN WEB
+================================================================================
+
+Dựa trên audit code và các tính năng còn thiếu, dưới đây là đề xuất cho hệ thống Admin Web:
+
+3.1. QUẢN LÝ NGƯỜI DÙNG (USER MANAGEMENT)
+------------------------------------------
+*Hiện tại: Không có, dữ liệu User nằm rải rác trong collection `users`.*
+
+- **Danh sách người dùng**: Xem ID, Email, Phone, Ngày tham gia.
+- **Trạng thái**: Online/Offline, Last Active.
+- **Hành động**:
+  - **Ban/Unban User**: Khóa tài khoản vi phạm (cần thêm field `isBanned` vào User model).
+  - **Verify User**: Cấp tích xanh (cần thêm field `isVerified`).
+  - **Reset Password**: Gửi email reset (nếu dùng Email Auth).
+
+3.2. QUẢN LÝ STICKER (STICKER MANAGEMENT)
+-----------------------------------------
+*Hiện tại: Dùng Script Python (admin_upload_sticker_pack.py), khó dùng cho người không biết code.*
+
+- **Upload Pack**: UI để upload trọn bộ sticker, auto-generate thumbnail.
+- **Manage Packs**:
+  - Edit: Tên, Mô tả, Tags.
+  - Sắp xếp: Chọn Featured, Trending (hiện tại logic Trending là hardcoded hoặc dựa trên download count thuần túy).
+  - Hide/Show: Ẩn pack lỗi hoặc cũ.
+- **Stats**: Xem lượt tải của từng pack.
+
+3.3. QUẢN LÝ NỘI DUNG & BÁO CÁO (MODERATION & REPORTS)
+------------------------------------------------------
+*Hiện tại: Chưa có tính năng Report trong App.*
+
+- **Hệ thống Report**:
+  - App: Thêm nút "Report Message" hoặc "Report User" trong menu.
+  - Admin: Xem danh sách report, nội dung bị report, người report.
+- **Content Moderation**:
+  - Xóa tin nhắn vi phạm (Admin delete).
+  - Xóa nhóm chat vi phạm.
+
+3.4. CẤU HÌNH HỆ THỐNG (SYSTEM CONFIG)
+---------------------------------------
+*Hiện tại: Hardcoded trong code hoặc strings.xml.*
+
+- **Global Maintenance Mode**: Tắt app bảo trì (Admin set flag → App check lúc start).
+- **Force Update**: Yêu cầu update app phiên bản mới nhất.
+- **Global Tags**: Quản lý danh sách Tags mặc định cho hệ thống (hiện tại user tự tạo tags).
+- **Banner/Announcements**: Đẩy thông báo hệ thống tới tất cả user.
+
+================================================================================
+4. ĐỀ XUẤT KIẾN TRÚC CHO ADMIN WEB
+================================================================================
+
+Để xây dựng Admin Web hiệu quả và an toàn, không nên dùng chung logic với Mobile App.
+
+4.1. CÔNG NGHỆ ĐỀ XUẤT
+----------------------
+- **Frontend**: ReactJS hoặc Next.js (Dễ tích hợp Firebase).
+- **Backend (Admin API)**: Firebase Cloud Functions hoặc Node.js (trên VPS hiện tại).
+- **Authentication**: Firebase Auth (kết hợp Role: "ADMIN" trong Claims).
+
+4.2. QUYỀN TRUY CẬP (SECURITY)
+------------------------------
+- **Custom Claims**: Set claim `role: 'admin'` cho tài khoản admin.
+- **Firestore Rules**:
+  ```javascript
+  // Ví dụ rule cho admin
+  match /{document=**} {
+    allow read, write: if request.auth.token.role == 'admin';
+  }
+  ```
+
+4.3. LỘ TRÌNH TRIỂN KHAI (ROADMAP)
+----------------------------------
+1. **Phase 1**: Refactor Mobile App (Chuyển direct access về Repository).
+2. **Phase 2**: Xây dựng Admin Web cơ bản (User List, Sticker Manager).
+3. **Phase 3**: Thêm tính năng Report trên Mobile App.
+4. **Phase 4**: Xây dựng module Moderation trên Admin Web.
+
+================================================================================
+5. TỔNG KẾT
+================================================================================
+
+Việc xây dựng Admin Web là cần thiết để vận hành app lâu dài. Tuy nhiên, trước mắt cần ưu tiên **Refactor MessageAdapter & RoomActivity** để giảm sự phụ thuộc vào Direct DB Access, giúp app ổn định và dễ bảo trì hơn trước khi scale.

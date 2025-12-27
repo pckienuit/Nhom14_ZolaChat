@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#FFFFFF">
+
+    <!-- Toolbar -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="45dp"
+        android:background="@color/white"
+        app:title="QR của tôi"
+        app:titleTextColor="@color/black"
+        app:navigationIcon="@drawable/ic_back"
+        app:menu="@menu/menu_my_qr"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#E0E0E0"/>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            android:padding="24dp">
+
+            <!-- Profile Info Card -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/cardQrProfile"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="4dp"
+                android:layout_marginTop="24dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center_horizontal"
+                    android:padding="24dp"
+                    android:background="@drawable/bg_gradient_qr">
+
+                    <!-- Avatar -->
+                    <FrameLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content">
+
+                        <ImageView
+                            android:id="@+id/ivAvatar"
+                            android:layout_width="80dp"
+                            android:layout_height="80dp"
+                            android:scaleType="centerCrop"
+                            android:src="@drawable/ic_avatar"
+                            android:background="@drawable/bg_avatar_circle_white"/>
+
+                        <!-- Online Status Dot -->
+                        <View
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:background="@drawable/bg_online_dot"
+                            android:layout_gravity="bottom|end"
+                            android:layout_marginEnd="4dp"
+                            android:layout_marginBottom="4dp"/>
+
+                    </FrameLayout>
+
+                    <!-- User Name -->
+                    <TextView
+                        android:id="@+id/tvUserName"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Người dùng"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        android:textColor="#FFFFFF"
+                        android:layout_marginTop="12dp"/>
+
+                    <!-- Bio -->
+                    <TextView
+                        android:id="@+id/tvBio"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text=""
+                        android:textSize="14sp"
+                        android:textColor="#E0E0E0"
+                        android:maxLines="2"
+                        android:ellipsize="end"
+                        android:gravity="center"
+                        android:visibility="gone"/>
+
+                    <!-- QR Code Container -->
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        app:cardCornerRadius="16dp"
+                        app:cardElevation="0dp"
+                        android:layout_marginTop="20dp">
+
+                        <FrameLayout
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:padding="16dp"
+                            android:background="#FFFFFF">
+
+                            <ImageView
+                                android:id="@+id/ivQrCode"
+                                android:layout_width="200dp"
+                                android:layout_height="200dp"
+                                android:scaleType="fitCenter"/>
+
+                            <!-- Small App Logo in center -->
+                            <ImageView
+                                android:id="@+id/ivQrLogo"
+                                android:layout_width="40dp"
+                                android:layout_height="40dp"
+                                android:src="@drawable/ic_app_logo_qr"
+                                android:layout_gravity="center"
+                                android:background="@drawable/bg_circle_white"
+                                android:padding="8dp"
+                                android:visibility="gone"/>
+
+                        </FrameLayout>
+
+                    </androidx.cardview.widget.CardView>
+
+                    <!-- QR Info -->
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Quét mã để xem trang cá nhân"
+                        android:textSize="14sp"
+                        android:textColor="#E0E0E0"
+                        android:layout_marginTop="16dp"/>
+
+                </LinearLayout>
+
+            </androidx.cardview.widget.CardView>
+
+            <!-- Action Buttons -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="24dp"
+                android:gravity="center">
+
+                <!-- Share Button -->
+                <LinearLayout
+                    android:id="@+id/btnShare"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="16dp"
+                    android:background="?attr/selectableItemBackground">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_share"
+                        android:padding="12dp"
+                        android:background="@drawable/bg_circle_light_blue"
+                        app:tint="#0068FF"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Chia sẻ"
+                        android:textSize="13sp"
+                        android:textColor="#333333"
+                        android:layout_marginTop="8dp"/>
+
+                </LinearLayout>
+
+                <!-- Save Button -->
+                <LinearLayout
+                    android:id="@+id/btnSave"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="16dp"
+                    android:background="?attr/selectableItemBackground">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_download"
+                        android:padding="12dp"
+                        android:background="@drawable/bg_circle_light_blue"
+                        app:tint="#0068FF"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Lưu ảnh"
+                        android:textSize="13sp"
+                        android:textColor="#333333"
+                        android:layout_marginTop="8dp"/>
+
+                </LinearLayout>
+
+                <!-- Scan Button -->
+                <LinearLayout
+                    android:id="@+id/btnScan"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="16dp"
+                    android:background="?attr/selectableItemBackground">
+
+                    <ImageView
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:src="@drawable/ic_qr_scan"
+                        android:padding="12dp"
+                        android:background="@drawable/bg_circle_light_blue"
+                        app:tint="#0068FF"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Quét mã"
+                        android:textSize="13sp"
+                        android:textColor="#333333"
+                        android:layout_marginTop="8dp"/>
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Note -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Mã QR này chứa liên kết đến trang cá nhân của bạn. Bạn bè có thể quét mã để xem profile và gửi lời mời kết bạn."
+                android:textSize="13sp"
+                android:textColor="#757575"
+                android:lineSpacingExtra="4dp"
+                android:layout_marginTop="24dp"
+                android:gravity="center"
+                android:paddingHorizontal="16dp"/>
+
+        </LinearLayout>
+
+    </androidx.core.widget.NestedScrollView>
+
+</LinearLayout>

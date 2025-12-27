@@ -17,32 +17,25 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
-    
-    private static final int TYPE_CAMERA = 0;
-    private static final int TYPE_PHOTO = 1;
-    
+
     // Payload constant for partial updates
     public static final String PAYLOAD_SELECTION = "selection";
-    
+    private static final int TYPE_CAMERA = 0;
+    private static final int TYPE_PHOTO = 1;
     private final List<Uri> allPhotos;
     private final List<Uri> selectedPhotos = new ArrayList<>();
     private final OnItemClickListener listener;
-    
-    public interface OnItemClickListener {
-        void onCameraClick();
-        void onPhotoClick(Uri photoUri, int position);
-    }
-    
+
     public ImagePickerAdapter(List<Uri> photos, OnItemClickListener listener) {
         this.allPhotos = photos;
         this.listener = listener;
     }
-    
+
     @Override
     public int getItemViewType(int position) {
         return position == 0 ? TYPE_CAMERA : TYPE_PHOTO;
     }
-    
+
     @NonNull
     @Override
     public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
@@ -56,7 +49,7 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             return new PhotoViewHolder(view);
         }
     }
-    
+
     @Override
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         if (holder instanceof PhotoViewHolder) {
@@ -66,7 +59,7 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             ((CameraViewHolder) holder).bind();
         }
     }
-    
+
     // Override with payloads to handle partial updates
     @Override
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position, @NonNull List<Object> payloads) {
@@ -81,28 +74,34 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             super.onBindViewHolder(holder, position, payloads);
         }
     }
-    
+
     @Override
     public int getItemCount() {
         return allPhotos.size() + 1; // +1 for camera button
     }
-    
+
     public List<Uri> getSelectedPhotos() {
         return new ArrayList<>(selectedPhotos);
     }
-    
+
     public void clearSelection() {
         selectedPhotos.clear();
         notifyDataSetChanged();
     }
-    
+
+    public interface OnItemClickListener {
+        void onCameraClick();
+
+        void onPhotoClick(Uri photoUri, int position);
+    }
+
     // Camera ViewHolder
     class CameraViewHolder extends RecyclerView.ViewHolder {
-        
+
         public CameraViewHolder(@NonNull View itemView) {
             super(itemView);
         }
-        
+
         public void bind() {
             itemView.setOnClickListener(v -> {
                 if (listener != null) {
@@ -111,14 +110,14 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             });
         }
     }
-    
+
     // Photo ViewHolder
     class PhotoViewHolder extends RecyclerView.ViewHolder {
         private final ImageView photoImageView;
         private final View selectionOverlay;
         private final View checkboxBackground;
         private final TextView selectionNumber;
-        
+
         public PhotoViewHolder(@NonNull View itemView) {
             super(itemView);
             photoImageView = itemView.findViewById(R.id.photoImageView);
@@ -126,7 +125,7 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
             checkboxBackground = itemView.findViewById(R.id.checkboxBackground);
             selectionNumber = itemView.findViewById(R.id.selectionNumber);
         }
-        
+
         public void bind(Uri photoUri, int position) {
             // Load photo with Glide (only on full bind) - OPTIMIZED
             Glide.with(itemView.getContext())
@@ -134,15 +133,15 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                     .centerCrop()
                     .thumbnail(0.1f)  // Show 10% thumbnail first for faster initial load
                     .into(photoImageView);
-            
+
             // Update selection state
             updateSelectionState(photoUri);
-            
+
             // Handle click
             itemView.setOnClickListener(v -> {
                 int selectionIndex = selectedPhotos.indexOf(photoUri);
                 boolean wasSelected = selectionIndex != -1;
-                
+
                 if (wasSelected) {
                     // Deselect
                     selectedPhotos.remove(photoUri);
@@ -150,26 +149,26 @@ public class ImagePickerAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
                     // Select
                     selectedPhotos.add(photoUri);
                 }
-                
+
                 // Update all items to refresh selection numbers
                 // Start from position 1 (skip camera)
                 notifyItemRangeChanged(1, allPhotos.size(), PAYLOAD_SELECTION);
-                
+
                 if (listener != null) {
                     listener.onPhotoClick(photoUri, position);
                 }
             });
         }
-        
+
         // Update only selection state without reloading image
         public void updateSelectionState(Uri photoUri) {
             int selectionIndex = selectedPhotos.indexOf(photoUri);
             boolean isSelected = selectionIndex != -1;
-            
+
             // Update UI based on selection state
             selectionOverlay.setVisibility(isSelected ? View.VISIBLE : View.GONE);
             checkboxBackground.setSelected(isSelected);
-            
+
             if (isSelected) {
                 selectionNumber.setVisibility(View.VISIBLE);
                 selectionNumber.setText(String.valueOf(selectionIndex + 1));

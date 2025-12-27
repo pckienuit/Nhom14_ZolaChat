@@ -1,0 +1,147 @@
+# Phase 3D: Group Chat Management - Implementation Plan
+
+**Status:** 🚧 IN PROGRESS  
+**Started:** 2025-12-25
+
+---
+
+## 📊 Assessment
+
+### Android Status: ✅ Already Migrated
+- `ChatRepository.createGroup()` - Call API ✅
+- Uses `apiService.createConversation()` ✅
+- Member management likely in UI layer
+
+### Backend Status: ❌ Not Implemented
+- No `/api/conversations` endpoints yet
+- Need to create routes
+
+---
+
+## 🎯 Required APIs
+
+### 1. Create Group/Conversation
+```
+POST /api/conversations
+Body: {
+  "type": "GROUP" | "PRIVATE",
+  "name": "Nhóm gia đình",  // For GROUP only
+  "member Ids": ["userId1", "userId2"],
+  "adminId": "userId1"      // For GROUP only
+}
+Response: {
+  "conversationId": "xxx",
+  "conversation": {...}
+}
+WebSocket: conversation_created → All members
+```
+
+### 2. Update Group Info
+```
+PUT /api/conversations/:conversationId
+Body: {
+  "name": "New name",
+  "avatar": "https://..."
+}
+Response: { "success": true }
+WebSocket: conversation_updated → All members
+```
+
+### 3. Add Member
+```
+POST /api/conversations/:conversationId/members
+Body: {
+  "userId": "newMemberId"
+}
+Response: { "success": true }
+WebSocket: member_added → All members
+```
+
+### 4. Remove Member
+```
+DELETE /api/conversations/:conversationId/members/:userId
+Response: { "success": true }
+WebSocket: member_removed → All members
+```
+
+### 5. Leave Group
+```
+POST /api/conversations/:conversationId/leave
+Response: { "success": true }
+WebSocket: member_left → All members
+```
+
+### 6. Promote/Demote Admin
+```
+PUT /api/conversations/:conversationId/admins
+Body: {
+  "userId": "memberId",
+  "action": "add" | "remove"
+}
+Response: { "success": true }
+WebSocket: admin_updated → All members
+```
+
+---
+
+## 📝 Implementation Steps
+
+### Step 1: Create Backend Routes ✅ NEXT
+1. Create `server/src/routes/conversations.js`
+2. Implement POST /api/conversations
+3. Implement PUT /api/conversations/:id
+4. Implement member management endpoints
+5. Add WebSocket events
+
+### Step 2: Verify Android
+1. Check `ApiService.createConversation()` matches backend
+2. Add missing endpoints if needed
+3. Test group creation
+
+### Step 3: Testing
+1. Create group
+2. Update group name/avatar
+3. Add/remove members
+4. Leave group
+5. Admin operations
+6. Real-time updates
+
+---
+
+## 🔧 Technical Details
+
+### Firestore Structure
+```
+conversations/{conversationId}
+  - id
+  - type: "GROUP" | "PRIVATE"
+  - name (GROUP only)
+  - avatar
+  - memberIds: [...]
+  - adminIds: [...] (GROUP only)
+  - createdAt
+  - lastMessageAt
+  - lastMessage
+```
+
+### Validation Rules
+- GROUP must have ≥2 members
+- PRIVATE must have exactly 2 members
+- Only admins can update group info
+- Only admins can add/remove members
+- Cannot remove last admin
+- User can only leave if not last admin
+
+---
+
+## 🎯 Success Criteria
+- [ ] All APIs implemented
+- [ ] WebSocket events working
+- [ ] Android integration verified
+- [ ] Real-time updates across devices
+- [ ] Permission checks enforced
+- [ ] Error handling complete
+
+---
+
+**Next:** Implement backend routes file

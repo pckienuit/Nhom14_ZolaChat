@@ -1,0 +1,145 @@
+# Firebase Quick Reference
+
+## 🔥 AuthRepository API
+
+### Login
+```java
+authRepository.login(email, password, new AuthRepository.AuthCallback() {
+    @Override
+    public void onSuccess(FirebaseUser user) {
+        // Login thành công
+        String userId = user.getUid();
+        String email = user.getEmail();
+    }
+    
+    @Override
+    public void onError(String error) {
+        // Login thất bại
+        Toast.makeText(context, error, Toast.LENGTH_SHORT).show();
+    }
+});
+```
+
+### Register
+```java
+authRepository.register(name, email, password, new AuthRepository.AuthCallback() {
+    @Override
+    public void onSuccess(FirebaseUser user) {
+        // Register + Firestore save thành công
+    }
+    
+    @Override
+    public void onError(String error) {
+        // Register thất bại
+    }
+});
+```
+
+### Logout
+```java
+authRepository.logout(); // Tự động update isOnline = false
+```
+
+### Check Auth Status
+```java
+if (authRepository.isAuthenticated()) {
+    // User đã đăng nhập
+    FirebaseUser user = authRepository.getCurrentUser();
+}
+```
+
+## 📊 Firestore Schema
+
+### Users Collection
+```
+users/{userId}
+  - userId: string
+  - name: string
+  - email: string
+  - createdAt: timestamp
+  - isOnline: boolean
+  - lastSeen: timestamp
+```
+
+### Read User Data
+```java
+FirebaseFirestore db = FirebaseFirestore.getInstance();
+db.collection("users").document(userId)
+    .get()
+    .addOnSuccessListener(documentSnapshot -> {
+        String name = documentSnapshot.getString("name");
+        Boolean isOnline = documentSnapshot.getBoolean("isOnline");
+    });
+```
+
+### Update User
+```java
+Map<String, Object> updates = new HashMap<>();
+updates.put("isOnline", true);
+
+db.collection("users").document(userId)
+    .update(updates)
+    .addOnSuccessListener(aVoid -> { /* success */ });
+```
+
+## 🎯 Usage Examples
+
+### Auto-Login Flow
+```java
+// LoginActivity.onCreate()
+authRepository = new AuthRepository();
+if (authRepository.isAuthenticated()) {
+    navigateToMain();
+    return;
+}
+```
+
+### Loading State Pattern
+```java
+private void showLoading(boolean isLoading) {
+    progressBar.setVisibility(isLoading ? View.VISIBLE : View.GONE);
+    button.setEnabled(!isLoading);
+    editText.setEnabled(!isLoading);
+}
+```
+
+### Navigation với Clear Stack
+```java
+Intent intent = new Intent(this, LoginActivity.class);
+intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+startActivity(intent);
+finish();
+```
+
+## ⚠️ Error Codes
+
+```java
+// Common Firebase Auth errors
+ERROR_INVALID_EMAIL
+ERROR_WRONG_PASSWORD
+ERROR_USER_NOT_FOUND
+ERROR_EMAIL_ALREADY_IN_USE
+ERROR_WEAK_PASSWORD
+ERROR_NETWORK_REQUEST_FAILED
+```
+
+## 🔧 Build Commands
+
+```bash
+# Windows
+.\gradlew clean
+.\gradlew build
+.\gradlew installDebug
+
+# Check for errors
+.\gradlew compileDebugJavaWithJavac
+```
+
+## 🧪 Test Credentials
+
+```
+Email: test@example.com
+Password: 123456
+
+Hoặc tạo account mới qua Sign Up screen
+```

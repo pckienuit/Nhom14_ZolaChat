@@ -2,16 +2,19 @@
 <androidx.constraintlayout.widget.ConstraintLayout 
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/white"
-    android:fitsSystemWindows="true">
+    android:background="@color/zalo_background_gray">
 
     <androidx.appcompat.widget.Toolbar
         android:id="@+id/toolbar"
         android:layout_width="0dp"
-        android:layout_height="?attr/actionBarSize"
-        android:background="@color/colorPrimary"
+        android:layout_height="wrap_content"
+        android:minHeight="?attr/actionBarSize"
+        android:background="@drawable/bg_gradient_blue"
+        android:paddingTop="45dp"
+        android:paddingBottom="10dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -20,48 +23,80 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
-            <TextView
-                android:id="@+id/titleTextView"
+            <!-- Title and Subtitle Container -->
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Chat"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:textColor="@color/white"
-                android:ellipsize="end"
-                android:maxLines="1" />
-            
-            <ImageButton
-                android:id="@+id/fileManagementButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/ic_file"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/white"
-                android:contentDescription="Quản lý file" />
-            
-            <ImageButton
-                android:id="@+id/videoCallButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/ic_videocam"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/white"
-                android:contentDescription="Video call" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/titleTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Chat Name"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/white"
+                    android:ellipsize="end"
+                    android:maxLines="1" />
+                    
+                <TextView
+                    android:id="@+id/subtitleTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="12sp"
+                    android:textColor="#B3FFFFFF"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:visibility="gone" />
+
+            </LinearLayout>
             
             <ImageButton
                 android:id="@+id/voiceCallButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/ic_call"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_phone_outline"
                 android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
                 android:tint="@color/white"
                 android:contentDescription="Voice call" />
+
+            <ImageButton
+                android:id="@+id/videoCallButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_video_call_outline"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
+                android:tint="@color/white"
+                android:contentDescription="Video call" />
+
+            <ImageButton
+                android:id="@+id/menuButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_menu_list" 
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:padding="10dp"
+                android:scaleType="fitCenter"
+                android:tint="@color/white"
+                android:contentDescription="Menu" />
+                
+            <!-- Hidden original buttons for compatibility logic -->
+            <ImageButton
+                 android:id="@+id/fileManagementButton"
+                 android:layout_width="0dp"
+                 android:layout_height="0dp"
+                 android:visibility="gone"/>
 
         </LinearLayout>
 
@@ -80,17 +115,87 @@
         <include layout="@layout/layout_pinned_message_bar" />
     </FrameLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/messagesRecyclerView"
+    <!-- Add Friend Banner (shown when not friends) -->
+    <LinearLayout
+        android:id="@+id/addFriendBanner"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#E3F2FD"
+        android:padding="12dp"
+        android:gravity="center_vertical"
+        android:elevation="2dp"
+        android:visibility="gone"
+        tools:visibility="visible"
+        app:layout_constraintTop_toBottomOf="@id/pinnedMessagesContainer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@drawable/ic_person_add"
+            android:tint="@color/colorPrimary"
+            android:padding="8dp" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="8dp">
+
+            <TextView
+                android:id="@+id/addFriendTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Chưa là bạn bè"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/black" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Gửi lời mời kết bạn để trò chuyện"
+                android:textSize="12sp"
+                android:textColor="@android:color/darker_gray" />
+
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSendFriendRequest"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:text="Kết bạn"
+            android:textSize="13sp"
+            android:backgroundTint="@color/colorPrimary"
+            app:cornerRadius="18dp"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            style="@style/Widget.MaterialComponents.Button" />
+
+    </LinearLayout>
+
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipeRefreshLayout"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:padding="16dp"
-        android:clipToPadding="false"
-        android:clipChildren="false"
-        app:layout_constraintTop_toBottomOf="@id/pinnedMessagesContainer"
+        app:layout_constraintTop_toBottomOf="@id/addFriendBanner"
         app:layout_constraintBottom_toTopOf="@id/inputContainer"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/messagesRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp"
+            android:clipToPadding="false"
+            android:clipChildren="false" />
+
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
     <!-- Container for input layouts -->
     <LinearLayout
@@ -98,6 +203,8 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
+        android:background="@color/white"
+        android:elevation="4dp"
         app:layout_constraintBottom_toTopOf="@id/imagePickerContainer"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -113,49 +220,316 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="8dp"
-            android:background="@color/white"
-            android:elevation="4dp"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="6dp"
             android:visibility="visible">
 
+            <!-- Sticker Button (Left) -->
             <ImageButton
-                android:id="@+id/moreActionsButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="8dp"
-                android:src="@drawable/ic_more_horiz"
+                android:id="@+id/stickerButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@drawable/ic_sticker_outline"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/colorPrimary"
-                android:contentDescription="More actions" />
+                android:tint="#666666"
+                android:contentDescription="Sticker" />
 
-            <ImageButton
-                android:id="@+id/attachImageButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="8dp"
-                android:src="@drawable/ic_image"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/colorPrimary"
-                android:contentDescription="Attach image" />
-
+            <!-- Input EditText -->
             <EditText
                 android:id="@+id/messageEditText"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:hint="Type a message..."
-                android:padding="12dp"
-                android:background="@drawable/message_input_background"
-                android:maxLines="4" />
+                android:layout_marginHorizontal="8dp"
+                android:hint="Tin nhắn"
+                android:paddingVertical="8dp"
+                android:paddingHorizontal="12dp"
+                android:background="@drawable/bg_message_input" 
+                android:textSize="16sp"
+                android:maxLines="5"
+                android:inputType="textMultiLine|textCapSentences" />
+            
+             <!-- Right Action Buttons -->
+             <LinearLayout
+                 android:layout_width="wrap_content"
+                 android:layout_height="wrap_content"
+                 android:orientation="horizontal"
+                 android:gravity="center_vertical">
+                 
+                 <ImageButton
+                    android:id="@+id/moreActionsButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_more_horiz"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:tint="#666666"
+                    android:contentDescription="More actions" />
 
+                 <ImageButton
+                    android:id="@+id/voiceRecordButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_microphone"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:tint="#666666"
+                    android:contentDescription="Voice record" />
+
+                <ImageButton
+                    android:id="@+id/attachImageButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_gallery_orange" 
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Attach image" />
+                
+                <!-- Send button (initially hidden or replaces mic when typing, but keeping for logic for now) -->
+               <ImageButton
+                    android:id="@+id/sendButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@drawable/ic_send_blue"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:visibility="gone"
+                    android:contentDescription="Send" />
+
+             </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Voice Recording UI (hidden by default) -->
+        <LinearLayout
+            android:id="@+id/recordingInputLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="10dp"
+            android:visibility="gone"
+            android:background="#FFFFFF"
+            android:elevation="4dp">
+
+            <!-- Delete button -->
             <ImageButton
-                android:id="@+id/sendButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="8dp"
-                android:src="@drawable/ic_send"
+                android:id="@+id/deleteRecordingButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@android:drawable/ic_menu_delete"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="@color/colorPrimary" />
+                android:tint="#757575"
+                android:contentDescription="Delete recording" />
+
+            <!-- Recording timer -->
+            <TextView
+                android:id="@+id/recordingTimerText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textSize="14sp"
+                android:typeface="monospace"
+                android:textColor="#F44336"
+                android:paddingHorizontal="8dp" />
+            
+            <!-- Waveform visualization (Phase 4D-2) -->
+            <com.example.doan_zaloclone.ui.room.WaveformView
+                android:id="@+id/waveformView"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:layout_marginHorizontal="8dp" />
+
+            <!-- Stop button -->
+            <ImageButton
+                android:id="@+id/stopRecordingButton"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:src="@android:drawable/ic_media_pause"
+                android:background="@drawable/circle_background_red_light"
+                android:backgroundTint="#FEECEC"
+                android:padding="8dp"
+                android:scaleType="fitCenter"
+                android:tint="#F44336"
+                android:contentDescription="Stop recording" />
+
+        </LinearLayout>
+
+        <!-- Audio Editor UI (Phase 4D-3, hidden by default) -->
+        <LinearLayout
+            android:id="@+id/editorInputLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone"
+            android:background="@drawable/top_rounded_white_bg"
+            android:elevation="16dp">
+
+            <!-- Header with Close button -->
+            <RelativeLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp">
+                
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Xem lại bản ghi"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#333333"
+                    android:layout_centerVertical="true" />
+
+                <ImageButton
+                    android:id="@+id/closeEditorButton"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_alignParentEnd="true"
+                    android:src="@android:drawable/ic_menu_close_clear_cancel"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:tint="#999999"
+                    android:contentDescription="Close editor" />
+            </RelativeLayout>
+
+            <!-- Waveform preview -->
+            <com.example.doan_zaloclone.ui.room.WaveformView
+                android:id="@+id/editorWaveformView"
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Duration display -->
+            <TextView
+                android:id="@+id/editorDurationText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:text="00:00"
+                android:textSize="14sp"
+                android:textColor="#666666"
+                android:typeface="monospace" 
+                android:layout_marginBottom="24dp" />
+
+            <!-- Playback Controls Container -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="24dp">
+                
+                <!-- Speed Controls (Left) -->
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="horizontal"
+                    android:background="@drawable/rounded_gray_bg_small"
+                    android:padding="2dp">
+
+                    <Button
+                        android:id="@+id/speed05Button"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="32dp"
+                        android:layout_weight="1"
+                        android:text="0.5x"
+                        android:textSize="11sp"
+                        android:textAllCaps="false"
+                        android:padding="0dp"
+                        android:minWidth="0dp" />
+
+                    <Button
+                        android:id="@+id/speed10Button"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="32dp"
+                        android:layout_weight="1"
+                        android:text="1x"
+                        android:textStyle="bold"
+                        android:textSize="11sp"
+                        android:textAllCaps="false"
+                        android:padding="0dp"
+                        android:minWidth="0dp" />
+
+                    <Button
+                        android:id="@+id/speed15Button"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="32dp"
+                        android:layout_weight="1"
+                        android:text="1.5x"
+                        android:textSize="11sp"
+                        android:textAllCaps="false"
+                        android:padding="0dp"
+                        android:minWidth="0dp" />
+
+                    <Button
+                        android:id="@+id/speed20Button"
+                        style="@style/Widget.AppCompat.Button.Borderless"
+                        android:layout_width="0dp"
+                        android:layout_height="32dp"
+                        android:layout_weight="1"
+                        android:text="2x"
+                        android:textSize="11sp"
+                        android:textAllCaps="false"
+                        android:padding="0dp"
+                        android:minWidth="0dp" />
+                </LinearLayout>
+
+                <!-- Spacer -->
+                <View android:layout_width="16dp" android:layout_height="1dp" />
+
+                <!-- Play Button (Right) -->
+                <ImageButton
+                    android:id="@+id/playPauseButton"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:src="@android:drawable/ic_media_play"
+                    android:background="@drawable/circle_blue_bg"
+                    android:padding="12dp"
+                    android:scaleType="fitCenter"
+                    android:tint="@android:color/white"
+                    android:elevation="2dp"
+                    android:contentDescription="Play/Pause" />
+
+            </LinearLayout>
+
+            <!-- Action buttons -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center">
+
+                <!-- Re-record button -->
+                <Button
+                    android:id="@+id/reRecordButton"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="Ghi âm lại"
+                    android:textSize="14sp"
+                    android:textColor="#555555"
+                    android:background="?attr/selectableItemBackground"
+                    android:textAllCaps="false" />
+
+                <Space android:layout_width="12dp" android:layout_height="wrap_content" />
+
+                <!-- Send button -->
+                <Button
+                    android:id="@+id/sendVoiceButton"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:text="Gửi"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@android:color/white"
+                    android:background="@drawable/rounded_blue_bg"
+                    android:textAllCaps="false" />
+
+            </LinearLayout>
 
         </LinearLayout>
 
@@ -166,8 +540,6 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:padding="8dp"
-            android:background="@color/white"
-            android:elevation="4dp"
             android:visibility="gone"
             android:gravity="center_vertical">
 

@@ -19,15 +19,10 @@ import java.util.List;
 
 public class GroupMemberAdapter extends RecyclerView.Adapter<GroupMemberAdapter.MemberViewHolder> {
 
+    private final String currentUserId;
+    private final boolean isCurrentUserAdmin;
+    private final OnMemberActionListener listener;
     private List<GroupMember> members = new ArrayList<>();
-    private String currentUserId;
-    private boolean isCurrentUserAdmin;
-    private OnMemberActionListener listener;
-
-    public interface OnMemberActionListener {
-        void onRemoveMember(GroupMember member);
-        void onMemberLongClick(GroupMember member);
-    }
 
     public GroupMemberAdapter(String currentUserId, boolean isCurrentUserAdmin, OnMemberActionListener listener) {
         this.currentUserId = currentUserId;
@@ -86,12 +81,18 @@ public class GroupMemberAdapter extends RecyclerView.Adapter<GroupMemberAdapter.
         diffResult.dispatchUpdatesTo(this);
     }
 
+    public interface OnMemberActionListener {
+        void onRemoveMember(GroupMember member);
+
+        void onMemberLongClick(GroupMember member);
+    }
+
     class MemberViewHolder extends RecyclerView.ViewHolder {
-        private ImageView avatarImageView;
-        private TextView nameTextView;
-        private TextView emailTextView;
-        private TextView adminBadgeTextView;
-        private ImageView removeButton;
+        private final ImageView avatarImageView;
+        private final TextView nameTextView;
+        private final TextView emailTextView;
+        private final TextView adminBadgeTextView;
+        private final ImageView removeButton;
 
         public MemberViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -117,18 +118,19 @@ public class GroupMemberAdapter extends RecyclerView.Adapter<GroupMemberAdapter.
             if (member.getAvatarUrl() != null && !member.getAvatarUrl().isEmpty()) {
                 Glide.with(itemView.getContext())
                         .load(member.getAvatarUrl())
+                        .circleCrop()
                         .placeholder(R.drawable.ic_person)
                         .into(avatarImageView);
             } else {
                 avatarImageView.setImageResource(R.drawable.ic_person);
             }
-            
+
             // Click avatar to view profile
             avatarImageView.setOnClickListener(v -> {
                 com.example.doan_zaloclone.utils.ProfileNavigator.openUserProfile(
-                    itemView.getContext(), member.getUserId());
+                        itemView.getContext(), member.getUserId());
             });
-            
+
             // Long click for admin transfer
             itemView.setOnLongClickListener(v -> {
                 if (listener != null) {

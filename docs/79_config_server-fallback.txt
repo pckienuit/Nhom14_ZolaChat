@@ -1,0 +1,171 @@
+# Server Fallback Mechanism
+
+## 📋 Overview
+
+Android app tự động fallback qua các server URLs khi kết nối thất bại.
+
+## 🔄 Server Priority List
+
+| Priority | URL | Protocol | Description |
+|----------|-----|----------|-------------|
+| 1 (Primary) | `https://zolachat.site/api/` | HTTPS | Preferred - Secure connection |
+| 2 (Secondary) | `http://zolachat.site/api/` | HTTP | Fallback if HTTPS fails |
+| 3 (Fallback) | `http://163.61.182.20/api/` | HTTP | Direct IP - Always works |
+| 4 (Dev) | `http://10.0.2.2:3000/api/` | HTTP | Localhost (development only) |
+
+## 🚀 How It Works
+
+### Automatic Fallback
+```
+1. App starts → Tries PRIMARY_URL (HTTPS domain)
+2. If 2+ requests fail → Switches to SECONDARY_URL (HTTP domain)
+3. If 2+ requests fail → Switches to FALLBACK_URL (HTTP IP)
+4. If all fail → Stays on last URL and logs error
+```
+
+### Success Recovery
+```
+- When any request succeeds → Reset failure counter
+- App continues using current working URL
+- Manual reset to primary: RetrofitClient.resetToPrimaryServer()
+```
+
+## 🔍 Code Implementation
+
+### File: `RetrofitClient.java`
+
+```java
+// Server URLs
+private static final String PRIMARY_URL = "https://zolachat.site/api/";
+private static final String SECONDARY_URL = "http://zolachat.site/api/";
+private static final String FALLBACK_URL = "http://163.61.182.20/api/";
+
+// Failure tracking
+private static String currentBaseUrl = PRIMARY_URL;
+private static int failureCount = 0;
+private static final int MAX_FAILURES_BEFORE_FALLBACK = 2;
+```
+
+### Interceptor Logic
+
+```java
+try {
+    Response response = chain.proceed(request);
+    
+    if (response.isSuccessful()) {
+        failureCount = 0;  // Reset on success
+    }
+    
+    return response;
+} catch (IOException e) {
+    failureCount++;
+    
+    if (failureCount >= MAX_FAILURES_BEFORE_FALLBACK) {
+        switchToNextServer();  // Try next URL
+    }
+    
+    throw e;
+}
+```
+
+## 📱 Usage
+
+### Get Current Server
+```java
+String currentServer = RetrofitClient.getCurrentServerUrl();
+Log.d("Server", "Using: " + currentServer);
+```
+
+### Force Reset to Primary
+```java
+// After network recovery or manual refresh
+RetrofitClient.resetToPrimaryServer();
+```
+
+### Check Logs
+```
+D/RetrofitClient: ✅ Retrofit initialized with: https://zolachat.site/api/
+E/RetrofitClient: ❌ Request failed (attempt 1): Failed to connect...
+E/RetrofitClient: ❌ Request failed (attempt 2): Failed to connect...
+W/RetrofitClient: ⚠️ Switching to fallback server...
+W/RetrofitClient: 🔄 Switched to fallback server: http://zolachat.site/api/
+```
+
+## ⚙️ Configuration
+
+### Timeout Settings
+```java
+.connectTimeout(15, TimeUnit.SECONDS)  // Fast failure for quick fallback
+.readTimeout(30, TimeUnit.SECONDS)
+.writeTimeout(30, TimeUnit.SECONDS)
+```
+
+### Adjust Failure Threshold
+```java
+private static final int MAX_FAILURES_BEFORE_FALLBACK = 2;  // Change to 3 or 1
+```
+
+## 🧪 Testing
+
+### Test Fallback Manually
+
+1. **Block HTTPS:**
+   - Turn off WiFi briefly or use airplane mode
+   - Make an API call
+   - Check logs for fallback
+
+2. **Test Recovery:**
+   ```java
+   RetrofitClient.resetToPrimaryServer();
+   // Next request will use PRIMARY_URL again
+   ```
+
+3. **Simulate Failures:**
+   ```java
+   // In development, temporarily set PRIMARY_URL to invalid URL
+   private static final String PRIMARY_URL = "https://invalid.url/api/";
+   ```
+
+## 📊 Monitoring
+
+### Display Current Server (Optional)
+
+Add to Settings screen or Debug menu:
+
+```java
+// In SettingsActivity or DebugActivity
+String server = RetrofitClient.getCurrentServerUrl();
+tvServerStatus.setText("Server: " + server);
+
+// Add refresh button
+btnRefreshServer.setOnClickListener(v -> {
+    RetrofitClient.resetToPrimaryServer();
+    Toast.makeText(this, "Reset to primary server", Toast.LENGTH_SHORT).show();
+});
+```
+
+## 🔐 Security Considerations
+
+1. **HTTPS First:** Always tries secure connection first
+2. **HTTP Fallback:** Only uses HTTP when HTTPS fails
+3. **IP Fallback:** Direct IP bypass DNS issues
+4. **Transparent:** All happens automatically, no user action needed
+
+## ⚠️ Known Limitations
+
+1. **Cache Effect:** Once fallen back, stays on that URL until reset
+2. **Network Change:** Doesn't auto-detect network recovery
+3. **Manual Reset:** Need to call `resetToPrimaryServer()` to retry HTTPS
+
+## 🔮 Future Improvements
+
+- [ ] Auto-retry primary server after X minutes
+- [ ] Network connectivity listener to auto-reset
+- [ ] Ping health check before switching
+- [ ] User preference to force specific server
+- [ ] Statistics tracking (success/failure rates per server)
+
+---
+
+**Last Updated:** 2025-12-26  
+**Version:** 1.0

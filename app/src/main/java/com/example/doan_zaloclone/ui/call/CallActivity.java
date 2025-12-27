@@ -240,6 +240,12 @@ public class CallActivity extends AppCompatActivity {
         if (callerNameStr != null) {
             callerName.setText(callerNameStr);
         }
+        
+        // Cancel incoming call notification since user is now viewing the call screen
+        if (isIncoming) {
+            com.example.doan_zaloclone.utils.CallNotificationHelper.cancelNotification(this, 1001);
+            Log.d(TAG, "Cancelled incoming call notification - user is viewing call screen");
+        }
 
         // Check permissions
         if (!PermissionHelper.checkCallPermissions(this, isVideo)) {
@@ -273,7 +279,7 @@ public class CallActivity extends AppCompatActivity {
             } else {
                 Log.e(TAG, "Permissions denied");
                 Toast.makeText(this, "Không thể thực hiện cuộc gọi do thiếu quyền", Toast.LENGTH_SHORT).show();
-                finish();
+                navigateToMain();
             }
         }
     }
@@ -348,11 +354,11 @@ public class CallActivity extends AppCompatActivity {
         remoteVideoView.init(eglBase.getEglBaseContext(), null);
         remoteVideoView.setEnableHardwareScaler(true);  // Enable hardware acceleration
         remoteVideoView.setMirror(false);  // Don't mirror remote video
-        remoteVideoView.setZOrderMediaOverlay(false);  // Render in background
-        remoteVideoView.setZOrderOnTop(false);  // Ensure it's in background
+        remoteVideoView.setZOrderMediaOverlay(false);  // Render in background layer
 
         // CRITICAL: Set visible NOW before attaching tracks
         remoteVideoView.setVisibility(View.VISIBLE);
+        remoteVideoView.bringToFront();  // Ensure it renders above white background
         remoteVideoView.requestLayout();
         Log.d(TAG, "Remote video view initialized and set to VISIBLE (width=" + remoteVideoView.getWidth() + ", height=" + remoteVideoView.getHeight() + ")");
 
@@ -365,6 +371,7 @@ public class CallActivity extends AppCompatActivity {
 
         // CRITICAL: Set visible NOW before attaching tracks
         localVideoView.setVisibility(View.VISIBLE);
+        localVideoView.bringToFront();  // Ensure it renders on top
         localVideoView.requestLayout();
         Log.d(TAG, "Local video view initialized and set to VISIBLE (width=" + localVideoView.getWidth() + ", height=" + localVideoView.getHeight() + ")");
 
@@ -437,7 +444,7 @@ public class CallActivity extends AppCompatActivity {
             } else if (resource.isError()) {
                 Log.e(TAG, "Call error: " + resource.getMessage());
                 showError(resource.getMessage());
-                finish();
+                navigateToMain();
             }
         });
 
@@ -448,7 +455,7 @@ public class CallActivity extends AppCompatActivity {
                 onCallConnected();
             } else if ("FAILED".equals(state)) {
                 showError("Kết nối thất bại");
-                finish();
+                navigateToMain();
             }
         });
 
@@ -522,7 +529,7 @@ public class CallActivity extends AppCompatActivity {
         if (callId == null) {
             Log.e(TAG, "ERROR: callId is null!");
             showError("Invalid call ID");
-            finish();
+            navigateToMain();
             return;
         }
 
@@ -531,7 +538,7 @@ public class CallActivity extends AppCompatActivity {
         if (currentUserId == null || currentUserId.isEmpty()) {
             Log.e(TAG, "ERROR: currentUserId is null or empty!");
             showError("Cannot determine receiver ID");
-            finish();
+            navigateToMain();
             return;
         }
 
@@ -563,7 +570,7 @@ public class CallActivity extends AppCompatActivity {
                 Log.e(TAG, "Cannot log MISSED call - conversationId is NULL!");
             }
         }
-        finish();
+        navigateToMain();
     }
 
     private void endCall() {
@@ -574,7 +581,9 @@ public class CallActivity extends AppCompatActivity {
         stopDurationTimer();
         stopOngoingCallService();
         disableProximitySensor();
-        finish();
+        // Note: Navigation will be handled by updateUIForCallStatus when call status changes to ENDED
+        // If endCall is called directly (e.g., user presses end button), navigate to main
+        navigateToMain();
     }
 
     private void toggleMicrophone() {
@@ -786,17 +795,23 @@ public class CallActivity extends AppCompatActivity {
                         openConversation(conversationId);
                     }, 300);  // Minimal delay for smooth transition
                 } else {
-                    Log.d(TAG, "Call was not accepted, just finishing");
-                    new Handler(Looper.getMainLooper()).postDelayed(this::finish, 300);
+                    Log.d(TAG, "Call was not accepted, navigating back to main");
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                        navigateToMain();
+                    }, 300);
                 }
                 break;
             case Call.STATUS_REJECTED:
                 callStatus.setText(R.string.call_rejected);
-                new Handler(Looper.getMainLooper()).postDelayed(this::finish, 1500);
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    navigateToMain();
+                }, 1500);
                 break;
             case Call.STATUS_FAILED:
                 callStatus.setText(R.string.call_failed);
-                new Handler(Looper.getMainLooper()).postDelayed(this::finish, 1500);
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    navigateToMain();
+                }, 1500);
                 break;
         }
     }
@@ -1145,20 +1160,19 @@ public class CallActivity extends AppCompatActivity {
             localVideoView.setVisibility(View.GONE);
         }
 
-        // Ensure overlay is visible with dark background and bring to front
+        // Ensure overlay is visible with light background and bring to front
         if (contentOverlay != null) {
             contentOverlay.setVisibility(View.VISIBLE);
             contentOverlay.bringToFront(); // Important: bring to front
-            // Set dark semi-transparent background so text is visible
-            contentOverlay.setBackgroundColor(0xDD000000); // Darker background
-            contentOverlay.setElevation(100); // High elevation to ensure it's on top
+            // Set light background
+            contentOverlay.setBackgroundColor(0xFFFFFFFF); // White background
         }
 
         // Update status text
         if (callStatus != null) {
             callStatus.setText("Đang kết thúc...");
             callStatus.setVisibility(View.VISIBLE);
-            callStatus.setTextColor(0xFFFFFFFF); // White text
+            callStatus.setTextColor(0xFF333333); // Dark text on light background
             callStatus.setTextSize(22); // Even larger for visibility
         }
 
@@ -1210,22 +1224,43 @@ public class CallActivity extends AppCompatActivity {
     }
 
     /**
+     * Navigate back to MainActivity when call ends without navigating to conversation
+     * This ensures app doesn't exit to home screen when CallActivity was started from notification
+     */
+    private void navigateToMain() {
+        Intent mainIntent = new Intent(this, com.example.doan_zaloclone.MainActivity.class);
+        mainIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(mainIntent);
+        
+        // Disable transition animations for seamless switch
+        overridePendingTransition(0, 0);
+
+        finish();
+    }
+
+    /**
      * Open conversation after call ends
      * Navigates to RoomActivity with the conversation ID
+     * Uses proper navigation to ensure MainActivity is in the back stack
      */
     private void openConversation(String conversationId) {
-        Intent intent = new Intent(this, com.example.doan_zaloclone.ui.room.RoomActivity.class);
-        intent.putExtra("conversationId", conversationId);
+        // First, ensure MainActivity is in the back stack
+        Intent mainIntent = new Intent(this, com.example.doan_zaloclone.MainActivity.class);
+        mainIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        
+        // Then create RoomActivity intent
+        Intent roomIntent = new Intent(this, com.example.doan_zaloclone.ui.room.RoomActivity.class);
+        roomIntent.putExtra("conversationId", conversationId);
 
         // Get conversation name from Intent if available
         String conversationName = getIntent().getStringExtra(EXTRA_CALLER_NAME);
         if (conversationName != null) {
-            intent.putExtra("conversationName", conversationName);
+            roomIntent.putExtra("conversationName", conversationName);
         }
 
-        // Clear call activity from back stack and start conversation
-        intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(intent);
+        // Start activities with proper back stack: MainActivity -> RoomActivity
+        // This ensures pressing back from RoomActivity returns to MainActivity
+        startActivities(new Intent[]{mainIntent, roomIntent});
 
         // Disable transition animations for seamless switch
         overridePendingTransition(0, 0);

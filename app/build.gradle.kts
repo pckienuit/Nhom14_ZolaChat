@@ -6,14 +6,8 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
-// ĐÚNG: Logic đọc file properties được đặt ở cấp cao nhất của script.
-val localProperties = Properties()
-val localPropertiesFile = rootProject.file("local.properties")
-if (localPropertiesFile.exists() && localPropertiesFile.isFile) {
-    FileInputStream(localPropertiesFile).use {
-        localProperties.load(it)
-    }
-}
+import java.util.Properties
+import java.io.FileInputStream
 
 android {
     namespace = "com.example.doan_zaloclone"
@@ -37,17 +31,88 @@ android {
             //noinspection ChromeOsAbiSupport
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
         }
+        
+        // Inject API keys from local.properties (secure, not committed to Git)
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.inputStream().use { localProperties.load(it) }
+        }
+        
+        buildConfigField("String", "CLOUDINARY_CLOUD_NAME", 
+            "\"${localProperties.getProperty("CLOUDINARY_CLOUD_NAME", "")}\"")
+        buildConfigField("String", "CLOUDINARY_API_KEY", 
+            "\"${localProperties.getProperty("CLOUDINARY_API_KEY", "")}\"")
+        buildConfigField("String", "CLOUDINARY_API_SECRET", 
+            "\"${localProperties.getProperty("CLOUDINARY_API_SECRET", "")}\"")
+        buildConfigField("String", "TURN_SERVER_HOST", 
+            "\"${localProperties.getProperty("TURN_SERVER_HOST", "")}\"")
+        buildConfigField("String", "TURN_SERVER_USERNAME", 
+            "\"${localProperties.getProperty("TURN_SERVER_USERNAME", "")}\"")
+        buildConfigField("String", "TURN_SERVER_PASSWORD", 
+            "\"${localProperties.getProperty("TURN_SERVER_PASSWORD", "")}\"")
+    }
+
+    // ============================================================
+    // SIGNING CONFIGS - Production release signing
+    // ============================================================
+    signingConfigs {
+        create("release") {
+            // Read keystore properties from local.properties
+            val localProperties = Properties()
+            val localPropertiesFile = rootProject.file("local.properties")
+            if (localPropertiesFile.exists()) {
+                localPropertiesFile.inputStream().use { localProperties.load(it) }
+            }
+            
+            storeFile = file(localProperties.getProperty("RELEASE_STORE_FILE", "keystore/release.jks"))
+            storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD", "")
+            keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS", "")
+            keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD", "")
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Apply signing config
+            signingConfig = signingConfigs.getByName("release")
+            
+            // Enable code minification & obfuscation with R8
+            isMinifyEnabled = true
+            // Enable resource shrinking (removes unused resources)
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
         }
+        
+        debug {
+            // Keep debug builds fast - no minification
+            isMinifyEnabled = false
+        }
     }
+    
+    // Product flavors for server environment switching
+    flavorDimensions += "environment"
+    
+    productFlavors {
+        create("development") {
+            dimension = "environment"
+            versionNameSuffix = "-dev"
+            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000/api/\"")
+            buildConfigField("String", "SOCKET_URL", "\"http://10.0.2.2:3000\"")
+            buildConfigField("String", "VPS_BASE_URL", "\"http://10.0.2.2:3000\"")
+        }
+        
+        create("production") {
+            dimension = "environment"
+            buildConfigField("String", "API_BASE_URL", "\"https://zolachat.site/api/\"")
+            buildConfigField("String", "SOCKET_URL", "\"https://zolachat.site\"")
+            buildConfigField("String", "VPS_BASE_URL", "\"https://zolachat.site\"")
+        }
+    }
+    
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -70,6 +135,10 @@ dependencies {
     implementation(libs.navigation.ui)
     implementation(libs.lifecycle.viewmodel)
     implementation(libs.lifecycle.livedata)
+    
+    // Lifecycle process for app-level presence tracking
+    implementation("androidx.lifecycle:lifecycle-process:2.7.0")
+    
     implementation(libs.recyclerview)
     implementation(libs.cardview)
     implementation(libs.glide)
@@ -103,6 +172,25 @@ dependencies {
     implementation("com.google.apis:google-api-services-youtube:v3-rev20210915-1.32.1")
     implementation("com.google.http-client:google-http-client-android:1.41.0")
     implementation("com.google.api-client:google-api-client-gson:1.32.1")
+    // OkHttp for HTTP requests (background removal API)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    
+    // Retrofit for API calls
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.google.code.gson:gson:2.10.1")
+    
+    // Socket.IO for WebSocket real-time messaging
+    implementation("io.socket:socket.io-client:2.1.0")
+    
+    // UCrop for image cropping in sticker creation
+    implementation("com.github.yalantis:ucrop:2.2.8")
+    
+    // ZXing for QR code scanning
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    implementation("com.google.zxing:core:3.5.3")
+    
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

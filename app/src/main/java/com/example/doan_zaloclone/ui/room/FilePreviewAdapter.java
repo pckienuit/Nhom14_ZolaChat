@@ -24,33 +24,14 @@ import java.util.Set;
  */
 public class FilePreviewAdapter extends RecyclerView.Adapter<FilePreviewAdapter.FileViewHolder> {
 
-    public static class FileItem {
-        public Uri uri;
-        public String name;
-        public long size;
-        public String mimeType;
-        
-        public FileItem(Uri uri, String name, long size, String mimeType) {
-            this.uri = uri;
-            this.name = name;
-            this.size = size;
-            this.mimeType = mimeType;
-        }
-    }
-
-    private List<FileItem> files;
-    private Set<Uri> selectedFiles;
-    private OnSelectionChangedListener listener;
-
-    public interface OnSelectionChangedListener {
-        void onSelectionChanged(int selectedCount);
-    }
-
+    private final List<FileItem> files;
+    private final Set<Uri> selectedFiles;
+    private final OnSelectionChangedListener listener;
     public FilePreviewAdapter(List<FileItem> files, OnSelectionChangedListener listener) {
         this.files = files != null ? files : new ArrayList<>();
         this.selectedFiles = new HashSet<>();
         this.listener = listener;
-        
+
         // Select all by default
         for (FileItem file : this.files) {
             selectedFiles.add(file.uri);
@@ -90,6 +71,24 @@ public class FilePreviewAdapter extends RecyclerView.Adapter<FilePreviewAdapter.
         return selectedFiles.size();
     }
 
+    public interface OnSelectionChangedListener {
+        void onSelectionChanged(int selectedCount);
+    }
+
+    public static class FileItem {
+        public Uri uri;
+        public String name;
+        public long size;
+        public String mimeType;
+
+        public FileItem(Uri uri, String name, long size, String mimeType) {
+            this.uri = uri;
+            this.name = name;
+            this.size = size;
+            this.mimeType = mimeType;
+        }
+    }
+
     class FileViewHolder extends RecyclerView.ViewHolder {
         ImageView fileIcon;
         TextView fileName;
@@ -108,11 +107,11 @@ public class FilePreviewAdapter extends RecyclerView.Adapter<FilePreviewAdapter.
             fileName.setText(file.name);
             fileSize.setText(FileUtils.formatFileSize(file.size));
             fileCheckbox.setChecked(isSelected);
-            
+
             // Set icon based on file type
             int iconResId = FileUtils.getFileIcon(file.mimeType);
             fileIcon.setImageResource(iconResId);
-            
+
             // Handle click on entire item
             itemView.setOnClickListener(v -> toggleSelection(file));
             fileCheckbox.setOnClickListener(v -> toggleSelection(file));
@@ -126,7 +125,7 @@ public class FilePreviewAdapter extends RecyclerView.Adapter<FilePreviewAdapter.
                 selectedFiles.add(file.uri);
                 fileCheckbox.setChecked(true);
             }
-            
+
             if (listener != null) {
                 listener.onSelectionChanged(selectedFiles.size());
             }

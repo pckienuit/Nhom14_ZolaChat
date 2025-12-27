@@ -22,7 +22,7 @@ public class AddGroupMemberActivity extends AppCompatActivity {
     private SelectableFriendsAdapter friendsAdapter;
     private ContactViewModel contactViewModel;
     private GroupViewModel groupViewModel;
-    
+
     private String conversationId;
     private List<String> currentMemberIds;
     private String currentUserId;
@@ -37,8 +37,8 @@ public class AddGroupMemberActivity extends AppCompatActivity {
         conversationId = getIntent().getStringExtra("conversationId");
         currentMemberIds = getIntent().getStringArrayListExtra("currentMemberIds");
         AuthRepository authRepository = new AuthRepository();
-        currentUserId = authRepository.getCurrentUser() != null 
-                ? authRepository.getCurrentUser().getUid() 
+        currentUserId = authRepository.getCurrentUser() != null
+                ? authRepository.getCurrentUser().getUid()
                 : null;
 
         if (conversationId == null || currentMemberIds == null) {
@@ -64,8 +64,8 @@ public class AddGroupMemberActivity extends AppCompatActivity {
 
     private void setupRecyclerView() {
         friendsAdapter = new SelectableFriendsAdapter(
-            new ArrayList<>(),
-            selectedCount -> binding.selectedCountTextView.setText(selectedCount + " đã chọn")
+                new ArrayList<>(),
+                selectedCount -> binding.selectedCountTextView.setText(selectedCount + " đã chọn")
         );
         binding.friendsRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         binding.friendsRecyclerView.setAdapter(friendsAdapter);
@@ -91,7 +91,7 @@ public class AddGroupMemberActivity extends AppCompatActivity {
                             friendsAdapter.updateFriends(nonMembers);
                         }
                         break;
-                        
+
                     case ERROR:
                         Toast.makeText(this, resource.getMessage(), Toast.LENGTH_SHORT).show();
                         break;
@@ -107,12 +107,12 @@ public class AddGroupMemberActivity extends AppCompatActivity {
                         Toast.makeText(this, "Đã thêm thành viên", Toast.LENGTH_SHORT).show();
                         finish();
                         break;
-                        
+
                     case ERROR:
                         Toast.makeText(this, resource.getMessage(), Toast.LENGTH_SHORT).show();
                         binding.addButton.setEnabled(true);
                         break;
-                        
+
                     case LOADING:
                         binding.addButton.setEnabled(false);
                         break;

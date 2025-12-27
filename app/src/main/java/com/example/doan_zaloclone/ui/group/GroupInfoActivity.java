@@ -2,16 +2,14 @@ package com.example.doan_zaloclone.ui.group;
 
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.ImageView;
-import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
 import com.example.doan_zaloclone.R;
@@ -19,12 +17,10 @@ import com.example.doan_zaloclone.databinding.ActivityGroupInfoBinding;
 import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.models.GroupMember;
 import com.example.doan_zaloclone.repository.AuthRepository;
-import com.example.doan_zaloclone.utils.Resource;
 import com.example.doan_zaloclone.viewmodel.ContactViewModel;
 import com.example.doan_zaloclone.viewmodel.GroupViewModel;
 import com.example.doan_zaloclone.viewmodel.RoomViewModel;
 import com.google.android.material.textfield.TextInputEditText;
-import com.google.firebase.firestore.FirebaseFirestore;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,7 +32,6 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
     private RoomViewModel roomViewModel;
     private ContactViewModel contactViewModel;
     private GroupMemberAdapter memberAdapter;
-    private FirebaseFirestore firestore;
 
     private String conversationId;
     private String currentUserId;
@@ -46,19 +41,22 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Enable edge-to-edge display
+        setupEdgeToEdge();
+        
         binding = ActivityGroupInfoBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
 
-        // Initialize Firebase and ViewModels
-        firestore = FirebaseFirestore.getInstance();
+        // Initialize ViewModels
         groupViewModel = new ViewModelProvider(this).get(GroupViewModel.class);
         roomViewModel = new ViewModelProvider(this).get(RoomViewModel.class);
         contactViewModel = new ViewModelProvider(this).get(ContactViewModel.class);
 
         // Get current user ID
         AuthRepository authRepository = new AuthRepository();
-        currentUserId = authRepository.getCurrentUser() != null 
-                ? authRepository.getCurrentUser().getUid() 
+        currentUserId = authRepository.getCurrentUser() != null
+                ? authRepository.getCurrentUser().getUid()
                 : null;
 
         // Get conversation ID from intent
@@ -74,6 +72,18 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
         loadGroupInfo();
         setupListeners();
         observeViewModel();
+    }
+    
+    private void setupEdgeToEdge() {
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            );
+        }
     }
 
     private void setupToolbar() {
@@ -93,7 +103,7 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
     }
 
     private void loadGroupInfo() {
-        firestore.collection("conversations")
+        com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("conversations")
                 .document(conversationId)
                 .get()
                 .addOnSuccessListener(documentSnapshot -> {
@@ -105,8 +115,8 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
                         }
                     }
                 })
-                .addOnFailureListener(e -> 
-                    Toast.makeText(this, "Lỗi khi tải thông tin nhóm", Toast.LENGTH_SHORT).show()
+                .addOnFailureListener(e ->
+                        Toast.makeText(this, "Lỗi khi tải thông tin nhóm", Toast.LENGTH_SHORT).show()
                 );
     }
 
@@ -158,7 +168,7 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
         int[] loadedCount = {0};
 
         for (String memberId : conversation.getMemberIds()) {
-            firestore.collection("users")
+            com.google.firebase.firestore.FirebaseFirestore.getInstance().collection("users")
                     .document(memberId)
                     .get()
                     .addOnSuccessListener(documentSnapshot -> {
@@ -191,8 +201,8 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
         binding.editGroupNameButton.setOnClickListener(v -> showEditNameDialog());
 
         // Change avatar (TODO: implement image picker)
-        binding.changeAvatarButton.setOnClickListener(v -> 
-            Toast.makeText(this, "Tính năng đang phát triển", Toast.LENGTH_SHORT).show()
+        binding.changeAvatarButton.setOnClickListener(v ->
+                Toast.makeText(this, "Tính năng đang phát triển", Toast.LENGTH_SHORT).show()
         );
 
         // Add member
@@ -229,7 +239,7 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
         // Navigate to member selection screen
         Intent intent = new Intent(this, AddGroupMemberActivity.class);
         intent.putExtra("conversationId", conversationId);
-        intent.putStringArrayListExtra("currentMemberIds", 
+        intent.putStringArrayListExtra("currentMemberIds",
                 new ArrayList<>(conversation.getMemberIds()));
         startActivity(intent);
     }
@@ -244,12 +254,12 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
                     .show();
             return;
         }
-        
+
         new AlertDialog.Builder(this)
                 .setTitle("Rời nhóm")
                 .setMessage("Bạn có chắc muốn rời khỏi nhóm này?")
-                .setPositiveButton("Rời nhóm", (dialog, which) -> 
-                    groupViewModel.leaveGroup(conversationId, currentUserId)
+                .setPositiveButton("Rời nhóm", (dialog, which) ->
+                        groupViewModel.leaveGroup(conversationId)
                 )
                 .setNegativeButton("Hủy", null)
                 .show();
@@ -259,8 +269,8 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
         new AlertDialog.Builder(this)
                 .setTitle("Xóa nhóm")
                 .setMessage("Bạn có chắc muốn xóa nhóm này? Hành động này không thể hoàn tác.")
-                .setPositiveButton("Xóa", (dialog, which) -> 
-                    groupViewModel.deleteGroup(conversationId)
+                .setPositiveButton("Xóa", (dialog, which) ->
+                        groupViewModel.deleteGroup(conversationId)
                 )
                 .setNegativeButton("Hủy", null)
                 .show();
@@ -271,24 +281,24 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
         new AlertDialog.Builder(this)
                 .setTitle("Xóa thành viên")
                 .setMessage("Bạn có chắc muốn xóa " + member.getName() + " khỏi nhóm?")
-                .setPositiveButton("Xóa", (dialog, which) -> 
-                    groupViewModel.removeGroupMember(conversationId, member.getUserId())
+                .setPositiveButton("Xóa", (dialog, which) ->
+                        groupViewModel.removeGroupMember(conversationId, member.getUserId())
                 )
                 .setNegativeButton("Hủy", null)
                 .show();
     }
-    
+
     public void onMemberLongClick(GroupMember member) {
         // Only admins can transfer admin rights
         if (conversation == null || !conversation.isAdmin(currentUserId)) {
             return;
         }
-        
+
         // Cannot transfer to yourself or someone who's already admin
         if (member.getUserId().equals(currentUserId) || member.isAdmin()) {
             return;
         }
-        
+
         // Show dialog to transfer admin
         new AlertDialog.Builder(this)
                 .setTitle("Chuyển quyền quản trị")
@@ -306,18 +316,70 @@ public class GroupInfoActivity extends AppCompatActivity implements GroupMemberA
                 switch (resource.getStatus()) {
                     case SUCCESS:
                         Toast.makeText(this, "Cập nhật thành công", Toast.LENGTH_SHORT).show();
-                        
+
                         // Check if user left or group was deleted
                         if (resource.getData() != null && resource.getData()) {
                             // Reload group info to update UI
                             loadGroupInfo();
                         }
                         break;
-                        
+
                     case ERROR:
                         Toast.makeText(this, resource.getMessage(), Toast.LENGTH_SHORT).show();
                         break;
-                        
+
+                    case LOADING:
+                        // Show loading indicator if needed
+                        break;
+                }
+            }
+        });
+
+        // Observe leave group result (API-based)
+        groupViewModel.getLeaveGroupResult().observe(this, resource -> {
+            if (resource != null) {
+                switch (resource.getStatus()) {
+                    case SUCCESS:
+                        Toast.makeText(this, "Đã rời nhóm thành công", Toast.LENGTH_SHORT).show();
+
+                        // Navigate to home and clear conversation from UI
+                        Intent intent = new Intent();
+                        intent.putExtra("conversationId", conversationId);
+                        intent.putExtra("action", "leave_group");
+                        setResult(RESULT_OK, intent);
+                        finish();
+                        break;
+
+                    case ERROR:
+                        Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                        break;
+
+                    case LOADING:
+                        // Show loading indicator if needed
+                        break;
+                }
+            }
+        });
+
+        // Observe delete group result
+        groupViewModel.getDeleteGroupResult().observe(this, resource -> {
+            if (resource != null) {
+                switch (resource.getStatus()) {
+                    case SUCCESS:
+                        Toast.makeText(this, "Đã xóa nhóm thành công", Toast.LENGTH_SHORT).show();
+
+                        // Navigate to home - the WebSocket will notify other members
+                        Intent intent = new Intent();
+                        intent.putExtra("conversationId", conversationId);
+                        intent.putExtra("action", "delete_group");
+                        setResult(RESULT_OK, intent);
+                        finish();
+                        break;
+
+                    case ERROR:
+                        Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                        break;
+
                     case LOADING:
                         // Show loading indicator if needed
                         break;

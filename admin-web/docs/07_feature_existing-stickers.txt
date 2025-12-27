@@ -1,0 +1,72 @@
+# Sticker Pack Management - Existing Stickers Feature
+
+## Tính năng mới
+
+Đã thêm khả năng xem và quản lý các sticker hiện có khi **chỉnh sửa sticker pack** trong Admin Web.
+
+### Các thay đổi:
+
+#### 1. HTML (stickers.html)
+- Thêm section "Stickers hiện có" trong modal edit pack
+- Hiển thị grid các sticker với preview
+- Chỉ hiển thị khi đang edit pack (không hiển thị khi thêm mới)
+
+#### 2. CSS (components.css)
+- Responsive grid layout cho sticker thumbnails
+- Hover effects với border highlight
+- Nút xóa sticker (hiện khi hover)
+- Style cho loading, empty, và error states
+- Fix lint warning cho `line-clamp` property
+
+#### 3. JavaScript (stickers.js)
+- `loadExistingStickers(packId)`: Load stickers từ Firestore subcollection
+- `deleteSticker(packId, stickerId)`: Xóa sticker khỏi pack
+- Tự động update count khi xóa
+- Error handling và fallback image
+
+### Cách sử dụng:
+
+1. Mở Admin Web tại `http://163.61.182.20/admin/stickers.html`
+2. Click nút "Sửa" (icon bút) trên một sticker pack
+3. Scroll xuống phần "Stickers hiện có"
+4. Xem preview các sticker trong pack
+5. Hover vào sticker để hiện nút xóa (icon X đỏ)
+6. Click nút X để xóa sticker (có confirm dialog)
+
+### Features:
+
+✅ Hiển thị grid responsive các sticker
+✅ Preview thumbnail với fallback image nếu lỗi
+✅ Đếm số lượng sticker
+✅ Xóa sticker trực tiếp từ UI
+✅ Tự động cập nhật `stickerCount` khi xóa
+✅ Loading state khi tải stickers
+✅ Empty state khi pack chưa có sticker
+✅ Error handling
+
+### Technical Details:
+
+**Firestore Query:**
+```javascript
+db.collection('stickerPacks')
+  .doc(packId)
+  .collection('stickers')
+  .orderBy('createdAt', 'asc')
+  .get()
+```
+
+**Delete Logic:**
+1. Xóa document trong subcollection `stickers`
+2. Decrement `stickerCount` field trong parent pack
+3. Reload cả existing stickers và pack list
+
+**CSS Grid:**
+- `grid-template-columns: repeat(auto-fill, minmax(80px, 1fr))`
+- Aspect ratio 1:1 cho mỗi sticker
+- Max height 400px với scroll
+
+### Lưu ý:
+
+- Chỉ admin có quyền xóa sticker (đã có check trong Firestore rules)
+- URL field sẽ fallback từ `imageUrl` sang `thumbnailUrl`
+- Nếu cả 2 đều null, hiển thị icon ❓

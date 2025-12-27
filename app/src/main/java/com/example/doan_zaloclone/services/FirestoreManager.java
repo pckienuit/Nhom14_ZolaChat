@@ -29,9 +29,8 @@ public class FirestoreManager {
     private static final String COLLECTION_USERS = "users";
     private static final String COLLECTION_CONVERSATIONS = "conversations";
     private static final String COLLECTION_FRIEND_REQUESTS = "friendRequests";
-
-    private final FirebaseFirestore db;
     private static FirestoreManager instance;
+    private final FirebaseFirestore db;
 
     // Singleton pattern
     private FirestoreManager() {
@@ -77,7 +76,7 @@ public class FirestoreManager {
                               @NonNull OnUserCreatedListener listener) {
         // Normalize email to lowercase for consistent searching
         String normalizedEmail = email.trim().toLowerCase();
-        
+
         // Create User object
         User user = new User(userId, name, normalizedEmail, ""); // avatarUrl empty initially
 
@@ -185,15 +184,15 @@ public class FirestoreManager {
      * @param listener Callback để xử lý kết quả
      */
     public void searchUsers(@NonNull String query,
-                           @NonNull OnUserSearchListener listener) {
+                            @NonNull OnUserSearchListener listener) {
         String searchQuery = query.trim().toLowerCase();
         Log.d(TAG, "Searching users with query: " + searchQuery);
-        
+
         if (searchQuery.isEmpty()) {
             listener.onSuccess(new ArrayList<>());
             return;
         }
-        
+
         // Fetch all users and filter client-side
         db.collection(COLLECTION_USERS)
                 .get()
@@ -202,7 +201,7 @@ public class FirestoreManager {
                     public void onSuccess(QuerySnapshot querySnapshot) {
                         Log.d(TAG, "Fetched " + querySnapshot.size() + " total users");
                         List<User> allUsers = new ArrayList<>();
-                        
+
                         // Parse all users
                         for (DocumentSnapshot document : querySnapshot.getDocuments()) {
                             User user = document.toObject(User.class);
@@ -211,33 +210,33 @@ public class FirestoreManager {
                                 allUsers.add(user);
                             }
                         }
-                        
+
                         // Filter by query (name or email contains)
                         List<User> matchedUsers = new ArrayList<>();
                         for (User user : allUsers) {
                             String userName = user.getName() != null ? user.getName().toLowerCase() : "";
                             String userEmail = user.getEmail() != null ? user.getEmail().toLowerCase() : "";
-                            
+
                             if (userName.contains(searchQuery) || userEmail.contains(searchQuery)) {
                                 matchedUsers.add(user);
                             }
                         }
-                        
+
                         // Sort: exact matches first, then partial matches
                         matchedUsers.sort((u1, u2) -> {
                             String name1 = u1.getName() != null ? u1.getName().toLowerCase() : "";
                             String email1 = u1.getEmail() != null ? u1.getEmail().toLowerCase() : "";
                             String name2 = u2.getName() != null ? u2.getName().toLowerCase() : "";
                             String email2 = u2.getEmail() != null ? u2.getEmail().toLowerCase() : "";
-                            
+
                             boolean exact1 = name1.equals(searchQuery) || email1.equals(searchQuery);
                             boolean exact2 = name2.equals(searchQuery) || email2.equals(searchQuery);
-                            
+
                             if (exact1 && !exact2) return -1;
                             if (!exact1 && exact2) return 1;
                             return name1.compareTo(name2);
                         });
-                        
+
                         Log.d(TAG, "Found " + matchedUsers.size() + " matching users");
                         listener.onSuccess(matchedUsers);
                     }
@@ -259,8 +258,8 @@ public class FirestoreManager {
      * @param listener      Callback để xử lý kết quả
      */
     public void findExistingConversation(@NonNull String currentUserId,
-                                        @NonNull String otherUserId,
-                                        @NonNull OnConversationFoundListener listener) {
+                                         @NonNull String otherUserId,
+                                         @NonNull OnConversationFoundListener listener) {
         // Tìm conversations có chứa cả 2 user IDs
         db.collection(COLLECTION_CONVERSATIONS)
                 .whereArrayContains("memberIds", currentUserId)
@@ -271,10 +270,10 @@ public class FirestoreManager {
                         // Lọc thêm để tìm conversation có cả 2 users VÀ là loại FRIEND (hoặc không có type)
                         for (DocumentSnapshot document : querySnapshot.getDocuments()) {
                             Conversation conversation = document.toObject(Conversation.class);
-                            if (conversation != null && 
-                                conversation.getMemberIds() != null &&
-                                conversation.getMemberIds().contains(otherUserId) &&
-                                conversation.getMemberIds().size() == 2) {
+                            if (conversation != null &&
+                                    conversation.getMemberIds() != null &&
+                                    conversation.getMemberIds().contains(otherUserId) &&
+                                    conversation.getMemberIds().size() == 2) {
                                 // Check if this is a 1-1 conversation (FRIEND type, null, or empty)
                                 String type = conversation.getType();
                                 if (type == null || type.isEmpty() || Conversation.TYPE_FRIEND.equals(type)) {
@@ -309,27 +308,27 @@ public class FirestoreManager {
      * @param listener        Callback để xử lý kết quả
      */
     public void createConversation(@NonNull String currentUserId,
-                                  @NonNull String currentUserName,
-                                  @NonNull String otherUserId,
-                                  @NonNull String otherUserName,
-                                  @NonNull OnConversationCreatedListener listener) {
+                                   @NonNull String currentUserName,
+                                   @NonNull String otherUserId,
+                                   @NonNull String otherUserName,
+                                   @NonNull OnConversationCreatedListener listener) {
         // Tạo conversation mới
         DocumentReference newConversationRef = db.collection(COLLECTION_CONVERSATIONS).document();
         String conversationId = newConversationRef.getId();
-        
+
         List<String> memberIds = Arrays.asList(currentUserId, otherUserId);
-        
+
         // Create conversation data with memberNames
         Map<String, Object> conversationData = new HashMap<>();
         conversationData.put("id", conversationId);
         conversationData.put("memberIds", memberIds);
-        
+
         // Store member names for easier access
         Map<String, String> memberNames = new HashMap<>();
         memberNames.put(currentUserId, currentUserName);
         memberNames.put(otherUserId, otherUserName);
         conversationData.put("memberNames", memberNames);
-        
+
         // For 1-1 chats, name is left empty, type is FRIEND
         conversationData.put("type", Conversation.TYPE_FRIEND);
         conversationData.put("name", "");
@@ -340,9 +339,9 @@ public class FirestoreManager {
                 .addOnSuccessListener(new OnSuccessListener<Void>() {
                     @Override
                     public void onSuccess(Void aVoid) {
-                        Log.d(TAG, "Conversation created successfully: " + conversationId + 
-                             " between " + currentUserName + " and " + otherUserName);
-                        
+                        Log.d(TAG, "Conversation created successfully: " + conversationId +
+                                " between " + currentUserName + " and " + otherUserName);
+
                         // Create conversation object for callback
                         Conversation conversation = new Conversation(
                                 conversationId,
@@ -353,7 +352,7 @@ public class FirestoreManager {
                         );
                         conversation.setMemberNames(memberNames);
                         conversation.setType(Conversation.TYPE_FRIEND);
-                        
+
                         listener.onSuccess(conversation);
                     }
                 })
@@ -370,55 +369,55 @@ public class FirestoreManager {
      * Tạo group conversation (multi-member chat)
      * Always creates new conversation (no duplicate check)
      *
-     * @param adminId     ID of the group creator (becomes admin)
-     * @param groupName   Name of the group
-     * @param memberIds   List of member IDs including admin
-     * @param listener    Callback để xử lý kết quả
+     * @param adminId   ID of the group creator (becomes admin)
+     * @param groupName Name of the group
+     * @param memberIds List of member IDs including admin
+     * @param listener  Callback để xử lý kết quả
      */
     public void createGroupConversation(@NonNull String adminId,
-                                       @NonNull String groupName,
-                                       @NonNull List<String> memberIds,
-                                       @NonNull OnConversationCreatedListener listener) {
+                                        @NonNull String groupName,
+                                        @NonNull List<String> memberIds,
+                                        @NonNull OnConversationCreatedListener listener) {
         // Validate input
         if (groupName.trim().isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Group name cannot be empty"));
             return;
         }
-        
+
         if (memberIds.size() < 2) {
             listener.onFailure(new IllegalArgumentException("Group must have at least 2 members"));
             return;
         }
-        
+
         if (!memberIds.contains(adminId)) {
             listener.onFailure(new IllegalArgumentException("Admin must be in member list"));
             return;
         }
-        
+
         // Create new conversation document
         DocumentReference newConversationRef = db.collection(COLLECTION_CONVERSATIONS).document();
         String conversationId = newConversationRef.getId();
-        
+
         // Build conversation data
         Map<String, Object> conversationData = new HashMap<>();
         conversationData.put("id", conversationId);
         conversationData.put("type", Conversation.TYPE_GROUP);
         conversationData.put("name", groupName.trim());
-        conversationData.put("adminIds", Arrays.asList(adminId));  // Store as array for multi-admin support
+        conversationData.put("adminIds", List.of(adminId));  // Store as array for multi-admin support
         conversationData.put("memberIds", memberIds);
         conversationData.put("lastMessage", "Nhóm được tạo");
         conversationData.put("timestamp", System.currentTimeMillis());
         conversationData.put("avatarUrl", ""); // Empty initially, can be updated later
-        
+
         // Save to Firestore
         newConversationRef.set(conversationData)
                 .addOnSuccessListener(new OnSuccessListener<Void>() {
                     @Override
                     public void onSuccess(Void aVoid) {
-                        Log.d(TAG, "Group conversation created: " + conversationId + 
-                             " with name: " + groupName + ", admin: " + adminId + 
-                             ", members: " + memberIds.size());
-                        
+                        Log.d(TAG, "Group conversation created: " + conversationId +
+                                " with name: " + groupName + ", admin: " + adminId +
+                                ", members: " + memberIds.size());
+
                         // Create conversation object for callback
                         Conversation conversation = new Conversation(
                                 conversationId,
@@ -430,7 +429,7 @@ public class FirestoreManager {
                                 adminId,
                                 ""
                         );
-                        
+
                         listener.onSuccess(conversation);
                     }
                 })
@@ -447,8 +446,8 @@ public class FirestoreManager {
      * Update group name
      */
     public void updateGroupName(@NonNull String conversationId,
-                               @NonNull String newName,
-                               @NonNull OnGroupUpdatedListener listener) {
+                                @NonNull String newName,
+                                @NonNull OnGroupUpdatedListener listener) {
         if (newName.trim().isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Group name cannot be empty"));
             return;
@@ -471,8 +470,8 @@ public class FirestoreManager {
      * Update group avatar URL
      */
     public void updateGroupAvatar(@NonNull String conversationId,
-                                 @NonNull String avatarUrl,
-                                 @NonNull OnGroupUpdatedListener listener) {
+                                  @NonNull String avatarUrl,
+                                  @NonNull OnGroupUpdatedListener listener) {
         db.collection(COLLECTION_CONVERSATIONS)
                 .document(conversationId)
                 .update("avatarUrl", avatarUrl)
@@ -490,8 +489,8 @@ public class FirestoreManager {
      * Add members to group
      */
     public void addGroupMembers(@NonNull String conversationId,
-                               @NonNull List<String> newMemberIds,
-                               @NonNull OnGroupUpdatedListener listener) {
+                                @NonNull List<String> newMemberIds,
+                                @NonNull OnGroupUpdatedListener listener) {
         if (newMemberIds.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("No members to add"));
             return;
@@ -514,8 +513,8 @@ public class FirestoreManager {
      * Remove member from group
      */
     public void removeGroupMember(@NonNull String conversationId,
-                                 @NonNull String memberId,
-                                 @NonNull OnGroupUpdatedListener listener) {
+                                  @NonNull String memberId,
+                                  @NonNull OnGroupUpdatedListener listener) {
         db.collection(COLLECTION_CONVERSATIONS)
                 .document(conversationId)
                 .update("memberIds", com.google.firebase.firestore.FieldValue.arrayRemove(memberId))
@@ -534,8 +533,8 @@ public class FirestoreManager {
      * Prevents last admin from leaving without transferring admin rights
      */
     public void leaveGroup(@NonNull String conversationId,
-                          @NonNull String userId,
-                          @NonNull OnGroupUpdatedListener listener) {
+                           @NonNull String userId,
+                           @NonNull OnGroupUpdatedListener listener) {
         // First, check if user is the last admin
         db.collection(COLLECTION_CONVERSATIONS)
                 .document(conversationId)
@@ -545,26 +544,26 @@ public class FirestoreManager {
                         listener.onFailure(new Exception("Nhóm không tồn tại"));
                         return;
                     }
-                    
+
                     Conversation conversation = doc.toObject(Conversation.class);
                     if (conversation == null) {
                         listener.onFailure(new Exception("Không thể tải thông tin nhóm"));
                         return;
                     }
-                    
+
                     // Check if user is the last admin
                     if (conversation.isLastAdmin(userId)) {
                         listener.onFailure(new Exception(
-                            "Bạn là quản trị viên duy nhất. Vui lòng chuyển quyền quản trị cho thành viên khác trước khi rời nhóm."));
+                                "Bạn là quản trị viên duy nhất. Vui lòng chuyển quyền quản trị cho thành viên khác trước khi rời nhóm."));
                         return;
                     }
-                    
+
                     // If user is admin but not the last one, remove from adminIds too
                     if (conversation.isAdmin(userId)) {
                         Map<String, Object> updates = new HashMap<>();
                         updates.put("adminIds", com.google.firebase.firestore.FieldValue.arrayRemove(userId));
                         updates.put("memberIds", com.google.firebase.firestore.FieldValue.arrayRemove(userId));
-                        
+
                         db.collection(COLLECTION_CONVERSATIONS)
                                 .document(conversationId)
                                 .update(updates)
@@ -592,8 +591,8 @@ public class FirestoreManager {
      * Adds userId to adminIds array
      */
     public void transferAdmin(@NonNull String conversationId,
-                             @NonNull String newAdminId,
-                             @NonNull OnGroupUpdatedListener listener) {
+                              @NonNull String newAdminId,
+                              @NonNull OnGroupUpdatedListener listener) {
         // Check if user is already a member
         db.collection(COLLECTION_CONVERSATIONS)
                 .document(conversationId)
@@ -603,25 +602,25 @@ public class FirestoreManager {
                         listener.onFailure(new Exception("Nhóm không tồn tại"));
                         return;
                     }
-                    
+
                     Conversation conversation = doc.toObject(Conversation.class);
                     if (conversation == null) {
                         listener.onFailure(new Exception("Không thể tải thông tin nhóm"));
                         return;
                     }
-                    
+
                     // Check if new admin is a member
                     if (!conversation.hasMember(newAdminId)) {
                         listener.onFailure(new Exception("Người dùng không phải là thành viên của nhóm"));
                         return;
                     }
-                    
+
                     // Check if already admin
                     if (conversation.isAdmin(newAdminId)) {
                         listener.onFailure(new Exception("Người dùng đã là quản trị viên"));
                         return;
                     }
-                    
+
                     // Add to adminIds
                     db.collection(COLLECTION_CONVERSATIONS)
                             .document(conversationId)
@@ -645,7 +644,7 @@ public class FirestoreManager {
      * Delete group conversation
      */
     public void deleteGroup(@NonNull String conversationId,
-                           @NonNull OnGroupUpdatedListener listener) {
+                            @NonNull OnGroupUpdatedListener listener) {
         db.collection(COLLECTION_CONVERSATIONS)
                 .document(conversationId)
                 .delete()
@@ -663,11 +662,11 @@ public class FirestoreManager {
      * Pin conversation for a user
      */
     public void pinConversation(@NonNull String conversationId,
-                               @NonNull String userId,
-                               @NonNull OnGroupUpdatedListener listener) {
+                                @NonNull String userId,
+                                @NonNull OnGroupUpdatedListener listener) {
         Map<String, Object> updates = new HashMap<>();
         updates.put("pinnedByUsers." + userId, System.currentTimeMillis());
-        
+
         db.collection(COLLECTION_CONVERSATIONS)
                 .document(conversationId)
                 .update(updates)
@@ -685,11 +684,11 @@ public class FirestoreManager {
      * Unpin conversation for a user
      */
     public void unpinConversation(@NonNull String conversationId,
-                                 @NonNull String userId,
-                                 @NonNull OnGroupUpdatedListener listener) {
+                                  @NonNull String userId,
+                                  @NonNull OnGroupUpdatedListener listener) {
         Map<String, Object> updates = new HashMap<>();
         updates.put("pinnedByUsers." + userId, FieldValue.delete());
-        
+
         db.collection(COLLECTION_CONVERSATIONS)
                 .document(conversationId)
                 .update(updates)
@@ -705,18 +704,19 @@ public class FirestoreManager {
 
     /**
      * Update conversation tags for a user
+     *
      * @param conversationId ID of the conversation
-     * @param userId ID of the user
-     * @param tags List of tags to set for this user
-     * @param listener Callback listener
+     * @param userId         ID of the user
+     * @param tags           List of tags to set for this user
+     * @param listener       Callback listener
      */
     public void updateConversationTags(@NonNull String conversationId,
-                                      @NonNull String userId,
-                                      @NonNull List<String> tags,
-                                      @NonNull OnGroupUpdatedListener listener) {
+                                       @NonNull String userId,
+                                       @NonNull List<String> tags,
+                                       @NonNull OnGroupUpdatedListener listener) {
         Map<String, Object> updates = new HashMap<>();
         updates.put("userTags." + userId, tags);
-        
+
         db.collection(COLLECTION_CONVERSATIONS)
                 .document(conversationId)
                 .update(updates)
@@ -732,6 +732,710 @@ public class FirestoreManager {
 
 
     // Callback Interfaces
+
+    /**
+     * Lắng nghe conversations của user realtime
+     *
+     * @param userId   ID của user
+     * @param listener Callback để xử lý kết quả
+     * @return ListenerRegistration để cleanup
+     */
+    public com.google.firebase.firestore.ListenerRegistration listenToConversations(
+            @NonNull String userId,
+            @NonNull OnConversationsChangedListener listener) {
+        return db.collection(COLLECTION_CONVERSATIONS)
+                .whereArrayContains("memberIds", userId)
+                .addSnapshotListener(new com.google.firebase.firestore.EventListener<QuerySnapshot>() {
+                    @Override
+                    public void onEvent(QuerySnapshot querySnapshot,
+                                        com.google.firebase.firestore.FirebaseFirestoreException e) {
+                        if (e != null) {
+                            Log.e(TAG, "Error listening to conversations", e);
+                            listener.onFailure(e);
+                            return;
+                        }
+
+                        if (querySnapshot != null) {
+                            List<Conversation> conversations = new ArrayList<>();
+                            for (DocumentSnapshot document : querySnapshot.getDocuments()) {
+                                Conversation conversation = document.toObject(Conversation.class);
+                                if (conversation != null) {
+                                    conversation.setId(document.getId());  // Set document ID
+                                    conversations.add(conversation);
+                                }
+                            }
+                            // Sort by timestamp descending (newest first)
+                            conversations.sort((c1, c2) -> Long.compare(c2.getTimestamp(), c1.getTimestamp()));
+                            Log.d(TAG, "Loaded " + conversations.size() + " conversations for user: " + userId);
+                            listener.onConversationsChanged(conversations);
+                        }
+                    }
+                });
+    }
+
+    /**
+     * Send friend request to another user
+     */
+    public void sendFriendRequest(@NonNull String fromUserId,
+                                  @NonNull String fromUserName,
+                                  @NonNull String fromUserEmail,
+                                  @NonNull String toUserId,
+                                  @NonNull OnFriendRequestListener listener) {
+        // Check if request already exists
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("fromUserId", fromUserId)
+                .whereEqualTo("toUserId", toUserId)
+                .whereIn("status", Arrays.asList("PENDING", "ACCEPTED"))
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    if (!querySnapshot.isEmpty()) {
+                        listener.onFailure(new Exception("Friend request already exists"));
+                        return;
+                    }
+
+                    // Create new friend request
+                    DocumentReference requestRef = db.collection(COLLECTION_FRIEND_REQUESTS).document();
+                    Map<String, Object> requestData = new HashMap<>();
+                    requestData.put("id", requestRef.getId());
+                    requestData.put("fromUserId", fromUserId);
+                    requestData.put("toUserId", toUserId);
+                    requestData.put("fromUserName", fromUserName);
+                    requestData.put("fromUserEmail", fromUserEmail);
+                    requestData.put("status", "PENDING");
+                    requestData.put("timestamp", System.currentTimeMillis());
+
+                    requestRef.set(requestData)
+                            .addOnSuccessListener(aVoid -> {
+                                Log.d(TAG, "Friend request sent: " + requestRef.getId());
+                                listener.onSuccess();
+                            })
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG, "Error sending friend request", e);
+                                listener.onFailure(e);
+                            });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error checking existing request", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Accept friend request and auto-create conversation
+     */
+    public void acceptFriendRequest(@NonNull String requestId,
+                                    @NonNull OnFriendRequestListener listener) {
+        // First get the request details
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .document(requestId)
+                .get()
+                .addOnSuccessListener(requestDoc -> {
+                    if (!requestDoc.exists()) {
+                        listener.onFailure(new Exception("Request not found"));
+                        return;
+                    }
+
+                    String fromUserId = requestDoc.getString("fromUserId");
+                    String toUserId = requestDoc.getString("toUserId");
+                    String fromUserName = requestDoc.getString("fromUserName");
+
+                    // Update status to ACCEPTED
+                    Map<String, Object> updates = new HashMap<>();
+                    updates.put("status", "ACCEPTED");
+
+                    db.collection(COLLECTION_FRIEND_REQUESTS)
+                            .document(requestId)
+                            .update(updates)
+                            .addOnSuccessListener(aVoid -> {
+                                Log.d(TAG, "Friend request accepted: " + requestId);
+
+                                // Create conversation
+                                createFriendConversation(fromUserId, toUserId, fromUserName, listener);
+                            })
+                            .addOnFailureListener(e -> {
+                                Log.e(TAG, "Error accepting friend request", e);
+                                listener.onFailure(e);
+                            });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error fetching request", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Create conversation when friends accept request
+     * Fetches both users' details to properly set conversation info
+     */
+    private void createFriendConversation(String user1Id, String user2Id,
+                                          String user1Name, OnFriendRequestListener listener) {
+        // Check if conversation already exists
+        findExistingConversation(user1Id, user2Id, new OnConversationFoundListener() {
+            @Override
+            public void onFound(Conversation conversation) {
+                // Conversation exists, just notify success
+                Log.d(TAG, "Conversation already exists: " + conversation.getId());
+                listener.onSuccess();
+            }
+
+            @Override
+            public void onNotFound() {
+                // Fetch both users' full details
+                db.collection(COLLECTION_USERS).document(user1Id).get()
+                        .addOnSuccessListener(user1Doc -> {
+                            db.collection(COLLECTION_USERS).document(user2Id).get()
+                                    .addOnSuccessListener(user2Doc -> {
+                                        User user1 = user1Doc.toObject(User.class);
+                                        User user2 = user2Doc.toObject(User.class);
+
+                                        if (user1 == null || user2 == null) {
+                                            Log.e(TAG, "Failed to fetch user details for conversation");
+                                            listener.onFailure(new Exception("User details not found"));
+                                            return;
+                                        }
+
+                                        // Create new conversation with proper user info
+                                        DocumentReference convRef = db.collection(COLLECTION_CONVERSATIONS).document();
+
+                                        // For a 1-1 conversation, we store it as a single conversation object
+                                        // The app will display the OTHER user's name based on who's viewing
+                                        Map<String, Object> conversationData = new HashMap<>();
+                                        conversationData.put("id", convRef.getId());
+                                        conversationData.put("memberIds", Arrays.asList(user1Id, user2Id));
+
+                                        // Store member names for easier access
+                                        Map<String, String> memberNames = new HashMap<>();
+                                        memberNames.put(user1Id, user1.getName());
+                                        memberNames.put(user2Id, user2.getName());
+                                        conversationData.put("memberNames", memberNames);
+
+                                        // For 1-1 chats, name is typically left empty or set as the conversation ID
+                                        // The UI will display the other user's name
+                                        conversationData.put("name", "");
+
+                                        // Set a friendly first message
+                                        conversationData.put("lastMessage", "Các bạn đã là bạn bè. Hãy bắt đầu trò chuyện!");
+                                        conversationData.put("timestamp", System.currentTimeMillis());
+
+                                        convRef.set(conversationData)
+                                                .addOnSuccessListener(aVoid -> {
+                                                    Log.d(TAG, "Friend conversation created: " + convRef.getId() +
+                                                            " between " + user1.getName() + " and " + user2.getName());
+                                                    listener.onSuccess();
+                                                })
+                                                .addOnFailureListener(e -> {
+                                                    Log.w(TAG, "Failed to create conversation, but friendship accepted", e);
+                                                    listener.onSuccess();  // Still success since friendship is accepted
+                                                });
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        Log.e(TAG, "Failed to fetch user2 details", e);
+                                        listener.onFailure(e);
+                                    });
+                        })
+                        .addOnFailureListener(e -> {
+                            Log.e(TAG, "Failed to fetch user1 details", e);
+                            listener.onFailure(e);
+                        });
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                Log.w(TAG, "Error checking existing conversation", e);
+                listener.onSuccess();  // Still success
+            }
+        });
+    }
+
+    /**
+     * Reject friend request
+     */
+    public void rejectFriendRequest(@NonNull String requestId,
+                                    @NonNull OnFriendRequestListener listener) {
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("status", "REJECTED");
+
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .document(requestId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Friend request rejected: " + requestId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error rejecting friend request", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Listen to incoming friend requests realtime
+     */
+    public com.google.firebase.firestore.ListenerRegistration listenToFriendRequests(
+            @NonNull String userId,
+            @NonNull OnFriendRequestsChangedListener listener) {
+        return db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("toUserId", userId)
+                .whereEqualTo("status", "PENDING")
+                .addSnapshotListener((querySnapshot, e) -> {
+                    if (e != null) {
+                        Log.e(TAG, "Error listening to friend requests", e);
+                        listener.onFailure(e);
+                        return;
+                    }
+
+                    if (querySnapshot != null) {
+                        List<com.example.doan_zaloclone.models.FriendRequest> requests = new ArrayList<>();
+                        for (DocumentSnapshot document : querySnapshot.getDocuments()) {
+                            com.example.doan_zaloclone.models.FriendRequest request =
+                                    document.toObject(com.example.doan_zaloclone.models.FriendRequest.class);
+                            if (request != null) {
+                                request.setId(document.getId());  // Set document ID for DiffUtil comparison
+                                requests.add(request);
+                            }
+                        }
+                        Log.d(TAG, "Loaded " + requests.size() + " pending friend requests");
+                        listener.onFriendRequestsChanged(requests);
+                    }
+                });
+    }
+
+    /**
+     * Check friend request status between two users
+     */
+    public void checkFriendRequestStatus(@NonNull String fromUserId,
+                                         @NonNull String toUserId,
+                                         @NonNull OnFriendRequestStatusListener listener) {
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("fromUserId", fromUserId)
+                .whereEqualTo("toUserId", toUserId)
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    if (querySnapshot.isEmpty()) {
+                        listener.onStatus("NONE");
+                    } else {
+                        DocumentSnapshot doc = querySnapshot.getDocuments().get(0);
+                        String status = doc.getString("status");
+                        listener.onStatus(status != null ? status : "NONE");
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error checking friend request status", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Get list of friends for a user
+     * Queries accepted friend requests and fetches user details
+     */
+    public void getFriends(@NonNull String userId,
+                           @NonNull OnFriendsLoadedListener listener) {
+        Log.d(TAG, "Loading friends for user: " + userId);
+
+        // Query friend requests where user is involved and status is ACCEPTED
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("status", "ACCEPTED")
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    // Use Set to avoid duplicates (in case of multiple requests between same users)
+                    java.util.Set<String> friendIdsSet = new java.util.HashSet<>();
+
+                    // Extract friend IDs
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        String fromUserId = doc.getString("fromUserId");
+                        String toUserId = doc.getString("toUserId");
+
+                        if (userId.equals(fromUserId)) {
+                            friendIdsSet.add(toUserId);
+                        } else if (userId.equals(toUserId)) {
+                            friendIdsSet.add(fromUserId);
+                        }
+                    }
+
+                    List<String> friendIds = new ArrayList<>(friendIdsSet);
+
+                    if (friendIds.isEmpty()) {
+                        Log.d(TAG, "No friends found");
+                        listener.onFriendsLoaded(new ArrayList<>());
+                        return;
+                    }
+
+                    Log.d(TAG, "Found " + friendIds.size() + " unique friend(s)");
+
+                    // Fetch user details for each friend
+                    List<User> friends = new ArrayList<>();
+                    int[] fetchedCount = {0};
+
+                    for (String friendId : friendIds) {
+                        db.collection(COLLECTION_USERS)
+                                .document(friendId)
+                                .get()
+                                .addOnSuccessListener(userDoc -> {
+                                    User friend = userDoc.toObject(User.class);
+                                    if (friend != null) {
+                                        friend.setId(userDoc.getId());  // Set document ID
+                                        friends.add(friend);
+                                    }
+
+                                    fetchedCount[0]++;
+                                    if (fetchedCount[0] == friendIds.size()) {
+                                        // All friends fetched
+                                        friends.sort((f1, f2) -> {
+                                            String name1 = f1.getName() != null ? f1.getName() : "";
+                                            String name2 = f2.getName() != null ? f2.getName() : "";
+                                            return name1.compareTo(name2);
+                                        });
+                                        Log.d(TAG, "Loaded " + friends.size() + " friends");
+                                        listener.onFriendsLoaded(friends);
+                                    }
+                                })
+                                .addOnFailureListener(e -> {
+                                    Log.w(TAG, "Failed to fetch friend: " + friendId, e);
+                                    fetchedCount[0]++;
+                                    if (fetchedCount[0] == friendIds.size()) {
+                                        listener.onFriendsLoaded(friends);
+                                    }
+                                });
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error loading friends", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    // ===================== FRIEND REQUEST METHODS =====================
+
+    /**
+     * Check if two users are friends
+     */
+    public void checkFriendship(@NonNull String user1Id,
+                                @NonNull String user2Id,
+                                @NonNull OnFriendshipCheckListener listener) {
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("status", "ACCEPTED")
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    boolean areFriends = false;
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        String from = doc.getString("fromUserId");
+                        String to = doc.getString("toUserId");
+
+                        if ((user1Id.equals(from) && user2Id.equals(to)) ||
+                                (user1Id.equals(to) && user2Id.equals(from))) {
+                            areFriends = true;
+                            break;
+                        }
+                    }
+                    Log.d(TAG, "Friendship check: " + user1Id + " and " + user2Id + " = " + areFriends);
+                    listener.onResult(areFriends);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error checking friendship", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Remove a friend (unfriend)
+     * Updates the friend request status from ACCEPTED to REMOVED
+     * Conversation is preserved to maintain chat history
+     *
+     * @param user1Id  First user ID
+     * @param user2Id  Second user ID
+     * @param listener Callback for result
+     */
+    public void removeFriend(@NonNull String user1Id,
+                             @NonNull String user2Id,
+                             @NonNull OnFriendRemovedListener listener) {
+        Log.d(TAG, "Removing friend relationship between: " + user1Id + " and " + user2Id);
+
+        // Find the accepted friend request between the two users
+        db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("status", "ACCEPTED")
+                .get()
+                .addOnSuccessListener(querySnapshot -> {
+                    boolean found = false;
+
+                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                        String fromUserId = doc.getString("fromUserId");
+                        String toUserId = doc.getString("toUserId");
+
+                        // Check if this is the friend request between the two users
+                        if ((user1Id.equals(fromUserId) && user2Id.equals(toUserId)) ||
+                                (user1Id.equals(toUserId) && user2Id.equals(fromUserId))) {
+
+                            // Update status to REMOVED (preserve for history)
+                            Map<String, Object> updates = new HashMap<>();
+                            updates.put("status", "REMOVED");
+                            updates.put("removedAt", System.currentTimeMillis());
+
+                            db.collection(COLLECTION_FRIEND_REQUESTS)
+                                    .document(doc.getId())
+                                    .update(updates)
+                                    .addOnSuccessListener(aVoid -> {
+                                        Log.d(TAG, "Friend removed successfully: " + doc.getId());
+                                        listener.onSuccess();
+                                    })
+                                    .addOnFailureListener(e -> {
+                                        Log.e(TAG, "Error removing friend", e);
+                                        listener.onFailure(e);
+                                    });
+
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found) {
+                        Log.w(TAG, "No friend relationship found between users");
+                        listener.onFailure(new Exception("Không tìm thấy mối quan hệ bạn bè"));
+                    }
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error finding friend request", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Listen to friends list with realtime updates
+     * Sets up a snapshot listener on friend requests with ACCEPTED status
+     */
+    public com.google.firebase.firestore.ListenerRegistration listenToFriends(
+            @NonNull String userId,
+            @NonNull OnFriendsChangedListener listener) {
+        return db.collection(COLLECTION_FRIEND_REQUESTS)
+                .whereEqualTo("status", "ACCEPTED")
+                .addSnapshotListener((querySnapshot, e) -> {
+                    if (e != null) {
+                        Log.e(TAG, "Error listening to friends", e);
+                        listener.onFailure(e);
+                        return;
+                    }
+
+                    if (querySnapshot != null) {
+                        // Use Set to avoid duplicates
+                        java.util.Set<String> friendIdsSet = new java.util.HashSet<>();
+
+                        // Extract friend IDs
+                        for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
+                            String fromUserId = doc.getString("fromUserId");
+                            String toUserId = doc.getString("toUserId");
+
+                            if (userId.equals(fromUserId)) {
+                                friendIdsSet.add(toUserId);
+                            } else if (userId.equals(toUserId)) {
+                                friendIdsSet.add(fromUserId);
+                            }
+                        }
+
+                        List<String> friendIds = new ArrayList<>(friendIdsSet);
+
+                        if (friendIds.isEmpty()) {
+                            Log.d(TAG, "No friends found (realtime)");
+                            listener.onFriendsChanged(new ArrayList<>());
+                            return;
+                        }
+
+                        Log.d(TAG, "Found " + friendIds.size() + " unique friend(s) (realtime)");
+
+                        // Fetch user details for each friend
+                        List<User> friends = new ArrayList<>();
+                        int[] fetchedCount = {0};
+
+                        for (String friendId : friendIds) {
+                            db.collection(COLLECTION_USERS)
+                                    .document(friendId)
+                                    .get()
+                                    .addOnSuccessListener(userDoc -> {
+                                        User friend = userDoc.toObject(User.class);
+                                        if (friend != null) {
+                                            friend.setId(userDoc.getId());
+                                            friends.add(friend);
+                                        }
+
+                                        fetchedCount[0]++;
+                                        if (fetchedCount[0] == friendIds.size()) {
+                                            // All friends fetched, sort and notify
+                                            friends.sort((f1, f2) -> {
+                                                String name1 = f1.getName() != null ? f1.getName() : "";
+                                                String name2 = f2.getName() != null ? f2.getName() : "";
+                                                return name1.compareTo(name2);
+                                            });
+                                            Log.d(TAG, "Loaded " + friends.size() + " friends (realtime)");
+                                            listener.onFriendsChanged(friends);
+                                        }
+                                    })
+                                    .addOnFailureListener(error -> {
+                                        Log.w(TAG, "Failed to fetch friend: " + friendId, error);
+                                        fetchedCount[0]++;
+                                        if (fetchedCount[0] == friendIds.size()) {
+                                            listener.onFriendsChanged(friends);
+                                        }
+                                    });
+                        }
+                    }
+                });
+    }
+
+    /**
+     * Pin a message in a conversation
+     *
+     * @param conversationId ID of the conversation
+     * @param messageId      ID of the message to pin
+     * @param listener       Callback for result
+     */
+    public void pinMessage(@NonNull String conversationId,
+                           @NonNull String messageId,
+                           @NonNull OnPinMessageListener listener) {
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update("pinnedMessageIds", com.google.firebase.firestore.FieldValue.arrayUnion(messageId))
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Message pinned: " + messageId + " in conversation: " + conversationId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error pinning message: " + messageId, e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Unpin a message from a conversation
+     *
+     * @param conversationId ID of the conversation
+     * @param messageId      ID of the message to unpin
+     * @param listener       Callback for result
+     */
+    public void unpinMessage(@NonNull String conversationId,
+                             @NonNull String messageId,
+                             @NonNull OnPinMessageListener listener) {
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .update("pinnedMessageIds", com.google.firebase.firestore.FieldValue.arrayRemove(messageId))
+                .addOnSuccessListener(aVoid -> {
+                    Log.d(TAG, "Message unpinned: " + messageId + " from conversation: " + conversationId);
+                    listener.onSuccess();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error unpinning message: " + messageId, e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Get all pinned messages for a conversation
+     * Fetches full Message objects for each pinned message ID
+     *
+     * @param conversationId ID of the conversation
+     * @param listener       Callback with list of pinned messages
+     */
+    public void getPinnedMessages(@NonNull String conversationId,
+                                  @NonNull OnPinnedMessagesListener listener) {
+        // First get the conversation to retrieve pinnedMessageIds
+        db.collection(COLLECTION_CONVERSATIONS)
+                .document(conversationId)
+                .get()
+                .addOnSuccessListener(doc -> {
+                    if (!doc.exists()) {
+                        listener.onFailure(new Exception("Conversation not found"));
+                        return;
+                    }
+
+                    Conversation conversation = doc.toObject(Conversation.class);
+                    if (conversation == null) {
+                        listener.onFailure(new Exception("Failed to parse conversation"));
+                        return;
+                    }
+
+                    List<String> pinnedIds = conversation.getPinnedMessageIds();
+                    if (pinnedIds.isEmpty()) {
+                        Log.d(TAG, "No pinned messages in conversation: " + conversationId);
+                        listener.onSuccess(new ArrayList<>());
+                        return;
+                    }
+
+                    Log.d(TAG, "Found " + pinnedIds.size() + " pinned message IDs in conversation: " + conversationId);
+
+                    // Fetch all pinned messages from messages subcollection
+                    // Note: We'll fetch them one by one since Firestore doesn't have a native "whereIn" for document IDs
+                    fetchPinnedMessagesByIds(conversationId, pinnedIds, listener);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Error fetching conversation for pinned messages", e);
+                    listener.onFailure(e);
+                });
+    }
+
+    /**
+     * Helper method to fetch multiple messages by their IDs
+     */
+    private void fetchPinnedMessagesByIds(@NonNull String conversationId,
+                                          @NonNull List<String> messageIds,
+                                          @NonNull OnPinnedMessagesListener listener) {
+        List<com.example.doan_zaloclone.models.Message> pinnedMessages = new ArrayList<>();
+        int[] fetchedCount = {0};
+
+        for (String messageId : messageIds) {
+            db.collection(COLLECTION_CONVERSATIONS)
+                    .document(conversationId)
+                    .collection("messages")
+                    .document(messageId)
+                    .get()
+                    .addOnSuccessListener(messageDoc -> {
+                        if (messageDoc.exists()) {
+                            com.example.doan_zaloclone.models.Message message =
+                                    messageDoc.toObject(com.example.doan_zaloclone.models.Message.class);
+                            if (message != null) {
+                                message.setId(messageDoc.getId());
+                                pinnedMessages.add(message);
+                            }
+                        } else {
+                            Log.w(TAG, "Pinned message not found: " + messageId);
+                        }
+
+                        fetchedCount[0]++;
+                        if (fetchedCount[0] == messageIds.size()) {
+                            // Sort by pin order: last in array = most recently pinned = first in list
+                            // Create a map for quick lookup of original order
+                            java.util.Map<String, Integer> orderMap = new java.util.HashMap<>();
+                            for (int i = 0; i < messageIds.size(); i++) {
+                                orderMap.put(messageIds.get(i), i);
+                            }
+                            // Sort descending by order (higher index = more recent pin = first)
+                            pinnedMessages.sort((m1, m2) -> {
+                                int order1 = orderMap.getOrDefault(m1.getId(), 0);
+                                int order2 = orderMap.getOrDefault(m2.getId(), 0);
+                                return Integer.compare(order2, order1); // Descending
+                            });
+                            Log.d(TAG, "Loaded " + pinnedMessages.size() + " pinned messages (sorted by pin order)");
+                            listener.onSuccess(pinnedMessages);
+                        }
+                    })
+                    .addOnFailureListener(error -> {
+                        Log.w(TAG, "Failed to fetch pinned message: " + messageId, error);
+                        fetchedCount[0]++;
+                        if (fetchedCount[0] == messageIds.size()) {
+                            // Same sorting logic
+                            java.util.Map<String, Integer> orderMap = new java.util.HashMap<>();
+                            for (int i = 0; i < messageIds.size(); i++) {
+                                orderMap.put(messageIds.get(i), i);
+                            }
+                            pinnedMessages.sort((m1, m2) -> {
+                                int order1 = orderMap.getOrDefault(m1.getId(), 0);
+                                int order2 = orderMap.getOrDefault(m2.getId(), 0);
+                                return Integer.compare(order2, order1);
+                            });
+                            listener.onSuccess(pinnedMessages);
+                        }
+                    });
+        }
+    }
+
+    // Callback Interfaces for Friend Requests
 
     /**
      * Listener cho việc tạo user mới
@@ -798,760 +1502,68 @@ public class FirestoreManager {
         void onFailure(Exception e);
     }
 
-    /**
-     * Lắng nghe conversations của user realtime
-     *
-     * @param userId   ID của user
-     * @param listener Callback để xử lý kết quả
-     * @return ListenerRegistration để cleanup
-     */
-    public com.google.firebase.firestore.ListenerRegistration listenToConversations(
-            @NonNull String userId,
-            @NonNull OnConversationsChangedListener listener) {
-        return db.collection(COLLECTION_CONVERSATIONS)
-                .whereArrayContains("memberIds", userId)
-                .addSnapshotListener(new com.google.firebase.firestore.EventListener<QuerySnapshot>() {
-                    @Override
-                    public void onEvent(QuerySnapshot querySnapshot,
-                                        com.google.firebase.firestore.FirebaseFirestoreException e) {
-                        if (e != null) {
-                            Log.e(TAG, "Error listening to conversations", e);
-                            listener.onFailure(e);
-                            return;
-                        }
-
-                        if (querySnapshot != null) {
-                            List<Conversation> conversations = new ArrayList<>();
-                            for (DocumentSnapshot document : querySnapshot.getDocuments()) {
-                                Conversation conversation = document.toObject(Conversation.class);
-                                if (conversation != null) {
-                                    conversation.setId(document.getId());  // Set document ID
-                                    conversations.add(conversation);
-                                }
-                            }
-                            // Sort by timestamp descending (newest first)
-                            conversations.sort((c1, c2) -> Long.compare(c2.getTimestamp(), c1.getTimestamp()));
-                            Log.d(TAG, "Loaded " + conversations.size() + " conversations for user: " + userId);
-                            listener.onConversationsChanged(conversations);
-                        }
-                    }
-                });
-    }
-
-    // ===================== FRIEND REQUEST METHODS =====================
-
-    /**
-     * Send friend request to another user
-     */
-    public void sendFriendRequest(@NonNull String fromUserId,
-                                  @NonNull String fromUserName,
-                                  @NonNull String fromUserEmail,
-                                  @NonNull String toUserId,
-                                  @NonNull OnFriendRequestListener listener) {
-        // Check if request already exists
-        db.collection(COLLECTION_FRIEND_REQUESTS)
-                .whereEqualTo("fromUserId", fromUserId)
-                .whereEqualTo("toUserId", toUserId)
-                .whereIn("status", Arrays.asList("PENDING", "ACCEPTED"))
-                .get()
-                .addOnSuccessListener(querySnapshot -> {
-                    if (!querySnapshot.isEmpty()) {
-                        listener.onFailure(new Exception("Friend request already exists"));
-                        return;
-                    }
-
-                    // Create new friend request
-                    DocumentReference requestRef = db.collection(COLLECTION_FRIEND_REQUESTS).document();
-                    Map<String, Object> requestData = new HashMap<>();
-                    requestData.put("id", requestRef.getId());
-                    requestData.put("fromUserId", fromUserId);
-                    requestData.put("toUserId", toUserId);
-                    requestData.put("fromUserName", fromUserName);
-                    requestData.put("fromUserEmail", fromUserEmail);
-                    requestData.put("status", "PENDING");
-                    requestData.put("timestamp", System.currentTimeMillis());
-
-                    requestRef.set(requestData)
-                            .addOnSuccessListener(aVoid -> {
-                                Log.d(TAG, "Friend request sent: " + requestRef.getId());
-                                listener.onSuccess();
-                            })
-                            .addOnFailureListener(e -> {
-                                Log.e(TAG, "Error sending friend request", e);
-                                listener.onFailure(e);
-                            });
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error checking existing request", e);
-                    listener.onFailure(e);
-                });
-    }
-
-    /**
-     * Accept friend request and auto-create conversation
-     */
-    public void acceptFriendRequest(@NonNull String requestId,
-                                    @NonNull OnFriendRequestListener listener) {
-        // First get the request details
-        db.collection(COLLECTION_FRIEND_REQUESTS)
-                .document(requestId)
-                .get()
-                .addOnSuccessListener(requestDoc -> {
-                    if (!requestDoc.exists()) {
-                        listener.onFailure(new Exception("Request not found"));
-                        return;
-                    }
-                    
-                    String fromUserId = requestDoc.getString("fromUserId");
-                    String toUserId = requestDoc.getString("toUserId");
-                    String fromUserName = requestDoc.getString("fromUserName");
-                    
-                    // Update status to ACCEPTED
-                    Map<String, Object> updates = new HashMap<>();
-                    updates.put("status", "ACCEPTED");
-                    
-                    db.collection(COLLECTION_FRIEND_REQUESTS)
-                            .document(requestId)
-                            .update(updates)
-                            .addOnSuccessListener(aVoid -> {
-                                Log.d(TAG, "Friend request accepted: " + requestId);
-                                
-                                // Create conversation
-                                createFriendConversation(fromUserId, toUserId, fromUserName, listener);
-                            })
-                            .addOnFailureListener(e -> {
-                                Log.e(TAG, "Error accepting friend request", e);
-                                listener.onFailure(e);
-                            });
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error fetching request", e);
-                    listener.onFailure(e);
-                });
-    }
-
-    /**
-     * Create conversation when friends accept request
-     * Fetches both users' details to properly set conversation info
-     */
-    private void createFriendConversation(String user1Id, String user2Id, 
-                                         String user1Name, OnFriendRequestListener listener) {
-        // Check if conversation already exists
-        findExistingConversation(user1Id, user2Id, new OnConversationFoundListener() {
-            @Override
-            public void onFound(Conversation conversation) {
-                // Conversation exists, just notify success
-                Log.d(TAG, "Conversation already exists: " + conversation.getId());
-                listener.onSuccess();
-            }
-
-            @Override
-            public void onNotFound() {
-                // Fetch both users' full details
-                db.collection(COLLECTION_USERS).document(user1Id).get()
-                    .addOnSuccessListener(user1Doc -> {
-                        db.collection(COLLECTION_USERS).document(user2Id).get()
-                            .addOnSuccessListener(user2Doc -> {
-                                User user1 = user1Doc.toObject(User.class);
-                                User user2 = user2Doc.toObject(User.class);
-                                
-                                if (user1 == null || user2 == null) {
-                                    Log.e(TAG, "Failed to fetch user details for conversation");
-                                    listener.onFailure(new Exception("User details not found"));
-                                    return;
-                                }
-                                
-                                // Create new conversation with proper user info
-                                DocumentReference convRef = db.collection(COLLECTION_CONVERSATIONS).document();
-                                
-                                // For a 1-1 conversation, we store it as a single conversation object
-                                // The app will display the OTHER user's name based on who's viewing
-                                Map<String, Object> conversationData = new HashMap<>();
-                                conversationData.put("id", convRef.getId());
-                                conversationData.put("memberIds", Arrays.asList(user1Id, user2Id));
-                                
-                                // Store member names for easier access
-                                Map<String, String> memberNames = new HashMap<>();
-                                memberNames.put(user1Id, user1.getName());
-                                memberNames.put(user2Id, user2.getName());
-                                conversationData.put("memberNames", memberNames);
-                                
-                                // For 1-1 chats, name is typically left empty or set as the conversation ID
-                                // The UI will display the other user's name
-                                conversationData.put("name", "");
-                                
-                                // Set a friendly first message
-                                conversationData.put("lastMessage", "Các bạn đã là bạn bè. Hãy bắt đầu trò chuyện!");
-                                conversationData.put("timestamp", System.currentTimeMillis());
-                                
-                                convRef.set(conversationData)
-                                        .addOnSuccessListener(aVoid -> {
-                                            Log.d(TAG, "Friend conversation created: " + convRef.getId() + 
-                                                 " between " + user1.getName() + " and " + user2.getName());
-                                            listener.onSuccess();
-                                        })
-                                        .addOnFailureListener(e -> {
-                                            Log.w(TAG, "Failed to create conversation, but friendship accepted", e);
-                                            listener.onSuccess();  // Still success since friendship is accepted
-                                        });
-                            })
-                            .addOnFailureListener(e -> {
-                                Log.e(TAG, "Failed to fetch user2 details", e);
-                                listener.onFailure(e);
-                            });
-                    })
-                    .addOnFailureListener(e -> {
-                        Log.e(TAG, "Failed to fetch user1 details", e);
-                        listener.onFailure(e);
-                    });
-            }
-
-            @Override
-            public void onFailure(Exception e) {
-                Log.w(TAG, "Error checking existing conversation", e);
-                listener.onSuccess();  // Still success
-            }
-        });
-    }
-
-    /**
-     * Reject friend request
-     */
-    public void rejectFriendRequest(@NonNull String requestId,
-                                    @NonNull OnFriendRequestListener listener) {
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("status", "REJECTED");
-
-        db.collection(COLLECTION_FRIEND_REQUESTS)
-                .document(requestId)
-                .update(updates)
-                .addOnSuccessListener(aVoid -> {
-                    Log.d(TAG, "Friend request rejected: " + requestId);
-                    listener.onSuccess();
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error rejecting friend request", e);
-                    listener.onFailure(e);
-                });
-    }
-
-    /**
-     * Listen to incoming friend requests realtime
-     */
-    public com.google.firebase.firestore.ListenerRegistration listenToFriendRequests(
-            @NonNull String userId,
-            @NonNull OnFriendRequestsChangedListener listener) {
-        return db.collection(COLLECTION_FRIEND_REQUESTS)
-                .whereEqualTo("toUserId", userId)
-                .whereEqualTo("status", "PENDING")
-                .addSnapshotListener((querySnapshot, e) -> {
-                    if (e != null) {
-                        Log.e(TAG, "Error listening to friend requests", e);
-                        listener.onFailure(e);
-                        return;
-                    }
-
-                    if (querySnapshot != null) {
-                        List<com.example.doan_zaloclone.models.FriendRequest> requests = new ArrayList<>();
-                        for (DocumentSnapshot document : querySnapshot.getDocuments()) {
-                            com.example.doan_zaloclone.models.FriendRequest request = 
-                                document.toObject(com.example.doan_zaloclone.models.FriendRequest.class);
-                            if (request != null) {
-                                request.setId(document.getId());  // Set document ID for DiffUtil comparison
-                                requests.add(request);
-                            }
-                        }
-                        Log.d(TAG, "Loaded " + requests.size() + " pending friend requests");
-                        listener.onFriendRequestsChanged(requests);
-                    }
-                });
-    }
-
-    /**
-     * Check friend request status between two users
-     */
-    public void checkFriendRequestStatus(@NonNull String fromUserId,
-                                        @NonNull String toUserId,
-                                        @NonNull OnFriendRequestStatusListener listener) {
-        db.collection(COLLECTION_FRIEND_REQUESTS)
-                .whereEqualTo("fromUserId", fromUserId)
-                .whereEqualTo("toUserId", toUserId)
-                .get()
-                .addOnSuccessListener(querySnapshot -> {
-                    if (querySnapshot.isEmpty()) {
-                        listener.onStatus("NONE");
-                    } else {
-                        DocumentSnapshot doc = querySnapshot.getDocuments().get(0);
-                        String status = doc.getString("status");
-                        listener.onStatus(status != null ? status : "NONE");
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error checking friend request status", e);
-                    listener.onFailure(e);
-                });
-    }
-
-    /**
-     * Get list of friends for a user
-     * Queries accepted friend requests and fetches user details
-     */
-    public void getFriends(@NonNull String userId,
-                          @NonNull OnFriendsLoadedListener listener) {
-        Log.d(TAG, "Loading friends for user: " + userId);
-        
-        // Query friend requests where user is involved and status is ACCEPTED
-        db.collection(COLLECTION_FRIEND_REQUESTS)
-                .whereEqualTo("status", "ACCEPTED")
-                .get()
-                .addOnSuccessListener(querySnapshot -> {
-                    // Use Set to avoid duplicates (in case of multiple requests between same users)
-                    java.util.Set<String> friendIdsSet = new java.util.HashSet<>();
-                    
-                    // Extract friend IDs
-                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
-                        String fromUserId = doc.getString("fromUserId");
-                        String toUserId = doc.getString("toUserId");
-                        
-                        if (userId.equals(fromUserId)) {
-                            friendIdsSet.add(toUserId);
-                        } else if (userId.equals(toUserId)) {
-                            friendIdsSet.add(fromUserId);
-                        }
-                    }
-                    
-                    List<String> friendIds = new ArrayList<>(friendIdsSet);
-                    
-                    if (friendIds.isEmpty()) {
-                        Log.d(TAG, "No friends found");
-                        listener.onFriendsLoaded(new ArrayList<>());
-                        return;
-                    }
-                    
-                    Log.d(TAG, "Found " + friendIds.size() + " unique friend(s)");
-                    
-                    // Fetch user details for each friend
-                    List<User> friends = new ArrayList<>();
-                    int[] fetchedCount = {0};
-                    
-                    for (String friendId : friendIds) {
-                        db.collection(COLLECTION_USERS)
-                                .document(friendId)
-                                .get()
-                                .addOnSuccessListener(userDoc -> {
-                                    User friend = userDoc.toObject(User.class);
-                                    if (friend != null) {
-                                        friend.setId(userDoc.getId());  // Set document ID
-                                        friends.add(friend);
-                                    }
-                                    
-                                    fetchedCount[0]++;
-                                    if (fetchedCount[0] == friendIds.size()) {
-                                        // All friends fetched
-                                        friends.sort((f1, f2) -> {
-                                            String name1 = f1.getName() != null ? f1.getName() : "";
-                                            String name2 = f2.getName() != null ? f2.getName() : "";
-                                            return name1.compareTo(name2);
-                                        });
-                                        Log.d(TAG, "Loaded " + friends.size() + " friends");
-                                        listener.onFriendsLoaded(friends);
-                                    }
-                                })
-                                .addOnFailureListener(e -> {
-                                    Log.w(TAG, "Failed to fetch friend: " + friendId, e);
-                                    fetchedCount[0]++;
-                                    if (fetchedCount[0] == friendIds.size()) {
-                                        listener.onFriendsLoaded(friends);
-                                    }
-                                });
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error loading friends", e);
-                    listener.onFailure(e);
-                });
-    }
-
-    // Callback Interfaces for Friend Requests
-
     public interface OnFriendRequestListener {
         void onSuccess();
+
         void onFailure(Exception e);
     }
 
     public interface OnFriendRequestsChangedListener {
         void onFriendRequestsChanged(List<com.example.doan_zaloclone.models.FriendRequest> requests);
+
         void onFailure(Exception e);
     }
 
     public interface OnFriendRequestStatusListener {
         void onStatus(String status);
+
         void onFailure(Exception e);
     }
-    
-    /**
-     * Check if two users are friends
-     */
-    public void checkFriendship(@NonNull String user1Id,
-                               @NonNull String user2Id,
-                               @NonNull OnFriendshipCheckListener listener) {
-        db.collection(COLLECTION_FRIEND_REQUESTS)
-                .whereEqualTo("status", "ACCEPTED")
-                .get()
-                .addOnSuccessListener(querySnapshot -> {
-                    boolean areFriends = false;
-                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
-                        String from = doc.getString("fromUserId");
-                        String to = doc.getString("toUserId");
-                        
-                        if ((user1Id.equals(from) && user2Id.equals(to)) ||
-                            (user1Id.equals(to) && user2Id.equals(from))) {
-                            areFriends = true;
-                            break;
-                        }
-                    }
-                    Log.d(TAG, "Friendship check: " + user1Id + " and " + user2Id + " = " + areFriends);
-                    listener.onResult(areFriends);
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error checking friendship", e);
-                    listener.onFailure(e);
-                });
-    }
-    
+
+    // ===================== PINNED MESSAGES METHODS =====================
+
     public interface OnFriendsLoadedListener {
         void onFriendsLoaded(List<User> friends);
+
         void onFailure(Exception e);
     }
-    
+
     /**
      * Listener for realtime friend list updates
      */
     public interface OnFriendsChangedListener {
         void onFriendsChanged(List<User> friends);
+
         void onFailure(Exception e);
     }
-    
+
     public interface OnFriendshipCheckListener {
         void onResult(boolean areFriends);
+
         void onFailure(Exception e);
     }
-    
+
     public interface OnFriendRemovedListener {
         void onSuccess();
+
         void onFailure(Exception e);
     }
-    
-    /**
-     * Remove a friend (unfriend)
-     * Updates the friend request status from ACCEPTED to REMOVED
-     * Conversation is preserved to maintain chat history
-     * 
-     * @param user1Id First user ID
-     * @param user2Id Second user ID
-     * @param listener Callback for result
-     */
-    public void removeFriend(@NonNull String user1Id,
-                            @NonNull String user2Id,
-                            @NonNull OnFriendRemovedListener listener) {
-        Log.d(TAG, "Removing friend relationship between: " + user1Id + " and " + user2Id);
-        
-        // Find the accepted friend request between the two users
-        db.collection(COLLECTION_FRIEND_REQUESTS)
-                .whereEqualTo("status", "ACCEPTED")
-                .get()
-                .addOnSuccessListener(querySnapshot -> {
-                    boolean found = false;
-                    
-                    for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
-                        String fromUserId = doc.getString("fromUserId");
-                        String toUserId = doc.getString("toUserId");
-                        
-                        // Check if this is the friend request between the two users
-                        if ((user1Id.equals(fromUserId) && user2Id.equals(toUserId)) ||
-                            (user1Id.equals(toUserId) && user2Id.equals(fromUserId))) {
-                            
-                            // Update status to REMOVED (preserve for history)
-                            Map<String, Object> updates = new HashMap<>();
-                            updates.put("status", "REMOVED");
-                            updates.put("removedAt", System.currentTimeMillis());
-                            
-                            db.collection(COLLECTION_FRIEND_REQUESTS)
-                                    .document(doc.getId())
-                                    .update(updates)
-                                    .addOnSuccessListener(aVoid -> {
-                                        Log.d(TAG, "Friend removed successfully: " + doc.getId());
-                                        listener.onSuccess();
-                                    })
-                                    .addOnFailureListener(e -> {
-                                        Log.e(TAG, "Error removing friend", e);
-                                        listener.onFailure(e);
-                                    });
-                            
-                            found = true;
-                            break;
-                        }
-                    }
-                    
-                    if (!found) {
-                        Log.w(TAG, "No friend relationship found between users");
-                        listener.onFailure(new Exception("Không tìm thấy mối quan hệ bạn bè"));
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error finding friend request", e);
-                    listener.onFailure(e);
-                });
-    }
-    
-    /**
-     * Listen to friends list with realtime updates
-     * Sets up a snapshot listener on friend requests with ACCEPTED status
-     */
-    public com.google.firebase.firestore.ListenerRegistration listenToFriends(
-            @NonNull String userId,
-            @NonNull OnFriendsChangedListener listener) {
-        return db.collection(COLLECTION_FRIEND_REQUESTS)
-                .whereEqualTo("status", "ACCEPTED")
-                .addSnapshotListener((querySnapshot, e) -> {
-                    if (e != null) {
-                        Log.e(TAG, "Error listening to friends", e);
-                        listener.onFailure(e);
-                        return;
-                    }
 
-                    if (querySnapshot != null) {
-                        // Use Set to avoid duplicates
-                        java.util.Set<String> friendIdsSet = new java.util.HashSet<>();
-                        
-                        // Extract friend IDs
-                        for (DocumentSnapshot doc : querySnapshot.getDocuments()) {
-                            String fromUserId = doc.getString("fromUserId");
-                            String toUserId = doc.getString("toUserId");
-                            
-                            if (userId.equals(fromUserId)) {
-                                friendIdsSet.add(toUserId);
-                            } else if (userId.equals(toUserId)) {
-                                friendIdsSet.add(fromUserId);
-                            }
-                        }
-                        
-                        List<String> friendIds = new ArrayList<>(friendIdsSet);
-                        
-                        if (friendIds.isEmpty()) {
-                            Log.d(TAG, "No friends found (realtime)");
-                            listener.onFriendsChanged(new ArrayList<>());
-                            return;
-                        }
-                        
-                        Log.d(TAG, "Found " + friendIds.size() + " unique friend(s) (realtime)");
-                        
-                        // Fetch user details for each friend
-                        List<User> friends = new ArrayList<>();
-                        int[] fetchedCount = {0};
-                        
-                        for (String friendId : friendIds) {
-                            db.collection(COLLECTION_USERS)
-                                    .document(friendId)
-                                    .get()
-                                    .addOnSuccessListener(userDoc -> {
-                                        User friend = userDoc.toObject(User.class);
-                                        if (friend != null) {
-                                            friend.setId(userDoc.getId());
-                                            friends.add(friend);
-                                        }
-                                        
-                                        fetchedCount[0]++;
-                                        if (fetchedCount[0] == friendIds.size()) {
-                                            // All friends fetched, sort and notify
-                                            friends.sort((f1, f2) -> {
-                                                String name1 = f1.getName() != null ? f1.getName() : "";
-                                                String name2 = f2.getName() != null ? f2.getName() : "";
-                                                return name1.compareTo(name2);
-                                            });
-                                            Log.d(TAG, "Loaded " + friends.size() + " friends (realtime)");
-                                            listener.onFriendsChanged(friends);
-                                        }
-                                    })
-                                    .addOnFailureListener(error -> {
-                                        Log.w(TAG, "Failed to fetch friend: " + friendId, error);
-                                        fetchedCount[0]++;
-                                        if (fetchedCount[0] == friendIds.size()) {
-                                            listener.onFriendsChanged(friends);
-                                        }
-                                    });
-                        }
-                    }
-                });
-    }
-    
-    // ===================== PINNED MESSAGES METHODS =====================
-    
-    /**
-     * Pin a message in a conversation
-     * @param conversationId ID of the conversation
-     * @param messageId ID of the message to pin
-     * @param listener Callback for result
-     */
-    public void pinMessage(@NonNull String conversationId,
-                          @NonNull String messageId,
-                          @NonNull OnPinMessageListener listener) {
-        db.collection(COLLECTION_CONVERSATIONS)
-                .document(conversationId)
-                .update("pinnedMessageIds", com.google.firebase.firestore.FieldValue.arrayUnion(messageId))
-                .addOnSuccessListener(aVoid -> {
-                    Log.d(TAG, "Message pinned: " + messageId + " in conversation: " + conversationId);
-                    listener.onSuccess();
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error pinning message: " + messageId, e);
-                    listener.onFailure(e);
-                });
-    }
-    
-    /**
-     * Unpin a message from a conversation
-     * @param conversationId ID of the conversation
-     * @param messageId ID of the message to unpin
-     * @param listener Callback for result
-     */
-    public void unpinMessage(@NonNull String conversationId,
-                            @NonNull String messageId,
-                            @NonNull OnPinMessageListener listener) {
-        db.collection(COLLECTION_CONVERSATIONS)
-                .document(conversationId)
-                .update("pinnedMessageIds", com.google.firebase.firestore.FieldValue.arrayRemove(messageId))
-                .addOnSuccessListener(aVoid -> {
-                    Log.d(TAG, "Message unpinned: " + messageId + " from conversation: " + conversationId);
-                    listener.onSuccess();
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error unpinning message: " + messageId, e);
-                    listener.onFailure(e);
-                });
-    }
-    
-    /**
-     * Get all pinned messages for a conversation
-     * Fetches full Message objects for each pinned message ID
-     * @param conversationId ID of the conversation
-     * @param listener Callback with list of pinned messages
-     */
-    public void getPinnedMessages(@NonNull String conversationId,
-                                 @NonNull OnPinnedMessagesListener listener) {
-        // First get the conversation to retrieve pinnedMessageIds
-        db.collection(COLLECTION_CONVERSATIONS)
-                .document(conversationId)
-                .get()
-                .addOnSuccessListener(doc -> {
-                    if (!doc.exists()) {
-                        listener.onFailure(new Exception("Conversation not found"));
-                        return;
-                    }
-                    
-                    Conversation conversation = doc.toObject(Conversation.class);
-                    if (conversation == null) {
-                        listener.onFailure(new Exception("Failed to parse conversation"));
-                        return;
-                    }
-                    
-                    List<String> pinnedIds = conversation.getPinnedMessageIds();
-                    if (pinnedIds.isEmpty()) {
-                        Log.d(TAG, "No pinned messages in conversation: " + conversationId);
-                        listener.onSuccess(new ArrayList<>());
-                        return;
-                    }
-                    
-                    Log.d(TAG, "Found " + pinnedIds.size() + " pinned message IDs in conversation: " + conversationId);
-                    
-                    // Fetch all pinned messages from messages subcollection
-                    // Note: We'll fetch them one by one since Firestore doesn't have a native "whereIn" for document IDs
-                    fetchPinnedMessagesByIds(conversationId, pinnedIds, listener);
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "Error fetching conversation for pinned messages", e);
-                    listener.onFailure(e);
-                });
-    }
-    
-    /**
-     * Helper method to fetch multiple messages by their IDs
-     */
-    private void fetchPinnedMessagesByIds(@NonNull String conversationId,
-                                         @NonNull List<String> messageIds,
-                                         @NonNull OnPinnedMessagesListener listener) {
-        List<com.example.doan_zaloclone.models.Message> pinnedMessages = new ArrayList<>();
-        int[] fetchedCount = {0};
-        
-        for (String messageId : messageIds) {
-            db.collection(COLLECTION_CONVERSATIONS)
-                    .document(conversationId)
-                    .collection("messages")
-                    .document(messageId)
-                    .get()
-                    .addOnSuccessListener(messageDoc -> {
-                        if (messageDoc.exists()) {
-                            com.example.doan_zaloclone.models.Message message = 
-                                messageDoc.toObject(com.example.doan_zaloclone.models.Message.class);
-                            if (message != null) {
-                                message.setId(messageDoc.getId());
-                                pinnedMessages.add(message);
-                            }
-                        } else {
-                            Log.w(TAG, "Pinned message not found: " + messageId);
-                        }
-                        
-                        fetchedCount[0]++;
-                        if (fetchedCount[0] == messageIds.size()) {
-                            // Sort by pin order: last in array = most recently pinned = first in list
-                            // Create a map for quick lookup of original order
-                            java.util.Map<String, Integer> orderMap = new java.util.HashMap<>();
-                            for (int i = 0; i < messageIds.size(); i++) {
-                                orderMap.put(messageIds.get(i), i);
-                            }
-                            // Sort descending by order (higher index = more recent pin = first)
-                            pinnedMessages.sort((m1, m2) -> {
-                                int order1 = orderMap.getOrDefault(m1.getId(), 0);
-                                int order2 = orderMap.getOrDefault(m2.getId(), 0);
-                                return Integer.compare(order2, order1); // Descending
-                            });
-                            Log.d(TAG, "Loaded " + pinnedMessages.size() + " pinned messages (sorted by pin order)");
-                            listener.onSuccess(pinnedMessages);
-                        }
-                    })
-                    .addOnFailureListener(error -> {
-                        Log.w(TAG, "Failed to fetch pinned message: " + messageId, error);
-                        fetchedCount[0]++;
-                        if (fetchedCount[0] == messageIds.size()) {
-                            // Same sorting logic
-                            java.util.Map<String, Integer> orderMap = new java.util.HashMap<>();
-                            for (int i = 0; i < messageIds.size(); i++) {
-                                orderMap.put(messageIds.get(i), i);
-                            }
-                            pinnedMessages.sort((m1, m2) -> {
-                                int order1 = orderMap.getOrDefault(m1.getId(), 0);
-                                int order2 = orderMap.getOrDefault(m2.getId(), 0);
-                                return Integer.compare(order2, order1);
-                            });
-                            listener.onSuccess(pinnedMessages);
-                        }
-                    });
-        }
-    }
-    
     /**
      * Listener for pin/unpin operations
      */
     public interface OnPinMessageListener {
         void onSuccess();
+
         void onFailure(Exception e);
     }
-    
+
     /**
      * Listener for fetching pinned messages
      */
     public interface OnPinnedMessagesListener {
         void onSuccess(List<com.example.doan_zaloclone.models.Message> messages);
+
         void onFailure(Exception e);
     }
 }

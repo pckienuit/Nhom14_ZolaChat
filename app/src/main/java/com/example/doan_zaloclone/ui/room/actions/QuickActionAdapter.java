@@ -19,12 +19,8 @@ import java.util.List;
  */
 public class QuickActionAdapter extends RecyclerView.Adapter<QuickActionAdapter.ActionViewHolder> {
 
+    private final OnActionClickListener listener;
     private List<QuickAction> actions;
-    private OnActionClickListener listener;
-
-    public interface OnActionClickListener {
-        void onActionClick(QuickAction action);
-    }
 
     public QuickActionAdapter(List<QuickAction> actions, OnActionClickListener listener) {
         this.actions = actions != null ? actions : new ArrayList<>();
@@ -55,19 +51,47 @@ public class QuickActionAdapter extends RecyclerView.Adapter<QuickActionAdapter.
         notifyDataSetChanged();
     }
 
+    public interface OnActionClickListener {
+        void onActionClick(QuickAction action);
+    }
+
     class ActionViewHolder extends RecyclerView.ViewHolder {
         ImageView actionIcon;
         TextView actionLabel;
+        View actionBackground;
 
         ActionViewHolder(@NonNull View itemView) {
             super(itemView);
             actionIcon = itemView.findViewById(R.id.actionIcon);
             actionLabel = itemView.findViewById(R.id.actionLabel);
+            actionBackground = itemView.findViewById(R.id.actionBackground);
         }
 
         void bind(QuickAction action) {
             actionIcon.setImageResource(action.getIconResId());
             actionLabel.setText(action.getLabel());
+
+            // Set gradient background
+            if (actionBackground != null) {
+                // Determine color
+                int color = action.getBackgroundColor();
+                // Default to blue if 0
+                if (color == 0) color = android.graphics.Color.parseColor("#2196F3");
+                
+                // Create lighter variant for gradient start
+                float[] hsv = new float[3];
+                android.graphics.Color.colorToHSV(color, hsv);
+                hsv[1] = Math.max(0, hsv[1] - 0.3f); // reduce saturation significantly
+                hsv[2] = Math.min(1, hsv[2] + 0.3f); // increase brightness
+                int lighterColor = android.graphics.Color.HSVToColor(hsv);
+                
+                android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable(
+                        android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                        new int[] { lighterColor, color });
+                gd.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+                
+                actionBackground.setBackground(gd);
+            }
 
             itemView.setOnClickListener(v -> {
                 if (listener != null) {

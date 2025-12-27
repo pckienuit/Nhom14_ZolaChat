@@ -1,0 +1,210 @@
+================================================================================
+TÍNH NĂNG AUTHENTICATION (Authentication Feature)
+================================================================================
+
+NGÀY TẠO: 23/12/2025
+LOẠI: Feature
+MÔ TẢ: Hệ thống xác thực và phân quyền Admin
+
+
+================================================================================
+1. TỔNG QUAN
+================================================================================
+
+Admin Web sử dụng Firebase Authentication để xác thực người dùng.
+Hệ thống kiểm tra quyền Admin qua nhiều phương thức để đảm bảo
+chỉ những người được phép mới truy cập được trang quản trị.
+
+
+================================================================================
+2. CÁC PHƯƠNG THỨC XÁC THỰC ADMIN
+================================================================================
+
+Hệ thống kiểm tra theo thứ tự ưu tiên sau:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Thứ tự │ Phương thức              │ Mô tả                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│   1    │ Email Whitelist          │ Danh sách email được phép (development)│
+│   2    │ Firebase Custom Claims   │ admin: true trong token                │
+│   3    │ /admins Collection       │ Document với ID = user UID             │
+│   4    │ User isAdmin Flag        │ Field isAdmin = true trong /users      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+2.1. EMAIL WHITELIST (Method 1 - Development)
+----------------------------------------------
+Dùng cho môi trường development, check đầu tiên để tránh lỗi Firestore.
+
+Location: admin-web/js/auth.js
+
+const adminEmails = [
+    'admin@example.com',
+    'admin@zaloclone.com',
+    'phanchikien@gmail.com'  // Email được phép
+];
+
+Ưu điểm:
+- Không cần Firestore access
+- Nhanh, đơn giản
+- Dễ debug
+
+Nhược điểm:
+- Cần redeploy khi thêm admin mới
+- Không bảo mật cho production
+
+
+2.2. FIREBASE CUSTOM CLAIMS (Method 2 - Production)
+----------------------------------------------------
+Cách tốt nhất cho production, set thông qua Firebase Admin SDK.
+
+Để set custom claim:
+```javascript
+// Node.js script: scripts/set_admin_claim.js
+admin.auth().setCustomUserClaims(uid, { admin: true });
+```
+
+Kiểm tra trong client:
+```javascript
+const idTokenResult = await user.getIdTokenResult();
+if (idTokenResult.claims.admin === true) {
+    // User is admin
+}
+```
+
+
+2.3. ADMINS COLLECTION (Method 3)
+----------------------------------
+Tạo document trong Firestore collection /admins với ID = user UID.
+
+Firestore path: /admins/{userId}
+Document content: { "role": "admin", "createdAt": timestamp }
+
+Firestore rule hỗ trợ:
+```
+function isAdmin() {
+  return exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+}
+```
+
+
+2.4. USER ISADMIN FLAG (Method 4)
+----------------------------------
+Field isAdmin trong document user.
+
+Firestore path: /users/{userId}
+Field: isAdmin = true
+
+
+================================================================================
+3. LUỒNG XÁC THỰC
+================================================================================
+
+                    ┌─────────────────┐
+                    │  User mở trang  │
+                    └────────┬────────┘
+                             │
+                    ┌────────▼────────┐
+                    │ auth.onAuthState│
+                    │   Changed()     │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              │                             │
+     ┌────────▼────────┐          ┌─────────▼─────────┐
+     │  User = null    │          │   User exists     │
+     │  (chưa login)   │          │   (đã login)      │
+     └────────┬────────┘          └─────────┬─────────┘
+              │                             │
+     ┌────────▼────────┐          ┌─────────▼─────────┐
+     │ Nếu không phải  │          │  checkAdminClaim()│
+     │ trang login     │          │                   │
+     │ → redirect      │          └─────────┬─────────┘
+     └─────────────────┘                    │
+                                 ┌──────────┴──────────┐
+                                 │                     │
+                        ┌────────▼────────┐   ┌────────▼────────┐
+                        │   isAdmin=true  │   │  isAdmin=false  │
+                        └────────┬────────┘   └────────┬────────┘
+                                 │                     │
+                        ┌────────▼────────┐   ┌────────▼────────┐
+                        │ Nếu ở login page│   │ showError() +   │
+                        │ → redirect to   │   │ auth.signOut()  │
+                        │   dashboard     │   │                 │
+                        └─────────────────┘   └─────────────────┘
+
+
+================================================================================
+4. FILES LIÊN QUAN
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ File                      │ Chức năng                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ index.html                │ Trang đăng nhập (login form)                   │
+│ js/firebase-config.js     │ Khởi tạo Firebase SDK                          │
+│ js/auth.js                │ Logic xác thực, check admin, redirect          │
+│ css/style.css             │ Styles cho login page                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+5. CHỨC NĂNG LOGIN FORM
+================================================================================
+
+5.1. ĐĂNG NHẬP
+--------------
+- Email và Password input
+- Toggle hiển thị password (icon mắt)
+- Loading state trên button submit
+- Error messages tiếng Việt
+
+5.2. XỬ LÝ LỖI
+--------------
+- auth/user-not-found → "Tài khoản không tồn tại"
+- auth/wrong-password → "Mật khẩu không đúng"
+- auth/invalid-email → "Email không hợp lệ"
+- auth/too-many-requests → "Quá nhiều lần thử, thử lại sau"
+- Không phải admin → "Tài khoản không có quyền Admin"
+
+
+================================================================================
+6. ĐĂNG XUẤT
+================================================================================
+
+Nút đăng xuất có ở sidebar footer của mọi trang.
+
+Xử lý:
+1. auth.signOut()
+2. Redirect về index.html
+
+
+================================================================================
+7. BẢO VỆ TRANG
+================================================================================
+
+Mỗi trang (dashboard, stickers, users) đều include auth.js.
+auth.js tự động:
+- Check authentication state
+- Redirect về login nếu chưa đăng nhập
+- Check quyền admin
+- Sign out nếu không phải admin
+
+
+================================================================================
+8. FIRESTORE RULES CHO ADMIN
+================================================================================
+
+function isAdmin() {
+  return request.auth != null && request.auth.token.admin == true;
+}
+
+// Admin full access
+match /{document=**} {
+  allow read, write: if isAdmin();
+}
+
+
+CẬP NHẬT
+--------
+Ngày tạo: 23/12/2025

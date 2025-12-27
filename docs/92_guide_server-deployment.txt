@@ -1,0 +1,452 @@
+# Server Deployment Guide - ZaloClone API
+
+**Date**: December 27, 2024  
+**Server IP**: 163.61.182.20  
+**Server Path**: `/opt/zaloclone-api`  
+**Process Manager**: PM2
+
+---
+
+## 🖥️ Server Information
+
+### Server Details
+- **IP Address**: 163.61.182.20
+- **OS**: Ubuntu 22.04 LTS
+- **User**: root
+- **Node.js**: v18.20.8
+- **Process Manager**: PM2
+
+### Application Details
+- **App Name**: zaloclone-api
+- **Working Directory**: `/opt/zaloclone-api`
+- **Entry Point**: `src/index.js`
+- **Log Files**:
+  - Error: `/root/.pm2/logs/zaloclone-api-error.log`
+  - Output: `/root/.pm2/logs/zaloclone-api-out.log`
+
+---
+
+## 📤 Upload Files to Server
+
+### Method 1: Using SCP (Secure Copy)
+
+#### Upload Single File
+```cmd
+scp <local_file_path> root@163.61.182.20:/opt/zaloclone-api/<remote_path>
+```
+
+**Examples:**
+```cmd
+REM Upload users.js route
+scp d:\DoAn_ZaloClone\server\src\routes\users.js root@163.61.182.20:/opt/zaloclone-api/src/routes/
+
+REM Upload conversations.js route
+scp d:\DoAn_ZaloClone\server\src\routes\conversations.js root@163.61.182.20:/opt/zaloclone-api/src/routes/
+
+REM Upload middleware
+scp d:\DoAn_ZaloClone\server\src\middleware\auth.js root@163.61.182.20:/opt/zaloclone-api/src/middleware/
+
+REM Upload main index.js
+scp d:\DoAn_ZaloClone\server\src\index.js root@163.61.182.20:/opt/zaloclone-api/src/
+```
+
+#### Upload Multiple Files
+```cmd
+scp d:\DoAn_ZaloClone\server\src\routes\*.js root@163.61.182.20:/opt/zaloclone-api/src/routes/
+```
+
+#### Upload Entire Directory
+```cmd
+scp -r d:\DoAn_ZaloClone\server\src\routes root@163.61.182.20:/opt/zaloclone-api/src/
+```
+
+### Method 2: Using SFTP
+```cmd
+sftp root@163.61.182.20
+
+# Inside SFTP session:
+cd /opt/zaloclone-api/src/routes
+put d:\DoAn_ZaloClone\server\src\routes\users.js
+exit
+```
+
+### Method 3: Using Git (Recommended for Production)
+```bash
+# On server:
+ssh root@163.61.182.20
+cd /opt/zaloclone-api
+git pull origin main
+pm2 restart zaloclone-api
+```
+
+---
+
+## 🔄 Restart Server
+
+### PM2 Commands
+
+#### Restart Application
+```bash
+ssh root@163.61.182.20 "pm2 restart zaloclone-api"
+```
+
+#### Reload (Zero-Downtime Restart)
+```bash
+ssh root@163.61.182.20 "pm2 reload zaloclone-api"
+```
+
+#### Stop Application
+```bash
+ssh root@163.61.182.20 "pm2 stop zaloclone-api"
+```
+
+#### Start Application
+```bash
+ssh root@163.61.182.20 "pm2 start zaloclone-api"
+```
+
+#### Check Status
+```bash
+ssh root@163.61.182.20 "pm2 status"
+```
+
+#### View Details
+```bash
+ssh root@163.61.182.20 "pm2 info zaloclone-api"
+```
+
+---
+
+## 📋 View Logs
+
+### Real-time Logs
+```bash
+ssh root@163.61.182.20 "pm2 logs zaloclone-api"
+```
+
+### Last N Lines
+```bash
+ssh root@163.61.182.20 "pm2 logs zaloclone-api --lines 50"
+```
+
+### Error Logs Only
+```bash
+ssh root@163.61.182.20 "pm2 logs zaloclone-api --err"
+```
+
+### Output Logs Only
+```bash
+ssh root@163.61.182.20 "pm2 logs zaloclone-api --out"
+```
+
+### Clear Logs
+```bash
+ssh root@163.61.182.20 "pm2 flush"
+```
+
+### View Log Files Directly
+```bash
+ssh root@163.61.182.20
+tail -f /root/.pm2/logs/zaloclone-api-error.log
+tail -f /root/.pm2/logs/zaloclone-api-out.log
+```
+
+---
+
+## 🚀 Complete Deployment Workflow
+
+### Quick Deploy (Single File)
+```cmd
+REM 1. Upload file
+scp d:\DoAn_ZaloClone\server\src\routes\users.js root@163.61.182.20:/opt/zaloclone-api/src/routes/
+
+REM 2. Restart server
+ssh root@163.61.182.20 "pm2 restart zaloclone-api"
+
+REM 3. Check logs
+ssh root@163.61.182.20 "pm2 logs zaloclone-api --lines 20"
+```
+
+### Full Deploy (All Files)
+```cmd
+REM 1. Upload all route files
+scp d:\DoAn_ZaloClone\server\src\routes\*.js root@163.61.182.20:/opt/zaloclone-api/src/routes/
+
+REM 2. Upload middleware
+scp d:\DoAn_ZaloClone\server\src\middleware\*.js root@163.61.182.20:/opt/zaloclone-api/src/middleware/
+
+REM 3. Upload main files
+scp d:\DoAn_ZaloClone\server\src\index.js root@163.61.182.20:/opt/zaloclone-api/src/
+
+REM 4. Restart with zero downtime
+ssh root@163.61.182.20 "pm2 reload zaloclone-api"
+
+REM 5. Monitor logs
+ssh root@163.61.182.20 "pm2 logs zaloclone-api --lines 50"
+```
+
+### Deploy with Package.json Changes
+```cmd
+REM 1. Upload package.json
+scp d:\DoAn_ZaloClone\server\package.json root@163.61.182.20:/opt/zaloclone-api/
+
+REM 2. SSH into server and install dependencies
+ssh root@163.61.182.20
+
+cd /opt/zaloclone-api
+npm install
+pm2 restart zaloclone-api
+exit
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### Server Not Responding
+```bash
+ssh root@163.61.182.20
+
+# Check if process is running
+pm2 status
+
+# Check system resources
+top
+df -h
+
+# Check Node.js process
+ps aux | grep node
+
+# Restart if needed
+pm2 restart zaloclone-api
+```
+
+### Port Already in Use
+```bash
+ssh root@163.61.182.20
+
+# Find process using port 3000
+lsof -i :3000
+# or
+netstat -tulpn | grep :3000
+
+# Kill process if needed
+kill -9 <PID>
+
+# Restart application
+pm2 restart zaloclone-api
+```
+
+### High Memory Usage
+```bash
+ssh root@163.61.182.20
+
+# Check memory
+free -h
+
+# Check PM2 metrics
+pm2 monit
+
+# Restart to free memory
+pm2 restart zaloclone-api
+```
+
+### Application Crashes
+```bash
+ssh root@163.61.182.20
+
+# View error logs
+pm2 logs zaloclone-api --err --lines 100
+
+# Check application info
+pm2 info zaloclone-api
+
+# Check restart count
+pm2 status
+
+# If restarts > 10, investigate logs
+cat /root/.pm2/logs/zaloclone-api-error.log
+```
+
+---
+
+## 📊 Monitoring
+
+### PM2 Monitoring
+```bash
+# Real-time monitoring
+ssh root@163.61.182.20 "pm2 monit"
+
+# Show metrics
+ssh root@163.61.182.20 "pm2 show zaloclone-api"
+```
+
+### Check Server Health
+```bash
+ssh root@163.61.182.20
+
+# CPU and Memory
+top
+
+# Disk usage
+df -h
+
+# Network connections
+netstat -tulpn
+
+# Application response
+curl http://localhost:3000/api/health
+```
+
+---
+
+## 🔐 Security Best Practices
+
+### 1. Use SSH Keys Instead of Password
+```cmd
+REM Generate SSH key (if not exists)
+ssh-keygen -t rsa -b 4096
+
+REM Copy public key to server
+type %USERPROFILE%\.ssh\id_rsa.pub | ssh root@163.61.182.20 "cat >> ~/.ssh/authorized_keys"
+```
+
+### 2. Backup Before Deploy
+```bash
+ssh root@163.61.182.20
+
+# Create backup
+cd /opt
+tar -czf zaloclone-api-backup-$(date +%Y%m%d-%H%M%S).tar.gz zaloclone-api/
+
+# Keep last 5 backups only
+ls -t zaloclone-api-backup-*.tar.gz | tail -n +6 | xargs rm -f
+```
+
+### 3. Test Before Restart
+```bash
+ssh root@163.61.182.20
+
+# Run syntax check
+cd /opt/zaloclone-api
+node --check src/index.js
+
+# Test with environment
+NODE_ENV=production node src/index.js --test
+
+# If tests pass, restart
+pm2 restart zaloclone-api
+```
+
+---
+
+## 📝 Common Update Scenarios
+
+### Scenario 1: Fix Bug in Route File
+```cmd
+REM 1. Edit file locally: server/src/routes/users.js
+REM 2. Upload to server
+scp d:\DoAn_ZaloClone\server\src\routes\users.js root@163.61.182.20:/opt/zaloclone-api/src/routes/
+
+REM 3. Restart
+ssh root@163.61.182.20 "pm2 restart zaloclone-api"
+
+REM 4. Verify
+ssh root@163.61.182.20 "pm2 logs zaloclone-api --lines 20"
+```
+
+### Scenario 2: Add New Route
+```cmd
+REM 1. Create new file locally: server/src/routes/newroute.js
+REM 2. Upload to server
+scp d:\DoAn_ZaloClone\server\src\routes\newroute.js root@163.61.182.20:/opt/zaloclone-api/src/routes/
+
+REM 3. Update index.js to register route
+scp d:\DoAn_ZaloClone\server\src\index.js root@163.61.182.20:/opt/zaloclone-api/src/
+
+REM 4. Restart
+ssh root@163.61.182.20 "pm2 restart zaloclone-api"
+```
+
+### Scenario 3: Update Dependencies
+```cmd
+REM 1. Update package.json locally
+REM 2. Upload to server
+scp d:\DoAn_ZaloClone\server\package.json root@163.61.182.20:/opt/zaloclone-api/
+
+REM 3. SSH and install
+ssh root@163.61.182.20
+cd /opt/zaloclone-api
+npm install
+pm2 restart zaloclone-api
+exit
+```
+
+### Scenario 4: Update Environment Variables
+```bash
+ssh root@163.61.182.20
+
+# Edit .env file
+cd /opt/zaloclone-api
+nano .env
+
+# Or upload from local
+# scp d:\DoAn_ZaloClone\server\.env root@163.61.182.20:/opt/zaloclone-api/
+
+# Restart to apply changes
+pm2 restart zaloclone-api
+```
+
+---
+
+## 🔄 Rollback Procedure
+
+### If Deployment Fails
+```bash
+ssh root@163.61.182.20
+
+# 1. Stop current version
+pm2 stop zaloclone-api
+
+# 2. Restore from backup
+cd /opt
+tar -xzf zaloclone-api-backup-YYYYMMDD-HHMMSS.tar.gz
+
+# 3. Restart
+pm2 start zaloclone-api
+
+# 4. Verify
+pm2 logs zaloclone-api --lines 50
+```
+
+---
+
+## 📞 Emergency Contacts
+
+- **Server Admin**: PCKIEN
+- **Backup Server**: (if available)
+- **Firebase Console**: https://console.firebase.google.com
+
+---
+
+## ✅ Deployment Checklist
+
+Before deploying:
+- [ ] Code tested locally
+- [ ] No syntax errors
+- [ ] Dependencies updated in package.json
+- [ ] Environment variables configured
+- [ ] Backup created
+- [ ] Maintenance window scheduled (if needed)
+
+After deploying:
+- [ ] Server restarted successfully
+- [ ] No errors in logs
+- [ ] API endpoints responding
+- [ ] Android app tested with new changes
+- [ ] Monitor for 5-10 minutes
+
+---
+
+**Last Updated**: December 27, 2024  
+**Document Version**: 1.0
