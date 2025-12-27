@@ -107,6 +107,13 @@
             android:exported="false"
             android:parentActivityName=".ui.room.RoomActivity"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- Create Post Activity -->
+        <activity
+            android:name=".activities.CreatePostActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
             
                 <!-- Profile Card Activity -->
         <activity

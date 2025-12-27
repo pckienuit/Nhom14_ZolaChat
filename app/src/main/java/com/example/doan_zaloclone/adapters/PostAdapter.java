@@ -1,6 +1,5 @@
-package com.example.doan_zaloclone.adapters; // Sửa dòng này
+package com.example.doan_zaloclone.adapters;
 
-// Các import giữ nguyên hoặc để Android Studio tự gợi ý lại
 import android.content.Context;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -15,7 +14,6 @@ import com.bumptech.glide.Glide;
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.FireBasePost;
 
-// ... phần còn lại giữ nguyên
 import org.ocpsoft.prettytime.PrettyTime;
 
 import java.util.Date;
@@ -61,7 +59,6 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
         holder.tvContent.setText(post.getContent());
 
         // 3. Xử lý thời gian (ví dụ: "10 phút trước")
-        // Kiểm tra timestamp để tránh lỗi NullPointerException
         if (post.getTimestamp() > 0) {
             String timeAgo = prettyTime.format(new Date(post.getTimestamp()));
             holder.tvTime.setText(timeAgo);
@@ -73,11 +70,10 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
         if (post.getUserAvatar() != null && !post.getUserAvatar().isEmpty()) {
             Glide.with(context)
                     .load(post.getUserAvatar())
-                    .placeholder(R.drawable.ic_launcher_background) // Dùng ảnh mặc định có sẵn
+                    .placeholder(R.drawable.ic_launcher_background)
                     .error(R.drawable.ic_launcher_background)
                     .into(holder.imgAvatar);
         } else {
-            // Set ảnh mặc định nếu không có avatar
             holder.imgAvatar.setImageResource(R.drawable.ic_launcher_background);
         }
 
@@ -89,13 +85,11 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
                     .placeholder(R.drawable.ic_launcher_background)
                     .into(holder.imgContent);
         } else {
-            // Ẩn ImageView nếu bài viết không có ảnh
             holder.imgContent.setVisibility(View.GONE);
         }
 
-        // 6. Tạm thời ẩn các số liệu chưa có trong model
-        // Nếu sau này model FireBasePost có likeCount, bạn có thể bỏ comment
-        // holder.tvLikeCount.setText(String.valueOf(post.getLikeCount()));
+        // 6. Hiển thị số lượt like
+        holder.tvLikeCount.setText(String.valueOf(post.getLikeCount()));
     }
 
     @Override
@@ -109,9 +103,6 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
     /**
      * ViewHolder class để ánh xạ các view từ item_post.xml
      */
-    /**
-     * ViewHolder class để ánh xạ các view từ item_post.xml
-     */
     public static class PostViewHolder extends RecyclerView.ViewHolder {
 
         CircleImageView imgAvatar;
@@ -120,9 +111,6 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
 
         public PostViewHolder(@NonNull View itemView) {
             super(itemView);
-
-            // Ánh xạ trực tiếp ID từ file item_post.xml
-            // Không cần logic fallback (if null) vì ID trong XML là cố định
 
             // 1. Thông tin người dùng
             imgAvatar = itemView.findViewById(R.id.imgAvatarPost);
@@ -140,6 +128,4 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
             tvCommentCount = itemView.findViewById(R.id.tvCommentCount);
         }
     }
-
 }
-

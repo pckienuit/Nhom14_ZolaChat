@@ -10,11 +10,33 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="Bạn đang nghĩ gì?"
-        android:minLines="3" />
+        android:minLines="3"
+        android:gravity="top|start" />
+
+    <Button
+        android:id="@+id/btnAddImage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Thêm ảnh"
+        android:layout_marginTop="8dp"
+        android:drawableLeft="@android:drawable/ic_menu_gallery" />
+
+    <ImageView
+        android:id="@+id/imgPreview"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginTop="8dp"
+        android:scaleType="centerCrop"
+        android:visibility="gone"
+        android:src="@drawable/ic_launcher_background" />
 
     <Button
         android:id="@+id/btnPost"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Đăng bài" />
+        android:text="Đăng bài"
+        android:layout_marginTop="16dp"
+        android:backgroundTint="@color/design_default_color_primary"
+        android:textColor="@android:color/white" />
+
 </LinearLayout>
