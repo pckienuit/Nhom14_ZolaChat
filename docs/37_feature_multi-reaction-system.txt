@@ -1,0 +1,643 @@
+================================================================================
+FEATURE: MULTI-REACTION SYSTEM (UNLIMITED REACTIONS PER USER)
+================================================================================
+Date: December 27, 2025
+Version: 2.0
+Status: ✅ COMPLETED
+Author: Development Team
+
+================================================================================
+1. OVERVIEW
+================================================================================
+
+Hệ thống reaction cho phép users tương tác với messages thông qua các biểu tượng
+cảm xúc (emoji reactions). Phiên bản 2.0 này hỗ trợ:
+
+✅ Mỗi user có thể thêm NHIỀU LOẠI reaction khác nhau cho cùng 1 message
+✅ Số lượng mỗi loại reaction KHÔNG GIỚI HẠN (click nhiều lần = tăng count)
+✅ Click vào reaction type đã có → GIẢM count của user đó
+✅ Khi count = 0 → Tự động xóa reaction type của user
+✅ Real-time sync qua WebSocket cho tất cả clients
+✅ Optimistic updates trên UI
+
+Ví dụ: User A có thể:
+- Click "heart" 3 lần → heart count = 3
+- Click "haha" 2 lần → haha count = 2  
+- Click "heart" lại → heart count giảm xuống 2
+- Click "heart" 2 lần nữa → heart count = 0, reaction "heart" bị xóa
+
+================================================================================
+2. DATA STRUCTURE
+================================================================================
+
+2.1. FIRESTORE DOCUMENT STRUCTURE
+----------------------------------
+messages/{messageId}/
+  reactions: Map<userId, reactionType>
+    - Lưu reaction type gần nhất của mỗi user
+    - Backward compatible với version cũ
+    - Example: {"userA": "heart", "userB": "haha"}
+  
+  reactionsDetailed: Map<userId, Map<reactionType, count>>
+    - Chi tiết đầy đủ về reactions của mỗi user
+    - Hỗ trợ multiple reaction types và multiple counts
+    - Example: {
+        "userA": {"heart": 3, "haha": 2},
+        "userB": {"heart": 1, "wow": 5}
+      }
+  
+  reactionCounts: Map<reactionType, totalCount>
+    - Tổng count của mỗi reaction type (sum tất cả users)
+    - Dùng để display số lượng trên UI
+    - Example: {"heart": 4, "haha": 2, "wow": 5}
+
+2.2. MESSAGE MODEL (Android)
+-----------------------------
+public class Message {
+    // Backward compatible - shows latest reaction per user
+    private Map<String, String> reactions;
+    
+    // Detailed reactions - Map<userId, Map<reactionType, count>>
+    private Map<String, Map<String, Object>> reactionsDetailed;
+    
+    // Total counts - Map<reactionType, totalCount>
+    private Map<String, Integer> reactionCounts;
+    
+    // Getters/Setters...
+}
+
+2.3. CALCULATION LOGIC
+----------------------
+reactionCounts[type] = SUM of all reactionsDetailed[userId][type]
+
+Example:
+reactionsDetailed = {
+  "userA": {"heart": 3, "haha": 2},
+  "userB": {"heart": 1, "wow": 5}
+}
+
+→ reactionCounts = {
+  "heart": 4,   // 3 + 1
+  "haha": 2,    // 2
+  "wow": 5      // 5
+}
+
+================================================================================
+3. API ENDPOINTS
+================================================================================
+
+3.1. ADD/REMOVE REACTION
+------------------------
+POST /api/chats/:conversationId/messages/:messageId/reactions
+
+Request Body:
+{
+  "userId": "string",
+  "reactionType": "string",  // "heart", "haha", "wow", "sad", "angry", "like"
+  "action": "string"         // "add" or "remove"
+}
+
+Response (200 OK):
+{
+  "success": true,
+  "message": "Reaction added/removed successfully",
+  "data": {
+    "conversationId": "string",
+    "messageId": "string",
+    "userId": "string",
+    "reactionType": "string",
+    "reactions": Map<String, String>,
+    "reactionsDetailed": Map<String, Map<String, Object>>,
+    "reactionCounts": Map<String, Integer>
+  }
+}
+
+LOGIC:
+------
+action = "add":
+  1. Increment reactionsDetailed[userId][reactionType]
+  2. Update reactions[userId] = reactionType (latest)
+  3. Recalculate reactionCounts
+  4. Save to Firestore
+  5. Broadcast via WebSocket
+
+action = "remove":
+  1. Decrement reactionsDetailed[userId][reactionType]
+  2. If count <= 0: Delete reactionsDetailed[userId][reactionType]
+  3. If no reactions left: Delete reactionsDetailed[userId]
+  4. Update reactions[userId] to other reaction type (if exists)
+  5. Recalculate reactionCounts
+  6. Save to Firestore
+  7. Broadcast via WebSocket
+
+================================================================================
+4. WEBSOCKET EVENTS
+================================================================================
+
+4.1. SERVER TO CLIENT: reaction_updated
+----------------------------------------
+Event: "reaction_updated"
+
+Payload:
+{
+  "conversationId": "string",
+  "messageId": "string",
+  "userId": "string",           // User who triggered the action
+  "reactionType": "string",     // Reaction type affected
+  "reactions": Map<String, String>,
+  "reactionsDetailed": Map<String, Map<String, Object>>,
+  "reactionCounts": Map<String, Integer>
+}
+
+Broadcast to: All clients in room "conversation:{conversationId}"
+
+4.2. CLIENT HANDLING
+--------------------
+1. Receive event via SocketManager
+2. Find message in cached list by messageId
+3. Update message.reactions, message.reactionsDetailed, message.reactionCounts
+4. Create deep copy of message list
+5. Notify UI via LiveData
+6. DiffUtil detects changes
+7. RecyclerView updates affected items
+
+================================================================================
+5. CLIENT IMPLEMENTATION (Android)
+================================================================================
+
+5.1. REPOSITORY LAYER (ChatRepository.java)
+--------------------------------------------
+// Add reaction (increment count)
+public void addReaction(String conversationId, String messageId, 
+                       String reactionType, ResponseCallback callback)
+
+// Remove reaction (decrement count)  
+public void decrementReaction(String conversationId, String messageId,
+                              String reactionType, ResponseCallback callback)
+
+// Toggle reaction (smart logic)
+public void toggleReaction(String conversationId, String messageId,
+                          String currentUserId, String reactionType,
+                          ResponseCallback callback)
+
+TOGGLE LOGIC:
+-------------
+Map<String, Object> userReactions = reactionsDetailed.get(currentUserId);
+
+if (userReactions != null && userReactions.containsKey(reactionType)) {
+    // User đã có reaction này → REMOVE (decrement)
+    decrementReaction(conversationId, messageId, reactionType, callback);
+} else {
+    // User chưa có reaction này → ADD (increment)
+    addReaction(conversationId, messageId, reactionType, callback);
+}
+
+5.2. VIEWMODEL LAYER (RoomViewModel.java)
+------------------------------------------
+public void addReaction(String messageId, String reactionType) {
+    chatRepository.addReaction(conversationId, messageId, reactionType, callback);
+}
+
+public void decrementReaction(String messageId, String reactionType) {
+    chatRepository.decrementReaction(conversationId, messageId, reactionType, callback);
+}
+
+public void toggleReaction(String messageId, String reactionType) {
+    chatRepository.toggleReaction(conversationId, messageId, currentUserId,
+                                  reactionType, callback);
+}
+
+5.3. UI LAYER (RoomActivity.java)
+----------------------------------
+private void handleReactionClick(String messageId, String reactionType) {
+    Log.d(TAG, "handleReactionClick - messageId: " + messageId 
+              + ", reactionType: " + reactionType);
+    
+    // Use toggleReaction for smart add/remove logic
+    viewModel.toggleReaction(messageId, reactionType);
+}
+
+5.4. ADAPTER (MessageAdapter.java)
+-----------------------------------
+CRITICAL: Prevent shared reference issues
+
+// Store DEEP COPY of messages to prevent external modification
+this.messages = new java.util.ArrayList<>();
+for (Message msg : filteredMessages) {
+    this.messages.add(new Message(msg)); // Deep copy each message
+}
+
+// Create DEEP COPY for DiffUtil comparison
+List<Message> oldMessages = new java.util.ArrayList<>();
+for (Message msg : this.messages) {
+    oldMessages.add(new Message(msg)); // Deep copy each message
+}
+
+WHY DEEP COPY?
+--------------
+1. ChatRepository modifies cachedMessages directly
+2. If adapter holds references to same objects → DiffUtil won't detect changes
+3. Deep copy ensures adapter has immutable snapshot
+4. DiffUtil can properly compare old vs new states
+
+5.5. MESSAGE COPY CONSTRUCTOR
+------------------------------
+public Message(Message other) {
+    // ... copy all fields ...
+    
+    // CRITICAL: Deep copy reactions maps
+    this.reactions = other.reactions != null 
+        ? new java.util.HashMap<>(other.reactions) : null;
+    
+    this.reactionCounts = other.reactionCounts != null 
+        ? new java.util.HashMap<>(other.reactionCounts) : null;
+    
+    // Deep copy reactionsDetailed (nested map)
+    if (other.reactionsDetailed != null) {
+        this.reactionsDetailed = new java.util.HashMap<>();
+        for (Map.Entry<String, Map<String, Object>> entry : other.reactionsDetailed.entrySet()) {
+            this.reactionsDetailed.put(entry.getKey(), 
+                new java.util.HashMap<>(entry.getValue()));
+        }
+    }
+}
+
+================================================================================
+6. FLOW DIAGRAMS
+================================================================================
+
+6.1. ADD REACTION FLOW
+----------------------
+User clicks reaction → RoomActivity.handleReactionClick()
+  ↓
+RoomViewModel.toggleReaction(messageId, reactionType)
+  ↓
+ChatRepository checks reactionsDetailed
+  ↓
+Determine action: add or remove
+  ↓
+[ACTION = ADD]
+  ↓
+ChatRepository.addReaction() → API POST with action="add"
+  ↓
+Server: Increment count in Firestore
+  ↓
+Server: Broadcast reaction_updated via WebSocket
+  ↓
+All clients receive event
+  ↓
+SocketManager → OnReactionListener → ChatRepository
+  ↓
+Update cachedMessages → Create deep copy
+  ↓
+Notify LiveData observers
+  ↓
+RoomActivity observer → adapter.updateMessages()
+  ↓
+DiffUtil.calculateDiff() detects changes
+  ↓
+RecyclerView updates item
+
+6.2. REMOVE REACTION FLOW  
+-------------------------
+User clicks existing reaction → RoomActivity.handleReactionClick()
+  ↓
+RoomViewModel.toggleReaction(messageId, reactionType)
+  ↓
+ChatRepository checks reactionsDetailed → reaction exists
+  ↓
+[ACTION = REMOVE]
+  ↓
+ChatRepository.decrementReaction() → API POST with action="remove"
+  ↓
+Server: Decrement count in Firestore
+  ↓
+If count = 0: Remove from reactionsDetailed
+  ↓
+Server: Broadcast reaction_updated via WebSocket
+  ↓
+[Same as ADD flow from WebSocket onwards]
+
+6.3. WEBSOCKET SYNC FLOW
+-------------------------
+Device A adds reaction
+  ↓
+Server broadcasts to room "conversation:{id}"
+  ↓
+Device B (in same conversation) receives event
+  ↓
+SocketManager parses JSON
+  ↓
+Extract: conversationId, messageId, userId, reactionType,
+         reactions, reactionsDetailed, reactionCounts
+  ↓
+Call reactionListener.onReactionUpdated()
+  ↓
+ChatRepository finds message in cachedMessages
+  ↓
+Create NEW maps (to avoid reference issues):
+  - newReactions = new HashMap(reactions)
+  - newReactionCounts = new HashMap(reactionCounts)
+  - newReactionsDetailed = deep copy of reactionsDetailed
+  ↓
+Update message with new maps
+  ↓
+Create deep copy list for UI
+  ↓
+Post to main thread → Notify LiveData
+  ↓
+UI updates via DiffUtil
+
+================================================================================
+7. SERVER IMPLEMENTATION (Node.js)
+================================================================================
+
+7.1. API ENDPOINT (server/src/routes/chats.js)
+-----------------------------------------------
+router.post('/:conversationId/messages/:messageId/reactions', async (req, res) => {
+    const { conversationId, messageId } = req.params;
+    const { userId, reactionType, action } = req.body; // action: "add" or "remove"
+    
+    const messageRef = db.collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .doc(messageId);
+    
+    const messageDoc = await messageRef.get();
+    const messageData = messageDoc.data();
+    
+    let reactions = messageData.reactions || {};
+    let reactionsDetailed = messageData.reactionsDetailed || {};
+    let reactionCounts = messageData.reactionCounts || {};
+    
+    if (action === 'add') {
+        // Increment count
+        if (!reactionsDetailed[userId]) reactionsDetailed[userId] = {};
+        reactionsDetailed[userId][reactionType] = 
+            (reactionsDetailed[userId][reactionType] || 0) + 1;
+        
+        // Update latest reaction
+        reactions[userId] = reactionType;
+        
+    } else if (action === 'remove') {
+        // Decrement count
+        if (reactionsDetailed[userId] && reactionsDetailed[userId][reactionType]) {
+            reactionsDetailed[userId][reactionType]--;
+            
+            // Remove if count <= 0
+            if (reactionsDetailed[userId][reactionType] <= 0) {
+                delete reactionsDetailed[userId][reactionType];
+            }
+            
+            // Remove user if no reactions left
+            if (Object.keys(reactionsDetailed[userId]).length === 0) {
+                delete reactionsDetailed[userId];
+                delete reactions[userId];
+            } else {
+                // Update to another reaction type
+                const remainingTypes = Object.keys(reactionsDetailed[userId]);
+                reactions[userId] = remainingTypes[0];
+            }
+        }
+    }
+    
+    // Recalculate total counts
+    reactionCounts = {};
+    for (const [uid, userReactions] of Object.entries(reactionsDetailed)) {
+        for (const [type, count] of Object.entries(userReactions)) {
+            reactionCounts[type] = (reactionCounts[type] || 0) + count;
+        }
+    }
+    
+    // Save to Firestore
+    await messageRef.update({
+        reactions,
+        reactionsDetailed,
+        reactionCounts
+    });
+    
+    // Broadcast via WebSocket
+    io.to(`conversation:${conversationId}`).emit('reaction_updated', {
+        conversationId,
+        messageId,
+        userId,
+        reactionType,
+        reactions,
+        reactionsDetailed,
+        reactionCounts
+    });
+    
+    res.json({ success: true, data: { ... } });
+});
+
+7.2. WEBSOCKET HANDLER (server/src/websocket/index.js)
+-------------------------------------------------------
+// Room management for conversations
+socket.on('join_conversation', (conversationId) => {
+    socket.join(`conversation:${conversationId}`);
+    socket.emit('room_joined', { 
+        conversationId, 
+        success: true 
+    });
+});
+
+// Broadcast happens automatically in API endpoint using:
+io.to(`conversation:${conversationId}`).emit('reaction_updated', payload);
+
+================================================================================
+8. UI DISPLAY LOGIC
+================================================================================
+
+8.1. REACTION DISPLAY
+---------------------
+For each message:
+  - Show reaction buttons: ❤️ 😂 😮 😢 😠 👍
+  - Display count badge: ❤️ 5  😂 3
+  - Highlight if current user has that reaction
+  - Show detailed list on long press (optional)
+
+8.2. CURRENT USER HIGHLIGHT
+----------------------------
+Map<String, Object> currentUserReactions = 
+    message.getReactionsDetailed().get(currentUserId);
+
+if (currentUserReactions != null && 
+    currentUserReactions.containsKey("heart")) {
+    // Highlight heart button
+    heartButton.setSelected(true);
+    // Show count
+    int count = (Integer) currentUserReactions.get("heart");
+    heartButton.setText("❤️ " + count);
+}
+
+8.3. REACTION DETAILS DIALOG (Future Enhancement)
+--------------------------------------------------
+Show list of users and their reaction counts:
+- John: ❤️ x3, 😂 x2
+- Mary: ❤️ x1, 😮 x5
+- Bob: 👍 x1
+
+================================================================================
+9. TESTING SCENARIOS
+================================================================================
+
+9.1. SINGLE USER MULTI-REACTION
+--------------------------------
+✅ User A clicks "heart" → count = 1
+✅ User A clicks "heart" again → count = 2
+✅ User A clicks "heart" again → count = 3
+✅ User A clicks "haha" → heart = 3, haha = 1
+✅ User A clicks "heart" again (remove) → count = 2
+✅ User A clicks "heart" 2 more times → count = 0, removed
+
+9.2. MULTI-USER SYNC
+--------------------
+✅ Device A: User A adds heart → Device B sees update
+✅ Device B: User B adds heart → Device A sees update
+✅ Device A: User A removes heart → Device B sees update
+✅ Total count updates correctly across all devices
+
+9.3. EDGE CASES
+---------------
+✅ Add reaction when offline → Optimistic update → Sync when online
+✅ Remove reaction that doesn't exist → Graceful handling
+✅ Rapid clicks → Queue requests, no race conditions
+✅ Empty reactions → Display nothing, no errors
+
+================================================================================
+10. PERFORMANCE CONSIDERATIONS
+================================================================================
+
+10.1. OPTIMISTIC UPDATES
+-------------------------
+- UI updates immediately before API response
+- If API fails, revert to previous state
+- Prevents UI lag
+
+10.2. DEEP COPY STRATEGY
+------------------------
+- Only copy when needed (on data change)
+- Use efficient HashMap copy constructors
+- Avoid unnecessary object creation
+
+10.3. DIFFUTIL EFFICIENCY
+--------------------------
+- Only compares visible items
+- Animates only changed items
+- Prevents full RecyclerView refresh
+
+10.4. WEBSOCKET ROOMS
+---------------------
+- Each conversation has own room
+- Only users in conversation receive updates
+- Reduces unnecessary network traffic
+
+================================================================================
+11. MIGRATION FROM V1 TO V2
+================================================================================
+
+11.1. BACKWARD COMPATIBILITY
+-----------------------------
+✅ Old clients still see `reactions` map (single reaction per user)
+✅ New clients use `reactionsDetailed` for full functionality
+✅ Server maintains both fields during transition
+
+11.2. DATA MIGRATION
+--------------------
+Existing messages with old reaction format:
+{
+  "reactions": {"userA": "heart", "userB": "like"}
+}
+
+Auto-convert on first access:
+{
+  "reactions": {"userA": "heart", "userB": "like"},
+  "reactionsDetailed": {
+    "userA": {"heart": 1},
+    "userB": {"like": 1}
+  },
+  "reactionCounts": {"heart": 1, "like": 1}
+}
+
+================================================================================
+12. FUTURE ENHANCEMENTS
+================================================================================
+
+12.1. CUSTOM REACTIONS
+----------------------
+- Allow users to add custom emoji
+- Store in user preferences
+- Sync across devices
+
+12.2. REACTION ANIMATIONS
+-------------------------
+- Animate reaction count changes
+- Show who reacted (avatars fly up)
+- Haptic feedback on click
+
+12.3. REACTION STATISTICS
+-------------------------
+- Most used reaction per user
+- Conversation reaction trends
+- Export reaction analytics
+
+12.4. REACTION NOTIFICATIONS
+----------------------------
+- Notify when someone reacts to your message
+- Group similar notifications
+- Smart notification batching
+
+================================================================================
+13. TROUBLESHOOTING
+================================================================================
+
+13.1. REACTIONS NOT SYNCING
+----------------------------
+Check:
+- WebSocket connection status
+- User is in correct room (conversation:{id})
+- Server broadcasting to correct room
+- Client listener registered
+
+Debug:
+- Enable debug logs in SocketManager
+- Check server logs for broadcast events
+- Verify conversationId matches
+
+13.2. DIFFUTIL NOT DETECTING CHANGES
+-------------------------------------
+Check:
+- Deep copy is being used in adapter
+- Message copy constructor copies all maps
+- No shared references between old and new lists
+
+Debug:
+- Log oldReactions vs newReactions in DiffCallback
+- Verify object references are different
+- Check if maps are properly copied
+
+13.3. COUNT MISMATCH
+--------------------
+Check:
+- reactionCounts calculation is correct
+- No concurrent modification issues
+- All clients using same calculation logic
+
+Debug:
+- Compare reactionsDetailed vs reactionCounts
+- Verify sum matches across all users
+- Check for race conditions on rapid clicks
+
+================================================================================
+14. RELATED DOCUMENTATION
+================================================================================
+
+- 22_feature_message-reactions.txt (V1 implementation)
+- 31_audit_direct-db-access-analysis.txt (API migration context)
+- 33_phase2-backend-api-completed.txt (API architecture)
+- WebSocket documentation in server/README.md
+- Message model documentation in app/src/main/java/com/example/doan_zaloclone/models/
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================

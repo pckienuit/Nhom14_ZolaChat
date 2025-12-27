@@ -5,9 +5,4 @@
     <stroke
         android:width="1.5dp"
         android:color="@color/zalo_bubble_friend_border" />
-    <padding
-        android:left="12dp"
-        android:top="8dp"
-        android:right="12dp"
-        android:bottom="8dp"/>
 </shape>

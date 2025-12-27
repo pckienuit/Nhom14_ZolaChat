@@ -146,7 +146,7 @@ public class RoomActivity extends AppCompatActivity {
         // Initialize ViewModel
         roomViewModel = new ViewModelProvider(this).get(RoomViewModel.class);
         contactViewModel = new ViewModelProvider(this).get(ContactViewModel.class);
-        chatRepository = new ChatRepository(); // For legacy image upload operations
+        chatRepository = ChatRepository.getInstance(); // Singleton for all chat operations
         conversationRepository = com.example.doan_zaloclone.repository.ConversationRepository.getInstance();
         firebaseAuth = FirebaseAuth.getInstance();
 
@@ -352,12 +352,18 @@ public class RoomActivity extends AppCompatActivity {
         ImageButton videoCallButton = findViewById(R.id.videoCallButton);
         ImageButton voiceCallButton = findViewById(R.id.voiceCallButton);
         ImageButton fileManagementButton = findViewById(R.id.fileManagementButton);
+        
+        // Menu button in toolbar
+        ImageButton menuButton = findViewById(R.id.menuButton);
 
         // Setup call button listeners
         if (videoCallButton != null) videoCallButton.setOnClickListener(v -> startCall(true));
         if (voiceCallButton != null) voiceCallButton.setOnClickListener(v -> startCall(false));
          // Compatibility check for hidden buttons
         if (fileManagementButton != null) fileManagementButton.setOnClickListener(v -> openFileManagement());
+        
+        // Setup menu button to open file management
+        if (menuButton != null) menuButton.setOnClickListener(v -> openFileManagement());
 
         // Initialize QuickActionManager
         quickActionManager = com.example.doan_zaloclone.ui.room.actions.QuickActionManager.getInstance();
@@ -1770,12 +1776,17 @@ public class RoomActivity extends AppCompatActivity {
     private void observeViewModel() {
         // Observe messages via ViewModel
         roomViewModel.getMessages(conversationId).observe(this, resource -> {
+            android.util.Log.d("RoomActivity", "📬 Messages observer triggered, resource status: " + 
+                (resource != null ? (resource.isSuccess() ? "SUCCESS" : resource.isError() ? "ERROR" : "LOADING") : "NULL"));
+            
             if (resource == null) return;
 
             if (resource.isSuccess()) {
                 List<Message> newMessages = resource.getData();
 
                 if (newMessages != null) {
+                    android.util.Log.d("RoomActivity", "📬 Received " + newMessages.size() + " messages, calling adapter.updateMessages()");
+                    
                     // Check if this is a new message addition (not just an update)
                     int oldSize = messages != null ? messages.size() : 0;
                     int newSize = newMessages.size();
@@ -1959,7 +1970,7 @@ public class RoomActivity extends AppCompatActivity {
     private void setupListeners() {
         sendButton.setOnClickListener(v -> handleSendMessage());
         attachImageButton.setOnClickListener(v -> requestPermissionAndShowPicker());
-        moreActionsButton.setOnClickListener(v -> showActionMenu());
+        moreActionsButton.setOnClickListener(v -> toggleActionMenu());
         backButton.setOnClickListener(v -> hideImagePicker());
         sendImagesButton.setOnClickListener(v -> handleSendImages());
 
@@ -2353,6 +2364,14 @@ public class RoomActivity extends AppCompatActivity {
     }
 
     // ============ ACTION MENU METHODS ============
+
+    private void toggleActionMenu() {
+        if (actionMenuContainer.getVisibility() == View.VISIBLE) {
+            hideActionMenu();
+        } else {
+            showActionMenu();
+        }
+    }
 
     private void showActionMenu() {
         // Hide keyboard

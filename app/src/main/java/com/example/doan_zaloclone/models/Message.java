@@ -107,6 +107,13 @@ public class Message {
         this.reactions = other.reactions != null ? new java.util.HashMap<>(other.reactions) : null;
         // Deep copy reactionCounts map
         this.reactionCounts = other.reactionCounts != null ? new java.util.HashMap<>(other.reactionCounts) : null;
+        // Deep copy reactionsDetailed map (nested map)
+        if (other.reactionsDetailed != null) {
+            this.reactionsDetailed = new java.util.HashMap<>();
+            for (java.util.Map.Entry<String, Map<String, Object>> entry : other.reactionsDetailed.entrySet()) {
+                this.reactionsDetailed.put(entry.getKey(), new java.util.HashMap<>(entry.getValue()));
+            }
+        }
         this.pollData = other.pollData; // Poll is complex, shallow copy for now
         this.contactUserId = other.contactUserId;
         this.latitude = other.latitude;

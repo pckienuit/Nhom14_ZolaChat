@@ -1,5 +1,6 @@
 package com.example.doan_zaloclone.ui.contact;
 
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -48,6 +49,10 @@ public class AddFriendActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Enable edge-to-edge display
+        setupEdgeToEdge();
+        
         setContentView(R.layout.activity_add_friend);
 
         viewModel = new ViewModelProvider(this).get(ContactViewModel.class);
@@ -56,6 +61,18 @@ public class AddFriendActivity extends AppCompatActivity {
         setupListeners();
         observeViewModel();
         setupWebSocketListener();
+    }
+    
+    private void setupEdgeToEdge() {
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            );
+        }
     }
 
     private void initViews() {

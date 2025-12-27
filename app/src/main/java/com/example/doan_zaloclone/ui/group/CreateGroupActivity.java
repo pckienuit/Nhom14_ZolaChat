@@ -1,10 +1,12 @@
 package com.example.doan_zaloclone.ui.group;
 
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ProgressBar;
@@ -54,6 +56,10 @@ public class CreateGroupActivity extends AppCompatActivity implements Selectable
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Enable edge-to-edge display
+        setupEdgeToEdge();
+        
         setContentView(R.layout.activity_create_group);
 
         firebaseAuth = FirebaseAuth.getInstance();
@@ -231,5 +237,17 @@ public class CreateGroupActivity extends AppCompatActivity implements Selectable
     public void onSelectionChanged(int selectedCount) {
         selectedCountTextView.setText(selectedCount + " đã chọn");
         updateCreateButtonState();
+    }
+    
+    private void setupEdgeToEdge() {
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            );
+        }
     }
 }

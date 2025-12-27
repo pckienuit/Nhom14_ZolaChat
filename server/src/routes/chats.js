@@ -231,10 +231,12 @@ router.post('/:conversationId/messages/:messageId/recall', authenticateUser, asy
 });
 
 // Add/update reaction to a message
+// NEW LOGIC: Each user can add multiple types of reactions, each type can have multiple counts
+// Clicking same reaction type toggles: if count > 0, increment; API also supports decrement via action param
 router.post('/:conversationId/messages/:messageId/react', authenticateUser, async (req, res) => {
   try {
     const { conversationId, messageId } = req.params;
-    const { userId, reactionType } = req.body;
+    const { userId, reactionType, action = 'add' } = req.body; // action: 'add' or 'remove'
     
     if (!userId || !reactionType) {
       return res.status(400).json({ success: false, message: 'userId and reactionType are required' });
@@ -245,6 +247,8 @@ router.post('/:conversationId/messages/:messageId/react', authenticateUser, asyn
       return res.status(400).json({ success: false, message: 'Invalid reaction type' });
     }
     
+    console.log(`❤️ Reaction ${action}: user=${userId}, type=${reactionType}, message=${messageId}`);
+    
     const messageRef = db.collection('conversations').doc(conversationId)
       .collection('messages').doc(messageId);
     
@@ -254,24 +258,67 @@ router.post('/:conversationId/messages/:messageId/react', authenticateUser, asyn
     }
     
     const messageData = messageDoc.data();
+    
+    // Data structures:
+    // - reactions: { userId: latestReactionType } - for backward compatibility, shows most recent reaction
+    // - reactionsDetailed: { userId: { reactionType: count, ... } } - detailed per-user counts
+    // - reactionCounts: { reactionType: totalCount } - total counts across all users
     const reactions = messageData.reactions || {};
+    const reactionsDetailed = messageData.reactionsDetailed || {};
     const reactionCounts = messageData.reactionCounts || {};
     
-    // If user already had a different reaction, decrement old count
-    const oldReaction = reactions[userId];
-    if (oldReaction && oldReaction !== reactionType) {
-      reactionCounts[oldReaction] = Math.max(0, (reactionCounts[oldReaction] || 0) - 1);
-      if (reactionCounts[oldReaction] === 0) {
-        delete reactionCounts[oldReaction];
+    // Initialize user's detailed reactions if not exist
+    if (!reactionsDetailed[userId]) {
+      reactionsDetailed[userId] = {};
+    }
+    
+    if (action === 'add') {
+      // INCREMENT: Add one more of this reaction type for this user
+      reactionsDetailed[userId][reactionType] = (reactionsDetailed[userId][reactionType] || 0) + 1;
+      reactionCounts[reactionType] = (reactionCounts[reactionType] || 0) + 1;
+      
+      // Update simple reactions map with latest reaction type (for backward compatibility)
+      reactions[userId] = reactionType;
+      
+      console.log(`📈 User ${userId} now has ${reactionsDetailed[userId][reactionType]} ${reactionType}(s)`);
+      console.log(`📈 Total ${reactionType} count: ${reactionCounts[reactionType]}`);
+      
+    } else if (action === 'remove') {
+      // DECREMENT: Remove one of this reaction type for this user
+      const currentUserCount = reactionsDetailed[userId][reactionType] || 0;
+      
+      if (currentUserCount > 0) {
+        reactionsDetailed[userId][reactionType] = currentUserCount - 1;
+        reactionCounts[reactionType] = Math.max(0, (reactionCounts[reactionType] || 0) - 1);
+        
+        // Clean up if count reaches 0
+        if (reactionsDetailed[userId][reactionType] === 0) {
+          delete reactionsDetailed[userId][reactionType];
+        }
+        if (reactionCounts[reactionType] === 0) {
+          delete reactionCounts[reactionType];
+        }
+        
+        // Clean up user entry if no reactions left
+        if (Object.keys(reactionsDetailed[userId]).length === 0) {
+          delete reactionsDetailed[userId];
+          delete reactions[userId];
+        } else {
+          // Update simple reactions to show remaining reaction type
+          const remainingTypes = Object.keys(reactionsDetailed[userId]);
+          if (remainingTypes.length > 0) {
+            reactions[userId] = remainingTypes[0]; // Show first remaining type
+          }
+        }
+        
+        console.log(`📉 Decremented ${reactionType} for user ${userId}`);
+      } else {
+        console.log(`ℹ️ User ${userId} has no ${reactionType} to remove`);
       }
     }
     
-    // Add/update new reaction
-    reactions[userId] = reactionType;
-    reactionCounts[reactionType] = (reactionCounts[reactionType] || 0) + 1;
-    
     // Update Firestore
-    await messageRef.update({ reactions, reactionCounts });
+    await messageRef.update({ reactions, reactionsDetailed, reactionCounts });
     
     // Get updated message
     const updatedDoc = await messageRef.get();
@@ -279,15 +326,28 @@ router.post('/:conversationId/messages/:messageId/react', authenticateUser, asyn
     
     // Broadcast reaction update via WebSocket
     if (global.io) {
-      console.log('Broadcasting reaction_updated:', messageId, 'to room:', `conversation:${conversationId}`);
-      global.io.to(`conversation:${conversationId}`).emit('reaction_updated', {
+      const roomName = `conversation:${conversationId}`;
+      const socketsInRoom = global.io.sockets.adapter.rooms.get(roomName);
+      const numClientsInRoom = socketsInRoom ? socketsInRoom.size : 0;
+      
+      console.log(`📡 Broadcasting reaction_updated to room: ${roomName}`);
+      console.log(`📡 Number of clients in room: ${numClientsInRoom}`);
+      console.log(`📡 Data: messageId=${messageId}, reactions=${JSON.stringify(updatedMessage.reactions)}, counts=${JSON.stringify(updatedMessage.reactionCounts)}`);
+      
+      global.io.to(roomName).emit('reaction_updated', {
         conversationId,
         messageId,
         userId,
         reactionType,
-        reactions: updatedMessage.reactions,
-        reactionCounts: updatedMessage.reactionCounts
+        action,
+        reactions: updatedMessage.reactions || {},
+        reactionsDetailed: updatedMessage.reactionsDetailed || {},
+        reactionCounts: updatedMessage.reactionCounts || {}
       });
+      
+      console.log(`✅ Broadcast sent to ${numClientsInRoom} clients`);
+    } else {
+      console.log('⚠️ global.io is not set!');
     }
     
     res.json({ 
@@ -296,11 +356,11 @@ router.post('/:conversationId/messages/:messageId/react', authenticateUser, asyn
     });
   } catch (error) {
     console.error('Reaction error:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });;
   }
 });
 
-// Remove reaction from a message
+// Remove reaction from a message (removes ALL reactions of the specified user)
 router.delete('/:conversationId/messages/:messageId/react', authenticateUser, async (req, res) => {
   try {
     const { conversationId, messageId } = req.params;
@@ -310,6 +370,8 @@ router.delete('/:conversationId/messages/:messageId/react', authenticateUser, as
       return res.status(400).json({ success: false, message: 'userId is required' });
     }
     
+    console.log(`🗑️ Removing ALL reactions of user ${userId} on message ${messageId}`);
+    
     const messageRef = db.collection('conversations').doc(conversationId)
       .collection('messages').doc(messageId);
     
@@ -321,20 +383,48 @@ router.delete('/:conversationId/messages/:messageId/react', authenticateUser, as
     const messageData = messageDoc.data();
     const reactions = messageData.reactions || {};
     const reactionCounts = messageData.reactionCounts || {};
+    const reactionsDetailed = messageData.reactionsDetailed || {};
     
+    let hasChanges = false;
+    
+    // Handle old format: reactions = { userId: reactionType }
     const oldReaction = reactions[userId];
     if (oldReaction) {
-      // Remove user's reaction
+      // Remove user's reaction from simple map
       delete reactions[userId];
       
-      // Decrement count
+      // Decrement count for old reaction type
       reactionCounts[oldReaction] = Math.max(0, (reactionCounts[oldReaction] || 0) - 1);
       if (reactionCounts[oldReaction] === 0) {
         delete reactionCounts[oldReaction];
       }
+      hasChanges = true;
+    }
+    
+    // Handle new format: reactionsDetailed = { userId: { reactionType: count, ... } }
+    if (reactionsDetailed[userId]) {
+      const userReactions = reactionsDetailed[userId];
       
+      // Decrement counts for all user's reaction types
+      for (const reactionType in userReactions) {
+        const count = userReactions[reactionType] || 0;
+        reactionCounts[reactionType] = Math.max(0, (reactionCounts[reactionType] || 0) - count);
+        if (reactionCounts[reactionType] === 0) {
+          delete reactionCounts[reactionType];
+        }
+      }
+      
+      // Remove user from detailed reactions
+      delete reactionsDetailed[userId];
+      hasChanges = true;
+    }
+    
+    if (hasChanges) {
       // Update Firestore
-      await messageRef.update({ reactions, reactionCounts });
+      await messageRef.update({ reactions, reactionCounts, reactionsDetailed });
+      console.log(`✅ Removed all reactions of user ${userId}`);
+    } else {
+      console.log(`ℹ️ User ${userId} had no reactions to remove`);
     }
     
     // Get updated message
@@ -343,13 +433,20 @@ router.delete('/:conversationId/messages/:messageId/react', authenticateUser, as
     
     // Broadcast reaction update via WebSocket
     if (global.io) {
-      global.io.to(`conversation:${conversationId}`).emit('reaction_updated', {
+      const roomName = `conversation:${conversationId}`;
+      const socketsInRoom = global.io.sockets.adapter.rooms.get(roomName);
+      const numClientsInRoom = socketsInRoom ? socketsInRoom.size : 0;
+      
+      console.log(`📡 Broadcasting reaction_updated (remove) to room: ${roomName}`);
+      console.log(`📡 Number of clients in room: ${numClientsInRoom}`);
+      
+      global.io.to(roomName).emit('reaction_updated', {
         conversationId,
         messageId,
         userId,
         reactionType: null,
-        reactions: updatedMessage.reactions,
-        reactionCounts: updatedMessage.reactionCounts
+        reactions: updatedMessage.reactions || {},
+        reactionCounts: updatedMessage.reactionCounts || {}
       });
     }
     

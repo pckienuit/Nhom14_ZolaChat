@@ -32,7 +32,9 @@
         android:layout_height="wrap_content"
         app:cardCornerRadius="16dp"
         app:cardElevation="2dp"
-        app:cardBackgroundColor="#D4EDFC">
+        app:cardBackgroundColor="#D4EDFC"
+        app:strokeColor="#A8D1FF"
+        app:strokeWidth="1.5dp">
 
         <LinearLayout
             android:layout_width="match_parent"

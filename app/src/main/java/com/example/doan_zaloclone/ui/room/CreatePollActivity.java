@@ -4,7 +4,9 @@ import android.app.Activity;
 import android.app.DatePickerDialog;
 import android.app.TimePickerDialog;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -54,6 +56,10 @@ public class CreatePollActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Enable edge-to-edge display
+        setupEdgeToEdge();
+        
         setContentView(R.layout.activity_create_poll);
 
         initViews();
@@ -232,5 +238,17 @@ public class CreatePollActivity extends AppCompatActivity {
         resultIntent.putExtra(EXTRA_POLL_DATA, poll);
         setResult(Activity.RESULT_OK, resultIntent);
         finish();
+    }
+    
+    private void setupEdgeToEdge() {
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            );
+        }
     }
 }
