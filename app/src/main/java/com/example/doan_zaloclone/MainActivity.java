@@ -20,6 +20,7 @@ import com.example.doan_zaloclone.ui.contact.ContactFragment;
 import com.example.doan_zaloclone.ui.home.HomeFragment;
 import com.example.doan_zaloclone.ui.login.LoginActivity;
 import com.example.doan_zaloclone.ui.personal.PersonalFragment;
+import com.example.doan_zaloclone.utils.NotificationHelper;
 import com.example.doan_zaloclone.viewmodel.MainViewModel;
 import android.view.View;
 import android.widget.ImageView;
@@ -72,6 +73,9 @@ public class MainActivity extends AppCompatActivity {
         getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
         
         setContentView(R.layout.activity_main);
+
+        // Create notification channels
+        NotificationHelper.createNotificationChannels(this);
 
         // Record login timestamp for force logout comparison
         loginTimestamp = System.currentTimeMillis();
