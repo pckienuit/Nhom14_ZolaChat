@@ -1,0 +1,84 @@
+# Backend Fix: Undefined Fields Issue
+
+## Problem
+```
+HTTP 500 Internal Server Error
+"Cannot use \"undefined\" as a Firestore value (found in field \"mediaUrl\")"
+```
+
+## Root Cause
+Old code destructured ALL fields from request body:
+```javascript
+const { content, type, mediaUrl, metadata } = req.body;
+const message = {
+  content, type, mediaUrl, metadata,  // ❌ undefined values!
+  senderId: req.user.uid,
+  ...
+};
+```
+
+If `mediaUrl` not in request → `undefined` → Firestore rejects!
+
+## Solution
+Only include fields with actual values:
+```javascript
+const message = {
+  content: content || '',
+  type: type,
+  senderId: senderId || req.user.uid,
+  timestamp: Date.now(),
+  isRead: false
+};
+
+// Add optional fields only if they exist
+if (fileName) message.fileName = fileName;
+if (fileSize) message.fileSize = fileSize;
+// etc...
+```
+
+## Changes Made
+
+**File:** `server/src/routes/chats.js`
+
+1. ✅ Destructure all possible message fields from request body
+2. ✅ Build base message with required fields only
+3. ✅ Conditionally add optional fields using `if` checks
+4. ✅ Support all message types (file, reply, forward, location, sticker, contact)
+5. ✅ Add `conversationId` to fullMessage for WebSocket filtering
+6. ✅ Fixed response format: `{ success: true, data: fullMessage }`
+
+## Testing
+
+**Restart server:**
+```bash
+cd server
+npm start
+```
+
+**Test message send:**
+- Android app sends TEXT message
+- Should get HTTP 200 (not 500!)
+- Message saved to Firestore
+- WebSocket broadcasts message
+- Receiver gets message in real-time
+
+## Expected Behavior
+
+**Before fix:**
+```
+POST /messages → HTTP 500
+Error: Cannot use "undefined" as Firestore value
+```
+
+**After fix:**
+```
+POST /messages → HTTP 200
+{ "success": true, "data": { "id": "...", "content": "...", ... }}
+Message saved ✅
+WebSocket broadcast ✅
+```
+
+---
+
+**Status:** FIXED ✅
+**Action needed:** Restart backend server

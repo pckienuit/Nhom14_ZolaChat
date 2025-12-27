@@ -91,8 +91,20 @@ router.post('/', authenticateUser, async (req, res) => {
     // Emit WebSocket event
     const io = req.app.get('io');
     if (io) {
-      const messageWithId = { ...message, id: messageRef.id };
-      console.log(`📡 Emitting new_message to conversation:${conversationId}`);
+      // Fetch sender name for notifications
+      let senderName = 'Unknown';
+      try {
+        const senderDoc = await db.collection('users').doc(req.user.uid).get();
+        if (senderDoc.exists) {
+          const senderData = senderDoc.data();
+          senderName = senderData.name || senderData.displayName || 'Unknown';
+        }
+      } catch (err) {
+        console.error('Failed to fetch sender name:', err);
+      }
+      
+      const messageWithId = { ...message, id: messageRef.id, senderName };
+      console.log(`📡 Emitting new_message to conversation:${conversationId} with senderName: ${senderName}`);
       io.to(`conversation:${conversationId}`).emit('new_message', messageWithId);
 
       // Notification for Home Screen Preview (emit to each user's room)

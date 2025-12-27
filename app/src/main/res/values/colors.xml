@@ -11,11 +11,15 @@
     
     <color name="colorError">#F44336</color>
     <color name="textSecondary">#757575</color>
+    <color name="gray">#9E9E9E</color>
+    <color name="primary_blue">#0068FF</color>
     
     <!-- Zalo Specific UI Colors -->
     <color name="zalo_background_gray">#F2F4F7</color>
     <color name="zalo_bubble_me">#E5F7FF</color>
     <color name="zalo_bubble_friend">#FFFFFF</color>
+    <color name="zalo_bubble_me_border">#A8D1FF</color>
+    <color name="zalo_bubble_friend_border">#D0D0D0</color>
     <color name="zalo_text_primary">#000000</color>
     <color name="backgroundColor">@color/zalo_background_gray</color>
     

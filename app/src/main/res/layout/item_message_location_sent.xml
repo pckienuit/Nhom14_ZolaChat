@@ -20,13 +20,16 @@
             android:layout_marginStart="48dp"
             app:cardCornerRadius="12dp"
             app:cardElevation="2dp"
-            app:cardBackgroundColor="#E1F5D1">
+            app:cardBackgroundColor="@android:color/transparent"
+            app:strokeColor="#C5E5B4"
+            app:strokeWidth="1.5dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="12dp">
+                android:padding="12dp"
+                android:background="#E1F5D1">
 
                 <!-- Location Icon and Name -->
                 <LinearLayout

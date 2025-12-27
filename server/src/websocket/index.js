@@ -32,8 +32,17 @@ function initializeWebSocket(server) {
     await updateOnlineStatus(socket.userId, true);
     await notifyFriendsOfStatusChange(io, socket.userId, true);
     
-    socket.on('join_conversation', (id) => socket.join(`conversation:${id}`));
-    socket.on('leave_conversation', (id) => socket.leave(`conversation:${id}`));
+    socket.on('join_conversation', (id) => {
+      socket.join(`conversation:${id}`);
+      console.log(`📥 User ${socket.userId} joined room: conversation:${id}`);
+      // Confirm to client that they joined the room
+      socket.emit('room_joined', { conversationId: id, success: true });
+    });
+    socket.on('leave_conversation', (id) => {
+      socket.leave(`conversation:${id}`);
+      console.log(`📤 User ${socket.userId} left room: conversation:${id}`);
+      socket.emit('room_left', { conversationId: id, success: true });
+    });
     socket.on('typing', (data) => {
       socket.to(`conversation:${data.conversationId}`).emit('user_typing', {
         userId: socket.userId,

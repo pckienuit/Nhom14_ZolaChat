@@ -180,7 +180,19 @@
                     android:textSize="14sp"/>
             </LinearLayout>
 
-
+            <!-- Add Friend Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnAddFriend"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:layout_marginTop="16dp"
+                android:text="Kết bạn"
+                android:textColor="@color/white"
+                android:textSize="14sp"
+                android:paddingHorizontal="32dp"
+                app:cornerRadius="24dp"
+                app:backgroundTint="@color/primary_blue"
+                android:visibility="gone" />
 
             <!-- Bottom Illustration Area -->
             <LinearLayout
@@ -211,11 +223,6 @@
                 android:visibility="invisible" />
              <LinearLayout
                  android:id="@+id/nameContainer"
-                 android:layout_width="1dp"
-                 android:layout_height="1dp"
-                 android:visibility="invisible" />
-             <com.google.android.material.button.MaterialButton
-                 android:id="@+id/btnAddFriend"
                  android:layout_width="1dp"
                  android:layout_height="1dp"
                  android:visibility="invisible" />

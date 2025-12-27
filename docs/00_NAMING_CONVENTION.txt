@@ -1,82 +1,72 @@
 ================================================================================
-QUYƯỚC ĐẶT TÊN FILE TÀI LIỆU (Documentation Naming Convention)
+QUY ƯỚC ĐẶT TÊN FILE TÀI LIỆU (Documentation Naming Convention)
 ================================================================================
 
 MỤC ĐÍCH
-Thống nhất cách đặt tên các file documentation (.txt) trong thư mục docs/,
+--------
+Thống nhất cách đặt tên các file documentation trong thư mục docs/,
 giúp dễ quản lý, tìm kiếm và sắp xếp theo logic.
 
 
 NGUYÊN TẮC ĐẶT TÊN
 ------------------
 
-Format: [số thứ tự]_[loại]_[tên-mô-tả].txt
+Format: [số thứ tự]_[loại]_[tên-mô-tả].[txt|md]
 
-1. SỐ THỨ TỰ (2 chữ số: 01, 02, 03...)
+1. SỐ THỨ TỰ (2 chữ số: 01, 02, 03... hoặc 3 chữ số nếu > 99)
    - Giúp sắp xếp file theo thứ tự ưu tiên/thời gian
    - File này (naming convention) là 00
 
 2. LOẠI TÀI LIỆU (category)
-   - feature: Tài liệu về tính năng mới
-   - architecture: Kiến trúc, design pattern
-   - bugfix: Báo cáo sửa lỗi
-   - config: Cấu hình, setup
-   - optimization: Tối ưu hóa hiệu năng
-   - guide: Hướng dẫn sử dụng
+   - feature:       Tài liệu về tính năng mới
+   - architecture:  Kiến trúc, design pattern
+   - bugfix:        Báo cáo sửa lỗi
+   - config:        Cấu hình, setup
+   - optimization:  Tối ưu hóa hiệu năng
+   - guide:         Hướng dẫn sử dụng
+   - migration:     Quá trình chuyển đổi/migrate
+   - audit:         Đánh giá, kiểm tra
 
 3. TÊN MÔ TẢ
    - Viết thường, không dấu
    - Dùng dấu gạch ngang (-) thay khoảng trắng
    - Ngắn gọn, mô tả rõ nội dung
 
+4. ĐỊNH DẠNG FILE
+   - .txt: Tài liệu text thuần
+   - .md:  Tài liệu Markdown (có format)
+
 
 VÍ DỤ
 -----
 
-01_feature_contact-guide.txt
-   → Feature về contact/search users
-
-02_architecture_mvvm-migration.txt
-   → Chuyển đổi sang kiến trúc MVVM
-
-03_bugfix_file-management.txt
-   → Sửa lỗi liên quan đến quản lý file
-
-04_config_firestore-security-rules.txt
-   → Cấu hình Firestore security rules
-
-05_bugfix_friend-request.txt
-   → Sửa lỗi friend request
-
-06_optimization_image-loading.txt
-   → Tối ưu hóa việc load ảnh
-
-07_optimization_performance.txt
-   → Tối ưu hóa hiệu năng tổng quát
-
-08_optimization_recyclerview.txt
-   → Tối ưu hóa RecyclerView
+01_feature_contact-guide.txt      → Feature về contact/search users
+02_architecture_mvvm-migration.txt → Chuyển đổi sang kiến trúc MVVM
+03_bugfix_file-management.txt     → Sửa lỗi liên quan đến quản lý file
+04_config_firestore-security.txt  → Cấu hình Firestore security rules
+32_migration_api-deployment.txt   → Tài liệu migration API deployment
 
 
 LƯU Ý
-------
+-----
 
-- Khi thêm file mới, chọn số thứ tự tiếp theo
+- Khi thêm file mới, chọn số thứ tự tiếp theo (hiện tại: 95+)
 - Nếu có nhiều file cùng loại, sắp xếp theo thứ tự logic hoặc thời gian
 - Có thể thêm loại mới nếu cần thiết
 - Tất cả file documentation thuộc dự án nên đặt trong folder docs/
 - File build artifacts (trong app/build/) KHÔNG cần tổ chức lại
+- README.md trong các subfolder (server/, admin-web/, scripts/) giữ nguyên
 
 
+================================================================================
 QUY ƯỚC TRÌNH BÀY NỘI DUNG (Content Formatting Convention)
-----------------------------------------------------------
+================================================================================
 
-Để đảm bảo tính nhất quán, các file tài liệu (đặc biệt là Feature và Architecture)
-nên tuân theo cấu trúc sau:
+Để đảm bảo tính nhất quán, các file tài liệu nên tuân theo cấu trúc sau:
 
 1. HEADER
-   - Dùng 80 dấu bằng (=) để phân cách header.
-   - Tiêu đề viết HOA.
+   - Dùng 80 dấu bằng (=) để phân cách header
+   - Tiêu đề viết HOA
 
    Ví dụ:
    ================================================================================
@@ -90,50 +80,179 @@ nên tuân theo cấu trúc sau:
    - KIẾN TRÚC: MVVM/Repository...
 
 3. CẤU TRÚC MỤC (SECTIONS)
-   - Dùng 80 dấu bằng (=) để phân cách các mục lớn.
+   - Dùng 80 dấu bằng (=) để phân cách các mục lớn
    - Đánh số 1. 2. 3.
-   - Tiêu đề mục viết HOA.
-
-   Ví dụ:
-   ================================================================================
-   1. TỔNG QUAN
-   ================================================================================
+   - Tiêu đề mục viết HOA
 
 4. TIỂU MỤC (SUBSECTIONS)
    - Đánh số 1.1, 1.2...
-   - Tiêu đề viết HOA.
+   - Tiêu đề viết HOA
 
 5. BẢNG BIỂU (TABLES)
-   - Sử dụng ASCII art để mô tả thay đổi Data Model.
+   - Sử dụng ASCII art hoặc Markdown table
 
-   Ví dụ:
-   ┌─────────────────────────────────────────────────────────────────────────────┐
-   │ Field               │ Type    │ Mô tả                                      │
-   ├─────────────────────────────────────────────────────────────────────────────┤
-   │ fieldName           │ String  │ Description                                │
-   └─────────────────────────────────────────────────────────────────────────────┘
+   ASCII:
+   ┌─────────────────┬─────────┬─────────────────────────┐
+   │ Field           │ Type    │ Mô tả                   │
+   ├─────────────────┼─────────┼─────────────────────────┤
+   │ fieldName       │ String  │ Description             │
+   └─────────────────┴─────────┴─────────────────────────┘
 
-
-DANH SÁCH FILE HIỆN TẠI
------------------------
-
-00_NAMING_CONVENTION.txt       - File này (quy tắc đặt tên)
-01_feature_contact-guide.txt   - Hướng dẫn tính năng Contact
-02_architecture_mvvm-migration.txt - Tổng kết chuyển đổi MVVM
-03_bugfix_file-management.txt  - Sửa lỗi quản lý file
-04_config_firestore-security-rules.txt - Cấu hình Firestore
-05_bugfix_friend-request.txt   - Sửa lỗi friend request
-06_optimization_image-loading.txt - Tối ưu image loading
-07_optimization_performance.txt - Tối ưu hiệu năng tổng quát
-08_optimization_recyclerview.txt - Tối ưu RecyclerView
-09_bugfix_filter-chip.txt      - Sửa lỗi filter chip container & circular button
-10_feature_voice-video-call.txt - Tài liệu tổng quát về voice/video call
-11_bugfix_call-system-debug.txt - Debug và fix 9 lỗi hệ thống cuộc gọi
+   Markdown:
+   | Field     | Type   | Mô tả       |
+   |-----------|--------|-------------|
+   | fieldName | String | Description |
 
 
+================================================================================
+DANH SÁCH FILE HIỆN TẠI (92 files)
+================================================================================
+
+GENERAL
+-------
+00_NAMING_CONVENTION.txt           - File này (quy tắc đặt tên)
+
+FEATURES (24 files)
+-------------------
+01_feature_contact-guide.txt       - Contact/search users
+10_feature_voice-video-call.txt    - Voice/video call
+16_feature_call-history-ui-improvements.txt
+17_feature_call-history-perspective-filtering.txt
+18_feature_reply-message.txt       - Reply message
+20_feature_recall-message.txt      - Recall/unsend message
+21_feature_forward-message.txt     - Forward message
+22_feature_message-reactions.txt   - Message reactions
+23_feature_pin-conversation.txt    - Pin conversation
+24_feature_conversation-tags.txt   - Conversation tags
+26_feature_personal-tab-profile.txt
+28_feature_live-location-sharing.txt
+30_feature_sticker-system.txt      - Sticker system
+52_feature_realtime-preview-messages.md
+67_feature_friend-requests-realtime.md
+68_feature_group-chat-complete.md
+70_feature_group-management.md
+72_feature_websocket-messages.md
+74_feature_notification-system.md
+78_feature_sendmessage-api.md
+81_feature_ui-theme-update.md
+82_feature_unfriend.md
+89_feature_multi-reaction-system.txt
+91_feature_personal-qr-code.md
+
+BUGFIXES (14 files)
+-------------------
+03_bugfix_file-management.txt
+05_bugfix_friend-request.txt
+09_bugfix_filter-chip.txt
+11_bugfix_call-system-debug.txt
+12_bugfix_webrtc-ice-connection.txt
+13_bugfix_video-call-black-screen.txt
+27_bugfix_business-card-button-state.txt
+53_bugfix_call-duration-chat-sort.md
+55_bugfix_add-friend-banner.md
+56_bugfix_sticker-upload.md
+60_bugfix_backend-undefined-fields.md
+69_bugfix_group-chat-realtime.md
+87_bugfix_group-creation-permission.md
+88_bugfix_voice-message-display.md
+
+ARCHITECTURE (4 files)
+----------------------
+02_architecture_mvvm-migration.txt
+51_architecture_refactoring-complete.md
+54_architecture_update-queue-realtime.md
+73_architecture_mvvm-summary.txt
+
+OPTIMIZATION (7 files)
+----------------------
+06_optimization_image-loading.txt
+07_optimization_performance.txt
+08_optimization_recyclerview.txt
+14_optimization_call-background-audio.txt
+15_optimization_pip-mode.txt
+25_optimization_user-name-display.txt
+75_optimization_production-complete.md
+
+CONFIG (7 files)
+----------------
+04_config_firestore-security-rules.txt
+19_config_turn-server-setup.txt
+29_config_vps-sticker-server-setup.txt
+63_config_deployment-complete.md
+65_config_firebase-setup.md
+79_config_server-fallback.md
+93_config_production-api-urls.md
+
+MIGRATION (17 files)
+--------------------
+32_migration_api-intermediary-deployment.txt
+33_migration_phase2-backend-api.txt
+34_migration_phase3-android-progress.md
+36_migration_phase3b-user-friend.md
+39_migration_phase3c1-progress.md
+40_migration_phase3c2-media-messages.md
+42_migration_phase3c-summary.md
+43_migration_phase3d-group-chat-plan.md
+44_migration_phase3d-status.md
+45_migration_phase3-summary.md
+46_migration_phase4-complete.md
+49_migration_phase4-consolidation.md
+50_migration_phase5-error-handling.md
+61_migration_chatrepository-complete.md
+62_migration_chatrepository-plan.md
+90_migration_phase3b-realtime-friend-updates.md
+94_migration_phase3c3-reactions-complete.md
+
+GUIDE (16 files)
+----------------
+35_guide_api-test.md
+47_guide_remaining-tasks.md
+57_guide_android-app.md
+58_guide_api-deployment.md
+59_guide_api-test-checklist.md
+64_guide_firebase-quickref.md
+66_guide_firebase-summary.md
+71_guide_contact-feature.txt
+76_guide_quick-start.md
+77_guide_refactoring-reference.md
+80_guide_api-test-launcher.md
+83_guide_voice-message.md
+84_guide_websocket-realtime-test.md
+85_guide_websocket-test-checklist.md
+86_guide_websocket-test.md
+92_guide_server-deployment.md
+
+AUDIT (2 files)
+---------------
+31_audit_direct-db-access-analysis.txt
+48_audit_firestore.md
+
+
+================================================================================
+THỐNG KÊ
+================================================================================
+
+Tổng số file:      92 files
+- Feature:         24 files (26%)
+- Migration:       17 files (18%)
+- Guide:           16 files (17%)
+- Bugfix:          14 files (15%)
+- Config:           7 files (8%)
+- Optimization:     7 files (8%)
+- Architecture:     4 files (4%)
+- Audit:            2 files (2%)
+
+Số thứ tự tiếp theo: 95
+
+
+================================================================================
 CẬP NHẬT
---------
+================================================================================
 
-Tạo ngày: 16/12/2025
-Cập nhật lần cuối: 16/12/2025
-Tổng số file tài liệu: 11 files (bao gồm file này)
+Tạo ngày:           16/12/2025
+Cập nhật lần cuối:  27/12/2025
+Người cập nhật:     GitHub Copilot
+Lý do cập nhật:     Consolidate & standardize all documentation files
+                    - Di chuyển 12 files từ root vào docs/
+                    - Đổi tên 30+ files theo naming convention
+                    - Cập nhật danh sách đầy đủ

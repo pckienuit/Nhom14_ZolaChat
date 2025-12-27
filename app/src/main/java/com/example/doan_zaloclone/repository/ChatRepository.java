@@ -49,6 +49,8 @@ import org.json.JSONObject;
  */
 public class ChatRepository {
 
+    private static final String TAG = "ChatRepository";
+
     private final FirebaseFirestore firestore;
     private final FirestoreManager firestoreManager;
     private final ApiService apiService;
@@ -69,6 +71,20 @@ public class ChatRepository {
 
     private final java.util.concurrent.ExecutorService backgroundExecutor;
 
+    // Singleton instance
+    private static ChatRepository instance;
+    
+    /**
+     * Get singleton instance of ChatRepository
+     */
+    public static synchronized ChatRepository getInstance() {
+        if (instance == null) {
+            instance = new ChatRepository();
+        }
+        return instance;
+    }
+
+    // Keep public constructor for backward compatibility but log warning
     public ChatRepository() {
         this.backgroundExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
         this.firestore = FirebaseFirestore.getInstance();
@@ -78,7 +94,7 @@ public class ChatRepository {
         this.mainHandler = new Handler(Looper.getMainLooper());
         
         // Connect WebSocket for real-time updates
-        Log.d("ChatRepository", "Initializing WebSocket connection");
+        Log.d("ChatRepository", "Initializing ChatRepository, WebSocket connection");
         socketManager.connect();
     }
 
@@ -123,6 +139,11 @@ public class ChatRepository {
                 // Create API request from Message object
                 SendMessageRequest request = new SendMessageRequest(message);
                 
+                // Debug log for voice message
+                if (Message.TYPE_VOICE.equals(message.getType())) {
+                    Log.d("ChatRepository", "Sending VOICE message - voiceUrl: " + message.getVoiceUrl() + ", duration: " + message.getVoiceDuration());
+                }
+                
                 // Call API to send message (Synchronous execute)
                 Call<ApiResponse<Message>> call = apiService.sendMessage(conversationId, request);
                 Response<ApiResponse<Message>> response = call.execute(); // Blocking call
@@ -135,7 +156,7 @@ public class ChatRepository {
                         Message savedMessage = apiResponse.getData();
                         String messageId = savedMessage.getId();
                         
-                        Log.d("ChatRepository", "Message sent successfully - ID: " + messageId);
+                        Log.d("ChatRepository", "Message sent successfully - ID: " + messageId + ", Type: " + savedMessage.getType() + ", VoiceUrl: " + savedMessage.getVoiceUrl() + ", VoiceDuration: " + savedMessage.getVoiceDuration());
                         
                         // Add to pending set - to prevent WebSocket duplicate
                         synchronized (pendingSentMessageIds) {
@@ -150,19 +171,33 @@ public class ChatRepository {
                             }
                         }, 5000);
                         
-                        // IMMEDIATE UI UPDATE: Add message to cache NOW instead of waiting for WebSocket
+                        // IMMEDIATE UI UPDATE: Add or update message in cache
                         if (conversationId.equals(currentConversationId)) {
-                            // Check if not already in cache (to prevent duplicates)
-                            boolean exists = false;
+                            // Check if already in cache
                             Message finalSavedMessage = savedMessage;
-                            for (Message msg : cachedMessages) {
+                            int existingIndex = -1;
+                            for (int i = 0; i < cachedMessages.size(); i++) {
+                                Message msg = cachedMessages.get(i);
                                 if (msg.getId() != null && msg.getId().equals(finalSavedMessage.getId())) {
-                                    exists = true;
+                                    existingIndex = i;
                                     break;
                                 }
                             }
                             
-                            if (!exists) {
+                            if (existingIndex >= 0) {
+                                // UPDATE existing message with full data from API response
+                                // (WebSocket message may be missing some fields like voiceUrl)
+                                Log.d("ChatRepository", "Updating existing message in cache with API data: " + messageId);
+                                cachedMessages.set(existingIndex, savedMessage);
+                                
+                                // Notify UI on main thread to refresh
+                                if (activeMessagesLiveData != null) {
+                                    mainHandler.post(() -> {
+                                        activeMessagesLiveData.setValue(Resource.success(new ArrayList<>(cachedMessages)));
+                                    });
+                                }
+                            } else {
+                                // Add new message
                                 Log.d("ChatRepository", "Adding sent message to cache immediately: " + messageId);
                                 cachedMessages.add(savedMessage);
                                 
@@ -333,7 +368,10 @@ public class ChatRepository {
         activeMessagesListener = new MessagesListener() {
             @Override
             public void onMessagesChanged(List<Message> messages) {
+                Log.d("ChatRepository", "🎯 MessagesListener.onMessagesChanged called with " + messages.size() + " messages");
+                Log.d("ChatRepository", "🎯 Setting LiveData value, result=" + result + ", hasObservers=" + result.hasActiveObservers());
                 result.setValue(Resource.success(messages));
+                Log.d("ChatRepository", "🎯 LiveData value set complete");
             }
             
             @Override
@@ -356,6 +394,14 @@ public class ChatRepository {
      * @return ListenerRegistration for cleanup
      */
     public ListenerRegistration listenToMessages(String conversationId, MessagesListener listener) {
+        Log.d("ChatRepository", "🎯 listenToMessages called for: " + conversationId);
+        
+        // Leave previous conversation room if different
+        if (currentConversationId != null && !currentConversationId.equals(conversationId)) {
+            Log.d("ChatRepository", "📤 Leaving previous conversation: " + currentConversationId);
+            socketManager.leaveConversation(currentConversationId);
+        }
+        
         // Update current conversation
         currentConversationId = conversationId;
         cachedMessages.clear();
@@ -497,31 +543,79 @@ public class ChatRepository {
         socketManager.setReactionListener(new SocketManager.OnReactionListener() {
             @Override
             public void onReactionUpdated(String convId, String messageId, String userId, String reactionType,
-                                          java.util.Map<String, String> reactions, java.util.Map<String, Integer> reactionCounts) {
+                                          java.util.Map<String, String> reactions,
+                                          java.util.Map<String, java.util.Map<String, Object>> reactionsDetailed,
+                                          java.util.Map<String, Integer> reactionCounts) {
                 try {
+                    Log.d("ChatRepository", "🔔 Reaction update received: convId=" + convId 
+                        + ", messageId=" + messageId + ", type=" + reactionType
+                        + ", reactions=" + reactions + ", counts=" + reactionCounts);
+                    
                     if (!conversationId.equals(convId)) {
+                        Log.d("ChatRepository", "⏭️ Skipping reaction update - different conversation");
                         return; // Not for this conversation
                     }
                     
+                    Log.d("ChatRepository", "📦 cachedMessages size: " + cachedMessages.size());
+                    Log.d("ChatRepository", "🔍 Looking for messageId: [" + messageId + "]");
+                    
+                    // Log all messageIds in cache for debugging
+                    StringBuilder cacheIds = new StringBuilder("📋 Cache messageIds: ");
+                    for (int i = 0; i < Math.min(cachedMessages.size(), 10); i++) {
+                        cacheIds.append("[").append(cachedMessages.get(i).getId()).append("] ");
+                    }
+                    Log.d("ChatRepository", cacheIds.toString());
+                    
                     // Find and update message reactions in cache
+                    boolean found = false;
                     for (int i = 0; i < cachedMessages.size(); i++) {
                         Message msg = cachedMessages.get(i);
                         if (msg.getId() != null && msg.getId().equals(messageId)) {
-                            // Use data from server directly
-                            msg.setReactions(reactions != null ? reactions : new java.util.HashMap<>());
-                            msg.setReactionCounts(reactionCounts != null ? reactionCounts : new java.util.HashMap<>());
+                            found = true;
+                            Log.d("ChatRepository", "✅ Found message at index " + i + ", updating reactions");
                             
-                            // Deep copy and notify UI
+                            // Create NEW maps to ensure DiffUtil detects changes
+                            java.util.Map<String, String> newReactions = new java.util.HashMap<>();
+                            if (reactions != null) {
+                                newReactions.putAll(reactions);
+                            }
+                            
+                            java.util.Map<String, Integer> newCounts = new java.util.HashMap<>();
+                            if (reactionCounts != null) {
+                                newCounts.putAll(reactionCounts);
+                            }
+                            
+                            // Deep copy reactionsDetailed
+                            java.util.Map<String, java.util.Map<String, Object>> newDetailed = new java.util.HashMap<>();
+                            if (reactionsDetailed != null) {
+                                for (java.util.Map.Entry<String, java.util.Map<String, Object>> entry : reactionsDetailed.entrySet()) {
+                                    newDetailed.put(entry.getKey(), new java.util.HashMap<>(entry.getValue()));
+                                }
+                            }
+                            
+                            // Update cached message with new maps
+                            msg.setReactions(newReactions);
+                            msg.setReactionCounts(newCounts);
+                            msg.setReactionsDetailed(newDetailed);
+                            
+                            Log.d("ChatRepository", "📊 Updated message reactions: " + newReactions + ", counts: " + newCounts);
+                            
+                            // Create deep copy list for UI update
                             List<Message> messagesCopy = new ArrayList<>();
                             for (Message m : cachedMessages) {
                                 messagesCopy.add(new Message(m));
                             }
                             
                             mainHandler.post(() -> {
+                                Log.d("ChatRepository", "📤 Notifying UI about reaction update, list size: " + messagesCopy.size());
                                 listener.onMessagesChanged(messagesCopy);
                             });
                             break;
                         }
+                    }
+                    
+                    if (!found) {
+                        Log.w("ChatRepository", "⚠️ Message not found in cache for reaction update: " + messageId);
                     }
                 } catch (Exception e) {
                     Log.e("ChatRepository", "Error handling reaction update", e);
@@ -529,9 +623,35 @@ public class ChatRepository {
             }
         });
 
-        // 3. Join conversation room
-        Log.d("ChatRepository", "Joining WebSocket room: " + conversationId);
-        socketManager.joinConversation(conversationId);
+        // 3. Setup connection listener and ensure socket is connected before joining room
+        Log.d("ChatRepository", "🔌 Checking socket connection before joining room...");
+        
+        // Always set up connection listener to ensure join happens after connect
+        socketManager.setConnectionListener(new SocketManager.OnConnectionListener() {
+            @Override
+            public void onConnected() {
+                Log.d("ChatRepository", "✅ Socket connected callback received, now joining room: " + conversationId);
+                socketManager.joinConversation(conversationId);
+            }
+            
+            @Override
+            public void onDisconnected() {
+                Log.d("ChatRepository", "❌ Socket disconnected");
+            }
+            
+            @Override
+            public void onError(String error) {
+                Log.e("ChatRepository", "❌ Socket connection error: " + error);
+            }
+        });
+        
+        if (socketManager.isConnected()) {
+            Log.d("ChatRepository", "🔌 Socket already connected, joining room directly...");
+            socketManager.joinConversation(conversationId);
+        } else {
+            Log.d("ChatRepository", "🔌 Socket not connected, connecting now (will auto-join on connect)...");
+            socketManager.connect();
+        }
         
         // 4. Load initial messages via API
         Call<MessageListResponse> call = apiService.getMessages(conversationId, 100, null);
@@ -605,11 +725,67 @@ public class ChatRepository {
             }
         };
     }
+
+    /**
+     * Manually refresh messages for a conversation (pull-to-refresh)
+     * Fetches fresh data from API and updates cache
+     * @param conversationId ID of the conversation
+     * @param listener Callback for refresh result
+     */
+    public void refreshMessages(@NonNull String conversationId, @NonNull MessagesListener listener) {
+        Log.d("ChatRepository", "🔄 refreshMessages called for: " + conversationId);
+        
+        Call<MessageListResponse> call = apiService.getMessages(conversationId, 100, null);
+        call.enqueue(new Callback<MessageListResponse>() {
+            @Override
+            public void onResponse(Call<MessageListResponse> call, Response<MessageListResponse> response) {
+                Log.d("ChatRepository", "🔄 Refresh response: " + response.code());
+                if (response.isSuccessful() && response.body() != null) {
+                    List<Message> messages = response.body().getMessages();
+                    if (messages != null) {
+                        // Update cached messages
+                        cachedMessages.clear();
+                        cachedMessages.addAll(messages);
+                        
+                        // Sort by timestamp
+                        cachedMessages.sort((m1, m2) -> Long.compare(m1.getTimestamp(), m2.getTimestamp()));
+                        
+                        Log.d("ChatRepository", "🔄 Refresh success: " + messages.size() + " messages");
+                        listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                        
+                        // Also notify active LiveData if exists
+                        if (activeMessagesLiveData != null) {
+                            mainHandler.post(() -> {
+                                activeMessagesLiveData.setValue(Resource.success(new ArrayList<>(cachedMessages)));
+                            });
+                        }
+                    } else {
+                        listener.onMessagesChanged(new ArrayList<>());
+                    }
+                } else {
+                    Log.e("ChatRepository", "🔄 Refresh failed: HTTP " + response.code());
+                    listener.onError("Failed to refresh: HTTP " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<MessageListResponse> call, Throwable t) {
+                Log.e("ChatRepository", "🔄 Refresh network error", t);
+                listener.onError("Network error: " + (t.getMessage() != null ? t.getMessage() : "Unknown"));
+            }
+        });
+    }
     
     /**
      * Helper: Parse Message from WebSocket JSON data
      */
     private Message parseMessageFromJson(org.json.JSONObject messageData) {
+        // Debug log raw JSON data for voice messages
+        String type = messageData.optString("type", Message.TYPE_TEXT);
+        if (Message.TYPE_VOICE.equals(type)) {
+            Log.d("ChatRepository", "parseMessageFromJson VOICE - raw JSON: " + messageData.toString());
+        }
+        
         Message message = new Message();
         message.setId(messageData.optString("id", null));
         message.setSenderId(messageData.optString("senderId", null));
@@ -709,9 +885,11 @@ public class ChatRepository {
         // Voice fields
         if (messageData.has("voiceUrl")) {
             message.setVoiceUrl(messageData.optString("voiceUrl"));
+            Log.d("ChatRepository", "parseMessageFromJson - voiceUrl parsed: " + message.getVoiceUrl());
         }
         if (messageData.has("voiceDuration")) {
             message.setVoiceDuration(messageData.optInt("voiceDuration", 0));
+            Log.d("ChatRepository", "parseMessageFromJson - voiceDuration parsed: " + message.getVoiceDuration());
         }
         
         return message;
@@ -1041,14 +1219,33 @@ public class ChatRepository {
      * Clean up listeners when repository is no longer needed
      */
     public void cleanup() {
+        Log.d("ChatRepository", "🧹 Cleaning up repository listeners");
+        
         if (messagesListener != null) {
             messagesListener.remove();
             messagesListener = null;
         }
+        
+        // DON'T clear reaction listener here - it's global for the socket
+        // The listener checks conversationId anyway
+        // socketManager.setReactionListener(null);
+        
+        // Leave current conversation room
+        if (currentConversationId != null) {
+            Log.d("ChatRepository", "📤 Leaving conversation room: " + currentConversationId);
+            socketManager.leaveConversation(currentConversationId);
+            currentConversationId = null;
+        }
+        
+        // Clear cached data
+        cachedMessages.clear();
+        activeMessagesListener = null;
+        
+        Log.d("ChatRepository", "✅ Repository cleanup complete");
     }
 
     /**
-     * Create a group conversation (LiveData version)
+     * Create a group conversation via REST API
      * @param adminId ID of the user creating the group (becomes admin)
      * @param groupName Name of the group
      * @param memberIds List of member IDs including admin
@@ -1076,30 +1273,53 @@ public class ChatRepository {
             return result;
         }
         
-        // Call FirestoreManager to create group
-        firestoreManager.createGroupConversation(
-            adminId,
-            groupName,
-            memberIds,
-            new FirestoreManager.OnConversationCreatedListener() {
-                @Override
-                public void onSuccess(Conversation conversation) {
+        // Prepare request body for API (match server expected format)
+        Map<String, Object> conversationData = new HashMap<>();
+        conversationData.put("type", "GROUP");
+        conversationData.put("name", groupName);
+        conversationData.put("memberIds", memberIds);
+        conversationData.put("adminId", adminId);
+        
+        // Call API to create group
+        apiService.createConversation(conversationData).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(@NonNull Call<Map<String, Object>> call, 
+                                 @NonNull Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Map<String, Object> responseBody = response.body();
+                    String conversationId = (String) responseBody.get("conversationId");
+                    
+                    Log.d(TAG, "✅ Group created successfully via API: " + conversationId);
+                    
+                    // Create Conversation object for UI
+                    Conversation conversation = new Conversation(
+                            conversationId,
+                            groupName,
+                            "Nhóm được tạo",
+                            System.currentTimeMillis(),
+                            memberIds,
+                            Conversation.TYPE_GROUP,
+                            adminId,
+                            ""
+                    );
+                    
                     result.setValue(Resource.success(conversation));
                     
-                    // Manually trigger conversation refresh event
-                    // This ensures UI updates even when using Firestore directly (not API)
-                    socketManager.triggerConversationCreated(conversation.getId());
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể tạo nhóm";
+                    // WebSocket will handle real-time updates
+                } else {
+                    String errorMessage = "Không thể tạo nhóm: HTTP " + response.code();
+                    Log.e(TAG, errorMessage);
                     result.setValue(Resource.error(errorMessage));
                 }
             }
-        );
+            
+            @Override
+            public void onFailure(@NonNull Call<Map<String, Object>> call, @NonNull Throwable t) {
+                String errorMessage = "Lỗi kết nối: " + (t.getMessage() != null ? t.getMessage() : "Unknown");
+                Log.e(TAG, "❌ Failed to create group via API", t);
+                result.setValue(Resource.error(errorMessage));
+            }
+        });
         
         return result;
     }
@@ -1389,7 +1609,8 @@ public class ChatRepository {
     // ===================== MESSAGE REACTIONS METHODS =====================
     
     /**
-     * Add or update a reaction to a message
+     * Add a reaction to a message via API (increment count)
+     * NEW LOGIC: Each click adds one more reaction of that type for this user
      * @param conversationId ID of the conversation
      * @param messageId ID of the message to react to
      * @param userId ID of the user adding the reaction
@@ -1400,6 +1621,34 @@ public class ChatRepository {
                                                     @NonNull String messageId,
                                                     @NonNull String userId,
                                                     @NonNull String reactionType) {
+        return sendReactionRequest(conversationId, messageId, userId, reactionType, "add");
+    }
+    
+    /**
+     * Decrement a reaction from a message via API
+     * Removes one count of the specified reaction type for this user
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message
+     * @param userId ID of the user
+     * @param reactionType Type of reaction to decrement
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> decrementReaction(@NonNull String conversationId,
+                                                          @NonNull String messageId,
+                                                          @NonNull String userId,
+                                                          @NonNull String reactionType) {
+        return sendReactionRequest(conversationId, messageId, userId, reactionType, "remove");
+    }
+    
+    /**
+     * Send reaction request to API with specified action
+     * @param action "add" to increment, "remove" to decrement
+     */
+    private LiveData<Resource<Boolean>> sendReactionRequest(@NonNull String conversationId,
+                                                             @NonNull String messageId,
+                                                             @NonNull String userId,
+                                                             @NonNull String reactionType,
+                                                             @NonNull String action) {
         MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
         
@@ -1409,13 +1658,77 @@ public class ChatRepository {
             return result;
         }
         
-        // Prepare request body
+        // Prepare request body with action
         Map<String, String> reactionData = new HashMap<>();
         reactionData.put("userId", userId);
         reactionData.put("reactionType", reactionType);
+        reactionData.put("action", action); // "add" or "remove"
         
-        // Call API to add reaction
+        Log.d("ChatRepository", "Sending reaction request: action=" + action + ", type=" + reactionType + ", user=" + userId);
+        
+        // Call API to add/remove reaction
         Call<ApiResponse<Message>> call = apiService.addReaction(conversationId, messageId, reactionData);
+        
+        call.enqueue(new Callback<ApiResponse<Message>>() {
+            @Override
+            public void onResponse(Call<ApiResponse<Message>> call, Response<ApiResponse<Message>> response) {
+                Log.d("ChatRepository", "Reaction response code: " + response.code());
+                
+                if (response.isSuccessful() && response.body() != null) {
+                    ApiResponse<Message> apiResponse = response.body();
+                    
+                    if (apiResponse.isSuccess()) {
+                        Log.d("ChatRepository", "Reaction " + action + " successful: " + reactionType + " by user: " + userId);
+                        result.setValue(Resource.success(true));
+                        // Note: WebSocket will push the update to refresh UI - no optimistic update needed
+                    } else {
+                        String error = apiResponse.getMessage() != null 
+                            ? apiResponse.getMessage() 
+                            : "Failed to " + action + " reaction";
+                        Log.e("ChatRepository", "Reaction API error: " + error);
+                        result.setValue(Resource.error(error));
+                    }
+                } else {
+                    String errorBody = "";
+                    try {
+                        if (response.errorBody() != null) {
+                            errorBody = response.errorBody().string();
+                        }
+                    } catch (Exception e) {
+                        errorBody = "Could not read error body";
+                    }
+                    Log.e("ChatRepository", "Reaction HTTP error: " + response.code() + " - " + errorBody);
+                    result.setValue(Resource.error("HTTP " + response.code() + ": " + errorBody));
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<ApiResponse<Message>> call, Throwable t) {
+                String error = t.getMessage() != null 
+                    ? t.getMessage() 
+                    : "Network error";
+                result.setValue(Resource.error(error));
+            }
+        });
+        
+        return result;
+    }
+    
+    /**
+     * Remove user's reaction from a message via API
+     * @param conversationId ID of the conversation
+     * @param messageId ID of the message
+     * @param userId ID of the user removing their reaction
+     * @return LiveData containing Resource with success status
+     */
+    public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId,
+                                                       @NonNull String messageId,
+                                                       @NonNull String userId) {
+        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+        result.setValue(Resource.loading());
+        
+        // Call API to remove reaction
+        Call<ApiResponse<Message>> call = apiService.removeReaction(conversationId, messageId, userId);
         
         call.enqueue(new Callback<ApiResponse<Message>>() {
             @Override
@@ -1424,17 +1737,16 @@ public class ChatRepository {
                     ApiResponse<Message> apiResponse = response.body();
                     
                     if (apiResponse.isSuccess()) {
-                        Log.d("ChatRepository", "Reaction added via API: " + reactionType + " by user: " + userId);
+                        Log.d("ChatRepository", "Reaction removed via API for user: " + userId);
                         
-                        // DO NOT update local cache here - WebSocket will handle it with correct reactionCounts
-                        // The WebSocket reaction_updated event contains authoritative data from server
+                        // Optimistic update: Update local cache immediately
+                        updateLocalReactionCache(messageId, userId, null);
                         
-                        // Backend broadcasts update via WebSocket (reaction_updated event)
                         result.setValue(Resource.success(true));
                     } else {
                         String error = apiResponse.getMessage() != null 
                             ? apiResponse.getMessage() 
-                            : "Failed to add reaction";
+                            : "Failed to remove reaction";
                         result.setValue(Resource.error(error));
                     }
                 } else {
@@ -1455,48 +1767,8 @@ public class ChatRepository {
     }
     
     /**
-     * Remove ALL reactions from a message (clear all reactions and counts)
-     * This is used when user clicks the X button to reset all reactions
-     * @param conversationId ID of the conversation
-     * @param messageId ID of the message
-     * @param userId ID of the user removing reactions (not used but kept for consistency)
-     * @return LiveData containing Resource with success status
-     */
-    public LiveData<Resource<Boolean>> removeReaction(@NonNull String conversationId,
-                                                       @NonNull String messageId,
-                                                       @NonNull String userId) {
-        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
-        result.setValue(Resource.loading());
-        
-        DocumentReference messageRef = firestore
-                .collection("conversations")
-                .document(conversationId)
-                .collection("messages")
-                .document(messageId);
-        
-        // Clear ALL reactions and counts (reset to empty maps)
-        Map<String, Object> updates = new HashMap<>();
-        updates.put("reactions", new HashMap<String, String>());
-        updates.put("reactionCounts", new HashMap<String, Integer>());
-        
-        messageRef.update(updates)
-                .addOnSuccessListener(aVoid -> {
-                    Log.d("ChatRepository", "All reactions cleared for message: " + messageId);
-                    result.setValue(Resource.success(true));
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("ChatRepository", "Error clearing reactions", e);
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể xóa cảm xúc";
-                    result.setValue(Resource.error(errorMessage));
-                });
-        
-        return result;
-    }
-    
-    /**
-     * Toggle a reaction - if user already has this reaction type, remove it; otherwise add/update it
+     * Toggle a reaction - Zalo style: always add/update reaction (never remove on click)
+     * This uses the API directly without checking Firestore first
      * @param conversationId ID of the conversation
      * @param messageId ID of the message
      * @param userId ID of the user toggling the reaction
@@ -1507,43 +1779,92 @@ public class ChatRepository {
                                                        @NonNull String messageId,
                                                        @NonNull String userId,
                                                        @NonNull String reactionType) {
-        MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
-        result.setValue(Resource.loading());
-        
-        // First, fetch the current message to check existing reaction
-        DocumentReference messageRef = firestore
-                .collection("conversations")
-                .document(conversationId)
-                .collection("messages")
-                .document(messageId);
-        
-        messageRef.get()
-                .addOnSuccessListener(doc -> {
-                    if (!doc.exists()) {
-                        result.setValue(Resource.error("Tin nhắn không tồn tại"));
-                        return;
+        // Zalo style: Always add/update reaction via API, never remove on same click
+        // Server handles the logic and broadcasts update via WebSocket
+        return addReaction(conversationId, messageId, userId, reactionType);
+    }
+    
+    /**
+     * Update local reaction cache for optimistic UI update
+     * @param messageId ID of the message
+     * @param userId ID of the user
+     * @param reactionType Type of reaction to add (null to remove)
+     */
+    private void updateLocalReactionCache(@NonNull String messageId, @NonNull String userId, String reactionType) {
+        for (int i = 0; i < cachedMessages.size(); i++) {
+            Message msg = cachedMessages.get(i);
+            if (msg.getId() != null && msg.getId().equals(messageId)) {
+                Log.d("ChatRepository", "🔄 Optimistic update for message: " + messageId);
+                
+                // Get or create maps
+                java.util.Map<String, String> reactions = msg.getReactions();
+                if (reactions == null) {
+                    reactions = new java.util.HashMap<>();
+                } else {
+                    reactions = new java.util.HashMap<>(reactions); // Create copy
+                }
+                
+                java.util.Map<String, Integer> counts = msg.getReactionCounts();
+                if (counts == null) {
+                    counts = new java.util.HashMap<>();
+                } else {
+                    counts = new java.util.HashMap<>(counts); // Create copy
+                }
+                
+                // Get old reaction if any
+                String oldReaction = reactions.get(userId);
+                
+                if (reactionType == null) {
+                    // Remove reaction
+                    if (oldReaction != null) {
+                        reactions.remove(userId);
+                        int oldCount = counts.getOrDefault(oldReaction, 1);
+                        if (oldCount <= 1) {
+                            counts.remove(oldReaction);
+                        } else {
+                            counts.put(oldReaction, oldCount - 1);
+                        }
+                    }
+                } else {
+                    // Add/change reaction
+                    if (oldReaction != null && !oldReaction.equals(reactionType)) {
+                        // Decrement old reaction count
+                        int oldCount = counts.getOrDefault(oldReaction, 1);
+                        if (oldCount <= 1) {
+                            counts.remove(oldReaction);
+                        } else {
+                            counts.put(oldReaction, oldCount - 1);
+                        }
                     }
                     
-                    Message message = doc.toObject(Message.class);
-                    if (message == null) {
-                        result.setValue(Resource.error("Không thể đọc tin nhắn"));
-                        return;
+                    if (oldReaction == null || !oldReaction.equals(reactionType)) {
+                        // Set new reaction
+                        reactions.put(userId, reactionType);
+                        int newCount = counts.getOrDefault(reactionType, 0);
+                        counts.put(reactionType, newCount + 1);
                     }
-                    
-                    // Zalo style: Always add/update reaction, never remove on same click
-                    // This ensures clicking on the same reaction type keeps it (doesn't toggle off)
-                    LiveData<Resource<Boolean>> addResult = addReaction(conversationId, messageId, userId, reactionType);
-                    addResult.observeForever(resource -> result.setValue(resource));
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("ChatRepository", "Error fetching message for toggle reaction", e);
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể thay đổi cảm xúc";
-                    result.setValue(Resource.error(errorMessage));
-                });
-        
-        return result;
+                }
+                
+                // Update message
+                msg.setReactions(reactions);
+                msg.setReactionCounts(counts);
+                
+                // Notify UI - use the same listener as WebSocket handler
+                if (activeMessagesListener != null) {
+                    List<Message> messagesCopy = new ArrayList<>();
+                    for (Message m : cachedMessages) {
+                        messagesCopy.add(new Message(m));
+                    }
+                    mainHandler.post(() -> {
+                        Log.d("ChatRepository", "📤 Notifying UI about optimistic reaction update, list size: " + messagesCopy.size());
+                        activeMessagesListener.onMessagesChanged(messagesCopy);
+                    });
+                } else {
+                    Log.w("ChatRepository", "⚠️ activeMessagesListener is null, cannot notify UI");
+                }
+                break;
+            }
+        }
     }
 
     /**

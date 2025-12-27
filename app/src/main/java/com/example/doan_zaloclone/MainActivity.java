@@ -20,6 +20,7 @@ import com.example.doan_zaloclone.ui.contact.ContactFragment;
 import com.example.doan_zaloclone.ui.home.HomeFragment;
 import com.example.doan_zaloclone.ui.login.LoginActivity;
 import com.example.doan_zaloclone.ui.personal.PersonalFragment;
+import com.example.doan_zaloclone.utils.NotificationHelper;
 import com.example.doan_zaloclone.viewmodel.MainViewModel;
 import android.view.View;
 import android.widget.ImageView;
@@ -62,6 +63,9 @@ public class MainActivity extends AppCompatActivity {
     
     // Friend repository for badge updates
     private com.example.doan_zaloclone.repository.FriendRepository friendRepository;
+    
+    // Track active conversation to avoid notifications
+    private static String activeConversationId = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,6 +76,12 @@ public class MainActivity extends AppCompatActivity {
         getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
         
         setContentView(R.layout.activity_main);
+
+        // Create notification channels
+        NotificationHelper.createNotificationChannels(this);
+        
+        // Request notification permission for Android 13+
+        requestNotificationPermission();
 
         // Record login timestamp for force logout comparison
         loginTimestamp = System.currentTimeMillis();
@@ -94,6 +104,9 @@ public class MainActivity extends AppCompatActivity {
 
         // Setup friend events via WebSocket
         setupFriendEventListener();
+        
+        // Setup notification listener for messages and friend requests
+        setupNotificationListener();
 
         // Apply window insets for Edge-to-Edge Navigation Bar
         View bottomNav = findViewById(R.id.bottom_navigation_container);
@@ -118,9 +131,113 @@ public class MainActivity extends AppCompatActivity {
         
         // Initialize FriendRepository and load friend requests badge
         setupFriendRequestsBadge();
+        
+        // Start NotificationService to maintain WebSocket in background
+        startNotificationService();
 
         // TEMPORARY: API Test Button - Only in DEBUG builds
         // addApiTestButton();
+    }
+    
+    /**
+     * Start NotificationService as foreground service
+     * This maintains WebSocket connection when app is in background
+     */
+    private void startNotificationService() {
+        Intent serviceIntent = new Intent(this, com.example.doan_zaloclone.services.NotificationService.class);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent);
+        } else {
+            startService(serviceIntent);
+        }
+        Log.d("MainActivity", "NotificationService started");
+    }
+    
+    /**
+     * Request notification permission for Android 13+
+     */
+    private void requestNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) 
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(
+                    new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 
+                    1001
+                );
+                Log.d("MainActivity", "Requesting POST_NOTIFICATIONS permission");
+            } else {
+                Log.d("MainActivity", "POST_NOTIFICATIONS permission already granted");
+            }
+        }
+        
+        // Also request full-screen intent permission for calls
+        requestFullScreenIntentPermission();
+    }
+    
+    /**
+     * Request full-screen intent permission for Android 14+
+     * This allows incoming calls to pop up automatically
+     */
+    private void requestFullScreenIntentPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+ requires explicit permission
+            if (!getSystemService(android.app.NotificationManager.class).canUseFullScreenIntent()) {
+                Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
+                intent.setData(android.net.Uri.parse("package:" + getPackageName()));
+                try {
+                    startActivity(intent);
+                    Toast.makeText(this, 
+                        "Vui lòng bật 'Full screen intent' để nhận cuộc gọi toàn màn hình", 
+                        Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Failed to open full screen intent settings", e);
+                }
+            } else {
+                Log.d("MainActivity", "Full screen intent permission already granted");
+            }
+        }
+        
+        // Also request overlay permission for background activity launch
+        requestOverlayPermission();
+    }
+    
+    /**
+     * Request overlay permission for displaying over other apps
+     * Required for Android 10+ to show incoming call screen
+     */
+    private void requestOverlayPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (!android.provider.Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:" + getPackageName())
+                );
+                try {
+                    startActivity(intent);
+                    Toast.makeText(this, 
+                        "Vui lòng bật 'Hiển thị trên ứng dụng khác' để nhận cuộc gọi", 
+                        Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Failed to open overlay permission settings", e);
+                }
+            } else {
+                Log.d("MainActivity", "Overlay permission already granted");
+            }
+        }
+    }
+    
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1001) {
+            if (grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                Log.d("MainActivity", "POST_NOTIFICATIONS permission granted");
+                Toast.makeText(this, "Thông báo đã được bật", Toast.LENGTH_SHORT).show();
+            } else {
+                Log.w("MainActivity", "POST_NOTIFICATIONS permission denied");
+                Toast.makeText(this, "Vui lòng cấp quyền thông báo để nhận tin nhắn", Toast.LENGTH_LONG).show();
+            }
+        }
     }
     
     /**
@@ -326,6 +443,9 @@ public class MainActivity extends AppCompatActivity {
 
         // Sign out
         FirebaseAuth.getInstance().signOut();
+        
+        // Stop NotificationService
+        stopService(new Intent(this, com.example.doan_zaloclone.services.NotificationService.class));
 
         // Show message and redirect
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
@@ -670,6 +790,189 @@ public class MainActivity extends AppCompatActivity {
 
         transaction.commit();
     }
+    
+    /**
+     * Setup notification listener for WebSocket events
+     * Shows notifications for messages and friend requests
+     */
+    private void setupNotificationListener() {
+        com.example.doan_zaloclone.websocket.SocketManager socketManager =
+                com.example.doan_zaloclone.websocket.SocketManager.getInstance();
+        
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null) return;
+        
+        final String currentUserId = currentUser.getUid();
+        
+        socketManager.setNotificationListener(new com.example.doan_zaloclone.websocket.SocketManager.OnNotificationListener() {
+            @Override
+            public void onNewMessage(org.json.JSONObject messageData) {
+                try {
+                    String conversationId = messageData.optString("conversationId");
+                    String senderId = messageData.optString("senderId");
+                    String senderName = messageData.optString("senderName", "Unknown");
+                    String messageText = messageData.optString("text", "");
+                    String messageType = messageData.optString("type", "text");
+                    
+                    // Skip if from current user
+                    if (senderId.equals(currentUserId)) {
+                        return;
+                    }
+                    
+                    // Skip if user is viewing this conversation
+                    if (conversationId.equals(activeConversationId)) {
+                        Log.d("MainActivity", "Skipping notification - user is in this conversation");
+                        return;
+                    }
+                    
+                    // Format message text based on type
+                    String displayText = messageText;
+                    if ("image".equals(messageType)) {
+                        displayText = "\ud83d\uddbc\ufe0f Hình ảnh";
+                    } else if ("voice".equals(messageType)) {
+                        displayText = "\ud83c\udfa4 Tin nhắn thoại";
+                    } else if ("file".equals(messageType)) {
+                        displayText = "\ud83d\udcce Tệp tin";
+                    } else if ("sticker".equals(messageType)) {
+                        displayText = "\ud83d\ude00 Nhãn dán";
+                    } else if ("location".equals(messageType)) {
+                        displayText = "\ud83d\udccd Vị trí";
+                    } else if ("card".equals(messageType)) {
+                        displayText = "\ud83d\udcbc Danh thiếp";
+                    }
+                    
+                    // Show notification
+                    NotificationHelper.showMessageNotification(
+                            MainActivity.this, 
+                            senderName, 
+                            displayText, 
+                            conversationId, 
+                            null  // Avatar will be loaded async in future
+                    );
+                    
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error showing message notification", e);
+                }
+            }
+            
+            @Override
+            public void onMessageRecalled(org.json.JSONObject messageData) {
+                try {
+                    String conversationId = messageData.optString("conversationId");
+                    String senderId = messageData.optString("senderId");
+                    String senderName = messageData.optString("senderName", "Unknown");
+                    
+                    // Skip if from current user
+                    if (senderId.equals(currentUserId)) {
+                        return;
+                    }
+                    
+                    // Skip if user is viewing this conversation
+                    if (conversationId.equals(activeConversationId)) {
+                        return;
+                    }
+                    
+                    // Show recall notification
+                    NotificationHelper.showMessageRecallNotification(
+                            MainActivity.this,
+                            senderName,
+                            conversationId
+                    );
+                    
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error showing recall notification", e);
+                }
+            }
+            
+            @Override
+            public void onMessageReaction(org.json.JSONObject reactionData) {
+                try {
+                    String conversationId = reactionData.optString("conversationId");
+                    String userId = reactionData.optString("userId");
+                    String reactionType = reactionData.optString("reactionType");
+                    
+                    // Skip if from current user
+                    if (userId.equals(currentUserId)) {
+                        return;
+                    }
+                    
+                    // Skip if user is viewing this conversation
+                    if (conversationId.equals(activeConversationId)) {
+                        return;
+                    }
+                    
+                    // Fetch user name and show notification
+                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                            .collection("users")
+                            .document(userId)
+                            .get()
+                            .addOnSuccessListener(doc -> {
+                                String userName = "Unknown";
+                                if (doc.exists() && doc.contains("name")) {
+                                    userName = doc.getString("name");
+                                }
+                                
+                                NotificationHelper.showMessageReactionNotification(
+                                        MainActivity.this,
+                                        userName,
+                                        reactionType,
+                                        conversationId
+                                );
+                            });
+                    
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error showing reaction notification", e);
+                }
+            }
+            
+            @Override
+            public void onFriendRequestReceived(String senderId, String senderName) {
+                // Show friend request notification
+                NotificationHelper.showFriendRequestNotification(
+                        MainActivity.this,
+                        senderName,
+                        senderId,
+                        null  // Avatar will be loaded async in future
+                );
+            }
+            
+            @Override
+            public void onFriendRequestAccepted(String userId) {
+                // Fetch user name and show notification
+                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                        .collection("users")
+                        .document(userId)
+                        .get()
+                        .addOnSuccessListener(doc -> {
+                            String userName = "Unknown";
+                            if (doc.exists() && doc.contains("name")) {
+                                userName = doc.getString("name");
+                            }
+                            
+                            NotificationHelper.showFriendAcceptedNotification(
+                                    MainActivity.this,
+                                    userName,
+                                    userId
+                            );
+                        });
+            }
+        });
+    }
+    
+    /**
+     * Set the active conversation ID (called from RoomActivity)
+     * Used to prevent notifications when user is viewing the conversation
+     */
+    public static void setActiveConversationId(String conversationId) {
+        activeConversationId = conversationId;
+    }
+    
+    /**
+     * Clear the active conversation ID (called when RoomActivity is destroyed)
+     */
+    public static void clearActiveConversationId() {
+        activeConversationId = null;
+    }
 
     @Override
     protected void onResume() {
@@ -697,6 +1000,11 @@ public class MainActivity extends AppCompatActivity {
         // Clean up force logout listener
         if (forceLogoutListener != null) {
             forceLogoutListener.remove();
+        }
+        
+        // Stop NotificationService when app is finishing
+        if (isFinishing()) {
+            stopService(new Intent(this, com.example.doan_zaloclone.services.NotificationService.class));
         }
     }
 }

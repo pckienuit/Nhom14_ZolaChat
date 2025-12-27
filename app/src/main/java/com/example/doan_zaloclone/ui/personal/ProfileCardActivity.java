@@ -47,6 +47,7 @@ public class ProfileCardActivity extends AppCompatActivity {
     private String currentUserId;
     private boolean isEditable;
     private boolean areFriends = false;
+    private boolean hasPendingRequest = false;  // True if current user has sent request to this user
 
     // Views
     private ImageView btnBack; 
@@ -254,8 +255,10 @@ public class ProfileCardActivity extends AppCompatActivity {
      * Share QR code (for own profile)
      */
     private void shareQRCode() {
-        // TODO: Generate QR code image and share
-        Toast.makeText(this, "Tính năng chia sẻ QR code đang phát triển", Toast.LENGTH_SHORT).show();
+        // Open MyQRCodeActivity for full QR experience
+        android.content.Intent intent = new android.content.Intent(this, 
+            com.example.doan_zaloclone.ui.qr.MyQRCodeActivity.class);
+        startActivity(intent);
     }
 
     /**
@@ -409,6 +412,16 @@ public class ProfileCardActivity extends AppCompatActivity {
             // Allow clicking images to edit
             avatarImage.setOnClickListener(v -> pickAvatarImage());
             coverImage.setOnClickListener(v -> pickCoverImage());
+            
+            // Long press to show remove option
+            avatarImage.setOnLongClickListener(v -> {
+                showAvatarOptions();
+                return true;
+            });
+            coverImage.setOnLongClickListener(v -> {
+                showCoverOptions();
+                return true;
+            });
         }
 
         // Add friend button click listener
@@ -587,6 +600,88 @@ public class ProfileCardActivity extends AppCompatActivity {
         viewModel.uploadCover(imageUri);
     }
 
+    private void showAvatarOptions() {
+        // Get current user to check if has avatar
+        viewModel.getCurrentUser().observe(this, resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                User user = resource.getData();
+                boolean hasAvatar = user.getAvatarUrl() != null && !user.getAvatarUrl().isEmpty();
+                
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                builder.setTitle("Ảnh đại diện");
+                
+                if (hasAvatar) {
+                    builder.setItems(new CharSequence[]{"Thay đổi ảnh", "Gỡ ảnh đại diện"}, (dialog, which) -> {
+                        if (which == 0) {
+                            pickAvatarImage();
+                        } else if (which == 1) {
+                            confirmRemoveAvatar();
+                        }
+                    });
+                } else {
+                    builder.setItems(new CharSequence[]{"Thêm ảnh đại diện"}, (dialog, which) -> {
+                        pickAvatarImage();
+                    });
+                }
+                
+                builder.setNegativeButton("Hủy", null);
+                builder.show();
+            }
+        });
+    }
+
+    private void showCoverOptions() {
+        // Get current user to check if has cover
+        viewModel.getCurrentUser().observe(this, resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                User user = resource.getData();
+                boolean hasCover = user.getCoverUrl() != null && !user.getCoverUrl().isEmpty();
+                
+                AlertDialog.Builder builder = new AlertDialog.Builder(this);
+                builder.setTitle("Ảnh bìa");
+                
+                if (hasCover) {
+                    builder.setItems(new CharSequence[]{"Thay đổi ảnh bìa", "Gỡ ảnh bìa"}, (dialog, which) -> {
+                        if (which == 0) {
+                            pickCoverImage();
+                        } else if (which == 1) {
+                            confirmRemoveCover();
+                        }
+                    });
+                } else {
+                    builder.setItems(new CharSequence[]{"Thêm ảnh bìa"}, (dialog, which) -> {
+                        pickCoverImage();
+                    });
+                }
+                
+                builder.setNegativeButton("Hủy", null);
+                builder.show();
+            }
+        });
+    }
+
+    private void confirmRemoveAvatar() {
+        new AlertDialog.Builder(this)
+                .setTitle("Gỡ ảnh đại diện")
+                .setMessage("Bạn có chắc chắn muốn gỡ ảnh đại diện?")
+                .setPositiveButton("Gỡ", (dialog, which) -> {
+                    viewModel.removeAvatar();
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+
+    private void confirmRemoveCover() {
+        new AlertDialog.Builder(this)
+                .setTitle("Gỡ ảnh bìa")
+                .setMessage("Bạn có chắc chắn muốn gỡ ảnh bìa?")
+                .setPositiveButton("Gỡ", (dialog, which) -> {
+                    viewModel.removeCover();
+                })
+                .setNegativeButton("Hủy", null)
+                .show();
+    }
+
     private void showProgress(String message) {
         if (progressDialog == null) {
             progressDialog = new ProgressDialog(this);
@@ -620,6 +715,7 @@ public class ProfileCardActivity extends AppCompatActivity {
         if (user.getAvatarUrl() != null && !user.getAvatarUrl().isEmpty()) {
             Glide.with(this)
                     .load(user.getAvatarUrl())
+                    .circleCrop()
                     .placeholder(R.drawable.ic_avatar)
                     .into(avatarImage);
         }
@@ -637,11 +733,39 @@ public class ProfileCardActivity extends AppCompatActivity {
     private void checkFriendshipStatus() {
         if (currentUserId == null || userId == null) return;
 
+        // First check if already friends
         friendRepository.checkFriendship(currentUserId, userId).observe(this, resource -> {
             if (resource != null && resource.isSuccess()) {
                 areFriends = resource.getData() != null && resource.getData();
-                updateAddFriendButtonVisibility();
+                
+                if (!areFriends) {
+                    // If not friends, check if there's a pending request
+                    checkPendingFriendRequest();
+                } else {
+                    updateAddFriendButtonVisibility();
+                }
             }
+        });
+    }
+
+    /**
+     * Check if current user has sent a pending friend request to viewed user
+     */
+    private void checkPendingFriendRequest() {
+        if (currentUserId == null || userId == null) return;
+
+        friendRepository.getSentFriendRequests(currentUserId).observe(this, resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                hasPendingRequest = false;
+                for (com.example.doan_zaloclone.models.FriendRequest request : resource.getData()) {
+                    if (userId.equals(request.getToUserId()) && 
+                        "PENDING".equals(request.getStatus())) {
+                        hasPendingRequest = true;
+                        break;
+                    }
+                }
+            }
+            updateAddFriendButtonVisibility();
         });
     }
 
@@ -649,10 +773,30 @@ public class ProfileCardActivity extends AppCompatActivity {
      * Update add friend button visibility based on friendship status
      */
     private void updateAddFriendButtonVisibility() {
-        // Show button only if viewing another user's profile and not already friends
-        if (userId != null && !userId.equals(currentUserId) && !areFriends) {
-            btnAddFriend.setVisibility(View.VISIBLE);
+        if (btnAddFriend == null) return;
+        
+        // Show button only if viewing another user's profile
+        if (userId != null && !userId.equals(currentUserId)) {
+            if (areFriends) {
+                // Already friends - hide button
+                btnAddFriend.setVisibility(View.GONE);
+            } else if (hasPendingRequest) {
+                // Request already sent - show as "Đã gửi lời mời"
+                btnAddFriend.setVisibility(View.VISIBLE);
+                btnAddFriend.setText("Đã gửi lời mời");
+                btnAddFriend.setEnabled(false);
+                btnAddFriend.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.gray)));
+            } else {
+                // Not friends, no pending request - show "Kết bạn"
+                btnAddFriend.setVisibility(View.VISIBLE);
+                btnAddFriend.setText("Kết bạn");
+                btnAddFriend.setEnabled(true);
+                btnAddFriend.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(this, R.color.primary_blue)));
+            }
         } else {
+            // Own profile - hide button
             btnAddFriend.setVisibility(View.GONE);
         }
     }
@@ -681,13 +825,19 @@ public class ProfileCardActivity extends AppCompatActivity {
                                     if (friendResource.isSuccess()) {
                                         Toast.makeText(this, "Đã gửi lời mời kết bạn",
                                                 Toast.LENGTH_SHORT).show();
+                                        // Update state
+                                        hasPendingRequest = true;
                                         btnAddFriend.setText("Đã gửi lời mời");
                                         btnAddFriend.setEnabled(false);
+                                        btnAddFriend.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                                            ContextCompat.getColor(this, R.color.gray)));
                                     } else if (friendResource.isError()) {
                                         Toast.makeText(this, "Lỗi: " + friendResource.getMessage(),
                                                 Toast.LENGTH_SHORT).show();
                                         btnAddFriend.setText("Kết bạn");
                                         btnAddFriend.setEnabled(true);
+                                        btnAddFriend.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                                            ContextCompat.getColor(this, R.color.primary_blue)));
                                     }
                                 }
                             });

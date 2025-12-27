@@ -1,0 +1,38 @@
+# WebSocket Real-time Test - Quick Checklist ☑️
+
+## Setup (2 minutes)
+- [ ] Backend server running (`npm start`)
+- [ ] App built with latest code
+- [ ] Device A: Emulator/phone logged in as User A
+- [ ] Device B: Emulator/phone logged in as User B
+
+## Test A → B (30 seconds)
+- [ ] Device A: Open conversation with User B
+- [ ] Device B: Open SAME conversation
+- [ ] Device A: Send "Hello from A 🚀"
+- [ ] Device B: Message appears **within 2 seconds** (no refresh!)
+- [ ] ✅ PASS if automatic / ❌ FAIL if need to reload
+
+## Test B → A (30 seconds)  
+- [ ] Device B: Send "Reply from B ✨"
+- [ ] Device A: Message appears **within 2 seconds**
+- [ ] ✅ PASS if automatic
+
+## Backend Logs (check terminal)
+- [ ] See: `POST /api/chats/.../messages`
+- [ ] See: `Broadcasting new_message to conversation: ...`
+- [ ] See: `Delivered to X clients` (X >= 2)
+
+## Android Logcat (Device B)
+- [ ] See: `📨 New message received`
+- [ ] See: `Parsing WebSocket message`
+- [ ] See: `Adding message to cached list`
+
+## Result
+- [ ] ✅ **ALL PASS** → Real-time working! Phase 3 COMPLETE! 🎉
+- [ ] ❌ **ANY FAIL** → Check WEBSOCKET_REALTIME_TEST.md troubleshooting
+
+---
+
+**Total test time: ~2-3 minutes**
+**Impact: Confirms entire WebSocket architecture!**

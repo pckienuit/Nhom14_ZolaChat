@@ -1,0 +1,403 @@
+# Friend Requests Real-time Updates & UX Improvements
+
+**Ngày:** 25/12/2024  
+**Phiên bản:** 1.0
+
+---
+
+## 📋 Tổng quan
+
+Tài liệu này mô tả các cải tiến về **cập nhật real-time** cho tính năng lời mời kết bạn và **cải thiện UX** trong ứng dụng ZaloClone.
+
+### Vấn đề trước khi sửa:
+1. ❌ Danh sách lời mời không tự động cập nhật khi có thay đổi
+2. ❌ Không có tính năng thu hồi lời mời đã gửi
+3. ❌ UI không phản hồi real-time khi lời mời bị từ chối/chấp nhận
+4. ❌ Navigation không thuận tiện (icon settings thay vì add friend)
+
+### Giải pháp:
+1. ✅ WebSocket event listeners cho tất cả friend request events
+2. ✅ API endpoint để cancel/recall friend requests
+3. ✅ Button state management với real-time updates
+4. ✅ Cải thiện navigation với icon dấu cộng
+
+---
+
+## 🔧 Các thay đổi chính
+
+### 1. **Real-time Friend Updates qua WebSocket**
+
+#### Backend: Socket.IO Events
+**File:** `server/src/routes/friends.js`
+
+Các event được emit:
+```javascript
+// Event khi có lời mời mới
+io.to(`user:${receiverId}`).emit('friend_request_received', {
+    requestId, senderId, senderName, senderEmail
+});
+
+// Event khi lời mời được chấp nhận
+io.to(`user:${senderId}`).emit('friend_request_accepted', { userId });
+
+// Event khi lời mời bị từ chối
+io.to(`user:${senderId}`).emit('friend_request_rejected', { userId });
+
+// Event khi lời mời bị thu hồi
+io.to(`user:${receiverId}`).emit('friend_request_cancelled', {
+    requestId, senderId
+});
+
+// Event khi thêm/xóa bạn
+io.to(`user:${userId}`).emit('friend_added', { userId: friendId });
+io.to(`user:${friendId}`).emit('friend_removed', { userId });
+```
+
+#### Frontend: SocketManager
+**File:** `app/.../websocket/SocketManager.java`
+
+**Thay đổi:**
+- Đổi từ **single listener** → **list of listeners** pattern
+- Cho phép nhiều fragments lắng nghe cùng lúc
+
+```java
+// Interface cập nhật
+public interface OnFriendEventListener {
+    void onFriendRequestReceived(String senderId, String senderName);
+    void onFriendRequestAccepted(String userId);
+    void onFriendRequestRejected(String userId);
+    void onFriendRequestCancelled(String senderId);  // ⭐ Mới
+    void onFriendAdded(String userId);
+    void onFriendRemoved(String userId);
+}
+
+// Quản lý listeners
+private CopyOnWriteArrayList<OnFriendEventListener> friendEventListeners;
+
+public void addFriendEventListener(OnFriendEventListener listener);
+public void removeFriendEventListener(OnFriendEventListener listener);
+```
+
+#### Fragments cập nhật:
+
+**1. FriendRequestReceivedFragment**
+```java
+@Override
+public void onFriendRequestCancelled(String senderId) {
+    // Người gửi thu hồi → Reload danh sách
+    runOnUiThread(() -> {
+        Toast.makeText(getContext(), "Lời mời kết bạn đã bị thu hồi", Toast.LENGTH_SHORT).show();
+        loadRequests();
+    });
+}
+```
+
+**2. FriendRequestSentFragment**
+```java
+@Override
+public void onFriendRequestRejected(String userId) {
+    // Bị từ chối → Reload danh sách
+    runOnUiThread(() -> {
+        Toast.makeText(getContext(), "Lời mời kết bạn đã bị từ chối", Toast.LENGTH_SHORT).show();
+        loadRequests();
+    });
+}
+```
+
+**3. ContactFragment**
+```java
+@Override
+public void onFriendAdded(String userId) {
+    // Thêm bạn → Reload danh sách bạn bè
+    runOnUiThread(() -> loadFriends());
+}
+```
+
+---
+
+### 2. **Thu hồi lời mời kết bạn (Friend Request Cancellation)**
+
+#### Backend API
+**File:** `server/src/routes/friends.js`
+
+**Endpoint mới:**
+```javascript
+DELETE /api/friends/requests/:requestId
+```
+
+**Chức năng:**
+- Xác thực người dùng là sender
+- Xác nhận status = 'pending'
+- Xóa friend request khỏi Firestore
+- Emit WebSocket event `friend_request_cancelled` cho receiver
+
+**Security:**
+```javascript
+// Chỉ sender mới được cancel
+if (requestData.senderId !== req.user.uid) {
+    return res.status(403).json({ 
+        error: 'You can only cancel your own friend requests' 
+    });
+}
+
+// Chỉ cancel được pending requests
+if (requestData.status !== 'pending') {
+    return res.status(400).json({ 
+        error: 'Can only cancel pending requests' 
+    });
+}
+```
+
+#### Frontend
+**Files:** 
+- `FriendRepository.java` - `cancelFriendRequest(requestId)`
+- `ContactViewModel.java` - Expose cancel method
+- `FriendRequestSentFragment.java` - UI implementation
+
+**Flow:**
+```
+User nhấn "Thu hồi"
+  ↓
+Hiển thị confirmation dialog
+  ↓
+Call ViewModel.cancelFriendRequest()
+  ↓
+API DELETE request
+  ↓
+Server emit WebSocket event
+  ↓
+Receiver's UI tự động cập nhật
+```
+
+---
+
+### 3. **UX Improvements**
+
+#### 3.1. Smart Button States
+**File:** `AddFriendActivity.java`
+
+**Button State Machine:**
+```
+"KẾT BẠN" (xanh)
+    ↓ [Click]
+"THU HỒI" (đỏ) ← Có thể cancel ngay
+    ↓ [Người kia chấp nhận]
+"ĐÃ LÀ BẠN BÈ" (disabled)
+
+"THU HỒI" (đỏ)
+    ↓ [Người kia từ chối hoặc user nhấn THU HỒI]
+"KẾT BẠN" (xanh) ← Reset, có thể gửi lại
+```
+
+**Real-time updates:**
+```java
+private void setupWebSocketListener() {
+    friendEventListener = new SocketManager.OnFriendEventListener() {
+        @Override
+        public void onFriendRequestRejected(String userId) {
+            if (foundUser != null && foundUser.getId().equals(userId)) {
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Lời mời đã bị từ chối", Toast.LENGTH_SHORT).show();
+                    resetButtonToAddFriend(); // Reset về "KẾT BẠN"
+                });
+            }
+        }
+    };
+}
+```
+
+#### 3.2. Navigation Improvement
+**Files:**
+- `activity_friend_request.xml`
+- `FriendRequestActivity.java`
+
+**Thay đổi:**
+- Icon ⚙️ (settings) → ➕ (add)
+- Click navigate → `AddFriendActivity`
+
+**Lợi ích UX:**
+- Từ màn "Lời mời kết bạn" → Dễ dàng chuyển sang "Thêm bạn"
+- Icon trực quan, rõ ràng mục đích
+
+---
+
+## 📊 Flow Chart
+
+### Friend Request Lifecycle
+
+```
+[User A] ────────────► [User B]
+   │                      │
+   │  1. Gửi lời mời     │
+   │  (friend_request)    │
+   │─────────────────────►│
+   │                      │ ✅ Chấp nhận
+   │◄─────────────────────│ (friend_request_accepted)
+   │                      │
+   │  friend_added        │  friend_added
+   │◄─────────────────────┼─────────────────►│
+   │                      │
+
+HOẶC:
+   │                      │
+   │  1. Gửi lời mời     │
+   │─────────────────────►│
+   │                      │ ❌ Từ chối
+   │◄─────────────────────│ (friend_request_rejected)
+   │                      │
+   │  Button reset        │
+
+HOẶC:
+   │                      │
+   │  1. Gửi lời mời     │
+   │─────────────────────►│
+   │  2. Thu hồi          │
+   │─────────────────────►│ (friend_request_cancelled)
+   │                      │
+   │                      │ Request biến mất
+```
+
+---
+
+## 🔐 Security & Validation
+
+### Server-side Checks
+```javascript
+// 1. Authentication required
+router.delete('/requests/:requestId', authenticateUser, ...);
+
+// 2. Ownership verification
+if (requestData.senderId !== req.user.uid) {
+    return res.status(403).json({ error: 'Forbidden' });
+}
+
+// 3. Status validation
+if (requestData.status !== 'pending') {
+    return res.status(400).json({ error: 'Invalid status' });
+}
+```
+
+### Client-side Validation
+```java
+// Kiểm tra requestId tồn tại
+if (currentRequestId == null) {
+    Toast.makeText(this, "Không tìm thấy lời mời", Toast.LENGTH_SHORT).show();
+    return;
+}
+
+// Confirmation dialog trước khi cancel
+new AlertDialog.Builder(getContext())
+    .setTitle("Thu hồi lời mời")
+    .setMessage("Bạn có chắc muốn thu hồi?")
+    .setPositiveButton("Thu hồi", ...)
+    .setNegativeButton("Huỷ", null)
+    .show();
+```
+
+---
+
+## 🚀 Deployment
+
+### 1. Deploy Server
+```bash
+# Upload friends.js với DELETE endpoint
+scp d:\DoAn_ZaloClone\server\src\routes\friends.js root@163.61.182.20:/opt/zaloclone-api/src/routes/friends.js
+
+# Restart server
+ssh root@163.61.182.20 "pm2 restart zaloclone-api"
+```
+
+### 2. Build Android App
+```bash
+# Build debug APK
+gradlew assembleDebug
+
+# Build release APK
+gradlew assembleRelease
+```
+
+---
+
+## ✅ Testing Checklist
+
+### Real-time Updates
+- [ ] Gửi lời mời → Tab "Đã nhận" của người kia cập nhật ngay
+- [ ] Chấp nhận lời mời → Tab "Đã gửi" của người gửi cập nhật
+- [ ] Từ chối lời mời → Tab "Đã gửi" cập nhật, button reset
+- [ ] Thu hồi lời mời → Tab "Đã nhận" của người kia cập nhật
+
+### Friend Request Cancellation
+- [ ] Nhấn "Thu hồi" → Hiện confirmation dialog
+- [ ] Confirm → Request bị xóa khỏi cả 2 bên
+- [ ] Receiver nhận toast "Lời mời đã bị thu hồi"
+- [ ] Sender thấy button reset về "KẾT BẠN"
+
+### Button State Management
+- [ ] "KẾT BẠN" → Gửi → "THU HỒI" (màu đỏ)
+- [ ] "THU HỒI" → Cancel → "KẾT BẠN" (màu xanh)
+- [ ] Bị từ chối → Auto reset về "KẾT BẠN"
+- [ ] Được chấp nhận → "ĐÃ LÀ BẠN BÈ" (disabled)
+
+### Navigation
+- [ ] Icon dấu cộng hiển thị đúng
+- [ ] Click → Navigate sang AddFriendActivity
+- [ ] Back button hoạt động bình thường
+
+---
+
+## 📝 Code Summary
+
+### Files Modified
+
+#### Server (3 files)
+1. `server/src/routes/friends.js` - DELETE endpoint
+2. `server/src/index.js` - Rate limiting adjusted
+3. WebSocket events emitted
+
+#### Android (10 files)
+1. `websocket/SocketManager.java` - Multiple listeners pattern
+2. `api/ApiService.java` - DELETE method
+3. `repository/FriendRepository.java` - `cancelFriendRequest()`
+4. `viewmodel/ContactViewModel.java` - Expose method
+5. `ui/contact/ContactFragment.java` - Event handling
+6. `ui/contact/tabs/FriendRequestSentFragment.java` - Recall UI
+7. `ui/contact/tabs/FriendRequestReceivedFragment.java` - Real-time update
+8. `ui/contact/AddFriendActivity.java` - Smart button states
+9. `ui/contact/FriendRequestActivity.java` - Navigation
+10. `MainActivity.java` - Event listener
+11. `res/layout/activity_friend_request.xml` - Icon change
+
+### Lines of Code
+- **Added:** ~350 lines
+- **Modified:** ~150 lines
+- **Deleted:** ~50 lines
+
+---
+
+## 🐛 Known Issues & Limitations
+
+### Current Limitations
+1. Button state chỉ lưu trong memory, không persist qua app restart
+2. Cần network để cập nhật real-time
+3. Không có offline queue cho cancel requests
+
+### Future Improvements
+1. **Persistent State:** Lưu request status vào local database
+2. **Offline Support:** Queue cancel actions khi offline
+3. **Batch Operations:** Cho phép thu hồi nhiều requests cùng lúc
+4. **Analytics:** Track cancel rate để cải thiện UX
+
+---
+
+## 📚 References
+
+- [Socket.IO Documentation](https://socket.io/docs/)
+- [Firebase Firestore Security Rules](https://firebase.google.com/docs/firestore/security/get-started)
+- [Android WebSocket Best Practices](https://developer.android.com/training/basics/network-ops)
+- [Material Design - Button States](https://material.io/components/buttons)
+
+---
+
+**Tác giả:** Development Team  
+**Reviewer:** QA Team  
+**Last Updated:** 25/12/2024 20:36

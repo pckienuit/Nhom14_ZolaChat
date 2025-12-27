@@ -227,6 +227,7 @@ public class PersonalFragment extends Fragment {
         if (user.getAvatarUrl() != null && !user.getAvatarUrl().isEmpty()) {
             Glide.with(this)
                     .load(user.getAvatarUrl())
+                    .circleCrop()
                     .placeholder(R.drawable.ic_avatar)
                     .into(avatarImage);
         }

@@ -4,8 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="@color/white"
-    android:paddingBottom="16dp">
+    android:background="@color/white">
 
     <!-- Handle bar for bottom sheet -->
     <View
@@ -21,14 +20,16 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:paddingHorizontal="8dp">
+        android:paddingHorizontal="8dp"
+        android:background="@color/white"
+        android:elevation="2dp">
 
         <!-- Recent stickers tab -->
         <FrameLayout
             android:id="@+id/tabRecent"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:padding="8dp"
+            android:padding="10dp"
             android:clickable="true"
             android:focusable="true"
             android:foreground="?attr/selectableItemBackgroundBorderless">
@@ -37,13 +38,14 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:src="@drawable/ic_history"
-                android:contentDescription="Recent" />
+                app:tint="@color/colorPrimary"
+                android:contentDescription="Gần đây" />
         </FrameLayout>
 
         <!-- Divider -->
         <View
             android:layout_width="1dp"
-            android:layout_height="32dp"
+            android:layout_height="28dp"
             android:layout_gravity="center_vertical"
             android:layout_marginHorizontal="4dp"
             android:background="#E0E0E0" />
@@ -70,7 +72,8 @@
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/stickerPager"
         android:layout_width="match_parent"
-        android:layout_height="280dp" />
+        android:layout_height="280dp"
+        android:background="@color/zalo_background_gray" />
 
     <!-- Bottom action bar -->
     <LinearLayout
@@ -78,29 +81,67 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingHorizontal="16dp"
-        android:paddingTop="8dp">
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="8dp"
+        android:background="@color/white"
+        android:elevation="4dp">
 
         <!-- Add custom sticker button -->
-        <ImageButton
+        <LinearLayout
             android:id="@+id/btnAddSticker"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_add_circle"
-            android:contentDescription="Tạo sticker"
-            android:tint="#666666" />
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="8dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_add_circle"
+                app:tint="@color/colorPrimary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="Tạo"
+                android:textColor="@color/colorPrimary"
+                android:textSize="13sp" />
+
+        </LinearLayout>
 
         <!-- Sticker store button -->
-        <ImageButton
+        <LinearLayout
             android:id="@+id/btnStickerStore"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="8dp"
             android:layout_marginStart="8dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@drawable/ic_store"
-            android:contentDescription="Cửa hàng sticker"
-            android:tint="#666666" />
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_store"
+                app:tint="@color/colorPrimary" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="Cửa hàng"
+                android:textColor="@color/colorPrimary"
+                android:textSize="13sp" />
+
+        </LinearLayout>
 
         <View
             android:layout_width="0dp"
@@ -112,9 +153,10 @@
             android:id="@+id/btnMyStickers"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Sticker của tôi"
-            android:textColor="#0068FF"
-            android:textSize="14sp"
+            android:text="Sticker của tôi >"
+            android:textColor="@color/colorPrimary"
+            android:textSize="13sp"
+            android:textStyle="bold"
             android:padding="8dp"
             android:clickable="true"
             android:focusable="true"

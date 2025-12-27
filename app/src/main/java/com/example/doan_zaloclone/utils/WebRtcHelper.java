@@ -2,6 +2,8 @@ package com.example.doan_zaloclone.utils;
 
 import android.content.Context;
 
+import com.example.doan_zaloclone.BuildConfig;
+
 import org.webrtc.DefaultVideoDecoderFactory;
 import org.webrtc.DefaultVideoEncoderFactory;
 import org.webrtc.EglBase;
@@ -41,11 +43,11 @@ public class WebRtcHelper {
         iceServers.add(PeerConnection.IceServer.builder(STUN_SERVER_3).createIceServer());
 
         // ============================================================
-        // TURN SERVER - Self-hosted Coturn VPS (UDP supported)
+        // TURN SERVER - Self-hosted Coturn VPS (credentials from BuildConfig)
         // ============================================================
-        String coturnUsername = "pckien";
-        String coturnCredential = "18092005";
-        String coturnServer = "163.61.182.20";
+        String coturnUsername = BuildConfig.TURN_SERVER_USERNAME;
+        String coturnCredential = BuildConfig.TURN_SERVER_PASSWORD;
+        String coturnServer = BuildConfig.TURN_SERVER_HOST;
 
         // TURN UDP (preferred for media)
         iceServers.add(

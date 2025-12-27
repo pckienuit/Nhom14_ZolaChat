@@ -60,6 +60,8 @@ public class RoomActivity extends AppCompatActivity {
     private final List<FilePreviewAdapter.FileItem> selectedFilesForPreview = new ArrayList<>();
     private Toolbar toolbar;
     private TextView titleTextView;
+    private TextView subtitleTextView;
+    private androidx.swiperefreshlayout.widget.SwipeRefreshLayout swipeRefreshLayout;
     private RecyclerView messagesRecyclerView;
     private EditText messageEditText;
     private ImageButton sendButton;
@@ -146,7 +148,7 @@ public class RoomActivity extends AppCompatActivity {
         // Initialize ViewModel
         roomViewModel = new ViewModelProvider(this).get(RoomViewModel.class);
         contactViewModel = new ViewModelProvider(this).get(ContactViewModel.class);
-        chatRepository = new ChatRepository(); // For legacy image upload operations
+        chatRepository = ChatRepository.getInstance(); // Singleton for all chat operations
         conversationRepository = com.example.doan_zaloclone.repository.ConversationRepository.getInstance();
         firebaseAuth = FirebaseAuth.getInstance();
 
@@ -265,6 +267,10 @@ public class RoomActivity extends AppCompatActivity {
 
         // Check if we should auto-start a call (from business card)
         checkAutoStartCall();
+        
+        // Set active conversation to prevent notifications
+        com.example.doan_zaloclone.services.NotificationService.setActiveConversation(this, conversationId);
+        com.example.doan_zaloclone.MainActivity.setActiveConversationId(conversationId);
     }
 
     /**
@@ -321,11 +327,16 @@ public class RoomActivity extends AppCompatActivity {
 
         toolbar = findViewById(R.id.toolbar);
         titleTextView = findViewById(R.id.titleTextView);
+        subtitleTextView = findViewById(R.id.subtitleTextView);
+        swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
         messagesRecyclerView = findViewById(R.id.messagesRecyclerView);
         messageEditText = findViewById(R.id.messageEditText);
         sendButton = findViewById(R.id.sendButton);
         attachImageButton = findViewById(R.id.attachImageButton);
         stickerButton = findViewById(R.id.stickerButton);
+
+        // Setup SwipeRefreshLayout
+        setupSwipeRefresh();
 
         // Input container
         inputContainer = findViewById(R.id.inputContainer);
@@ -348,12 +359,18 @@ public class RoomActivity extends AppCompatActivity {
         ImageButton videoCallButton = findViewById(R.id.videoCallButton);
         ImageButton voiceCallButton = findViewById(R.id.voiceCallButton);
         ImageButton fileManagementButton = findViewById(R.id.fileManagementButton);
+        
+        // Menu button in toolbar
+        ImageButton menuButton = findViewById(R.id.menuButton);
 
         // Setup call button listeners
         if (videoCallButton != null) videoCallButton.setOnClickListener(v -> startCall(true));
         if (voiceCallButton != null) voiceCallButton.setOnClickListener(v -> startCall(false));
          // Compatibility check for hidden buttons
         if (fileManagementButton != null) fileManagementButton.setOnClickListener(v -> openFileManagement());
+        
+        // Setup menu button to open file management
+        if (menuButton != null) menuButton.setOnClickListener(v -> openFileManagement());
 
         // Initialize QuickActionManager
         quickActionManager = com.example.doan_zaloclone.ui.room.actions.QuickActionManager.getInstance();
@@ -1587,6 +1604,62 @@ public class RoomActivity extends AppCompatActivity {
                 });
     }
 
+    /**
+     * Setup SwipeRefreshLayout for pull-to-refresh messages
+     */
+    private void setupSwipeRefresh() {
+        if (swipeRefreshLayout == null) return;
+
+        // Set Zalo blue color for refresh indicator
+        swipeRefreshLayout.setColorSchemeResources(
+                R.color.colorPrimary,
+                R.color.colorPrimaryDark
+        );
+
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            android.util.Log.d("RoomActivity", "🔄 Pull-to-refresh triggered");
+            refreshMessages();
+        });
+    }
+
+    /**
+     * Refresh messages manually
+     */
+    private void refreshMessages() {
+        if (conversationId == null) {
+            swipeRefreshLayout.setRefreshing(false);
+            return;
+        }
+
+        // Force reload messages from server
+        chatRepository.refreshMessages(conversationId, new ChatRepository.MessagesListener() {
+            @Override
+            public void onMessagesChanged(List<Message> newMessages) {
+                runOnUiThread(() -> {
+                    android.util.Log.d("RoomActivity", "🔄 Refresh completed: " + newMessages.size() + " messages");
+                    
+                    // Update local cache
+                    messages = newMessages;
+                    messageAdapter.updateMessages(newMessages);
+                    
+                    // Stop refresh animation
+                    swipeRefreshLayout.setRefreshing(false);
+                    
+                    Toast.makeText(RoomActivity.this, "Đã cập nhật tin nhắn", Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    android.util.Log.e("RoomActivity", "🔄 Refresh failed: " + error);
+                    swipeRefreshLayout.setRefreshing(false);
+                    Toast.makeText(RoomActivity.this, "Lỗi tải tin nhắn: " + error, Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
+
     private void setupRecyclerView() {
         String currentUserId = firebaseAuth.getCurrentUser() != null
                 ? firebaseAuth.getCurrentUser().getUid()
@@ -1766,12 +1839,17 @@ public class RoomActivity extends AppCompatActivity {
     private void observeViewModel() {
         // Observe messages via ViewModel
         roomViewModel.getMessages(conversationId).observe(this, resource -> {
+            android.util.Log.d("RoomActivity", "📬 Messages observer triggered, resource status: " + 
+                (resource != null ? (resource.isSuccess() ? "SUCCESS" : resource.isError() ? "ERROR" : "LOADING") : "NULL"));
+            
             if (resource == null) return;
 
             if (resource.isSuccess()) {
                 List<Message> newMessages = resource.getData();
 
                 if (newMessages != null) {
+                    android.util.Log.d("RoomActivity", "📬 Received " + newMessages.size() + " messages, calling adapter.updateMessages()");
+                    
                     // Check if this is a new message addition (not just an update)
                     int oldSize = messages != null ? messages.size() : 0;
                     int newSize = newMessages.size();
@@ -1911,6 +1989,8 @@ public class RoomActivity extends AppCompatActivity {
                                     if (!memberId.equals(currentUserId)) {
                                         otherUserId = memberId;
                                         checkFriendship();
+                                        // Fetch and display last seen status
+                                        fetchUserOnlineStatus(memberId);
                                         break;
                                     }
                                 }
@@ -1919,6 +1999,10 @@ public class RoomActivity extends AppCompatActivity {
                             // For group chats, no message limit
                             areFriends = true; // Treat as friends to bypass limit
                             android.util.Log.d("RoomActivity", "Group chat - no message limit");
+                            // Hide subtitle for group chats
+                            if (subtitleTextView != null) {
+                                subtitleTextView.setVisibility(View.GONE);
+                            }
                         }
                     }
                 });
@@ -1939,6 +2023,89 @@ public class RoomActivity extends AppCompatActivity {
         });
     }
 
+    /**
+     * Fetch and display user's online status (last seen) in the subtitle
+     */
+    private void fetchUserOnlineStatus(String userId) {
+        if (userId == null || userId.isEmpty()) return;
+
+        com.example.doan_zaloclone.services.FirestoreManager.getInstance()
+                .getFirestore()
+                .collection("users")
+                .document(userId)
+                .addSnapshotListener((doc, error) -> {
+                    if (error != null) {
+                        android.util.Log.e("RoomActivity", "Error listening to user status", error);
+                        return;
+                    }
+
+                    if (doc != null && doc.exists()) {
+                        Boolean isOnline = doc.getBoolean("isOnline");
+                        Long lastSeen = doc.getLong("lastSeen");
+
+                        updateLastSeenSubtitle(isOnline != null && isOnline, lastSeen);
+                    }
+                });
+    }
+
+    /**
+     * Update the subtitle text view with online/last seen status
+     */
+    private void updateLastSeenSubtitle(boolean isOnline, Long lastSeenTimestamp) {
+        if (subtitleTextView == null) return;
+
+        runOnUiThread(() -> {
+            if (isOnline) {
+                // Check if last seen is within 5 minutes (not stale)
+                long now = System.currentTimeMillis();
+                boolean isRecent = lastSeenTimestamp != null && (now - lastSeenTimestamp) < 5 * 60 * 1000;
+                
+                if (isRecent || lastSeenTimestamp == null) {
+                    subtitleTextView.setText("Đang hoạt động");
+                    subtitleTextView.setVisibility(View.VISIBLE);
+                } else {
+                    // isOnline but stale lastSeen - treat as offline
+                    String lastSeenText = formatLastSeen(lastSeenTimestamp);
+                    subtitleTextView.setText(lastSeenText);
+                    subtitleTextView.setVisibility(View.VISIBLE);
+                }
+            } else if (lastSeenTimestamp != null && lastSeenTimestamp > 0) {
+                String lastSeenText = formatLastSeen(lastSeenTimestamp);
+                subtitleTextView.setText(lastSeenText);
+                subtitleTextView.setVisibility(View.VISIBLE);
+            } else {
+                subtitleTextView.setVisibility(View.GONE);
+            }
+        });
+    }
+
+    /**
+     * Format timestamp to human readable "last seen" text
+     */
+    private String formatLastSeen(long timestamp) {
+        long now = System.currentTimeMillis();
+        long diff = now - timestamp;
+
+        // Convert to minutes
+        long minutes = diff / (1000 * 60);
+        long hours = diff / (1000 * 60 * 60);
+        long days = diff / (1000 * 60 * 60 * 24);
+
+        if (minutes < 1) {
+            return "Vừa mới truy cập";
+        } else if (minutes < 60) {
+            return "Hoạt động " + minutes + " phút trước";
+        } else if (hours < 24) {
+            return "Hoạt động " + hours + " giờ trước";
+        } else if (days < 7) {
+            return "Hoạt động " + days + " ngày trước";
+        } else {
+            // Format as date
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault());
+            return "Hoạt động " + sdf.format(new java.util.Date(timestamp));
+        }
+    }
+
     private int countMyMessages() {
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
         int count = 0;
@@ -1955,12 +2122,22 @@ public class RoomActivity extends AppCompatActivity {
     private void setupListeners() {
         sendButton.setOnClickListener(v -> handleSendMessage());
         attachImageButton.setOnClickListener(v -> requestPermissionAndShowPicker());
-        moreActionsButton.setOnClickListener(v -> showActionMenu());
+        moreActionsButton.setOnClickListener(v -> toggleActionMenu());
         backButton.setOnClickListener(v -> hideImagePicker());
         sendImagesButton.setOnClickListener(v -> handleSendImages());
 
         // Sticker button
         stickerButton.setOnClickListener(v -> showStickerPicker());
+
+        // Close action menu when user clicks/touches input field
+        messageEditText.setOnTouchListener((v, event) -> {
+            if (event.getAction() == android.view.MotionEvent.ACTION_DOWN) {
+                if (actionMenuContainer != null && actionMenuContainer.getVisibility() == View.VISIBLE) {
+                    hideActionMenu();
+                }
+            }
+            return false; // Let the EditText handle the touch event normally
+        });
 
         // TextWatcher to toggle Send button visibility
         messageEditText.addTextChangedListener(new android.text.TextWatcher() {
@@ -2349,6 +2526,14 @@ public class RoomActivity extends AppCompatActivity {
     }
 
     // ============ ACTION MENU METHODS ============
+
+    private void toggleActionMenu() {
+        if (actionMenuContainer.getVisibility() == View.VISIBLE) {
+            hideActionMenu();
+        } else {
+            showActionMenu();
+        }
+    }
 
     private void showActionMenu() {
         // Hide keyboard
@@ -3459,5 +3644,9 @@ public class RoomActivity extends AppCompatActivity {
         if (isPlaying) {
             pauseAudio();
         }
+        
+        // Clear active conversation to resume notifications
+        com.example.doan_zaloclone.services.NotificationService.clearActiveConversation(this);
+        com.example.doan_zaloclone.MainActivity.clearActiveConversationId();
     }
 }

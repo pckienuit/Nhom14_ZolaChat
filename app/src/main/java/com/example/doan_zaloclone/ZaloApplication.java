@@ -16,11 +16,11 @@ public class ZaloApplication extends Application {
     public void onCreate() {
         super.onCreate();
 
-        // Initialize Cloudinary
+        // Initialize Cloudinary (credentials injected from local.properties)
         Map<String, String> config = new HashMap<>();
-        config.put("cloud_name", "do0mdssvu");
-        config.put("api_key", "248235972111755");
-        config.put("api_secret", "9hnWcqIA7en-XduIpo1f3C1CdIg");
+        config.put("cloud_name", BuildConfig.CLOUDINARY_CLOUD_NAME);
+        config.put("api_key", BuildConfig.CLOUDINARY_API_KEY);
+        config.put("api_secret", BuildConfig.CLOUDINARY_API_SECRET);
 
         MediaManager.init(this, config);
 

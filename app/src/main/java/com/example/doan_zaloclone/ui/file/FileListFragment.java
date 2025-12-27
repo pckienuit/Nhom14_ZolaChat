@@ -195,6 +195,15 @@ public class FileListFragment extends Fragment {
 
         MenuItem searchItem = menu.findItem(R.id.action_search);
         if (searchItem != null) {
+            // Set icon tint to white
+            android.graphics.drawable.Drawable icon = searchItem.getIcon();
+            if (icon != null) {
+                icon = androidx.core.graphics.drawable.DrawableCompat.wrap(icon);
+                androidx.core.graphics.drawable.DrawableCompat.setTint(icon, 
+                    androidx.core.content.ContextCompat.getColor(requireContext(), R.color.white));
+                searchItem.setIcon(icon);
+            }
+            
             searchView = (SearchView) searchItem.getActionView();
             setupSearchView();
         }

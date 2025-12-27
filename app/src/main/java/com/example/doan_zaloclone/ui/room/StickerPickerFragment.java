@@ -21,6 +21,7 @@ import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Sticker;
 import com.example.doan_zaloclone.models.StickerPack;
 import com.example.doan_zaloclone.repository.StickerRepository;
+import com.example.doan_zaloclone.ui.sticker.MyStickerActivity;
 import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.firebase.auth.FirebaseAuth;
@@ -39,8 +40,8 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
     private RecyclerView packTabsRecycler;
     private ViewPager2 stickerPager;
     private FrameLayout tabRecent;
-    private ImageButton btnAddSticker;
-    private ImageButton btnStickerStore;
+    private View btnAddSticker;
+    private View btnStickerStore;
     private TextView btnMyStickers;
 
     // Adapters
@@ -172,8 +173,8 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
 
         // My stickers button
         btnMyStickers.setOnClickListener(v -> {
-            // TODO: Open My Stickers section
-            Toast.makeText(requireContext(), "Sticker của tôi (coming soon)", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(requireContext(), MyStickerActivity.class);
+            startActivity(intent);
         });
     }
 

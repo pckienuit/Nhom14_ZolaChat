@@ -85,6 +85,7 @@ public class SenderFilterAdapter extends RecyclerView.Adapter<SenderFilterAdapte
             if (sender.getSenderAvatarUrl() != null && !sender.getSenderAvatarUrl().isEmpty()) {
                 Glide.with(itemView.getContext())
                         .load(sender.getSenderAvatarUrl())
+                        .circleCrop()
                         .placeholder(R.drawable.ic_person)
                         .into(avatar);
             } else {
