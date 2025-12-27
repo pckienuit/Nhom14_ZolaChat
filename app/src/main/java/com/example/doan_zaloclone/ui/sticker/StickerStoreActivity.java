@@ -2,15 +2,17 @@ package com.example.doan_zaloclone.ui.sticker;
 
 import android.os.Bundle;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.Toolbar;
 import androidx.lifecycle.Observer;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.StickerPack;
@@ -26,6 +28,11 @@ import java.util.List;
 public class StickerStoreActivity extends AppCompatActivity {
     private static final String TAG = "StickerStoreActivity";
 
+    private ImageView btnBack;
+    private ImageView btnSearch;
+    private SwipeRefreshLayout swipeRefreshLayout;
+    private View myStickersSection;
+    private TextView txtMyStickersCount;
     private RecyclerView featuredRecyclerView;
     private RecyclerView trendingRecyclerView;
     private RecyclerView newRecyclerView;
@@ -41,6 +48,10 @@ public class StickerStoreActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Make status bar transparent
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        
         setContentView(R.layout.activity_sticker_store);
 
         initViews();
@@ -49,12 +60,19 @@ public class StickerStoreActivity extends AppCompatActivity {
     }
 
     private void initViews() {
-        Toolbar toolbar = findViewById(R.id.toolbar);
-        setSupportActionBar(toolbar);
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setDisplayShowHomeEnabled(true);
-        }
+        // Header views
+        btnBack = findViewById(R.id.btnBack);
+        btnSearch = findViewById(R.id.btnSearch);
+        
+        // SwipeRefreshLayout
+        swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
+        swipeRefreshLayout.setColorSchemeResources(R.color.colorPrimary, R.color.colorPrimaryDark);
+        swipeRefreshLayout.setOnRefreshListener(this::loadStores);
+        
+        // My stickers section
+        myStickersSection = findViewById(R.id.myStickersSection);
+        txtMyStickersCount = findViewById(R.id.txtMyStickersCount);
+        myStickersSection.setOnClickListener(v -> openMyStickers());
 
         featuredRecyclerView = findViewById(R.id.featuredRecyclerView);
         trendingRecyclerView = findViewById(R.id.trendingRecyclerView);
@@ -65,6 +83,14 @@ public class StickerStoreActivity extends AppCompatActivity {
         setupRecyclerView(featuredRecyclerView, true); // Horizontal
         setupRecyclerView(trendingRecyclerView, false); // Grid
         setupRecyclerView(newRecyclerView, false); // Grid
+        
+        // Back button
+        btnBack.setOnClickListener(v -> finish());
+        
+        // Search button
+        btnSearch.setOnClickListener(v -> {
+            Toast.makeText(this, "Tìm kiếm sticker đang phát triển", Toast.LENGTH_SHORT).show();
+        });
     }
 
     private void setupRecyclerView(RecyclerView recyclerView, boolean horizontal) {
@@ -110,6 +136,9 @@ public class StickerStoreActivity extends AppCompatActivity {
     private void loadStores() {
         showLoading(true);
 
+        // Load user's sticker packs count
+        loadMyStickersCount();
+
         // Load featured packs
         stickerRepository.getFeaturedPacks().observe(this, new Observer<Resource<List<StickerPack>>>() {
             @Override
@@ -141,6 +170,7 @@ public class StickerStoreActivity extends AppCompatActivity {
             @Override
             public void onChanged(Resource<List<StickerPack>> resource) {
                 showLoading(false);
+                swipeRefreshLayout.setRefreshing(false);
                 if (resource.isSuccess()) {
                     newAdapter.setPacks(resource.getData());
                 } else if (resource.isError()) {
@@ -149,6 +179,22 @@ public class StickerStoreActivity extends AppCompatActivity {
                 }
             }
         });
+    }
+
+    private void loadMyStickersCount() {
+        if (currentUserId == null) return;
+        
+        stickerRepository.getUserSavedPacks(currentUserId).observe(this, resource -> {
+            if (resource.isSuccess() && resource.getData() != null) {
+                int count = resource.getData().size();
+                txtMyStickersCount.setText(count + " bộ sticker");
+            }
+        });
+    }
+
+    private void openMyStickers() {
+        // TODO: Open MyStickerActivity
+        Toast.makeText(this, "Sticker của tôi đang phát triển", Toast.LENGTH_SHORT).show();
     }
 
     private void downloadPack(StickerPack pack) {

@@ -39,8 +39,8 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
     private RecyclerView packTabsRecycler;
     private ViewPager2 stickerPager;
     private FrameLayout tabRecent;
-    private ImageButton btnAddSticker;
-    private ImageButton btnStickerStore;
+    private View btnAddSticker;
+    private View btnStickerStore;
     private TextView btnMyStickers;
 
     // Adapters
