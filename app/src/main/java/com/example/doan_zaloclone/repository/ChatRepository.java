@@ -723,6 +723,56 @@ public class ChatRepository {
             }
         };
     }
+
+    /**
+     * Manually refresh messages for a conversation (pull-to-refresh)
+     * Fetches fresh data from API and updates cache
+     * @param conversationId ID of the conversation
+     * @param listener Callback for refresh result
+     */
+    public void refreshMessages(@NonNull String conversationId, @NonNull MessagesListener listener) {
+        Log.d("ChatRepository", "🔄 refreshMessages called for: " + conversationId);
+        
+        Call<MessageListResponse> call = apiService.getMessages(conversationId, 100, null);
+        call.enqueue(new Callback<MessageListResponse>() {
+            @Override
+            public void onResponse(Call<MessageListResponse> call, Response<MessageListResponse> response) {
+                Log.d("ChatRepository", "🔄 Refresh response: " + response.code());
+                if (response.isSuccessful() && response.body() != null) {
+                    List<Message> messages = response.body().getMessages();
+                    if (messages != null) {
+                        // Update cached messages
+                        cachedMessages.clear();
+                        cachedMessages.addAll(messages);
+                        
+                        // Sort by timestamp
+                        cachedMessages.sort((m1, m2) -> Long.compare(m1.getTimestamp(), m2.getTimestamp()));
+                        
+                        Log.d("ChatRepository", "🔄 Refresh success: " + messages.size() + " messages");
+                        listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                        
+                        // Also notify active LiveData if exists
+                        if (activeMessagesLiveData != null) {
+                            mainHandler.post(() -> {
+                                activeMessagesLiveData.setValue(Resource.success(new ArrayList<>(cachedMessages)));
+                            });
+                        }
+                    } else {
+                        listener.onMessagesChanged(new ArrayList<>());
+                    }
+                } else {
+                    Log.e("ChatRepository", "🔄 Refresh failed: HTTP " + response.code());
+                    listener.onError("Failed to refresh: HTTP " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(Call<MessageListResponse> call, Throwable t) {
+                Log.e("ChatRepository", "🔄 Refresh network error", t);
+                listener.onError("Network error: " + (t.getMessage() != null ? t.getMessage() : "Unknown"));
+            }
+        });
+    }
     
     /**
      * Helper: Parse Message from WebSocket JSON data

@@ -61,6 +61,7 @@ public class RoomActivity extends AppCompatActivity {
     private Toolbar toolbar;
     private TextView titleTextView;
     private TextView subtitleTextView;
+    private androidx.swiperefreshlayout.widget.SwipeRefreshLayout swipeRefreshLayout;
     private RecyclerView messagesRecyclerView;
     private EditText messageEditText;
     private ImageButton sendButton;
@@ -327,11 +328,15 @@ public class RoomActivity extends AppCompatActivity {
         toolbar = findViewById(R.id.toolbar);
         titleTextView = findViewById(R.id.titleTextView);
         subtitleTextView = findViewById(R.id.subtitleTextView);
+        swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
         messagesRecyclerView = findViewById(R.id.messagesRecyclerView);
         messageEditText = findViewById(R.id.messageEditText);
         sendButton = findViewById(R.id.sendButton);
         attachImageButton = findViewById(R.id.attachImageButton);
         stickerButton = findViewById(R.id.stickerButton);
+
+        // Setup SwipeRefreshLayout
+        setupSwipeRefresh();
 
         // Input container
         inputContainer = findViewById(R.id.inputContainer);
@@ -1597,6 +1602,62 @@ public class RoomActivity extends AppCompatActivity {
                         }
                     }
                 });
+    }
+
+    /**
+     * Setup SwipeRefreshLayout for pull-to-refresh messages
+     */
+    private void setupSwipeRefresh() {
+        if (swipeRefreshLayout == null) return;
+
+        // Set Zalo blue color for refresh indicator
+        swipeRefreshLayout.setColorSchemeResources(
+                R.color.colorPrimary,
+                R.color.colorPrimaryDark
+        );
+
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            android.util.Log.d("RoomActivity", "🔄 Pull-to-refresh triggered");
+            refreshMessages();
+        });
+    }
+
+    /**
+     * Refresh messages manually
+     */
+    private void refreshMessages() {
+        if (conversationId == null) {
+            swipeRefreshLayout.setRefreshing(false);
+            return;
+        }
+
+        // Force reload messages from server
+        chatRepository.refreshMessages(conversationId, new ChatRepository.MessagesListener() {
+            @Override
+            public void onMessagesChanged(List<Message> newMessages) {
+                runOnUiThread(() -> {
+                    android.util.Log.d("RoomActivity", "🔄 Refresh completed: " + newMessages.size() + " messages");
+                    
+                    // Update local cache
+                    messages = newMessages;
+                    messageAdapter.updateMessages(newMessages);
+                    
+                    // Stop refresh animation
+                    swipeRefreshLayout.setRefreshing(false);
+                    
+                    Toast.makeText(RoomActivity.this, "Đã cập nhật tin nhắn", Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                runOnUiThread(() -> {
+                    android.util.Log.e("RoomActivity", "🔄 Refresh failed: " + error);
+                    swipeRefreshLayout.setRefreshing(false);
+                    Toast.makeText(RoomActivity.this, "Lỗi tải tin nhắn: " + error, Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
     }
 
     private void setupRecyclerView() {
