@@ -8,35 +8,28 @@ import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.lifecycle.ViewModelProvider;
 
 import com.example.doan_zaloclone.R;
-import com.example.doan_zaloclone.models.FireBasePost;
-import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.auth.FirebaseUser;
-import com.google.firebase.firestore.FirebaseFirestore;
+import com.example.doan_zaloclone.viewmodel.PostViewModel;
 
 public class CreatePostActivity extends AppCompatActivity {
 
     private EditText etContent;
     private Button btnDang;
-
-    private FirebaseFirestore db;
-    private FirebaseAuth auth;
+    private PostViewModel viewModel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_create_post);
 
-        // 1. Khởi tạo Firebase
-        db = FirebaseFirestore.getInstance();
-        auth = FirebaseAuth.getInstance();
+        // Khởi tạo ViewModel
+        viewModel = new ViewModelProvider(this).get(PostViewModel.class);
 
-        // 2. Ánh xạ View
         etContent = findViewById(R.id.etPostContent);
         btnDang = findViewById(R.id.btnPost);
 
-        // 3. Xử lý sự kiện bấm nút Đăng
         btnDang.setOnClickListener(v -> handlePost());
     }
 
@@ -52,40 +45,16 @@ public class CreatePostActivity extends AppCompatActivity {
         btnDang.setEnabled(false);
         btnDang.setText("Đang đăng...");
 
-        // Chỉ lưu bài viết dạng text, image URL là null
-        savePostToFirestore(content, null);
-    }
-
-    private void savePostToFirestore(String content, String imageUrl) {
-        FirebaseUser user = auth.getCurrentUser();
-
-        String userId = (user != null) ? user.getUid() : "anonymous_id";
-        String userName = (user != null && user.getDisplayName() != null) ? user.getDisplayName() : "Người dùng ẩn danh";
-        String userAvatar = (user != null && user.getPhotoUrl() != null) ? user.getPhotoUrl().toString() : "";
-
-        String postId = db.collection("posts").document().getId();
-        long timestamp = System.currentTimeMillis();
-
-        FireBasePost newPost = new FireBasePost(
-                postId,
-                userId,
-                userName,
-                userAvatar,
-                content,
-                imageUrl, // Sẽ luôn là null
-                timestamp
-        );
-
-        db.collection("posts").document(postId)
-                .set(newPost)
-                .addOnSuccessListener(aVoid -> {
-                    Toast.makeText(CreatePostActivity.this, "Đăng bài thành công!", Toast.LENGTH_SHORT).show();
-                    finish();
-                })
-                .addOnFailureListener(e -> {
-                    Toast.makeText(CreatePostActivity.this, "Lỗi: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                    btnDang.setEnabled(true);
-                    btnDang.setText("Đăng bài");
-                });
+        // Gọi ViewModel để đăng bài
+        viewModel.createPost(content).observe(this, resource -> {
+            if (resource.status == com.example.doan_zaloclone.utils.Status.SUCCESS) {
+                Toast.makeText(CreatePostActivity.this, "Đăng bài thành công!", Toast.LENGTH_SHORT).show();
+                finish();
+            } else if (resource.status == com.example.doan_zaloclone.utils.Status.ERROR) {
+                Toast.makeText(CreatePostActivity.this, "Lỗi: " + resource.message, Toast.LENGTH_SHORT).show();
+                btnDang.setEnabled(true);
+                btnDang.setText("Đăng bài");
+            }
+        });
     }
 }
