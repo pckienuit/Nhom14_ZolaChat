@@ -6,9 +6,6 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
-import java.util.Properties
-import java.io.FileInputStream
-
 android {
     namespace = "com.example.doan_zaloclone"
     compileSdk = 34
