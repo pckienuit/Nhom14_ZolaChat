@@ -1,0 +1,84 @@
+# Phase 2: Firestore Usage Audit
+
+## Summary
+Found 19 direct Firestore usages in UI layer.
+
+---
+
+## RoomActivity.java (4 usages)
+**Lines:** 687, 1224, 1869, 1986
+
+**Analysis Needed:**
+- Line 687: ?
+- Line 1224: ?
+- Line 1869: ?
+- Line 1986: ?
+
+**Action:** Investigate each usage
+
+---
+
+## MessageAdapter.java (6 usages)
+**Lines:** 920, 1042, 1810, 1958, 2278, 2455
+
+**Likely:** User profile fetches, message metadata
+
+**Action:** Replace with cached user data or repository calls
+
+---
+
+## PinnedMessagesAdapter.java (1 usage)
+**Line:** 83
+
+**Action:** Check if can use data from parent
+
+---
+
+## HomeFragment.java (4 usages)
+**Lines:** 243, 382, 485, 491
+
+**Analysis:** Conversation list fetching
+
+**Action:** Should already use Repository - verify and remove
+
+---
+
+## ConversationAdapter.java (2 usages)
+**Lines:** 171, 303
+
+**Action:** User profile fetch - use cached data
+
+---
+
+## GroupInfoActivity.java (1 usage)
+**Line:** 53
+
+**Action:** Should use Repository - remove
+
+---
+
+## LiveLocationViewActivity.java (1 usage)
+**Line:** 97
+
+**Decision:** **KEEP** - Real-time location listener required
+
+---
+
+## Priority Actions
+
+### HIGH (Remove Now):
+1. HomeFragment - Should use API/Repository
+2. GroupInfoActivity - Should use Repository
+3. ConversationAdapter - Use User cache
+
+### MEDIUM (Evaluate):
+4. MessageAdapter - Check if can use cache
+5. RoomActivity - Check each usage
+
+### LOW (Keep for Now):
+6. LiveLocationViewActivity - Real-time required
+7. PinnedMessagesAdapter - May need real-time
+
+---
+
+**Next:** Check each HIGH priority file

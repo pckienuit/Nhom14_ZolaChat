@@ -1,0 +1,422 @@
+# WebSocket Real-time Messaging Test Guide
+
+## Objective
+Verify that messages sent from one device appear instantly on another device via WebSocket broadcast (not just API polling).
+
+## Prerequisites
+
+✅ Backend server running (`npm start` in server folder)
+✅ App built with latest ChatRepository changes
+✅ Two test devices ready (2 emulators OR 1 emulator + 1 physical device)
+
+---
+
+## Setup: Two Devices/Emulators
+
+### Option 1: Two Android Emulators (Easiest)
+
+**Device A (Emulator 1):**
+1. Open AVD Manager in Android Studio
+2. Start first emulator (e.g., Pixel 5 API 30)
+3. Run app on this emulator
+4. Login as User A (e.g., demo@gmail.com)
+
+**Device B (Emulator 2):**
+1. Start second emulator (e.g., Pixel 4 API 30)
+2. Run app on second emulator (Android Studio will ask which device)
+3. Login as User B (e.g., test@gmail.com)
+
+### Option 2: Emulator + Physical Device
+
+**Device A (Emulator):**
+- Start emulator
+- Run app
+- Login as User A
+
+**Device B (Physical Device):**
+- Connect via USB with debugging enabled
+- Change backend URL in app to your computer's IP
+  - In `RetrofitClient.java`: `http://YOUR_IP:3000/api/`
+  - In `SocketManager.java`: `http://YOUR_IP:3000`
+- Run app on physical device
+- Login as User B
+
+---
+
+## Testing Steps
+
+### 1. Prepare Test Conversation
+
+**On Device A:**
+1. Open app
+2. Navigate to a conversation with User B
+3. **Important:** Keep this conversation open
+4. Clear Logcat filter to show ChatRepository logs
+
+**On Device B:**
+1. Open app  
+2. Navigate to **the SAME conversation**
+3. **Important:** Keep this conversation open
+4. Clear Logcat filter
+
+**Expected Logs (on both devices):**
+```
+ChatRepository: GET /api/chats/[conversationId]/messages
+WebSocketManager: Joined conversation: [conversationId]
+```
+
+---
+
+### 2. Test Real-time Message Delivery
+
+#### Test A → B (Send from Device A)
+
+**On Device A:**
+1. Type test message: "Hello from Device A! 🚀"
+2. Send message
+3. **Watch Device A:**
+   - Message appears immediately in UI ✅
+   - Logcat shows: `POST /api/chats/.../messages`
+   - Server response: Success
+
+**On Device B (SIMULTANEOUSLY):**
+4. **Watch Device B screen:**
+   - Message should appear **within 1-2 seconds** ✅
+   - NO user action required (no pull to refresh!)
+5. **Watch Device B Logcat:**
+   ```
+   SocketManager: 📨 New message received
+   ChatRepository: Parsing WebSocket message
+   ChatRepository: Adding message to cached list
+   ```
+
+**✅ PASS Criteria:**
+- Message appears on Device B WITHOUT any user action
+- Appears within 1-2 seconds
+- No need to refresh or reopen conversation
+
+**❌ FAIL Indicators:**
+- Message doesn't appear on Device B
+- Need to close/reopen conversation to see it
+- Takes longer than 5 seconds
+
+---
+
+#### Test B → A (Send from Device B)
+
+**On Device B:**
+1. Type test message: "Reply from Device B! ✨"
+2. Send message
+
+**On Device A:**
+3. Message should appear instantly
+4. Verify Logcat shows WebSocket event
+
+**✅ PASS Criteria:**
+- Bidirectional real-time works
+- Both directions < 2 seconds latency
+
+---
+
+### 3. Test Multiple Messages
+
+**Rapid Fire Test:**
+1. On Device A: Send 5 messages quickly
+   - "Message 1"
+   - "Message 2"  
+   - "Message 3"
+   - "Message 4"
+   - "Message 5"
+
+2. On Device B: All 5 should appear in order
+
+**✅ PASS Criteria:**
+- All messages appear
+- Correct order maintained
+- No duplicates
+
+---
+
+### 4. Test Conversation Switch
+
+**On Device B:**
+1. Navigate away from conversation (back to home)
+2. **Expected Logcat:**
+   ```
+   SocketManager: Left conversation: [conversationId]
+   ```
+
+**On Device A:**
+3. Send message "Testing cleanup"
+
+**On Device B:**
+4. Message should NOT appear (conversation closed)
+5. Navigate back into conversation
+6. **Expected:**
+   - Message loads from API (was saved)
+   - Shows "Testing cleanup"
+
+**✅ PASS Criteria:**
+- Cleanup works (leaves room)
+- Messages still saved server-side
+- Reload fetches missed messages
+
+---
+
+## What to Look For
+
+### Backend Server Logs (Terminal)
+
+**Message Sent:**
+```
+POST /api/chats/[conversationId]/messages
+Broadcasting new_message to conversation: [conversationId]
+```
+
+**WebSocket Connected:**
+```
+🔌 Connected: [userId]
+Joined conversation: [conversationId]
+```
+
+**WebSocket Message Delivered:**
+```
+Broadcasting to 2 clients in room: [conversationId]
+```
+
+### Android Logcat Filters
+
+**Device A Filter:**
+```
+ChatRepository|SocketManager|WebSocket
+```
+
+**Device B Filter:**
+```
+ChatRepository|SocketManager|WebSocket
+```
+
+**Key Logs to See:**
+
+**On sender (Device A):**
+```
+ChatRepository: Sending message via API
+ApiService: POST /api/chats/.../messages
+SocketManager: Message sent successfully
+```
+
+**On receiver (Device B):**
+```
+SocketManager: 📨 New message received
+SocketManager: Message data: {"id":"...","content":"..."}
+ChatRepository: Parsing WebSocket message
+ChatRepository: Adding new message
+```
+
+---
+
+## Expected Behavior Timeline
+
+**T=0s:** Device A sends message
+**T=0.1s:** API call to backend
+**T=0.3s:** Backend saves to Firestore
+**T=0.4s:** Backend broadcasts to WebSocket
+**T=0.5s:** Device B receives WebSocket event
+**T=0.6s:** Device B parses and adds to UI
+**T=0.7s:** User on Device B sees message
+
+**Total latency: < 1 second** ⚡
+
+---
+
+## Troubleshooting
+
+### Issue: Message doesn't appear on Device B
+
+**Check 1: WebSocket Connected?**
+```
+Logcat on Device B: Search "WebSocket"
+Should see: "✅ WebSocket CONNECTED"
+```
+
+**Fix:** Restart app on Device B
+
+---
+
+**Check 2: Same Conversation?**
+- Verify conversation IDs match
+- Logcat: "Joined conversation: [ID]"
+- Must be identical on both devices
+
+**Fix:** Both users must be in SAME conversation
+
+---
+
+**Check 3: Backend Broadcasting?**
+```
+Server terminal: Should see
+"Broadcasting new_message to conversation: [ID]"
+```
+
+**Fix:** 
+- Check backend WebSocket setup
+- Verify Socket.IO running
+- Check server/src/websocket/index.js
+
+---
+
+**Check 4: Room Members?**
+```
+Server logs: "Broadcasting to X clients in room"
+X should be >= 2
+```
+
+**Fix:** Join room failed - check auth token
+
+---
+
+### Issue: Duplicate Messages
+
+**Cause:** Message received via both:
+- API initial load
+- WebSocket event
+
+**Expected:** Code has duplicate prevention
+```java
+// Check if message already exists
+for (Message msg : cachedMessages) {
+    if (msg.getId().equals(newMessage.getId())) {
+        exists = true; // Skip duplicate
+    }
+}
+```
+
+**Fix:** Check parseMessageFromJson() implementation
+
+---
+
+### Issue: Messages Out of Order
+
+**Cause:** WebSocket faster than UI thread update
+
+**Fix:** Already sorted by timestamp in backend
+- Messages should maintain order
+- If not, check timestamp field
+
+---
+
+### Issue: High Latency (>5 seconds)
+
+**Check Network:**
+- Emulator: 10.0.2.2 resolves correctly?
+- Physical device: Computer IP reachable?
+- Firewall: Port 3000 open?
+
+**Check Backend:**
+- Server under load?
+- Redis connection OK?
+- Check server response times
+
+---
+
+## Success Checklist
+
+After testing, you should have verified:
+
+- [ ] Device A sends message
+- [ ] Message appears on Device B within 2 seconds
+- [ ] No user action needed on Device B
+- [ ] Works both directions (A→B and B→A)
+- [ ] Multiple rapid messages work
+- [ ] Cleanup works (leave conversation)
+- [ ] Missed messages loaded on rejoin
+- [ ] No duplicate messages
+- [ ] Correct message order
+- [ ] Backend logs show WebSocket broadcast
+
+---
+
+## Expected Results
+
+### ✅ PASS Scenario:
+
+```
+Device A: Types "Hello World" → Send
+  └─ [0.5s] Message appears on Device A
+Device B: *waiting*
+  └─ [1.0s] Message appears on Device B automatically! 🎉
+  
+Backend: 
+  POST /api/chats/.../messages
+  Broadcasting new_message to conversation: ...
+  ✅ Delivered to 2 clients
+
+Result: REAL-TIME WORKS! ⚡
+```
+
+### ❌ FAIL Scenario:
+
+```
+Device A: Types "Hello World" → Send
+  └─ [0.5s] Message appears on Device A
+Device B: *waiting*
+  └─ [10s later] Nothing...
+  └─ [User closes & reopens] NOW message appears
+
+Result: Only API load works, WebSocket not delivering 😞
+Need to debug WebSocket connection
+```
+
+---
+
+## Advanced: Verify WebSocket Inspector
+
+### Chrome DevTools (if using browser test)
+
+1. Open `chrome://inspect`
+2. Find WebSocket connection
+3. Watch frames:
+   - **Send:** `join_conversation`
+   - **Receive:** `new_message` event
+
+### Node.js Backend Debug
+
+Add more logging in `server/src/websocket/index.js`:
+```javascript
+socket.on('join_conversation', (conversationId) => {
+    console.log(`📥 User ${socket.userId} joining room: ${conversationId}`);
+    socket.join(conversationId);
+    console.log(`✅ Room ${conversationId} now has ${io.sockets.adapter.rooms.get(conversationId)?.size} members`);
+});
+```
+
+---
+
+## Final Verification
+
+**If all tests pass:**
+🎉 **WebSocket Real-time Messaging is FULLY WORKING!**
+🎉 **Phase 3 Core Migration is 100% COMPLETE!**
+
+**Next:** Test advanced message types (images, files, stickers, etc.)
+
+**If tests fail:**
+📋 Note which specific test failed
+📋 Collect logs (backend + both devices)
+📋 Debug systematically using troubleshooting section
+
+---
+
+## Quick Test Script
+
+**2-Minute Smoke Test:**
+1. ✅ Start backend server
+2. ✅ Run app on 2 devices/emulators
+3. ✅ Both login (different users)
+4. ✅ Both open same conversation
+5. ✅ Device A sends: "RealTime Test 🚀"
+6. ✅ Device B: Message appears < 2 seconds?
+7. ✅ YES → SUCCESS! / NO → Debug
+
+**Time to test: 2-5 minutes**
+**Impact: Confirms entire architecture working!**

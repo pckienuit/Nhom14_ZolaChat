@@ -1,0 +1,36 @@
+# Bug Fix: Add Friend Banner & Realtime Updates
+
+## 1. Problem Description
+The "Add Friend" banner in `RoomActivity` (1-on-1 chat) was not displaying correctly for non-friend users. Additionally, when sending a friend request, the UI did not update in real-time or persist the "Sent" state properly when re-entering the room.
+
+## 2. Root Cause Analysis
+1.  **Field Name Mismatch (Null Pointer):** The code was querying Firestore for `participantIds`, but in some legacy conversation documents or different schema versions, the field name is stored as `memberIds`. This caused the `participantIds` list to be null, incorrectly triggering the "Hide Banner" logic.
+2.  **Logic Flaw (Request Status):** The original logic only checked `areFriends`. It did not check `SentFriendRequests`. So if a user sent a request (status PENDING), the banner would show "Add Friend" again instead of "Request Sent".
+3.  **Lack of Realtime Updates:** The `FriendRepository` relied on one-time API calls via Retrofit and did not initially listen to WebSocket events for friend acceptance, leading to stale UI.
+4.  **Auto-Hide Behavior:** The banner was programmed to hide 1 second after sending a request, but the requirements were to keep it visible with a "Sent" status until accepted.
+
+## 3. Implementation Details
+
+### 3.1. Banner Visibility Logic (`RoomActivity.java`)
+-   **Fallback Mechanism:** Implemented a check that tries to read `participantIds` first, and if null, falls back to reading `memberIds`.
+-   **Optimistic UI:** Set the banner to `VISIBLE` immediately when checking sent request status to avoid UI flickering or delay.
+
+### 3.2. Sent Request State
+-   **Status Check:** Implemented `checkSentRequestStatus` method which queries `friendRepository.getSentFriendRequests(currentUserId)`.
+-   **UI Update:** If a PENDING request is found for the `otherUserId`, the button text is updated to "Đã gửi lời mời" and disabled. The banner remains visible.
+
+### 3.3. Realtime Updates
+-   **Socket Integration:** Utilized `FriendRepository`'s existing socket listeners.
+-   **Observers:** In `RoomActivity`, observed `friendRepository.getFriendListRefreshNeeded()` and `getFriendRequestRefreshNeeded()`.
+-   **Flow:** When the other user accepts the request (or new request sent), the socket triggers a refresh -> `checkFriendshipStatusForBanner` runs again -> Status changes to "Friends" -> Banner hides automatically.
+
+## 4. Design & UI Changes
+-   **Layout (`activity_room.xml`):**
+    -   Changed background color to light blue (`#E3F2FD`) for better aesthetics and visibility.
+    -   Set default visibility to `GONE` (logic controls visibility).
+
+## 5. Verification
+-   **Scenario 1 (Not Friends):** Open chat -> Banner appears with "Kết bạn".
+-   **Scenario 2 (Sending Request):** Click "Kết bạn" -> Button changes to "Đã gửi lời mời" (Disabled). Banner stays visible.
+-   **Scenario 3 (Re-enter Chat):** Exit and re-enter chat with PENDING request -> Banner appears with "Đã gửi lời mời" immediately.
+-   **Scenario 4 (Accept Request):** Other user accepts request -> Banner disappears automatically in real-time.

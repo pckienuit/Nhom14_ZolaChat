@@ -130,6 +130,13 @@ Thumbs.db
 # Backup
 backup_react/
 
+# Scripts folder (deployment scripts not needed in repo)
+scripts/
+
+# AI assistant configs
+.agent/
+.gemini/
+
 # Markdown files (ignore all except README.md)
 *.md
 !README.md

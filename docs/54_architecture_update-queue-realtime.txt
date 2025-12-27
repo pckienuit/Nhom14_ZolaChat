@@ -1,0 +1,99 @@
+# Architectural Update: Queue & Real-time Mechanisms
+
+**Date:** December 26, 2025
+**Version:** 1.0
+**Status:** Implemented
+
+## 1. Overview
+This architectural update introduces a robust **Sequential Processing (Queue)** mechanism for write operations and **Real-time Listeners** for read operations across the core application repositories. The primary goals are to:
+- **Prevent Race Conditions:** Eliminate issues caused by rapid, concurrent user actions (e.g., double-clicking buttons, sending multiple messages instantly).
+- **Ensure Data Consistency:** Guarantee that client-side states remain synchronized with the server by processing modifying actions strictly one by one.
+- **Instant UI Updates:** Leverage WebSocket and Firestore listeners to reflect changes immediately without manual refreshes.
+
+## 2. Core Architecture
+
+### 2.1. Queue Mechanism (Write Operations)
+All critical write operations (Create, Update, Delete) are now wrapped in a `SingleThreadExecutor`. This ensures that tasks are executed strictly sequentially on a background thread.
+- **Implementation:** `java.util.concurrent.Executors.newSingleThreadExecutor()`
+- **Execution:** Operations use synchronizing calls (e.g., `Call.execute()` for Retrofit, `Tasks.await()` for Firebase) within the executor to block the background thread until completion before starting the next task.
+- **Result Handling:** `mainHandler.post()` is used to pass results back to the UI thread via `LiveData` or Callbacks.
+
+### 2.2. Real-time Mechanism (Read Operations)
+Data fetching logic has been upgraded from one-time fetches (`get()`) to persistent listeners where appropriate.
+- **Firestore:** Uses `addSnapshotListener` for collections that change frequently (e.g., Sticker Packs, File Lists).
+- **WebSocket:** Uses `SocketManager` to listen for server events (e.g., New Messages, Friend Requests, Group Updates) and trigger LiveData refreshes.
+
+## 3. Repository Implementation Details
+
+### 3.1. StickerRepository
+- **Write:** Implemented `uploadExecutor` for serializing custom sticker uploads.
+- **Read:** Converted fetching of Official Packs, User Saved Packs, Recent Stickers, and Stickers-in-Pack to use `addSnapshotListener`.
+- **Benefit:** Store UI updates instantly when new packs are published or saved.
+
+### 3.2. ChatRepository
+- **Write:** Implemented `backgroundExecutor` for `sendMessage`. Messages are sent synchronously in the background queue to ensure the "Last Message" logic remains consistent.
+- **Read:** Integrated `SocketManager` to listen for `new_message`, `message_updated`, `message_deleted`.
+- **Benefit:** Sent messages never trigger duplicate "ghost" messages; incoming messages appear instantly.
+
+### 3.3. FileRepository
+- **Read:** Updated `getFilesForConversation` to use `addSnapshotListener`.
+- **Benefit:** The "Files" tab in a conversation updates in real-time as new media is sent.
+
+### 3.4. FriendRepository
+- **Write:** Implemented queue for `sendFriendRequest`, `acceptFriendRequest`, `rejectFriendRequest`, `removeFriend`, and `cancelFriendRequest`.
+- **Read:** Listening to `friend_request_received`, `friend_request_accepted`, etc., via WebSocket to trigger `friendListRefreshNeeded`.
+- **Benefit:** Friend list consistency is guaranteed; no more "stuck" pending requests due to race conditions.
+
+### 3.5. ConversationRepository
+- **Write:** Implemented queue for `createConversation`, `updateGroupInfo`, `addGroupMember`, `removeGroupMember`, `leaveGroup`, `deleteConversation`.
+- **Read:** Listening to `conversation_updated`, `member_added`, `member_removed` via WebSocket.
+- **Benefit:** Complex group management actions (like kicking multiple users) are processed reliably.
+
+### 3.6. UserRepository
+- **Write:** Implemented queue for `updateUser` (profile) and `updateUserStatus` (online/offline).
+- **Read:** Prepared `userRefreshNeeded` LiveData for future real-time profile sync.
+- **Benefit:** Profile edits are applied reliably; prevent partial updates.
+
+### 3.7. AuthRepository
+- **Write:** Implemented queue for `login`, `register`, and `logout`.
+- **Implementation:** Uses `Tasks.await()` to wrap asynchronous Firebase Auth methods into blocking calls within the queue.
+- **Benefit:** Prevents accidental double-login or inconsistent auth states.
+
+## 4. Usage Guide for Developers
+
+### How to Implement a New Write Operation
+1.  **Define the Method:** Create your public method in the Repository.
+2.  **Use the Executor:** Wrap the logic in `backgroundExecutor.execute(() -> { ... });`.
+3.  **Execute Synchronously:** Use blocking calls (e.g., `call.execute()`). **Do not** use `enqueue` or async listeners inside the executor block unless you manually manage synchronization (which is error-prone).
+4.  **Post to Main Thread:** Use `mainHandler.post()` to return the result to the UI.
+
+```java
+public LiveData<Resource<Boolean>> performAction(String data) {
+    MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+    result.setValue(Resource.loading());
+
+    backgroundExecutor.execute(() -> {
+        try {
+            // Synchronous execution
+            Response response = api.doSomething(data).execute();
+            if (response.isSuccessful()) {
+                mainHandler.post(() -> result.setValue(Resource.success(true)));
+            } else {
+                mainHandler.post(() -> result.setValue(Resource.error("Error")));
+            }
+        } catch (Exception e) {
+            mainHandler.post(() -> result.setValue(Resource.error(e.getMessage())));
+        }
+    });
+
+    return result;
+}
+```
+
+### How to Implement a Real-time Feature
+1.  **Identify the Event:** Determine if the data comes from Firestore (Data Sync) or WebSocket (Event Notification).
+2.  **Firestore:** Return `LiveData` that is fed by an `addSnapshotListener`. Remember to provide a `cleanup()` method to remove the listener.
+3.  **WebSocket:** Register a listener in `SocketManager` and expose a `LiveData` trigger in the Repository (e.g., `refreshNeeded`). Observe this LiveData in the ViewModel to trigger a data reload.
+
+## 5. Conclusion
+This architecture aligns the Android client with high standards of data integrity and responsiveness, providing a solid foundation for all future feature development.

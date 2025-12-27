@@ -1,0 +1,217 @@
+# Unfriend Feature - Implementation Guide
+
+## Overview
+
+The unfriend feature allows users to remove/disconnect from their friends without deleting the conversation history. This implementation follows the proposed changes with a complete backend-to-UI flow.
+
+## User Flow
+
+1. User opens their friends list in ContactFragment
+2. User clicks the "Xóa" (Remove) button on a friend's card
+3. Confirmation dialog appears asking "Are you sure you want to remove [Friend Name]?"
+4. User confirms or cancels
+5. If confirmed, the friend is removed and UI updates in real-time
+
+## Architecture Layers
+
+### 1. UI Layer (Fragment & Adapter)
+
+**ContactFragment.java**
+- Implements `FriendsAdapter.OnFriendClickListener` interface
+- Handles `onMessageClick()` - opens conversation
+- Handles `onUnfriendClick()` - shows confirmation dialog
+- `showUnfriendConfirmationDialog()` - AlertDialog for confirmation
+- `removeFriend()` - calls ViewModel and observes result
+
+**FriendsAdapter.java**
+- Interface `OnFriendClickListener` with two callback methods:
+  - `onMessageClick(User friend)` - message action
+  - `onUnfriendClick(User friend)` - unfriend action
+- ViewHolder binds unfriend button listener
+- Calls `listener.onUnfriendClick(friend)` when button clicked
+
+**item_friend.xml**
+- Two buttons in vertical LinearLayout:
+  - "Nhắn tin" (Message) - blue button using colorPrimary
+  - "Xóa" (Remove) - red button (#D32F2F)
+
+### 2. ViewModel Layer
+
+**ContactViewModel.java**
+```java
+public LiveData<Resource<Boolean>> removeFriend(@NonNull String userId1,
+                                                @NonNull String userId2) {
+    return friendRepository.removeFriend(userId1, userId2);
+}
+```
+
+- Exposes `removeFriend()` method to UI
+- Returns LiveData<Resource<Boolean>> for observing
+- Forwards call to FriendRepository
+
+### 3. Repository Layer
+
+**FriendRepository.java**
+```java
+public LiveData<Resource<Boolean>> removeFriend(@NonNull String userId1,
+                                                @NonNull String userId2) {
+    MutableLiveData<Resource<Boolean>> result = new MutableLiveData<>();
+    result.setValue(Resource.loading());
+    
+    firestoreManager.removeFriend(userId1, userId2, 
+        new FirestoreManager.OnFriendRemovedListener() {
+            @Override
+            public void onSuccess() {
+                result.setValue(Resource.success(true));
+            }
+            
+            @Override
+            public void onFailure(Exception e) {
+                String errorMessage = e.getMessage() != null 
+                    ? e.getMessage() 
+                    : "Failed to remove friend";
+                result.setValue(Resource.error(errorMessage));
+            }
+        });
+    
+    return result;
+}
+```
+
+- Wraps Firestore call in Resource pattern
+- Handles loading/success/error states
+- Returns LiveData for UI observation
+
+### 4. Backend Layer (FirestoreManager)
+
+**FirestoreManager.java**
+```java
+public void removeFriend(@NonNull String user1Id,
+                        @NonNull String user2Id,
+                        @NonNull OnFriendRemovedListener listener) {
+    // Find ACCEPTED friend request between users
+    // Update status from ACCEPTED to REMOVED
+    // Preserve conversation history
+    // Call listener.onSuccess() or listener.onFailure()
+}
+```
+
+**Firestore Operations:**
+- Query friendRequests collection where status = "ACCEPTED"
+- Find document matching both user combinations (bidirectional)
+- Update status to "REMOVED" (not delete)
+- Add removedAt timestamp
+- Callback to listener
+
+**Firestore Schema Change:**
+```
+friendRequests/{requestId}
+{
+  fromUserId: string
+  toUserId: string
+  status: "PENDING" | "ACCEPTED" | "REMOVED"  // NEW VALUE
+  createdAt: timestamp
+  acceptedAt: timestamp (if status = ACCEPTED)
+  removedAt: timestamp (if status = REMOVED)  // NEW FIELD
+  ...
+}
+```
+
+## Real-time Updates
+
+Friends list automatically updates via `listenToFriends()` real-time listener:
+
+1. When friend is removed, status changes to "REMOVED"
+2. `listenToFriends()` filters out REMOVED friendships
+3. Friends list RecyclerView updates automatically
+4. User sees friend disappear from list instantly
+
+## Implementation Details
+
+### Confirmation Dialog
+
+```java
+new androidx.appcompat.app.AlertDialog.Builder(getContext())
+    .setTitle("Confirm Unfriend")
+    .setMessage("Are you sure you want to remove [Friend Name]?")
+    .setPositiveButton("Remove", (dialog, which) -> removeFriend(...))
+    .setNegativeButton("Cancel", null)
+    .show();
+```
+
+### Status Resource Pattern
+
+```
+Resource.loading() → Firestore query in progress
+  ↓
+Resource.success(true) → Friend removed successfully
+Resource.error(message) → Error occurred (shown in Toast)
+```
+
+### Toast Notifications
+
+- Success: "Friend removed successfully"
+- Error: "Error: [Firebase error message]"
+
+## Data Preservation
+
+**Kept:**
+- Conversation history (messages preserved)
+- Previous messages visible
+- Conversation document remains in Firestore
+
+**Changed:**
+- Friend request status: "ACCEPTED" → "REMOVED"
+- Friend appears removed from friends list
+- Can re-friend by sending new friend request
+
+## Testing
+
+### Test Case 1: Remove Friend Successfully
+1. Login as User A
+2. View friends list (should see User B)
+3. Click "Xóa" on User B's card
+4. Confirm in dialog
+5. Verify: Toast shows success, User B disappears from list
+6. Check Firestore: friendRequest.status = "REMOVED"
+
+### Test Case 2: Cancel Removal
+1. Click "Xóa" button
+2. Click "Cancel" in dialog
+3. Verify: Friend remains in list, no changes
+
+### Test Case 3: Re-friend After Removal
+1. Remove Friend B (status = "REMOVED")
+2. Search for Friend B
+3. Send new friend request
+4. Friend request shows as new (not affected by REMOVED status)
+5. Accept and friend is re-added
+
+### Test Case 4: Message History Preserved
+1. Have conversation with Friend B (5 messages)
+2. Remove friend
+3. Open conversation history with Friend B
+4. Verify: All 5 messages still visible
+
+## Error Handling
+
+| Error | Message | Action |
+|-------|---------|--------|
+| No friendship found | "Không tìm thấy mối quan hệ bạn bè" | Show Toast |
+| Firestore error | Firebase error message | Show Toast |
+| Null user | (handled by null check) | No action |
+
+## Performance Considerations
+
+- Lightweight update: status field change only
+- No document deletion (preserves history)
+- Real-time listener keeps list current
+- DiffUtil in FriendsAdapter optimizes list updates
+
+## Future Enhancements
+
+1. **Block User** - Extend to block instead of just remove
+2. **Bulk Unfriend** - Allow multiple friend removals
+3. **Undo Option** - Temporary undo within 30 seconds
+4. **Notification** - Notify friend they've been removed
+5. **Analytics** - Track unfriend events

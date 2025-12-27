@@ -1,0 +1,133 @@
+# API Server Deployment - Quick Start
+
+**5 phút để deploy!** ⚡
+
+---
+
+## 🚀 Deployment Tự Động (Khuyên Dùng)
+
+### Bước 1: Chuẩn Bị
+
+```powershell
+cd D:\DoAn_ZaloClone
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+
+### Bước 2: Deploy Lần Đầu
+
+```powershell
+.\scripts\deploy-api-server.ps1
+```
+
+**Nhập password khi được yêu cầu** (4-6 lần)
+
+### Bước 3: Verify
+
+```powershell
+Invoke-RestMethod -Uri "https://zolachat.site/health"
+```
+
+**Xong!** ✅
+
+---
+
+## 🔄 Update Code (Sau Khi Deploy)
+
+```powershell
+.\scripts\upload-and-update-api.ps1
+```
+
+**Xong!** ✅
+
+---
+
+## 📋 Manual Deployment (10 Bước)
+
+### 1. SSH vào VPS
+```bash
+ssh root@163.61.182.20
+```
+
+### 2. Install Node.js
+```bash
+curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+apt-get install -y nodejs
+```
+
+### 3. Install PM2
+```bash
+npm install -g pm2
+```
+
+### 4. Create Directory
+```bash
+mkdir -p /opt/zaloclone-api
+```
+
+### 5. Upload Code (từ Windows)
+```powershell
+scp -r server\* root@163.61.182.20:/opt/zaloclone-api/
+```
+
+### 6. Install Packages (trên VPS)
+```bash
+cd /opt/zaloclone-api
+npm install --production
+```
+
+### 7. Create .env
+```bash
+cat > .env << 'EOF'
+PORT=3000
+NODE_ENV=production
+ALLOWED_ORIGINS=https://zolachat.site
+FIREBASE_SERVICE_ACCOUNT_PATH=./serviceAccountKey.json
+EOF
+```
+
+### 8. Upload Firebase Key (từ Windows)
+```powershell
+scp server\serviceAccountKey.json root@163.61.182.20:/opt/zaloclone-api/
+```
+
+### 9. Start Server (trên VPS)
+```bash
+cd /opt/zaloclone-api
+pm2 start src/index.js --name zaloclone-api
+pm2 save
+```
+
+### 10. Test
+```bash
+curl http://localhost:3000/health
+```
+
+**Xong!** ✅
+
+---
+
+## 🔧 Useful Commands
+
+```bash
+# View status
+pm2 status
+
+# View logs
+pm2 logs zaloclone-api
+
+# Restart
+pm2 restart zaloclone-api
+
+# Monitor
+pm2 monit
+```
+
+---
+
+## 📚 Full Documentation
+
+Xem chi tiết: [docs/API_DEPLOYMENT_GUIDE.md](API_DEPLOYMENT_GUIDE.md)
+
+---
+
+**Cần help?** Check Troubleshooting section trong full guide.

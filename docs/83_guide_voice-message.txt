@@ -1,0 +1,88 @@
+# Voice Message Integration Guide for MessageAdapter
+
+## Summary
+This document provides step-by-step instructions for integrating voice message display into MessageAdapter.java
+
+## Changes Required
+
+### 1. Add View Type Constants (after line 58)
+
+```java
+public static final int VIEW_TYPE_VOICE_SENT = 20;
+public static final int VIEW_TYPE_VOICE_RECEIVED = 21;
+```
+
+### 2. Update getItemViewType() method (around line 536, after sticker check)
+
+Add this code after the sticker type check:
+
+```java
+// Voice messages
+if (Message.TYPE_VOICE.equals(message.getType())) {
+    return isSent ? VIEW_TYPE_VOICE_SENT : VIEW_TYPE_VOICE_RECEIVED;
+}
+```
+
+### 3. Update onCreateViewHolder() (around line 629, before default case)
+
+Add these cases:
+
+```java
+case VIEW_TYPE_VOICE_SENT:
+case VIEW_TYPE_VOICE_RECEIVED:
+    return com.example.doan_zaloclone.adapters.VoiceMessageViewHolder.create(parent);
+```
+
+### 4. Update onBindViewHolder() (around line 666, after sticker binding)
+
+Add this code:
+
+```java
+else if (holder instanceof com.example.doan_zaloclone.adapters.VoiceMessageViewHolder) {
+    ((com.example.doan_zaloclone.adapters.VoiceMessageViewHolder) holder).bind(message);
+}
+```
+
+### 5. Add import statement at top of file
+
+```java
+import com.example.doan_zaloclone.adapters.VoiceMessageViewHolder;
+```
+
+### 6. Handle ViewHolder recycling in onViewRecycled() method
+
+Add this method if it doesn't exist (around line 670):
+
+```java
+@Override
+public void onViewRecycled(@NonNull RecyclerView.ViewHolder holder) {
+    super.onViewRecycled(holder);
+    if (holder instanceof com.example.doan_zaloclone.adapters.VoiceMessageViewHolder) {
+        ((com.example.doan_zaloclone.adapters.VoiceMessageViewHolder) holder).onRecycled();
+    }
+}
+```
+
+## Files Created
+
+1. `/res/layout/item_voice_message.xml` - Voice message bubble layout
+2. `/adapters/VoiceMessageViewHolder.java` - ViewHolder for voice messages
+3. `/res/drawable/rounded_blue_bg_small.xml` - Small rounded blue background for speed button
+
+## Testing
+
+After implementation:
+1. Send a voice message in chat
+2. Verify it displays with play button, waveform, duration, and speed control
+3. Click play → should play audio
+4. Click speed button → should show popup menu with speed options
+5. Verify progress bar updates during playback
+6. Verify duration counter updates (00:00 / 00:05 format)
+
+## Notes
+
+- Voice messages use the same layout for both sent and received (background is defined in view root)
+- MediaPlayer is automatically released when ViewHolder is recycled
+- Progress tracking updates every 100ms for smooth animation
+- Speed can be changed during playback (applies immediately)
+- Waveform serves as a visual progress indicator (though currently static - could be enhanced later)

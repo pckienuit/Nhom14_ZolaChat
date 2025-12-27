@@ -1,0 +1,191 @@
+# WebSocket Testing Guide
+
+## Overview
+WebSocket Test Activity cho phép test real-time messaging connection trước khi migrate ChatRepository.
+
+## Setup Testing
+
+### 1. Start Backend Server
+```bash
+cd D:\DoAn_ZaloClone\server
+npm start
+```
+
+Verify server running:
+```
+✅ Firebase Admin SDK initialized
+✅ WebSocket server initialized
+HTTP Server: http://localhost:3000
+```
+
+### 2. Launch App & Test Activity
+1. Run app trên emulator
+2. Login với Firebase account
+3. Tap "🔧 API Test" button (green, góc trên phải)
+4. Tap "🔌 WebSocket Test" button (purple)
+
+### 3. Test Connection
+1. **Tap "Connect"**
+   - Logs should show: "Connecting to WebSocket..."
+   - Wait for: "✅ WebSocket CONNECTED"
+   - Buttons will enable
+
+2. **Enter Conversation ID**
+   - Nhập bất kỳ ID nào (e.g., "test123")
+   - Hoặc copy ID từ Firestore conversations collection
+
+3. **Tap "Join Room"**
+   - Logs: "Joined room: [id]"
+   - Now listening for messages in that room
+
+4. **Test Typing Indicator**
+   - Tap "Send Typing (2s)"
+   - Logs: "Sent typing indicator..."
+   - After 2s: "Stopped typing indicator"
+
+5. **Wait for Events**
+   - If another user sends message → "📨 NEW MESSAGE"
+   - If another user types → "⌨️ TYPING:"
+
+## Expected Results
+
+### Successful Connection:
+```
+=== WebSocket Test Activity ===
+
+Server: http://10.0.2.2:3000
+User: [your-email]
+UID: [your-uid]
+✅ Authenticated
+
+--- Ready to test ---
+
+Connecting to WebSocket...
+✅ WebSocket CONNECTED
+Joined room: test123
+Sent typing indicator for: test123
+Stopped typing indicator
+```
+
+### Message Received (from another client):
+```
+📨 NEW MESSAGE:
+  Content: Hello world
+  From: [sender-uid]
+  Type: text
+  Raw: {"id":"msg123","content":"Hello world",...}
+```
+
+### Typing Event:
+```
+⌨️ TYPING: [user-uid] is typing...
+⌨️ TYPING: [user-uid] is stopped
+```
+
+## Troubleshooting
+
+### Connection Failed
+**Error:** `⚠️ ERROR: Connection error`
+
+**Solutions:**
+1. Check server running: `npm start` in server folder
+2. Verify URL: http://10.0.2.2:3000 (emulator)
+3. Check Firebase user logged in
+4. Look at server logs for authentication errors
+
+### No Events Received
+**Issue:** Connected but no messages/typing events
+
+**Solutions:**
+1. Verify joined correct room (conversation ID)
+2. Check another client sending to same room
+3. Look at server console - should see:
+   ```
+   🔌 Connected: [uid]
+   ```
+4. Check backend WebSocket event handlers
+
+### Authentication Error
+**Error:** `Authentication error`
+
+**Solutions:**
+1. Logout and login again in app
+2. Check Firebase token is valid
+3. Verify server has correct serviceAccountKey.json
+4. Check server logs for token verification errors
+
+## Testing with Multiple Devices/Emulators
+
+### Setup:
+1. Run 2 emulators or 1 emulator + 1 real device
+2. Login different accounts on each
+3. Both connect to WebSocket
+4. Both join SAME conversation ID
+
+### Test Scenarios:
+
+**Real-time Message:**
+- Device A: Stay in WebSocket Test, joined room "abc123"
+- Device B: Send message via API or app to conversation "abc123"
+- Device A: Should receive "📨 NEW MESSAGE" event
+
+**Typing Indicator:**
+- Both join room "abc123"
+- Device A: Tap "Send Typing"
+- Device B: Should see "⌨️ TYPING: [A's uid] is typing..."
+
+## Server-Side Verification
+
+Check server console for:
+```
+🔌 Connected: [uid]
+Joined conversation: abc123
+```
+
+If you send a message via API and WebSocket is working, server logs:
+```
+Broadcasting new_message to conversation: abc123
+```
+
+## Next Steps After Testing
+
+Once WebSocket test passes:
+1. ✅ Connection works
+2. ✅ Room join/leave works
+3. ✅ Events received correctly
+4. ✅ Typing indicators work
+
+→ **Ready to migrate ChatRepository!**
+
+## Common Issues
+
+### Issue: Socket won't connect
+- Backend không chạy: Start server
+- Wrong URL: Emulator dùng 10.0.2.2, real device dùng IP máy dev
+- Firewall: Check Windows Firewall allow port 3000
+
+### Issue: Connected but can't join room
+- Check conversation ID có tồn tại
+- Server có thể require conversation exist (check backend code)
+
+### Issue: No typing events
+- Must be in same room
+- Check sendTypingIndicator implementation
+- Look at backend Socket.IO event handlers
+
+## Files Created
+
+```
+app/src/main/java/com/example/doan_zaloclone/
+├── websocket/
+│   └── SocketManager.java
+└── WebSocketTestActivity.java
+
+app/src/main/res/layout/
+└── activity_websocket_test.xml
+```
+
+## Clean Up After Testing
+
+WebSocketTestActivity will be removed after full migration.
+For now, keep it for debugging real-time features.

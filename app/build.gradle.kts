@@ -3,6 +3,9 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
+import java.util.Properties
+import java.io.FileInputStream
+
 android {
     namespace = "com.example.doan_zaloclone"
     compileSdk = 34
@@ -21,15 +24,65 @@ android {
             //noinspection ChromeOsAbiSupport
             abiFilters.addAll(listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64"))
         }
+        
+        // Inject API keys from local.properties (secure, not committed to Git)
+        val localProperties = Properties()
+        val localPropertiesFile = rootProject.file("local.properties")
+        if (localPropertiesFile.exists()) {
+            localPropertiesFile.inputStream().use { localProperties.load(it) }
+        }
+        
+        buildConfigField("String", "CLOUDINARY_CLOUD_NAME", 
+            "\"${localProperties.getProperty("CLOUDINARY_CLOUD_NAME", "")}\"")
+        buildConfigField("String", "CLOUDINARY_API_KEY", 
+            "\"${localProperties.getProperty("CLOUDINARY_API_KEY", "")}\"")
+        buildConfigField("String", "CLOUDINARY_API_SECRET", 
+            "\"${localProperties.getProperty("CLOUDINARY_API_SECRET", "")}\"")
+        buildConfigField("String", "TURN_SERVER_HOST", 
+            "\"${localProperties.getProperty("TURN_SERVER_HOST", "")}\"")
+        buildConfigField("String", "TURN_SERVER_USERNAME", 
+            "\"${localProperties.getProperty("TURN_SERVER_USERNAME", "")}\"")
+        buildConfigField("String", "TURN_SERVER_PASSWORD", 
+            "\"${localProperties.getProperty("TURN_SERVER_PASSWORD", "")}\"")
+    }
+
+    // ============================================================
+    // SIGNING CONFIGS - Production release signing
+    // ============================================================
+    signingConfigs {
+        create("release") {
+            // Read keystore properties from local.properties
+            val localProperties = Properties()
+            val localPropertiesFile = rootProject.file("local.properties")
+            if (localPropertiesFile.exists()) {
+                localPropertiesFile.inputStream().use { localProperties.load(it) }
+            }
+            
+            storeFile = file(localProperties.getProperty("RELEASE_STORE_FILE", "keystore/release.jks"))
+            storePassword = localProperties.getProperty("RELEASE_STORE_PASSWORD", "")
+            keyAlias = localProperties.getProperty("RELEASE_KEY_ALIAS", "")
+            keyPassword = localProperties.getProperty("RELEASE_KEY_PASSWORD", "")
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Apply signing config
+            signingConfig = signingConfigs.getByName("release")
+            
+            // Enable code minification & obfuscation with R8
+            isMinifyEnabled = true
+            // Enable resource shrinking (removes unused resources)
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        
+        debug {
+            // Keep debug builds fast - no minification
+            isMinifyEnabled = false
         }
     }
     

@@ -1,0 +1,693 @@
+# Group Chat Real-time UI Update Fix
+
+## Ngày cập nhật: 2025-12-24
+
+---
+
+## 📋 Tổng quan
+
+Document này mô tả việc fix các vấn đề liên quan đến real-time UI updates cho Group Chat, bao gồm:
+- ✅ **Xóa nhóm**: Tự động cập nhật UI và navigate về Home
+- ✅ **Thêm nhóm**: Hiển thị ngay lập tức cho tất cả members
+- ✅ **Rời nhóm**: Auto-finish khi đang trong chat
+
+---
+
+## 🐛 Vấn đề ban đầu
+
+### 1. WebSocket Events không được nhận
+- Backend emit events nhưng clients không nhận được
+- UI không tự động cập nhật khi conversation bị xóa/tạo mới
+
+### 2. Delay khi thêm nhóm mới
+- Tạo nhóm mới phải đợi lâu mới hiển thị trên UI
+- Chỉ người tạo thấy nhóm ngay, members khác phải refresh
+
+### 3. Không tự động thoát khi group bị xóa
+- User đang trong chat, nhóm bị xóa nhưng vẫn ở trong màn hình chat
+- Không có thông báo hoặc điều hướng
+
+---
+
+## 🔍 Root Cause Analysis
+
+### 1. WebSocket io Object không accessible trong Routes
+
+**Vấn đề**: Backend khởi tạo `io` object nhưng không set vào Express app
+```javascript
+// index.js - VẤN ĐỀ
+const io = initializeWebSocket(server);
+// ❌ KHÔNG có: app.set('io', io);
+
+// conversations.js
+const io = req.app.get('io'); // ❌ luôn trả về undefined
+```
+
+**Hậu quả**: Routes không thể emit WebSocket events
+
+### 2. WebSocket Room Naming không đồng nhất
+
+**Vấn đề**: Backend emit đến `participantId` thay vì `user:participantId`
+```javascript
+// ❌ SAI
+io.to(participantId).emit('conversation_created', {...});
+
+// ✅ ĐÚNG  
+io.to(`user:${participantId}`).emit('conversation_created', {...});
+```
+
+**Hậu quả**: Client join room `user:userId` nhưng server emit đến room `userId`
+
+### 3. ConversationRepository không phải Singleton
+
+**Vấn đề**: Mỗi ViewModel/Activity tạo instance riêng
+```java
+// HomeViewModel
+this.conversationRepository = new ConversationRepository(); // Instance 1
+
+// RoomActivity  
+conversationRepository = new ConversationRepository(); // Instance 2
+
+// GroupViewModel
+this.conversationRepository = new ConversationRepository(); // Instance 3
+```
+
+**Hậu quả**: 
+- Mỗi instance có `groupLeftEvent` LiveData riêng
+- Socket listeners được set nhiều lần không cần thiết
+- Events chỉ trigger trên instance nhận được, không share giữa các màn hình
+
+### 4. Create Group dùng Firestore trực tiếp
+
+**Vấn đề**: `ChatRepository.createGroup()` gọi Firestore thay vì API
+```java
+// ❌ Firestore trực tiếp - không emit WebSocket
+firestoreManager.createGroupConversation(adminId, groupName, memberIds, ...);
+socketManager.triggerConversationCreated(id); // Chỉ trigger local
+```
+
+**Hậu quả**: Chỉ người tạo nhóm nhận được trigger, members khác không
+
+---
+
+## ✅ Giải pháp đã triển khai
+
+### 1. Backend: Make `io` accessible trong Routes
+
+**File**: `server/src/index.js`
+
+```javascript
+// Initialize WebSocket
+const io = initializeWebSocket(server);
+
+// ✅ FIX: Make io available in routes for emitting events
+app.set('io', io);
+```
+
+**Kết quả**: Routes có thể access `io` qua `req.app.get('io')`
+
+---
+
+### 2. Backend: Fix WebSocket Room Names
+
+**File**: `server/src/routes/conversations.js`
+
+**Trước đây**:
+```javascript
+io.to(participantId).emit('conversation_created', {...});
+```
+
+**Sau khi fix**:
+```javascript
+memberIds.forEach(memberId => {
+  const room = `user:${memberId}`;
+  io.to(room).emit('conversation_created', {...});
+});
+```
+
+**Áp dụng cho**:
+- `conversation_created`
+- `conversation_updated`
+- `conversation_deleted`
+- `member_left`
+- `group_left`
+
+---
+
+### 3. Backend: Thêm DELETE API cho Conversations
+
+**File**: `server/src/routes/conversations.js`
+
+```javascript
+router.delete('/:conversationId', authenticateUser, async (req, res) => {
+  const { conversationId } = req.params;
+  const userId = req.user.uid;
+  
+  // Get conversation data
+  const doc = await db.collection('conversations').doc(conversationId).get();
+  const memberIds = doc.data().memberIds || [];
+  
+  // Notify all members via WebSocket BEFORE deletion
+  const io = req.app.get('io');
+  if (io) {
+    memberIds.forEach(memberId => {
+      io.to(`user:${memberId}`).emit('conversation_deleted', {
+        conversationId,
+        deletedBy: userId
+      });
+    });
+  }
+  
+  // Delete messages and conversation
+  // ... batch delete logic
+  
+  res.json({ success: true });
+});
+```
+
+**Features**:
+- Check membership permissions
+- Emit `conversation_deleted` event đến tất cả members
+- Batch delete messages và conversation document
+
+---
+
+### 4. Backend: Enhance POST API cho Group Creation
+
+**File**: `server/src/routes/conversations.js`
+
+```javascript
+router.post('/', authenticateUser, async (req, res) => {
+  const { memberIds, name, adminId, type } = req.body;
+  
+  const conversation = {
+    memberIds,
+    type: type || 'GROUP',
+    name,
+    adminIds: [adminId],
+    createdAt: Date.now(),
+    timestamp: Date.now()
+  };
+  
+  const convRef = await db.collection('conversations').add(conversation);
+  
+  // Emit WebSocket event to ALL members
+  const io = req.app.get('io');
+  if (io) {
+    memberIds.forEach(memberId => {
+      io.to(`user:${memberId}`).emit('conversation_created', {
+        conversationId: convRef.id,
+        conversation: { id: convRef.id, ...conversation }
+      });
+    });
+  }
+  
+  res.json({ 
+    success: true, 
+    conversationId: convRef.id,
+    conversation: { id: convRef.id, ...conversation }
+  });
+});
+```
+
+---
+
+### 5. Android: Convert ConversationRepository to Singleton
+
+**File**: `app/src/main/java/.../repository/ConversationRepository.java`
+
+**Trước đây**:
+```java
+public class ConversationRepository {
+    public ConversationRepository() {
+        // Constructor public
+    }
+}
+```
+
+**Sau khi fix**:
+```java
+public class ConversationRepository {
+    private static ConversationRepository instance;
+    
+    public static synchronized ConversationRepository getInstance() {
+        if (instance == null) {
+            instance = new ConversationRepository();
+        }
+        return instance;
+    }
+    
+    private ConversationRepository() {
+        // Private constructor
+        setupSocketListeners();
+        socketManager.connect();
+    }
+}
+```
+
+**Cập nhật usage**:
+```java
+// HomeViewModel
+this.conversationRepository = ConversationRepository.getInstance();
+
+// GroupViewModel  
+this.conversationRepository = ConversationRepository.getInstance();
+
+// RoomActivity
+conversationRepository = ConversationRepository.getInstance();
+
+// ContactViewModel
+this.conversationRepository = ConversationRepository.getInstance();
+```
+
+**Benefits**:
+- Single source of truth cho WebSocket events
+- Shared `groupLeftEvent` LiveData giữa tất cả components
+- Giảm overhead (chỉ 1 set socket listeners)
+
+---
+
+### 6. Android: Add conversation_deleted Event Handler
+
+**File**: `app/src/main/java/.../websocket/SocketManager.java`
+
+**Thêm interface callback**:
+```java
+public interface OnGroupEventListener {
+    void onGroupLeft(String conversationId);
+    void onMemberLeft(String conversationId, String userId, String userName);
+    void onConversationCreated(String conversationId);
+    void onConversationUpdated(String conversationId);
+    void onConversationDeleted(String conversationId); // ✅ NEW
+}
+```
+
+**Thêm socket listener**:
+```java
+socket.on("conversation_deleted", args -> {
+    try {
+        JSONObject data = (JSONObject) args[0];
+        String conversationId = data.getString("conversationId");
+        
+        if (groupEventListener != null) {
+            groupEventListener.onConversationDeleted(conversationId);
+        }
+    } catch (JSONException e) {
+        Log.e(TAG, "Error parsing conversation_deleted event", e);
+    }
+});
+```
+
+---
+
+### 7. Android: Handle conversation_deleted in Repository
+
+**File**: `app/src/main/java/.../repository/ConversationRepository.java`
+
+```java
+@Override
+public void onConversationDeleted(String conversationId) {
+    Log.d(TAG, "🗑️ Conversation deleted: " + conversationId);
+    
+    // Remove from cache
+    synchronized (cachedConversations) {
+        cachedConversations.removeIf(c -> c.getId().equals(conversationId));
+    }
+    
+    // Broadcast event to UI (same as group_left)
+    mainHandler.post(() -> groupLeftEvent.setValue(conversationId));
+}
+```
+
+---
+
+### 8. Android: Auto-finish RoomActivity on deletion
+
+**File**: `app/src/main/java/.../ui/room/RoomActivity.java`
+
+**Thêm field**:
+```java
+private ConversationRepository conversationRepository;
+```
+
+**Khởi tạo trong onCreate**:
+```java
+conversationRepository = ConversationRepository.getInstance();
+```
+
+**Observe trong observeViewModel()**:
+```java
+// Observe group left/deleted events
+conversationRepository.getGroupLeftEvent().observe(this, deletedConversationId -> {
+    if (deletedConversationId != null && deletedConversationId.equals(conversationId)) {
+        Toast.makeText(this, "Nhóm đã bị xóa hoặc bạn đã rời nhóm", Toast.LENGTH_SHORT).show();
+        finish();
+    }
+});
+```
+
+---
+
+### 9. Android: Navigate Home after delete in GroupInfoActivity
+
+**File**: `app/src/main/java/.../ui/group/GroupInfoActivity.java`
+
+**Thêm LiveData riêng trong GroupViewModel**:
+```java
+private MutableLiveData<Resource<Boolean>> deleteGroupResult;
+
+public LiveData<Resource<Boolean>> getDeleteGroupResult() {
+    return deleteGroupResult;
+}
+```
+
+**Observe trong GroupInfoActivity**:
+```java
+groupViewModel.getDeleteGroupResult().observe(this, resource -> {
+    if (resource != null && resource.getStatus() == Resource.Status.SUCCESS) {
+        Toast.makeText(this, "Đã xóa nhóm thành công", Toast.LENGTH_SHORT).show();
+        
+        Intent intent = new Intent();
+        intent.putExtra("conversationId", conversationId);
+        intent.putExtra("action", "delete_group");
+        setResult(RESULT_OK, intent);
+        finish();
+    }
+});
+```
+
+---
+
+### 10. Android: Migrate createGroup to API
+
+**File**: `app/src/main/java/.../repository/ChatRepository.java`
+
+**Trước đây (Firestore)**:
+```java
+firestoreManager.createGroupConversation(
+    adminId, groupName, memberIds,
+    new OnConversationCreatedListener() {
+        @Override
+        public void onSuccess(Conversation conversation) {
+            result.setValue(Resource.success(conversation));
+            socketManager.triggerConversationCreated(conversation.getId());
+        }
+    }
+);
+```
+
+**Sau khi fix (REST API)**:
+```java
+Map<String, Object> requestBody = new HashMap<>();
+requestBody.put("memberIds", memberIds);
+requestBody.put("name", groupName);
+requestBody.put("type", "GROUP");
+requestBody.put("adminId", adminId);
+
+Call<Map<String, Object>> call = apiService.createConversation(requestBody);
+
+call.enqueue(new Callback<Map<String, Object>>() {
+    @Override
+    public void onResponse(...) {
+        if (response.isSuccessful()) {
+            String conversationId = (String) body.get("conversationId");
+            
+            Conversation conversation = new Conversation();
+            conversation.setId(conversationId);
+            conversation.setName(groupName);
+            conversation.setMemberIds(memberIds);
+            
+            result.setValue(Resource.success(conversation));
+            // WebSocket handles notification automatically
+        }
+    }
+});
+```
+
+**Benefits**:
+- Backend emit event cho **tất cả members** qua WebSocket
+- Members khác nhận được update ngay lập tức
+- Không cần manual `triggerConversationCreated()`
+
+---
+
+### 11. Android: Add TAG constant to ChatRepository
+
+**File**: `app/src/main/java/.../repository/ChatRepository.java`
+
+```java
+public class ChatRepository {
+    private static final String TAG = "ChatRepository"; // ✅ Added
+    
+    // ... rest of code
+}
+```
+
+**Lý do**: Compile errors do thiếu TAG constant khi thêm logging
+
+---
+
+## 📊 Flow Diagram
+
+### Xóa nhóm (Delete Group)
+
+```
+[User clicks Delete in GroupInfoActivity]
+           ↓
+[GroupViewModel.deleteGroup(conversationId)]
+           ↓
+[ChatRepository.deleteGroup() - API Call]
+           ↓
+[Backend DELETE /api/conversations/:id]
+           ↓
+[Emit conversation_deleted to all memberIds via WebSocket]
+           ↓
+┌─────────────────┬─────────────────┬─────────────────┐
+│   Member 1      │   Member 2      │   Member 3      │
+│  (in Home)      │  (in Chat)      │  (in Home)      │
+└─────────────────┴─────────────────┴─────────────────┘
+           ↓                ↓                ↓
+[SocketManager receives conversation_deleted event]
+           ↓
+[ConversationRepository.onConversationDeleted()]
+           ↓
+[groupLeftEvent.setValue(conversationId)]
+           ↓
+┌─────────────────┬─────────────────┬─────────────────┐
+│ HomeFragment    │  RoomActivity   │  HomeFragment   │
+│ observes event  │  observes event │  observes event │
+│ → Remove from   │  → Toast +      │  → Remove from  │
+│   list          │    finish()     │    list         │
+└─────────────────┴─────────────────┴─────────────────┘
+```
+
+### Thêm nhóm (Create Group)
+
+```
+[User creates group in CreateGroupActivity]
+           ↓
+[GroupViewModel.createGroup(adminId, groupName, memberIds)]
+           ↓
+[ChatRepository.createGroup() - API Call]
+           ↓
+[Backend POST /api/conversations]
+           ↓
+[Save to Firestore + Emit conversation_created to all memberIds]
+           ↓
+┌─────────────────┬─────────────────┬─────────────────┐
+│   Creator       │   Member 1      │   Member 2      │
+│  (navigates     │   (in Home)     │   (in Chat)     │
+│   to chat)      │                 │                 │
+└─────────────────┴─────────────────┴─────────────────┘
+           ↓                ↓                ↓
+[SocketManager receives conversation_created event]
+           ↓
+[ConversationRepository.onConversationCreated()]
+           ↓
+[conversationRefreshNeeded.setValue(true)]
+           ↓
+┌─────────────────┬─────────────────┬─────────────────┐
+│ Creator sees    │ HomeFragment    │ Member sees     │
+│ success +       │ observes event  │ new group       │
+│ navigates       │ → Refresh list  │ appear in       │
+│ to chat         │ → Show new      │ real-time       │
+│                 │   group         │                 │
+└─────────────────┴─────────────────┴─────────────────┘
+```
+
+---
+
+## 🧪 Testing Guide
+
+### Test Case 1: Xóa nhóm (cả 3 members online)
+
+**Setup**:
+- Device A: User1 (admin) - đang ở Home
+- Device B: User2 - đang chat trong group
+- Device C: User3 - đang ở Home
+
+**Steps**:
+1. User1 vào Group Info → Click "Xóa nhóm"
+2. Confirm deletion
+
+**Expected Results**:
+- ✅ User1: Navigate về Home, group biến mất khỏi list, Toast "Đã xóa nhóm thành công"
+- ✅ User2: RoomActivity tự động finish(), Toast "Nhóm đã bị xóa", navigate về Home, group biến mất
+- ✅ User3: Group biến mất khỏi list ngay lập tức
+
+**Server Logs**:
+```
+🗑️ User xxx deleting conversation yyy
+🔌 WebSocket io available: true
+📢 Emitting conversation_deleted to members: [user1, user2, user3]
+  → Emitting to room: user:user1
+  → Emitting to room: user:user2
+  → Emitting to room: user:user3
+✅ Notified all members of conversation deletion
+✅ Deleted conversation yyy
+```
+
+**Client Logs** (mỗi device):
+```
+ConversationRepo: 🗑️ Conversation deleted: yyy
+HomeFragment: Group left event received: yyy
+RoomActivity: Conversation deleted, finishing activity: yyy
+```
+
+---
+
+### Test Case 2: Tạo nhóm mới
+
+**Setup**:
+- Device A: User1 - tạo nhóm
+- Device B: User2 - đang ở Home
+- Device C: User3 - đang ở Home
+
+**Steps**:
+1. User1 vào Create Group
+2. Chọn User2 và User3
+3. Nhập tên nhóm "Test Group"
+4. Click "Tạo nhóm"
+
+**Expected Results**:
+- ✅ User1: Toast "Tạo nhóm thành công", navigate vào chat của nhóm mới
+- ✅ User2: Group mới xuất hiện trong list ngay lập tức (< 1s)
+- ✅ User3: Group mới xuất hiện trong list ngay lập tức (< 1s)
+
+**Server Logs**:
+```
+📝 Creating conversation: { type: 'GROUP', name: 'Test Group', members: [...] }
+✅ Created conversation: xxx
+📢 Emitting conversation_created to members: [user1, user2, user3]
+  → Emitting to room: user:user1
+  → Emitting to room: user:user2
+  → Emitting to room: user:user3
+✅ Notified all members of new conversation
+```
+
+**Client Logs** (User2, User3):
+```
+ConversationRepo: ➕ New conversation created: xxx
+HomeViewModel: Conversation refresh needed triggered
+HomeFragment: Refreshing conversations due to new conversation
+```
+
+---
+
+### Test Case 3: Rời nhóm khi đang chat
+
+**Setup**:
+- Device A: User1 - đang chat trong group
+- Device B: User2 (admin) - ở Home
+
+**Steps**:
+1. User1 click nút "Rời nhóm" trong Group Info
+2. Confirm
+
+**Expected Results**:
+- ✅ User1: RoomActivity tự động finish(), navigate về Home, group biến mất
+- ✅ User2: Group vẫn còn trong list (nhưng member count giảm)
+
+---
+
+## 🔧 Troubleshooting
+
+### Vấn đề: Events không được nhận
+
+**Kiểm tra**:
+1. Server logs có dòng `🔌 WebSocket io available: true`?
+   - Nếu false: Check `app.set('io', io)` trong `index.js`
+
+2. Server logs có emit events?
+   - Nếu không: Check API route có gọi `req.app.get('io')` và emit?
+
+3. Client có connect WebSocket?
+   - Check Logcat: `🔌 Connected: userId`
+   - Check: `ConversationRepository.getInstance()` được gọi?
+
+### Vấn đề: UI không cập nhật
+
+**Kiểm tra**:
+1. Client có nhận event?
+   - Check Logcat: `🗑️ Conversation deleted:` hoặc `➕ New conversation created:`
+
+2. Observer có được set?
+   - Check `HomeFragment.observeViewModel()` có observe `getGroupLeftEvent()`?
+   - Check `RoomActivity.observeViewModel()` có observe `groupLeftEvent`?
+
+3. LiveData có trigger?
+   - Check: `groupLeftEvent.setValue()` được gọi trong ConversationRepository?
+
+---
+
+## 📝 Summary
+
+### Backend Changes
+- ✅ Added `app.set('io', io)` để routes access WebSocket
+- ✅ Fixed room names: `user:${userId}` thay vì `userId`
+- ✅ Added `DELETE /conversations/:id` endpoint
+- ✅ Enhanced `POST /conversations` để support GROUP creation
+- ✅ Added debug logging cho WebSocket emits
+
+### Android Changes
+- ✅ Convert `ConversationRepository` thành Singleton
+- ✅ Added `onConversationDeleted` callback và handler
+- ✅ Added auto-finish logic trong `RoomActivity`
+- ✅ Added navigate logic trong `GroupInfoActivity`
+- ✅ Migrated `createGroup` từ Firestore sang REST API
+- ✅ Updated all ViewModels/Activities dùng `getInstance()`
+
+### Benefits
+- ⚡ **Real-time updates**: < 1 second latency
+- 🔄 **Consistency**: Tất cả clients sync ngay lập tức
+- 🎯 **User Experience**: Smooth navigation và instant feedback
+- 🏗️ **Architecture**: Clean separation giữa API và WebSocket
+- 🐛 **Debugging**: Comprehensive logging ở cả client và server
+
+---
+
+## 🔮 Future Improvements
+
+1. **Optimistic UI Updates**: Update UI trước khi server respond
+2. **Offline Support**: Queue actions khi offline, sync khi online
+3. **Conflict Resolution**: Handle concurrent modifications
+4. **Performance**: Batch WebSocket emits cho nhiều events cùng lúc
+5. **Testing**: Unit tests cho WebSocket event handlers
+6. **Monitoring**: Track real-time event delivery metrics
+
+---
+
+## 📚 Related Documents
+
+- [WebSocket Implementation Guide](./WEBSOCKET_TEST_GUIDE.md)
+- [WebSocket Real-time Test Checklist](./WEBSOCKET_REALTIME_TEST_CHECKLIST.md)
+- [Backend API Documentation](./API_DOCUMENTATION.md)
+- [Send Message API Implementation](./SENDMESSAGE_API_IMPLEMENTATION.md)
+
+---
+
+## 👥 Contributors
+
+- Developer: PC Kien
+- Date: 2025-12-24
+- Version: 1.0.0

@@ -1,0 +1,136 @@
+# listenToMessages() WebSocket Implementation
+
+## Strategy: Hybrid API + WebSocket
+
+### Flow:
+1. **Initial Load:** Fetch existing messages via API
+2. **Join Room:** Join WebSocket conversation room
+3. **Listen:** Set up WebSocket listener for new messages
+4. **Merge:** Add new messages from WebSocket to cached list
+5. **Notify:** Call listener with updated message list
+
+### New Implementation:
+
+```java
+/**
+ * Listen to messages in a conversation (callback version - backward compatibility)
+ * MIGRATED: Uses API for initial load + WebSocket for real-time updates
+ * @param conversationId ID of the conversation
+ * @param listener Listener for message updates
+ * @return ListenerRegistration for cleanup (maintains backward compatibility)
+ */
+public ListenerRegistration listenToMessages(String conversationId, MessagesListener listener) {
+    // Update current conversation
+    currentConversationId = conversationId;
+    cachedMessages.clear();
+    
+    // 1. Load initial messages via API
+    Call<MessageListResponse> call = apiService.getMessages(conversationId, 100, null);
+    call.enqueue(new Callback<MessageListResponse>() {
+        @Override
+        public void onResponse(Call<MessageListResponse> call, Response<MessageListResponse> response) {
+            if (response.isSuccessful() && response.body() != null) {
+                List<Message> messages = response.body().getMessages();
+                if (messages != null) {
+                    cachedMessages.addAll(messages);
+                    listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                }
+            } else {
+                listener.onError("Failed to load messages: HTTP " + response.code());
+            }
+        }
+        
+        @Override
+        public void onFailure(Call<MessageListResponse> call, Throwable t) {
+            listener.onError("Network error: " + (t.getMessage() != null ? t.getMessage() : "Unknown"));
+        }
+    });
+    
+    // 2. Setup WebSocket listener for new messages
+    socketManager.setMessageListener(messageData -> {
+        try {
+            // Parse JSON to Message object
+            // Note: messageData is JSONObject from Socket.IO
+            String id = messageData.optString("id");
+            String senderId = messageData.optString("senderId");
+            String content = messageData.optString("content");
+            String type = messageData.optString("type");
+            long timestamp = messageData.optLong("timestamp");
+            
+            Message newMessage = new Message();
+            newMessage.setId(id);
+            newMessage.setSenderId(senderId);
+            newMessage.setContent(content);
+            newMessage.setType(type);
+            newMessage.setTimestamp(timestamp);
+            
+            // Add optional fields
+            if (messageData.has("senderName")) {
+                newMessage.setSenderName(messageData.optString("senderName"));
+            }
+            
+            // Check if message already exists (avoid duplicates)
+            boolean exists = false;
+            for (Message msg : cachedMessages) {
+                if (msg.getId() != null && msg.getId().equals(id)) {
+                    exists = true;
+                    break;
+                }
+            }
+            
+            if (!exists) {
+                cachedMessages.add(newMessage);
+                listener.onMessagesChanged(new ArrayList<>(cachedMessages));
+            }
+        } catch (Exception e) {
+            Log.e("ChatRepository", "Error parsing WebSocket message", e);
+        }
+    });
+    
+    // 3. Join conversation room
+    socketManager.joinConversation(conversationId);
+    
+    // 4. Return a custom ListenerRegistration for cleanup
+    return new ListenerRegistration() {
+        @Override
+        public void remove() {
+            // Leave WebSocket room
+            if (conversationId.equals(currentConversationId)) {
+                socketManager.leaveConversation(conversationId);
+                currentConversationId = null;
+                cachedMessages.clear();
+            }
+        }
+    };
+}
+```
+
+### Key Features:
+
+1. **Backward Compatible**: Same signature, returns ListenerRegistration
+2. **Hybrid Approach**: API + WebSocket
+3. **Duplicate Prevention**: Checks message ID before adding
+4. **Proper Cleanup**: Custom ListenerRegistration leaves WebSocket room
+5. **Error Handling**: Both API and WebSocket errors
+
+### Limitations:
+
+- ⚠️ Message parsing is simplified (only basic fields)
+- ⚠️ Need to add support for file metadata, reply, forward, etc.
+- ⚠️ One active conversation at a time per repository instance
+- ⚠️ No pagination support yet (loads 100 messages max)
+
+### Future Improvements:
+
+1. Complete message parsing (all fields)
+2. Pagination support
+3. Message ordering verification
+4. Optimistic updates (show sent message immediately)
+5. Offline support
+
+### Testing:
+
+1. Open conversation → Messages load
+2. Send message from another device → Appears in real-time
+3. Close conversation → Leaves WebSocket room
+4. Reopen → Loads fresh via API + joins again
