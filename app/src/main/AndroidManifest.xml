@@ -123,7 +123,6 @@
             android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="adjustResize" />
             
-<<<<<<< HEAD
         <!-- Comments Activity -->
         <activity
             android:name=".activities.CommentsActivity"
@@ -131,8 +130,6 @@
             android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="adjustResize" />
             
-        <!-- Profile Card Activity -->
-=======
         <!-- Create Sticker Activity -->
         <activity
             android:name=".ui.sticker.CreateStickerActivity"
@@ -159,8 +156,7 @@
             android:exported="false"
             android:parentActivityName=".ui.sticker.StickerStoreActivity" />
             
-                <!-- Profile Card Activity -->
->>>>>>> main
+        <!-- Profile Card Activity -->
         <activity
             android:name=".ui.personal.ProfileCardActivity"
             android:exported="false"
