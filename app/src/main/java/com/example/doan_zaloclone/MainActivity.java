@@ -128,9 +128,26 @@ public class MainActivity extends AppCompatActivity {
         
         // Initialize FriendRepository and load friend requests badge
         setupFriendRequestsBadge();
+        
+        // Start NotificationService to maintain WebSocket in background
+        startNotificationService();
 
         // TEMPORARY: API Test Button - Only in DEBUG builds
         // addApiTestButton();
+    }
+    
+    /**
+     * Start NotificationService as foreground service
+     * This maintains WebSocket connection when app is in background
+     */
+    private void startNotificationService() {
+        Intent serviceIntent = new Intent(this, com.example.doan_zaloclone.services.NotificationService.class);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent);
+        } else {
+            startService(serviceIntent);
+        }
+        Log.d("MainActivity", "NotificationService started");
     }
     
     /**
@@ -336,6 +353,9 @@ public class MainActivity extends AppCompatActivity {
 
         // Sign out
         FirebaseAuth.getInstance().signOut();
+        
+        // Stop NotificationService
+        stopService(new Intent(this, com.example.doan_zaloclone.services.NotificationService.class));
 
         // Show message and redirect
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
@@ -890,6 +910,11 @@ public class MainActivity extends AppCompatActivity {
         // Clean up force logout listener
         if (forceLogoutListener != null) {
             forceLogoutListener.remove();
+        }
+        
+        // Stop NotificationService when app is finishing
+        if (isFinishing()) {
+            stopService(new Intent(this, com.example.doan_zaloclone.services.NotificationService.class));
         }
     }
 }

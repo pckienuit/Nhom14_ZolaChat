@@ -267,6 +267,7 @@ public class RoomActivity extends AppCompatActivity {
         checkAutoStartCall();
         
         // Set active conversation to prevent notifications
+        com.example.doan_zaloclone.services.NotificationService.setActiveConversation(this, conversationId);
         com.example.doan_zaloclone.MainActivity.setActiveConversationId(conversationId);
     }
 
@@ -3464,6 +3465,7 @@ public class RoomActivity extends AppCompatActivity {
         }
         
         // Clear active conversation to resume notifications
+        com.example.doan_zaloclone.services.NotificationService.clearActiveConversation(this);
         com.example.doan_zaloclone.MainActivity.clearActiveConversationId();
     }
 }
