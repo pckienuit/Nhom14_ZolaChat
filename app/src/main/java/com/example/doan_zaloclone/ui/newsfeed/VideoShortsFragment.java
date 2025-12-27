@@ -6,9 +6,12 @@ import android.view.View;
 import android.view.ViewGroup;
 
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import com.example.doan_zaloclone.R;
 
 import java.util.List;
+import java.util.Arrays;
 
 public class VideoShortsFragment extends Fragment {
     private RecyclerView rvVideoShorts;
@@ -20,7 +23,7 @@ public class VideoShortsFragment extends Fragment {
 
         rvVideoShorts = view.findViewById(R.id.rvVideoShorts);
         // Thiết lập 2 cột
-        rvVideoShorts.setLayoutManager(new androidx.leanback.widget.GridLayoutManager(getContext(), 2));
+        rvVideoShorts.setLayoutManager(new GridLayoutManager(getContext(), 2));
 
         // Dữ liệu mẫu ID video Shorts
         List<String> videoIds = Arrays.asList("dQw4w9WgXcQ", "3JZ_D3ELwOQ", "jNQXAC9IVRw");
