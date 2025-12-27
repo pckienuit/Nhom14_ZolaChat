@@ -23,6 +23,7 @@ public class PersonalViewModel extends ViewModel {
     private final MutableLiveData<Resource<User>> currentUser = new MutableLiveData<>();
     private final MutableLiveData<Resource<Boolean>> updateProfileState = new MutableLiveData<>();
     private final MutableLiveData<Resource<String>> uploadImageState = new MutableLiveData<>();
+    private String lastLoadedUserId; // Track which user was last loaded
 
     public PersonalViewModel() {
         this.userRepository = new UserRepository();
@@ -64,6 +65,7 @@ public class PersonalViewModel extends ViewModel {
             return;
         }
 
+        lastLoadedUserId = userId; // Store for later reload
         currentUser.setValue(Resource.loading());
 
         userRepository.getUserById(userId, new UserRepository.OnUserLoadedListener() {
@@ -181,7 +183,12 @@ public class PersonalViewModel extends ViewModel {
                                 @Override
                                 public void onSuccess() {
                                     uploadImageState.setValue(Resource.success(avatarUrl));
-                                    loadCurrentUser(); // Reload user data
+                                    // Reload the user that was last loaded
+                                    if (lastLoadedUserId != null) {
+                                        loadUser(lastLoadedUserId);
+                                    } else {
+                                        loadCurrentUser();
+                                    }
                                 }
 
                                 @Override
@@ -245,7 +252,12 @@ public class PersonalViewModel extends ViewModel {
                                 @Override
                                 public void onSuccess() {
                                     uploadImageState.setValue(Resource.success(coverUrl));
-                                    loadCurrentUser(); // Reload user data
+                                    // Reload the user that was last loaded
+                                    if (lastLoadedUserId != null) {
+                                        loadUser(lastLoadedUserId);
+                                    } else {
+                                        loadCurrentUser();
+                                    }
                                 }
 
                                 @Override

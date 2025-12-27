@@ -19,11 +19,12 @@ router.put('/:userId', authenticateUser, async (req, res) => {
     if (req.user.uid !== userId && req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Forbidden' });
     }
-    const { name, bio, avatarUrl, phone } = req.body;
+    const { name, bio, avatarUrl, coverUrl, phone } = req.body;
     const updates = {};
     if (name) updates.name = name;
     if (bio !== undefined) updates.bio = bio;
     if (avatarUrl) updates.avatarUrl = avatarUrl;
+    if (coverUrl) updates.coverUrl = coverUrl;
     if (phone) updates.phone = phone;
     await db.collection('users').doc(userId).update(updates);
     res.json({ success: true });
