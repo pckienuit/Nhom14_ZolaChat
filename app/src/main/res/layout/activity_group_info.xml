@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fitsSystemWindows="true"
+    android:fitsSystemWindows="false"
     android:background="@color/white">
 
     <LinearLayout
@@ -15,8 +15,11 @@
         <com.google.android.material.appbar.MaterialToolbar
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            android:background="@color/primary"
+            android:layout_height="wrap_content"
+            android:minHeight="?attr/actionBarSize"
+            android:background="@drawable/bg_gradient_blue"
+            android:paddingTop="45dp"
+            android:paddingBottom="10dp"
             android:elevation="4dp"
             app:title="Thông tin nhóm"
             app:titleTextColor="@color/white"
