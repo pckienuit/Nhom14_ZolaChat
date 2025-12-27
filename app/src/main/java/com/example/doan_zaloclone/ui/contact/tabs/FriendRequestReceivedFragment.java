@@ -129,6 +129,11 @@ public class FriendRequestReceivedFragment extends Fragment implements FriendReq
             public void onFriendRemoved(String userId) {
                 // Not relevant for received requests
             }
+            
+            @Override
+            public void onFriendStatusChanged(String friendId, boolean isOnline) {
+                // Not relevant for friend requests
+            }
         };
         
         SocketManager.getInstance().addFriendEventListener(friendEventListener);

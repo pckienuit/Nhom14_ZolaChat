@@ -20,9 +20,8 @@ import io.socket.client.Socket;
 public class SocketManager {
     private static final String TAG = "SocketManager";
 
-    // TODO: Change to production URL when deploying
-    // private static final String SOCKET_URL = "http://10.0.2.2:3000";  // Emulator localhost
-    private static final String SOCKET_URL = "https://zolachat.site";  // Production
+    // Server URL from BuildConfig (set by product flavor)
+    private static final String SOCKET_URL = com.example.doan_zaloclone.config.ServerConfig.SOCKET_URL;
 
     private static SocketManager instance;
     private Socket socket;
@@ -74,7 +73,7 @@ public class SocketManager {
                 
                 // Force WebSocket transport and secure connection
                 options.transports = new String[]{"websocket"};
-                options.secure = true;
+                options.secure = SOCKET_URL.startsWith("https://");
                 
                 options.reconnection = true;
                 options.reconnectionAttempts = 10;
@@ -468,6 +467,25 @@ public class SocketManager {
                 }
             }
         });
+        
+        // Friend online/offline status change event
+        socket.on("friend_status_changed", args -> {
+            if (args.length > 0) {
+                try {
+                    JSONObject data = (JSONObject) args[0];
+                    String friendId = data.getString("friendId");
+                    boolean isOnline = data.getBoolean("isOnline");
+
+                    Log.d(TAG, "🟢 Friend status changed: " + friendId + " isOnline: " + isOnline);
+
+                    for (OnFriendEventListener listener : friendEventListeners) {
+                        listener.onFriendStatusChanged(friendId, isOnline);
+                    }
+                } catch (JSONException e) {
+                    Log.e(TAG, "Error parsing friend_status_changed event", e);
+                }
+            }
+        });
 
         // ========== Phase 4B: Group Management Events ==========
 
@@ -787,5 +805,7 @@ public class SocketManager {
         void onFriendAdded(String userId);
 
         void onFriendRemoved(String userId);
+        
+        void onFriendStatusChanged(String friendId, boolean isOnline);
     }
 }

@@ -705,6 +705,14 @@ public class ChatRepository {
                 message.setStickerAnimated(messageData.optBoolean("isStickerAnimated", false));
             }
         }
+
+        // Voice fields
+        if (messageData.has("voiceUrl")) {
+            message.setVoiceUrl(messageData.optString("voiceUrl"));
+        }
+        if (messageData.has("voiceDuration")) {
+            message.setVoiceDuration(messageData.optInt("voiceDuration", 0));
+        }
         
         return message;
     }
@@ -726,6 +734,32 @@ public class ChatRepository {
                 .addOnFailureListener(e -> {
                     // Log error but don't block message sending
                     // In production, you might want to handle this differently
+                });
+    }
+
+    /**
+     * Mark conversation as read for a user (reset unread count to 0)
+     * Should be called when user opens a conversation
+     * @param conversationId ID of the conversation
+     * @param userId ID of the user reading the conversation
+     */
+    public void markAsRead(String conversationId, String userId) {
+        if (conversationId == null || userId == null) {
+            Log.w("ChatRepository", "markAsRead called with null params");
+            return;
+        }
+        
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("unreadCounts." + userId, 0);
+        
+        firestore.collection("conversations")
+                .document(conversationId)
+                .update(updates)
+                .addOnSuccessListener(aVoid -> {
+                    Log.d("ChatRepository", "Marked conversation " + conversationId + " as read for user " + userId);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("ChatRepository", "Failed to mark as read", e);
                 });
     }
 

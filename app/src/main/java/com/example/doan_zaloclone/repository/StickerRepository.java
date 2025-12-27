@@ -49,9 +49,10 @@ public class StickerRepository {
     private static final String TAG = "StickerRepository";
 
     // VPS Configuration
-    private static final String VPS_BASE_URL = "https://zolachat.site";
-    private static final String VPS_UPLOAD_URL = VPS_BASE_URL + "/api/stickers/upload";
-    private static final String VPS_CREATE_PACK_URL = VPS_BASE_URL + "/api/stickers/packs";
+    private static final String VPS_BASE_URL = com.example.doan_zaloclone.config.ServerConfig.VPS_BASE_URL;
+    private static final String VPS_UPLOAD_URL = com.example.doan_zaloclone.config.ServerConfig.VPS_UPLOAD_URL;
+    private static final String VPS_CREATE_PACK_URL = com.example.doan_zaloclone.config.ServerConfig.VPS_CREATE_PACK_URL;
+
 
     // Firestore collections
     private static final String COLLECTION_STICKER_PACKS = "stickerPacks";

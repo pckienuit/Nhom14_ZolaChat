@@ -63,6 +63,113 @@ public class HomeFragment extends Fragment {
         conversationsRecyclerView = view.findViewById(R.id.conversationsRecyclerView);
         filterChipsContainer = view.findViewById(R.id.filterChipsContainer);
         setupFilterChips();
+        
+        // Setup inline search EditText
+        setupSearchEditText(view);
+        
+        // QR button - scan QR code
+        View btnQr = view.findViewById(R.id.btn_qr);
+        if (btnQr != null) {
+            btnQr.setOnClickListener(v -> openQRScanner());
+        }
+        
+        // Add button - show menu for adding friend or creating group
+        View btnAdd = view.findViewById(R.id.btn_add);
+        if (btnAdd != null) {
+            btnAdd.setOnClickListener(v -> showAddMenu(v));
+        }
+    }
+    
+    private void setupSearchEditText(View view) {
+        android.widget.EditText searchEditText = view.findViewById(R.id.searchEditText);
+        if (searchEditText == null) return;
+        
+        // TextWatcher for realtime filtering
+        searchEditText.addTextChangedListener(new android.text.TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                filterConversations(s.toString());
+            }
+            
+            @Override
+            public void afterTextChanged(android.text.Editable s) {}
+        });
+    }
+    
+    private void filterConversations(String query) {
+        if (conversationAdapter == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser() != null
+                ? firebaseAuth.getCurrentUser().getUid()
+                : "";
+        
+        // Get all conversations from ViewModel
+        homeViewModel.getConversations(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                java.util.List<Conversation> allConversations = resource.getData();
+                
+                if (query == null || query.trim().isEmpty()) {
+                    // Show all if search is empty
+                    conversationAdapter.updateConversations(allConversations);
+                } else {
+                    // Filter by conversation name or last message
+                    String lowerQuery = query.toLowerCase();
+                    java.util.List<Conversation> filtered = new java.util.ArrayList<>();
+                    
+                    for (Conversation conv : allConversations) {
+                        // Search in conversation name
+                        String convName = conv.getName();
+                        if (convName == null) {
+                            convName = conv.getOtherUserName(currentUserId);
+                        }
+                        
+                        if (convName != null && convName.toLowerCase().contains(lowerQuery)) {
+                            filtered.add(conv);
+                            continue;
+                        }
+                        
+                        // Search in last message
+                        if (conv.getLastMessage() != null && 
+                            conv.getLastMessage().toLowerCase().contains(lowerQuery)) {
+                            filtered.add(conv);
+                        }
+                    }
+                    
+                    conversationAdapter.updateConversations(filtered);
+                }
+            }
+        });
+    }
+    
+    private void openQRScanner() {
+        Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.qr.QRScanActivity.class);
+        startActivity(intent);
+    }
+    
+    private void showAddMenu(View anchor) {
+        android.widget.PopupMenu popup = new android.widget.PopupMenu(getContext(), anchor);
+        popup.getMenu().add("Thêm bạn bè");
+        popup.getMenu().add("Tạo nhóm");
+        
+        popup.setOnMenuItemClickListener(item -> {
+            String title = item.getTitle().toString();
+            if (title.equals("Thêm bạn bè")) {
+                // Open AddFriendActivity
+                Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.contact.AddFriendActivity.class);
+                startActivity(intent);
+                return true;
+            } else if (title.equals("Tạo nhóm")) {
+                // Open CreateGroupActivity
+                Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.group.CreateGroupActivity.class);
+                startActivity(intent);
+                return true;
+            }
+            return false;
+        });
+        popup.show();
     }
 
     private void setupRecyclerView() {
@@ -549,6 +656,13 @@ public class HomeFragment extends Fragment {
                  android.widget.Toast.makeText(getContext(), "⚠️ Reconnecting Socket...", android.widget.Toast.LENGTH_SHORT).show();
              socketManager.connect();
         }
+        
+        // Refresh conversations to update badge when returning from another activity (e.g., RoomActivity)
+        if (firebaseAuth.getCurrentUser() != null) {
+            String userId = firebaseAuth.getCurrentUser().getUid();
+            android.util.Log.d("HomeFragment", "onResume: Refreshing conversations for badge update");
+            homeViewModel.refreshConversations(userId);
+        }
     }
 
     private void observeViewModel() {
@@ -557,6 +671,7 @@ public class HomeFragment extends Fragment {
                 ? firebaseAuth.getCurrentUser().getUid()
                 : "";
 
+        // Observer 1: For RecyclerView display (may be filtered by tag)
         homeViewModel.getFilteredConversations(currentUserId).observe(getViewLifecycleOwner(), resource -> {
             if (resource == null) return;
 
@@ -566,7 +681,7 @@ public class HomeFragment extends Fragment {
             } else if (resource.isSuccess()) {
                 List<Conversation> conversations = resource.getData();
                 if (conversations != null) {
-                    android.util.Log.d("HomeFragment", "Received " + conversations.size() + " conversations");
+                    android.util.Log.d("HomeFragment", "Received " + conversations.size() + " filtered conversations");
                     conversationAdapter.updateConversations(conversations);
                 }
             } else if (resource.isError()) {
@@ -578,6 +693,20 @@ public class HomeFragment extends Fragment {
                 if (getContext() != null) {
                     Toast.makeText(getContext(), errorMessage, Toast.LENGTH_SHORT).show();
                 }
+            }
+        });
+        
+        // Observer 2: For badge - ALWAYS use ALL conversations (not filtered)
+        // This ensures badge shows total unread count regardless of current filter
+        homeViewModel.getConversations(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                List<Conversation> allConversations = resource.getData();
+                android.util.Log.d("HomeFragment", "Badge update: Total " + allConversations.size() + " conversations");
+                // Debug: Log unreadCounts for each conversation
+                for (Conversation conv : allConversations) {
+                    android.util.Log.d("HomeFragment", "  Conv[" + conv.getId() + "] unreadCounts=" + conv.getUnreadCounts() + ", for user=" + conv.getUnreadCountForUser(currentUserId));
+                }
+                updateUnreadBadge(allConversations, currentUserId);
             }
         });
 
@@ -628,6 +757,29 @@ public class HomeFragment extends Fragment {
 
         // Conversations are automatically loaded via ViewModel observer
         // The observer in observeViewModel() handles the real-time updates
+    }
+    
+    /**
+     * Calculate total unread messages and update badge in MainActivity
+     */
+    private void updateUnreadBadge(List<Conversation> conversations, String userId) {
+        if (conversations == null || getActivity() == null) return;
+        
+        int totalUnread = 0;
+        for (Conversation conv : conversations) {
+            int unread = conv.getUnreadCountForUser(userId);
+            totalUnread += unread;
+            if (unread > 0) {
+                android.util.Log.d("HomeFragment", "Conv " + conv.getId() + " has " + unread + " unread");
+            }
+        }
+        
+        android.util.Log.d("HomeFragment", "Total unread messages: " + totalUnread);
+        
+        // Update badge in MainActivity
+        if (getActivity() instanceof com.example.doan_zaloclone.MainActivity) {
+            ((com.example.doan_zaloclone.MainActivity) getActivity()).updateMessagesBadge(totalUnread);
+        }
     }
 }
 

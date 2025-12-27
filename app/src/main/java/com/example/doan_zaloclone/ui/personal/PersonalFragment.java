@@ -18,7 +18,9 @@ import androidx.lifecycle.ViewModelProvider;
 import com.bumptech.glide.Glide;
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.User;
+import com.example.doan_zaloclone.repository.AuthRepository;
 import com.example.doan_zaloclone.viewmodel.PersonalViewModel;
+import com.example.doan_zaloclone.websocket.SocketManager;
 
 /**
  * PersonalFragment - Main fragment for Personal tab
@@ -27,6 +29,7 @@ import com.example.doan_zaloclone.viewmodel.PersonalViewModel;
 public class PersonalFragment extends Fragment {
 
     private PersonalViewModel viewModel;
+    private AuthRepository authRepository;
 
     // Views
     private LinearLayout compactUserCard;
@@ -44,6 +47,7 @@ public class PersonalFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         viewModel = new ViewModelProvider(this).get(PersonalViewModel.class);
+        authRepository = new AuthRepository();
     }
 
     @Nullable
@@ -86,6 +90,15 @@ public class PersonalFragment extends Fragment {
         // Click compact user card to open full profile
         compactUserCard.setOnClickListener(v -> openProfileCard());
         
+        // Search button - opens search/add friend activity
+        View btnSearch = getView().findViewById(R.id.btn_search);
+        if (btnSearch != null) {
+            btnSearch.setOnClickListener(v -> {
+                Intent intent = new Intent(getContext(), com.example.doan_zaloclone.ui.contact.AddFriendActivity.class);
+                startActivity(intent);
+            });
+        }
+        
         if (btnSettings != null) {
             btnSettings.setOnClickListener(v -> {
                  Toast.makeText(getContext(), "Cài đặt & Quyền riêng tư", Toast.LENGTH_SHORT).show();
@@ -109,11 +122,19 @@ public class PersonalFragment extends Fragment {
     }
 
     private void performLogout() {
-        com.google.firebase.auth.FirebaseAuth.getInstance().signOut();
+        // Show progress
+        Toast.makeText(requireContext(), "Đang đăng xuất...", Toast.LENGTH_SHORT).show();
         
-        Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.login.LoginActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        startActivity(intent);
+        // Disconnect WebSocket first
+        SocketManager.getInstance().disconnect();
+        
+        // Call AuthRepository to properly logout (updates isOnline = false in Firestore)
+        authRepository.logout(() -> {
+            // Navigate to login screen
+            Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.login.LoginActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+            startActivity(intent);
+        });
     }
 
     private void setupMenuItems() {

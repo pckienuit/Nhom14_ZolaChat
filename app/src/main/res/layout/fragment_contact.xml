@@ -24,7 +24,7 @@
                 android:paddingTop="50dp"
                 android:paddingBottom="12dp">
 
-                <!-- Search Bar -->
+                <!-- Search Icon -->
                 <ImageView
                     android:id="@+id/btn_search"
                     android:layout_width="28dp"
@@ -37,18 +37,24 @@
                     app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toBottomOf="parent"/>
 
-                <TextView
-                    android:id="@+id/tv_search_placeholder"
+                <!-- Search EditText -->
+                <EditText
+                    android:id="@+id/searchEditText"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Tìm kiếm"
-                    android:textColor="#B3FFFFFF"
+                    android:hint="Tìm kiếm"
+                    android:textColorHint="#B3FFFFFF"
+                    android:textColor="#FFFFFF"
                     android:textSize="16sp"
+                    android:background="@null"
+                    android:singleLine="true"
+                    android:imeOptions="actionSearch"
+                    android:inputType="text"
                     android:layout_marginStart="16dp"
                     app:layout_constraintStart_toEndOf="@+id/btn_search"
                     app:layout_constraintTop_toTopOf="@+id/btn_search"
                     app:layout_constraintBottom_toBottomOf="@+id/btn_search"
-                    app:layout_constraintEnd_toStartOf="@+id/btn_add_friend"/>
+                    app:layout_constraintEnd_toStartOf="@id/btn_add_friend"/>
 
                 <!-- Add Friend Icon -->
                 <ImageView
@@ -163,13 +169,22 @@
                     android:src="@drawable/ic_friend_request_blue" />
 
                 <TextView
+                    android:id="@+id/tvFriendRequestCount"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginStart="16dp"
-                    android:text="Lời mời kết bạn (12)"
+                    android:text="Lời mời kết bạn"
                     android:textSize="16sp"
                     android:textColor="#000000"/>
+
+                <!-- Red dot notification for new requests -->
+                <View
+                    android:id="@+id/dotFriendRequestNew"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:background="@drawable/bg_red_badge"
+                    android:visibility="gone"/>
             </LinearLayout>
 
             <!-- 2. Birthdays -->
@@ -220,9 +235,10 @@
 
                     <!-- Chip: Tất cả -->
                     <TextView
+                        android:id="@+id/chipAllFriends"
                         android:layout_width="wrap_content"
                         android:layout_height="32dp"
-                        android:text="Tất cả 198"
+                        android:text="Tất cả"
                         android:background="@drawable/bg_chip_selected"
                         android:textColor="#000000"
                         android:textStyle="bold"
@@ -232,17 +248,20 @@
                         android:paddingEnd="12dp"
                         android:layout_marginEnd="8dp"/>
 
-                    <!-- Chip: Mới truy cập -->
+                    <!-- Chip: Trực tuyến (Online filter) -->
                     <TextView
+                        android:id="@+id/chipRecentlyActive"
                         android:layout_width="wrap_content"
                         android:layout_height="32dp"
-                        android:text="Mới truy cập 36"
+                        android:text="Trực tuyến"
                         android:background="@drawable/bg_chip_unselected"
                         android:textColor="#000000"
                         android:textSize="13sp"
                         android:gravity="center"
                         android:paddingStart="12dp"
-                        android:paddingEnd="12dp"/>
+                        android:paddingEnd="12dp"
+                        android:clickable="true"
+                        android:focusable="true"/>
 
                 </LinearLayout>
             </HorizontalScrollView>

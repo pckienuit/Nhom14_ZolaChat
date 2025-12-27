@@ -22,4 +22,7 @@
     <!-- Aliases for consistent naming -->
     <color name="primary">@color/colorPrimary</color>
     <color name="text_secondary">@color/textSecondary</color>
+    
+    <!-- ZXing Scanner Colors -->
+    <color name="zxing_custom_result_view">#b0000000</color>
 </resources>

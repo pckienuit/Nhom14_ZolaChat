@@ -4,6 +4,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import com.example.doan_zaloclone.api.RetrofitClient;
+import com.example.doan_zaloclone.api.models.ApiResponse;
+import com.example.doan_zaloclone.api.ApiService;
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
@@ -16,6 +19,8 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import retrofit2.Call;
+
 /**
  * Repository class for handling Firebase Authentication operations
  * Updated to use ExecutorService for sequential processing
@@ -25,12 +30,14 @@ public class AuthRepository {
     private static final String TAG = "AuthRepository";
     private final FirebaseAuth firebaseAuth;
     private final FirebaseFirestore firestore;
+    private final ApiService apiService;
     private final ExecutorService backgroundExecutor;
     private final Handler mainHandler;
 
     public AuthRepository() {
         this.firebaseAuth = FirebaseAuth.getInstance();
         this.firestore = FirebaseFirestore.getInstance();
+        this.apiService = RetrofitClient.getApiService();
         this.backgroundExecutor = Executors.newSingleThreadExecutor();
         this.mainHandler = new Handler(Looper.getMainLooper());
     }
@@ -154,14 +161,26 @@ public class AuthRepository {
             try {
                 FirebaseUser user = firebaseAuth.getCurrentUser();
                 if (user != null) {
-                    Map<String, Object> updates = new HashMap<>();
-                    updates.put("isOnline", false);
-                    updates.put("lastSeen", System.currentTimeMillis());
+                    // Update online status to false via API (which also updates Firestore)
+                    Map<String, Boolean> statusUpdate = new HashMap<>();
+                    statusUpdate.put("isOnline", false);
                     
                     try {
-                        Tasks.await(firestore.collection("users").document(user.getUid()).update(updates));
+                        Call<ApiResponse<Void>> call = apiService.updateUserStatus(user.getUid(), statusUpdate);
+                        call.execute(); // Synchronous call
+                        Log.d(TAG, "✅ Updated user status to offline via API");
                     } catch (Exception e) {
-                        Log.w(TAG, "Failed to set offline status on logout", e);
+                        Log.w(TAG, "Failed to set offline status via API on logout, trying Firestore", e);
+                        
+                        // Fallback to direct Firestore update
+                        try {
+                            Map<String, Object> updates = new HashMap<>();
+                            updates.put("isOnline", false);
+                            updates.put("lastSeen", System.currentTimeMillis());
+                            Tasks.await(firestore.collection("users").document(user.getUid()).update(updates));
+                        } catch (Exception ex) {
+                            Log.w(TAG, "Failed to set offline status on logout (Firestore fallback)", ex);
+                        }
                     }
                 }
                 

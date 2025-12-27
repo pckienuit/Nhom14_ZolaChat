@@ -13,6 +13,7 @@ public class Message {
     public static final String TYPE_LOCATION = "LOCATION"; // Location message
     public static final String TYPE_LIVE_LOCATION = "LIVE_LOCATION"; // Live location message
     public static final String TYPE_STICKER = "STICKER"; // Sticker message
+    public static final String TYPE_VOICE = "VOICE"; // Voice message
 
     private String id;
     private String senderId;
@@ -73,6 +74,10 @@ public class Message {
     private String stickerPackId;       // Sticker pack ID
     private String stickerUrl;          // Direct URL for display
     private boolean isStickerAnimated;  // true if animated sticker
+
+    // Voice data (only used for TYPE_VOICE messages)
+    private String voiceUrl;            // URL of voice message audio file
+    private int voiceDuration;          // Duration in seconds
 
     // Empty constructor bắt buộc cho Firestore serialization/deserialization
     public Message() {
@@ -558,5 +563,26 @@ public class Message {
 
     public boolean isStickerMessage() {
         return TYPE_STICKER.equals(this.type);
+    }
+
+    // Voice message getters and setters
+    public String getVoiceUrl() {
+        return voiceUrl;
+    }
+
+    public void setVoiceUrl(String voiceUrl) {
+        this.voiceUrl = voiceUrl;
+    }
+
+    public int getVoiceDuration() {
+        return voiceDuration;
+    }
+
+    public void setVoiceDuration(int voiceDuration) {
+        this.voiceDuration = voiceDuration;
+    }
+
+    public boolean isVoiceMessage() {
+        return TYPE_VOICE.equals(this.type);
     }
 }

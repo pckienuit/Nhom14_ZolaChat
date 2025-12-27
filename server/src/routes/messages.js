@@ -45,11 +45,48 @@ router.post('/', authenticateUser, async (req, res) => {
     
     console.log(`✅ Message created with ID: ${messageRef.id}`);
     
-    // Update conversation lastMessage
+    // Update conversation lastMessage and timestamp
     await db.collection('conversations').doc(conversationId).update({
       lastMessage: content || `[${type}]`,
-      lastMessageTime: message.timestamp
+      lastMessageTime: message.timestamp,
+      timestamp: message.timestamp  // Also update timestamp for Android client compatibility
     });
+    
+    // Increment unreadCounts for all members except sender
+    try {
+      const convDoc = await db.collection('conversations').doc(conversationId).get();
+      if (convDoc.exists) {
+        const convData = convDoc.data();
+        const members = convData.memberIds || convData.participantIds || [];
+        const unreadUpdates = {};
+        
+        console.log(`📊 Conversation ${conversationId} members: ${JSON.stringify(members)}, sender: ${req.user.uid}`);
+        
+        members.forEach(memberId => {
+          if (memberId !== req.user.uid) {
+            // Use concatenation to avoid potential template literal issues
+            unreadUpdates['unreadCounts.' + memberId] = admin.firestore.FieldValue.increment(1);
+            console.log(`📊 Will increment unreadCounts for member: ${memberId}`);
+          } else {
+            console.log(`📊 Skipping sender: ${memberId}`);
+          }
+        });
+        
+        console.log('📊 Unread updates to apply:', JSON.stringify(unreadUpdates));
+        
+        if (Object.keys(unreadUpdates).length > 0) {
+          await db.collection('conversations').doc(conversationId).update(unreadUpdates);
+          console.log(`📊 ✅ Successfully incremented unreadCounts for ${Object.keys(unreadUpdates).length} members`);
+        } else {
+          console.log(`📊 ⚠️ No unread updates to apply (members: ${members.length}, sender in list: ${members.includes(req.user.uid)})`);
+        }
+      } else {
+        console.log(`📊 ⚠️ Conversation ${conversationId} not found for unread update`);
+      }
+    } catch (unreadErr) {
+      console.error('❌ Failed to update unreadCounts:', unreadErr);
+      // Don't fail the request if unread update fails
+    }
     
     // Emit WebSocket event
     const io = req.app.get('io');
@@ -434,6 +471,28 @@ router.delete('/:messageId/reactions', authenticateUser, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error clearing reactions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mark conversation as read (reset unread count)
+router.post('/conversations/:conversationId/seen', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId' });
+    }
+    
+    await db.collection('conversations').doc(conversationId).update({
+      [`unreadCounts.${userId}`]: 0
+    });
+    
+    console.log(`👀 Mark as read for user ${userId} in conversation ${conversationId}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking as read:', error);
     res.status(500).json({ error: error.message });
   }
 });
