@@ -349,6 +349,7 @@ public class NotificationService extends Service {
     private void launchIncomingCallService(com.example.doan_zaloclone.models.Call call, 
                                             String receiverId, String callerName) {
         Intent serviceIntent = new Intent(this, IncomingCallService.class);
+        // Use lowercase keys to match CallActivity.EXTRA_* constants
         serviceIntent.putExtra("call_id", call.getId());
         serviceIntent.putExtra("caller_id", call.getCallerId());
         serviceIntent.putExtra("caller_name", callerName);

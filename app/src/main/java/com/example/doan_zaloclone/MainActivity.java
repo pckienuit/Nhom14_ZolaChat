@@ -169,6 +169,61 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("MainActivity", "POST_NOTIFICATIONS permission already granted");
             }
         }
+        
+        // Also request full-screen intent permission for calls
+        requestFullScreenIntentPermission();
+    }
+    
+    /**
+     * Request full-screen intent permission for Android 14+
+     * This allows incoming calls to pop up automatically
+     */
+    private void requestFullScreenIntentPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+ requires explicit permission
+            if (!getSystemService(android.app.NotificationManager.class).canUseFullScreenIntent()) {
+                Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT);
+                intent.setData(android.net.Uri.parse("package:" + getPackageName()));
+                try {
+                    startActivity(intent);
+                    Toast.makeText(this, 
+                        "Vui lòng bật 'Full screen intent' để nhận cuộc gọi toàn màn hình", 
+                        Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Failed to open full screen intent settings", e);
+                }
+            } else {
+                Log.d("MainActivity", "Full screen intent permission already granted");
+            }
+        }
+        
+        // Also request overlay permission for background activity launch
+        requestOverlayPermission();
+    }
+    
+    /**
+     * Request overlay permission for displaying over other apps
+     * Required for Android 10+ to show incoming call screen
+     */
+    private void requestOverlayPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (!android.provider.Settings.canDrawOverlays(this)) {
+                Intent intent = new Intent(
+                    android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    android.net.Uri.parse("package:" + getPackageName())
+                );
+                try {
+                    startActivity(intent);
+                    Toast.makeText(this, 
+                        "Vui lòng bật 'Hiển thị trên ứng dụng khác' để nhận cuộc gọi", 
+                        Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Failed to open overlay permission settings", e);
+                }
+            } else {
+                Log.d("MainActivity", "Overlay permission already granted");
+            }
+        }
     }
     
     @Override
