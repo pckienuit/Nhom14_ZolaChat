@@ -1,5 +1,6 @@
 package com.example.doan_zaloclone.ui.newsfeed;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,6 +12,8 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.example.doan_zaloclone.R;
+import com.example.doan_zaloclone.ui.createpost.CreatePostActivity;
+
 import java.util.ArrayList;
 
 public class TimelineFragment extends Fragment {
@@ -36,7 +39,8 @@ public class TimelineFragment extends Fragment {
 
         // Xử lý sự kiện khi nhấn vào "Hôm nay bạn thế nào?"
         view.findViewById(R.id.layoutCreatePost).setOnClickListener(v -> {
-            // Mở màn hình đăng bài
+            Intent intent = new Intent(getActivity(), CreatePostActivity.class);
+            startActivity(intent);
         });
 
         return view;

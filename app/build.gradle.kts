@@ -1,6 +1,18 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.google.services)
+}
+
+// ĐÚNG: Logic đọc file properties được đặt ở cấp cao nhất của script.
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists() && localPropertiesFile.isFile) {
+    FileInputStream(localPropertiesFile).use {
+        localProperties.load(it)
+    }
 }
 
 android {
@@ -15,6 +27,10 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Lấy API key từ properties và tạo build config field
+        val youtubeApiKey = localProperties.getProperty("YOUTUBE_API_KEY", "") // Cung cấp giá trị mặc định
+        buildConfigField("String", "YOUTUBE_API_KEY", "\"$youtubeApiKey\"")
         
         // Support for 16KB page size devices
         ndk {
@@ -38,6 +54,10 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true // BẬT LẠI TÍNH NĂNG BUILDCONFIG
+    }
+    packagingOptions {
+        exclude("META-INF/DEPENDENCIES")
     }
 }
 
@@ -80,6 +100,9 @@ dependencies {
     // Location services (FREE)
     implementation("com.google.android.gms:play-services-location:21.0.1")
     
+    implementation("com.google.apis:google-api-services-youtube:v3-rev20210915-1.32.1")
+    implementation("com.google.http-client:google-http-client-android:1.41.0")
+    implementation("com.google.api-client:google-api-client-gson:1.32.1")
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

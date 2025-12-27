@@ -6,18 +6,26 @@ import android.view.ViewGroup;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.widget.ImageView;
+import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.example.doan_zaloclone.R;
+import com.example.doan_zaloclone.models.VideoItem;
 import java.util.List;
 
 public class VideoAdapter extends RecyclerView.Adapter<VideoAdapter.VideoViewHolder> {
 
-    private List<String> videoIds;
+    private List<VideoItem> videoItems;
 
-    public VideoAdapter(List<String> videoIds) {
-        this.videoIds = videoIds;
+    public VideoAdapter(List<VideoItem> videoItems) {
+        this.videoItems = videoItems;
+    }
+
+    public void updateVideos(List<VideoItem> newVideos) {
+        this.videoItems.clear();
+        this.videoItems.addAll(newVideos);
+        notifyDataSetChanged();
     }
 
     @NonNull
@@ -29,21 +37,23 @@ public class VideoAdapter extends RecyclerView.Adapter<VideoAdapter.VideoViewHol
 
     @Override
     public void onBindViewHolder(@NonNull VideoViewHolder holder, int position) {
-        String videoId = videoIds.get(position);
+        VideoItem videoItem = videoItems.get(position);
 
-        // 1. Tải ảnh Thumbnail từ YouTube API (Dùng Glide)
-        String thumbnailUrl = "https://img.youtube.com/vi/" + videoId + "/0.jpg";
+        // 1. Tải ảnh Thumbnail từ URL đã lấy (Dùng Glide)
         Glide.with(holder.itemView.getContext())
-                .load(thumbnailUrl)
+                .load(videoItem.getThumbnailUrl())
                 .into(holder.imgThumbnail);
+
+        holder.txtVideoTitle.setText(videoItem.getTitle());
 
         // 2. Thiết lập WebView (nhưng chưa load ngay để tiết kiệm RAM)
         holder.itemView.setOnClickListener(v -> {
             holder.imgThumbnail.setVisibility(View.GONE);
             holder.imgPlayIcon.setVisibility(View.GONE);
+            holder.txtVideoTitle.setVisibility(View.GONE);
             holder.webViewVideo.setVisibility(View.VISIBLE);
 
-            loadYouTubeVideo(holder.webViewVideo, videoId);
+            loadYouTubeVideo(holder.webViewVideo, videoItem.getVideoId());
         });
     }
 
@@ -62,28 +72,33 @@ public class VideoAdapter extends RecyclerView.Adapter<VideoAdapter.VideoViewHol
 
     @Override
     public int getItemCount() {
-        return videoIds.size();
+        return videoItems.size();
     }
 
     // Quan trọng: Giải phóng WebView khi item bị cuộn đi để tránh lag/tràn bộ nhớ
     @Override
     public void onViewRecycled(@NonNull VideoViewHolder holder) {
         super.onViewRecycled(holder);
-        holder.webViewVideo.loadUrl("about:blank");
-        holder.webViewVideo.setVisibility(View.GONE);
+        if (holder.webViewVideo != null) {
+            holder.webViewVideo.loadUrl("about:blank");
+            holder.webViewVideo.setVisibility(View.GONE);
+        }
         holder.imgThumbnail.setVisibility(View.VISIBLE);
         holder.imgPlayIcon.setVisibility(View.VISIBLE);
+        holder.txtVideoTitle.setVisibility(View.VISIBLE);
     }
 
     static class VideoViewHolder extends RecyclerView.ViewHolder {
         ImageView imgThumbnail, imgPlayIcon;
         WebView webViewVideo;
+        TextView txtVideoTitle;
 
         public VideoViewHolder(@NonNull View itemView) {
             super(itemView);
             imgThumbnail = itemView.findViewById(R.id.imgThumbnail);
             imgPlayIcon = itemView.findViewById(R.id.imgPlayIcon);
             webViewVideo = itemView.findViewById(R.id.webViewVideo);
+            txtVideoTitle = itemView.findViewById(R.id.txtVideoTitle);
         }
     }
 }

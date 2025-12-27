@@ -16,6 +16,7 @@
 
             <!-- Phần đăng bài nhanh (Post Header) -->
             <LinearLayout
+                android:id="@+id/layoutCreatePost"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:background="@color/white"
