@@ -1,11 +1,16 @@
 package com.example.doan_zaloclone.ui.file;
 
+import android.os.Build;
 import android.os.Bundle;
 import android.view.MenuItem;
+import android.view.View;
+import android.view.WindowInsetsController;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.viewpager2.widget.ViewPager2;
 
 import com.example.doan_zaloclone.R;
@@ -32,6 +37,10 @@ public class FileManagementActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Enable edge-to-edge display BEFORE setContentView
+        setupEdgeToEdge();
+        
         setContentView(R.layout.activity_file_management);
 
         // Get data from Intent
@@ -48,6 +57,22 @@ public class FileManagementActivity extends AppCompatActivity {
         setupViewPager();
         setupTabs();
     }
+    
+    private void setupEdgeToEdge() {
+        // Make status bar transparent
+        getWindow().setStatusBarColor(android.graphics.Color.TRANSPARENT);
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11+ - Use WindowInsetsController
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            // Pre-Android 11 - Use flags
+            getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            );
+        }
+    }
 
     private void initViews() {
         toolbar = findViewById(R.id.toolbar);
@@ -60,11 +85,6 @@ public class FileManagementActivity extends AppCompatActivity {
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
             getSupportActionBar().setDisplayShowHomeEnabled(true);
-
-            // Set subtitle with conversation name if provided
-            if (conversationName != null && !conversationName.isEmpty()) {
-                getSupportActionBar().setSubtitle(conversationName);
-            }
         }
     }
 
