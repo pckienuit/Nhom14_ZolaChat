@@ -340,11 +340,11 @@ public class CallActivity extends AppCompatActivity {
         remoteVideoView.init(eglBase.getEglBaseContext(), null);
         remoteVideoView.setEnableHardwareScaler(true);  // Enable hardware acceleration
         remoteVideoView.setMirror(false);  // Don't mirror remote video
-        remoteVideoView.setZOrderMediaOverlay(false);  // Render in background
-        remoteVideoView.setZOrderOnTop(false);  // Ensure it's in background
+        remoteVideoView.setZOrderMediaOverlay(false);  // Render in background layer
 
         // CRITICAL: Set visible NOW before attaching tracks
         remoteVideoView.setVisibility(View.VISIBLE);
+        remoteVideoView.bringToFront();  // Ensure it renders above white background
         remoteVideoView.requestLayout();
         Log.d(TAG, "Remote video view initialized and set to VISIBLE (width=" + remoteVideoView.getWidth() + ", height=" + remoteVideoView.getHeight() + ")");
 
@@ -357,6 +357,7 @@ public class CallActivity extends AppCompatActivity {
 
         // CRITICAL: Set visible NOW before attaching tracks
         localVideoView.setVisibility(View.VISIBLE);
+        localVideoView.bringToFront();  // Ensure it renders on top
         localVideoView.requestLayout();
         Log.d(TAG, "Local video view initialized and set to VISIBLE (width=" + localVideoView.getWidth() + ", height=" + localVideoView.getHeight() + ")");
 
@@ -1157,20 +1158,19 @@ public class CallActivity extends AppCompatActivity {
             localVideoView.setVisibility(View.GONE);
         }
 
-        // Ensure overlay is visible with dark background and bring to front
+        // Ensure overlay is visible with light background and bring to front
         if (contentOverlay != null) {
             contentOverlay.setVisibility(View.VISIBLE);
             contentOverlay.bringToFront(); // Important: bring to front
-            // Set dark semi-transparent background so text is visible
-            contentOverlay.setBackgroundColor(0xDD000000); // Darker background
-            contentOverlay.setElevation(100); // High elevation to ensure it's on top
+            // Set light background
+            contentOverlay.setBackgroundColor(0xFFFFFFFF); // White background
         }
 
         // Update status text
         if (callStatus != null) {
             callStatus.setText("Đang kết thúc...");
             callStatus.setVisibility(View.VISIBLE);
-            callStatus.setTextColor(0xFFFFFFFF); // White text
+            callStatus.setTextColor(0xFF333333); // Dark text on light background
             callStatus.setTextSize(22); // Even larger for visibility
         }
 

@@ -2,13 +2,23 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#FFFFFF">
+
+    <!-- Placeholder background when no video stream -->
+    <View
+        android:id="@+id/remoteVideoPlaceholder"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#F5F5F5"
+        android:visibility="gone" />
 
     <!-- Remote video (full screen) - BACKGROUND -->
     <org.webrtc.SurfaceViewRenderer
         android:id="@+id/remoteVideoView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:elevation="5dp"
         android:visibility="invisible" />
 
     <!-- Local video preview (small, top-right corner) -->
@@ -19,6 +29,8 @@
         android:layout_gravity="top|end"
         android:layout_marginTop="60dp"
         android:layout_marginEnd="16dp"
+        android:background="@drawable/bg_video_preview_border"
+        android:elevation="15dp"
         android:visibility="invisible" />
 
     <!-- Content overlay - now empty placeholder -->
@@ -38,15 +50,14 @@
         android:layout_gravity="top|center_horizontal"
         android:text="00:00"
         android:textSize="18sp"
-        android:textColor="@android:color/white"
+        android:textColor="#333333"
         android:textStyle="bold"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
         android:paddingTop="8dp"
         android:paddingBottom="8dp"
-        android:background="#CC000000"
-        android:elevation="30dp"
-        android:translationZ="30dp"
+        android:background="#E8F0FE"
+        android:elevation="15dp"
         android:layout_marginTop="8dp"
         android:visibility="gone" />
 
@@ -58,8 +69,7 @@
         android:orientation="vertical"
         android:gravity="center"
         android:layout_gravity="center"
-        android:elevation="30dp"
-        android:translationZ="30dp">
+        android:elevation="10dp">
 
         <!-- Caller avatar -->
         <ImageView
@@ -78,13 +88,9 @@
             android:layout_height="wrap_content"
             android:text="Người gọi"
             android:textSize="24sp"
-            android:textColor="@android:color/white"
+            android:textColor="#333333"
             android:textStyle="bold"
-            android:layout_marginBottom="8dp"
-            android:shadowColor="#000000"
-            android:shadowRadius="4"
-            android:shadowDx="0"
-            android:shadowDy="2" />
+            android:layout_marginBottom="8dp" />
 
         <!-- Call status -->
         <TextView
@@ -93,12 +99,8 @@
             android:layout_height="wrap_content"
             android:text="Đang gọi..."
             android:textSize="16sp"
-            android:textColor="@android:color/white"
-            android:alpha="0.9"
-            android:shadowColor="#000000"
-            android:shadowRadius="4"
-            android:shadowDx="0"
-            android:shadowDy="2" />
+            android:textColor="#666666"
+            android:alpha="0.9" />
     </LinearLayout>
 
     <!-- Incoming call buttons - OUTSIDE overlay so always at bottom -->
@@ -111,8 +113,8 @@
         android:gravity="center"
         android:paddingTop="16dp"
         android:paddingBottom="32dp"
-        android:background="#CC000000"
-        android:elevation="16dp"
+        android:background="#FFFFFF"
+        android:elevation="20dp"
         android:visibility="gone">
 
         <!-- Reject button -->
@@ -147,8 +149,8 @@
         android:gravity="center"
         android:paddingTop="16dp"
         android:paddingBottom="32dp"
-        android:background="#CC000000"
-        android:elevation="16dp"
+        android:background="#FFFFFF"
+        android:elevation="20dp"
         android:visibility="gone">
 
         <!-- Cancel button -->
@@ -174,8 +176,8 @@
         android:paddingBottom="32dp"
         android:paddingStart="16dp"
         android:paddingEnd="16dp"
-        android:background="#CC000000"
-        android:elevation="16dp"
+        android:background="#FFFFFF"
+        android:elevation="20dp"
         android:visibility="gone">
 
             <!-- Microphone button -->
