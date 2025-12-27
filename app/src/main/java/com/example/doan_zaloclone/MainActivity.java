@@ -232,8 +232,11 @@ public class MainActivity extends AppCompatActivity {
             } else if (itemId == R.id.nav_contact) {
                 showFragment(1);
                 return true;
-            } else if (itemId == R.id.nav_personal) {
+            } else if (itemId == R.id.nav_newsfeed) {
                 showFragment(2);
+                return true;
+            } else if (itemId == R.id.nav_personal) {
+                showFragment(3);
                 return true;
             }
             return false;
@@ -281,7 +284,7 @@ public class MainActivity extends AppCompatActivity {
             case 2: // Newsfeed
                 if (newsfeedFragment == null) {
                     newsfeedFragment = new NewsfeedFragment();
-                    transaction.add(R.id.fragmentContainer, newsfeedFragment, "CONTACT");
+                    transaction.add(R.id.fragmentContainer, newsfeedFragment, "NEWSFEED");
                 } else {
                     transaction.show(newsfeedFragment);
                 }
