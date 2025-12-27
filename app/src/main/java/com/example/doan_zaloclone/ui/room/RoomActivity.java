@@ -2129,6 +2129,16 @@ public class RoomActivity extends AppCompatActivity {
         // Sticker button
         stickerButton.setOnClickListener(v -> showStickerPicker());
 
+        // Close action menu when user clicks/touches input field
+        messageEditText.setOnTouchListener((v, event) -> {
+            if (event.getAction() == android.view.MotionEvent.ACTION_DOWN) {
+                if (actionMenuContainer != null && actionMenuContainer.getVisibility() == View.VISIBLE) {
+                    hideActionMenu();
+                }
+            }
+            return false; // Let the EditText handle the touch event normally
+        });
+
         // TextWatcher to toggle Send button visibility
         messageEditText.addTextChangedListener(new android.text.TextWatcher() {
             @Override

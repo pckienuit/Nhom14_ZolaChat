@@ -49,6 +49,8 @@ import org.json.JSONObject;
  */
 public class ChatRepository {
 
+    private static final String TAG = "ChatRepository";
+
     private final FirebaseFirestore firestore;
     private final FirestoreManager firestoreManager;
     private final ApiService apiService;
@@ -1243,7 +1245,7 @@ public class ChatRepository {
     }
 
     /**
-     * Create a group conversation (LiveData version)
+     * Create a group conversation via REST API
      * @param adminId ID of the user creating the group (becomes admin)
      * @param groupName Name of the group
      * @param memberIds List of member IDs including admin
@@ -1271,30 +1273,53 @@ public class ChatRepository {
             return result;
         }
         
-        // Call FirestoreManager to create group
-        firestoreManager.createGroupConversation(
-            adminId,
-            groupName,
-            memberIds,
-            new FirestoreManager.OnConversationCreatedListener() {
-                @Override
-                public void onSuccess(Conversation conversation) {
+        // Prepare request body for API (match server expected format)
+        Map<String, Object> conversationData = new HashMap<>();
+        conversationData.put("type", "GROUP");
+        conversationData.put("name", groupName);
+        conversationData.put("memberIds", memberIds);
+        conversationData.put("adminId", adminId);
+        
+        // Call API to create group
+        apiService.createConversation(conversationData).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(@NonNull Call<Map<String, Object>> call, 
+                                 @NonNull Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Map<String, Object> responseBody = response.body();
+                    String conversationId = (String) responseBody.get("conversationId");
+                    
+                    Log.d(TAG, "✅ Group created successfully via API: " + conversationId);
+                    
+                    // Create Conversation object for UI
+                    Conversation conversation = new Conversation(
+                            conversationId,
+                            groupName,
+                            "Nhóm được tạo",
+                            System.currentTimeMillis(),
+                            memberIds,
+                            Conversation.TYPE_GROUP,
+                            adminId,
+                            ""
+                    );
+                    
                     result.setValue(Resource.success(conversation));
                     
-                    // Manually trigger conversation refresh event
-                    // This ensures UI updates even when using Firestore directly (not API)
-                    socketManager.triggerConversationCreated(conversation.getId());
-                }
-                
-                @Override
-                public void onFailure(Exception e) {
-                    String errorMessage = e.getMessage() != null 
-                            ? e.getMessage() 
-                            : "Không thể tạo nhóm";
+                    // WebSocket will handle real-time updates
+                } else {
+                    String errorMessage = "Không thể tạo nhóm: HTTP " + response.code();
+                    Log.e(TAG, errorMessage);
                     result.setValue(Resource.error(errorMessage));
                 }
             }
-        );
+            
+            @Override
+            public void onFailure(@NonNull Call<Map<String, Object>> call, @NonNull Throwable t) {
+                String errorMessage = "Lỗi kết nối: " + (t.getMessage() != null ? t.getMessage() : "Unknown");
+                Log.e(TAG, "❌ Failed to create group via API", t);
+                result.setValue(Resource.error(errorMessage));
+            }
+        });
         
         return result;
     }
