@@ -118,6 +118,7 @@ public class GroupMemberAdapter extends RecyclerView.Adapter<GroupMemberAdapter.
             if (member.getAvatarUrl() != null && !member.getAvatarUrl().isEmpty()) {
                 Glide.with(itemView.getContext())
                         .load(member.getAvatarUrl())
+                        .circleCrop()
                         .placeholder(R.drawable.ic_person)
                         .into(avatarImageView);
             } else {

@@ -1865,6 +1865,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                             if (avatarUrl != null && !avatarUrl.isEmpty()) {
                                 Glide.with(itemView.getContext())
                                         .load(avatarUrl)
+                                        .circleCrop()
                                         .placeholder(R.drawable.ic_avatar)
                                         .into(contactAvatar);
                             } else {
