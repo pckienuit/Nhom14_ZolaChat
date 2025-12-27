@@ -627,18 +627,33 @@ public class StickerRepository {
                                     @NonNull UploadCallback callback) {
         uploadExecutor.execute(() -> {
             try {
+                Log.d(TAG, "=== Starting sticker upload ===");
+                Log.d(TAG, "URI: " + imageUri);
+                Log.d(TAG, "FileName: " + fileName);
+                Log.d(TAG, "userId: " + userId);
+                Log.d(TAG, "Upload URL: " + VPS_UPLOAD_URL);
+                
                 // Convert URI to File using content resolver (handles content:// URIs properly)
                 File imageFile = uriToFile(imageUri, context);
                 
                 if (imageFile == null) {
+                    Log.e(TAG, "Failed to convert URI to file");
                     callback.onError("Không thể đọc file ảnh");
                     return;
                 }
+                
+                Log.d(TAG, "File created: " + imageFile.getAbsolutePath());
+                Log.d(TAG, "File size: " + imageFile.length() + " bytes");
+                Log.d(TAG, "File exists: " + imageFile.exists());
+
+                // Detect MIME type from file extension
+                String mimeType = getMimeType(fileName);
+                Log.d(TAG, "MIME type: " + mimeType);
 
                 RequestBody requestBody = new MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
                         .addFormDataPart("sticker", fileName,
-                                RequestBody.create(imageFile, MediaType.parse("image/*")))
+                                RequestBody.create(imageFile, MediaType.parse(mimeType)))
                         .addFormDataPart("userId", userId)
                         .build();
 
@@ -647,22 +662,50 @@ public class StickerRepository {
                         .post(requestBody)
                         .build();
 
+                Log.d(TAG, "Sending request to server...");
                 callback.onProgress(50); // Simulated progress
 
                 Response response = httpClient.newCall(request).execute();
+                
+                Log.d(TAG, "Response code: " + response.code());
+                Log.d(TAG, "Response successful: " + response.isSuccessful());
 
                 if (response.isSuccessful() && response.body() != null) {
                     String responseBody = response.body().string();
-                    // Expected VPS response: {"success": true, "url": "http://..."}
-                    // Parse JSON to get URL
-                    // Note: In real app, proper JSON parsing is needed here.
-                    String stickerUrl = VPS_BASE_URL + "/stickers/" + fileName;
-                    // For improved reliability, we should ideally parse the response
+                    Log.d(TAG, "Response body: " + responseBody);
                     
-                    callback.onProgress(100);
-                    callback.onSuccess(stickerUrl);
+                    // Try to parse JSON response
+                    try {
+                        org.json.JSONObject json = new org.json.JSONObject(responseBody);
+                        if (json.has("sticker")) {
+                            org.json.JSONObject stickerObj = json.getJSONObject("sticker");
+                            String stickerUrl = stickerObj.getString("url");
+                            Log.d(TAG, "Upload success! URL: " + stickerUrl);
+                            callback.onProgress(100);
+                            callback.onSuccess(stickerUrl);
+                        } else {
+                            Log.w(TAG, "No sticker URL in response, using fallback");
+                            String stickerUrl = VPS_BASE_URL + "/uploads/stickers/" + fileName;
+                            callback.onProgress(100);
+                            callback.onSuccess(stickerUrl);
+                        }
+                    } catch (org.json.JSONException e) {
+                        Log.w(TAG, "Failed to parse JSON, using fallback URL", e);
+                        String stickerUrl = VPS_BASE_URL + "/uploads/stickers/" + fileName;
+                        callback.onProgress(100);
+                        callback.onSuccess(stickerUrl);
+                    }
                 } else {
-                    callback.onError("Upload failed: " + response.code());
+                    String errorBody = "";
+                    try {
+                        if (response.body() != null) {
+                            errorBody = response.body().string();
+                            Log.e(TAG, "Error response body: " + errorBody);
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to read error body", e);
+                    }
+                    callback.onError("Upload failed: " + response.code() + " - " + errorBody);
                 }
                 response.close();
 
@@ -671,6 +714,14 @@ public class StickerRepository {
                 callback.onError("Upload failed: " + e.getMessage());
             }
         });
+    }
+    
+    private String getMimeType(String fileName) {
+        if (fileName.toLowerCase().endsWith(".png")) return "image/png";
+        if (fileName.toLowerCase().endsWith(".jpg") || fileName.toLowerCase().endsWith(".jpeg")) return "image/jpeg";
+        if (fileName.toLowerCase().endsWith(".gif")) return "image/gif";
+        if (fileName.toLowerCase().endsWith(".webp")) return "image/webp";
+        return "image/*";
     }
 
     /**
