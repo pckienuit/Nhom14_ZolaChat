@@ -623,11 +623,17 @@ public class StickerRepository {
     public void uploadCustomSticker(@NonNull Uri imageUri,
                                     @NonNull String userId,
                                     @NonNull String fileName,
+                                    @NonNull Context context,
                                     @NonNull UploadCallback callback) {
         uploadExecutor.execute(() -> {
             try {
-                // Convert URI to File (using content resolver)
-                File imageFile = new File(imageUri.getPath());
+                // Convert URI to File using content resolver (handles content:// URIs properly)
+                File imageFile = uriToFile(imageUri, context);
+                
+                if (imageFile == null) {
+                    callback.onError("Không thể đọc file ảnh");
+                    return;
+                }
 
                 RequestBody requestBody = new MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
