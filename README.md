@@ -554,6 +554,8 @@ DoAn_ZaloClone/
 |
 |-- docs/                         # Documentation (92 files)
 |
+|-- landing-page/                 # Landing page website
+|
 |-- local.properties              # Local config (API keys, SDK path)
 |-- build.gradle.kts              # Root build config
 +-- README.md                     # This file
