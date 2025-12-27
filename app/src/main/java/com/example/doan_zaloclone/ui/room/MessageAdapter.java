@@ -701,6 +701,8 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
     }
 
     public void updateMessages(List<Message> newMessages) {
+        android.util.Log.d("MessageAdapter", "📥 updateMessages called with " + (newMessages != null ? newMessages.size() : 0) + " messages");
+        
         // Filter out call messages from other users
         // Each user should only see their own call history perspective
         List<Message> filteredMessages = new java.util.ArrayList<>();
@@ -716,8 +718,15 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
         }
 
-        // Save old list for DiffUtil comparison
-        List<Message> oldMessages = new java.util.ArrayList<>(this.messages);
+        // CRITICAL: Create DEEP COPY of old list for DiffUtil comparison
+        // This prevents shared reference issues where ChatRepository modifies
+        // messages that adapter is still holding references to
+        List<Message> oldMessages = new java.util.ArrayList<>();
+        for (Message msg : this.messages) {
+            oldMessages.add(new Message(msg)); // Deep copy each message
+        }
+        
+        android.util.Log.d("MessageAdapter", "📋 Created deep copy of old messages: " + oldMessages.size());
 
         // Check if any message has changed isRecalled status (ViewType change requires full rebind)
         boolean hasRecalledChange = false;
@@ -733,8 +742,12 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             }
         }
 
-        // Update the messages list
-        this.messages = filteredMessages;
+        // Update the messages list - CRITICAL: Store DEEP COPY to prevent external modification
+        // This ensures that this.messages is immutable until next updateMessages call
+        this.messages = new java.util.ArrayList<>();
+        for (Message msg : filteredMessages) {
+            this.messages.add(new Message(msg)); // Deep copy each message
+        }
 
         try {
             if (hasRecalledChange) {
@@ -743,8 +756,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 notifyDataSetChanged();
             } else {
                 // Normal diff update
+                android.util.Log.d("MessageAdapter", "🔄 Running DiffUtil.calculateDiff with old=" + oldMessages.size() + ", new=" + filteredMessages.size());
                 DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new MessageDiffCallback(oldMessages, filteredMessages));
+                android.util.Log.d("MessageAdapter", "🔄 DiffUtil complete, dispatching updates...");
                 diffResult.dispatchUpdatesTo(this);
+                android.util.Log.d("MessageAdapter", "✅ DiffUtil updates dispatched");
             }
         } catch (Exception e) {
             // Fallback to notifyDataSetChanged if DiffUtil fails
@@ -1456,6 +1472,15 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
             Message oldMessage = oldList.get(oldItemPosition);
             Message newMessage = newList.get(newItemPosition);
+            
+            // Log comparison for debugging
+            java.util.Map<String, String> oldR = oldMessage.getReactions();
+            java.util.Map<String, String> newR = newMessage.getReactions();
+            if ((oldR != null && !oldR.isEmpty()) || (newR != null && !newR.isEmpty())) {
+                android.util.Log.d("DiffCallback", "🔍 Comparing msg " + oldMessage.getId() + 
+                    " | oldReactions=" + (oldR != null ? oldR.toString() : "null") +
+                    " | newReactions=" + (newR != null ? newR.toString() : "null"));
+            }
 
             // CRITICAL: Check recalled status first - this triggers UI update for recall
             if (oldMessage.isRecalled() != newMessage.isRecalled()) {
@@ -1493,11 +1518,19 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 reactionsMatch = true;
             } else if (oldReactions == null || newReactions == null) {
                 reactionsMatch = false;
+                android.util.Log.d("DiffCallback", "❤️ Reaction null mismatch for " + oldMessage.getId() + 
+                    ": old=" + (oldReactions != null ? oldReactions.size() : "null") + 
+                    ", new=" + (newReactions != null ? newReactions.size() : "null"));
             } else {
                 reactionsMatch = oldReactions.equals(newReactions);
+                if (!reactionsMatch) {
+                    android.util.Log.d("DiffCallback", "❤️ Reaction content mismatch for " + oldMessage.getId() + 
+                        ": old=" + oldReactions + ", new=" + newReactions);
+                }
             }
 
             if (!reactionsMatch) {
+                android.util.Log.d("DiffCallback", "❤️ areContentsTheSame returning FALSE for reaction change: " + oldMessage.getId());
                 return false;
             }
 

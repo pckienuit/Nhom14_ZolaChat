@@ -34,7 +34,7 @@ public class RoomViewModel extends BaseViewModel {
     private LiveData<Resource<List<Message>>> pinnedMessages;
 
     public RoomViewModel() {
-        this.chatRepository = new ChatRepository();
+        this.chatRepository = ChatRepository.getInstance();
         this.friendRepository = new FriendRepository();
         this.userRepository = new UserRepository();
     }
@@ -45,9 +45,9 @@ public class RoomViewModel extends BaseViewModel {
      * @param conversationId ID of the conversation
      */
     public LiveData<Resource<List<Message>>> getMessages(@NonNull String conversationId) {
-        if (messages == null) {
-            messages = chatRepository.getMessagesLiveData(conversationId);
-        }
+        // Always get fresh LiveData from repository to handle conversation changes
+        // ChatRepository singleton will handle cleanup and setup internally
+        messages = chatRepository.getMessagesLiveData(conversationId);
         return messages;
     }
 
@@ -239,10 +239,22 @@ public class RoomViewModel extends BaseViewModel {
                                @NonNull String userId) {
         LiveData<Resource<Boolean>> result = chatRepository.removeReaction(
                 conversationId, messageId, userId);
-        reactionState.setValue(result.getValue());
+        
+        // Set initial loading state
+        reactionState.setValue(Resource.loading());
 
-        // Observe and forward the result
-        result.observeForever(reactionState::setValue);
+        // Observe and forward the result, then remove observer
+        final androidx.lifecycle.Observer<Resource<Boolean>> observer = new androidx.lifecycle.Observer<Resource<Boolean>>() {
+            @Override
+            public void onChanged(Resource<Boolean> resource) {
+                if (resource != null && !resource.isLoading()) {
+                    reactionState.setValue(resource);
+                    // Remove observer after getting final result
+                    result.removeObserver(this);
+                }
+            }
+        };
+        result.observeForever(observer);
     }
 
     /**
@@ -259,10 +271,22 @@ public class RoomViewModel extends BaseViewModel {
                                @NonNull String reactionType) {
         LiveData<Resource<Boolean>> result = chatRepository.toggleReaction(
                 conversationId, messageId, userId, reactionType);
-        reactionState.setValue(result.getValue());
+        
+        // Set initial loading state
+        reactionState.setValue(Resource.loading());
 
-        // Observe and forward the result
-        result.observeForever(reactionState::setValue);
+        // Observe and forward the result, then remove observer
+        final androidx.lifecycle.Observer<Resource<Boolean>> observer = new androidx.lifecycle.Observer<Resource<Boolean>>() {
+            @Override
+            public void onChanged(Resource<Boolean> resource) {
+                if (resource != null && !resource.isLoading()) {
+                    reactionState.setValue(resource);
+                    // Remove observer after getting final result
+                    result.removeObserver(this);
+                }
+            }
+        };
+        result.observeForever(observer);
     }
 
     /**

@@ -146,7 +146,7 @@ public class RoomActivity extends AppCompatActivity {
         // Initialize ViewModel
         roomViewModel = new ViewModelProvider(this).get(RoomViewModel.class);
         contactViewModel = new ViewModelProvider(this).get(ContactViewModel.class);
-        chatRepository = new ChatRepository(); // For legacy image upload operations
+        chatRepository = ChatRepository.getInstance(); // Singleton for all chat operations
         conversationRepository = com.example.doan_zaloclone.repository.ConversationRepository.getInstance();
         firebaseAuth = FirebaseAuth.getInstance();
 
@@ -1770,12 +1770,17 @@ public class RoomActivity extends AppCompatActivity {
     private void observeViewModel() {
         // Observe messages via ViewModel
         roomViewModel.getMessages(conversationId).observe(this, resource -> {
+            android.util.Log.d("RoomActivity", "📬 Messages observer triggered, resource status: " + 
+                (resource != null ? (resource.isSuccess() ? "SUCCESS" : resource.isError() ? "ERROR" : "LOADING") : "NULL"));
+            
             if (resource == null) return;
 
             if (resource.isSuccess()) {
                 List<Message> newMessages = resource.getData();
 
                 if (newMessages != null) {
+                    android.util.Log.d("RoomActivity", "📬 Received " + newMessages.size() + " messages, calling adapter.updateMessages()");
+                    
                     // Check if this is a new message addition (not just an update)
                     int oldSize = messages != null ? messages.size() : 0;
                     int newSize = newMessages.size();
