@@ -1,6 +1,7 @@
 package com.example.doan_zaloclone.adapters;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.bumptech.glide.Glide;
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.FireBasePost;
+import com.google.firebase.auth.FirebaseAuth;
 
 import org.ocpsoft.prettytime.PrettyTime;
 
@@ -27,13 +29,24 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
     private Context context;
     private List<FireBasePost> postList;
     private PrettyTime prettyTime;
+    private String currentUserId;
+    private OnPostInteractionListener listener;
+
+    public interface OnPostInteractionListener {
+        void onLikeClick(String postId);
+        void onCommentClick(String postId);
+    }
 
     // Constructor
-    public PostAdapter(Context context, List<FireBasePost> postList) {
+    public PostAdapter(Context context, List<FireBasePost> postList, OnPostInteractionListener listener) {
         this.context = context;
         this.postList = postList;
-        // Khởi tạo PrettyTime với Locale tiếng Việt
+        this.listener = listener;
         this.prettyTime = new PrettyTime(new Locale("vi"));
+        
+        if (FirebaseAuth.getInstance().getCurrentUser() != null) {
+            this.currentUserId = FirebaseAuth.getInstance().getCurrentUser().getUid();
+        }
     }
 
     @NonNull
@@ -90,6 +103,28 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
 
         // 6. Hiển thị số lượt like
         holder.tvLikeCount.setText(String.valueOf(post.getLikeCount()));
+        
+        // 7. Xử lý trạng thái Like (đổi màu nút)
+        if (post.isLikedBy(currentUserId)) {
+            holder.btnLike.setColorFilter(Color.parseColor("#1E88E5")); // Màu xanh Zalo
+            holder.btnLike.setImageResource(android.R.drawable.btn_star_big_on);
+        } else {
+            holder.btnLike.setColorFilter(Color.parseColor("#757575")); // Màu xám
+            holder.btnLike.setImageResource(android.R.drawable.btn_star_big_off);
+        }
+        
+        // 8. Sự kiện Click
+        holder.btnLike.setOnClickListener(v -> {
+            if (listener != null) listener.onLikeClick(post.getPostId());
+        });
+        
+        holder.btnComment.setOnClickListener(v -> {
+            if (listener != null) listener.onCommentClick(post.getPostId());
+        });
+        
+        holder.tvCommentCount.setOnClickListener(v -> {
+            if (listener != null) listener.onCommentClick(post.getPostId());
+        });
     }
 
     @Override

@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.doan_zaloclone.R;
+import com.example.doan_zaloclone.activities.CommentsActivity;
 import com.example.doan_zaloclone.activities.CreatePostActivity;
 import com.example.doan_zaloclone.adapters.PostAdapter;
 import com.example.doan_zaloclone.models.FireBasePost;
@@ -24,7 +25,7 @@ import com.example.doan_zaloclone.viewmodel.PostViewModel;
 import java.util.ArrayList;
 import java.util.List;
 
-public class TimelineFragment extends Fragment {
+public class TimelineFragment extends Fragment implements PostAdapter.OnPostInteractionListener {
 
     private RecyclerView rvTimeline;
     private SwipeRefreshLayout swipeRefresh;
@@ -46,10 +47,8 @@ public class TimelineFragment extends Fragment {
         setupRecyclerView();
         loadPosts();
 
-        // Xử lý sự kiện kéo để làm mới
         swipeRefresh.setOnRefreshListener(this::loadPosts);
 
-        // Xử lý sự kiện khi nhấn vào "Hôm nay bạn thế nào?"
         view.findViewById(R.id.layoutCreatePost).setOnClickListener(v -> {
             Intent intent = new Intent(getActivity(), CreatePostActivity.class);
             startActivity(intent);
@@ -60,7 +59,8 @@ public class TimelineFragment extends Fragment {
 
     private void setupRecyclerView() {
         rvTimeline.setLayoutManager(new LinearLayoutManager(getContext()));
-        postAdapter = new PostAdapter(getContext(), postList);
+        // Truyền 'this' làm listener để xử lý click like/comment
+        postAdapter = new PostAdapter(getContext(), postList, this);
         rvTimeline.setAdapter(postAdapter);
     }
 
@@ -83,7 +83,21 @@ public class TimelineFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
-        // Load lại bài viết khi quay lại màn hình này
-        loadPosts();
+        // Không cần gọi loadPosts() ở đây nữa vì đã dùng addSnapshotListener trong Repository
+        // Dữ liệu sẽ tự động cập nhật realtime
+    }
+
+    // Xử lý sự kiện Like
+    @Override
+    public void onLikeClick(String postId) {
+        viewModel.toggleLike(postId);
+    }
+
+    // Xử lý sự kiện Comment
+    @Override
+    public void onCommentClick(String postId) {
+        Intent intent = new Intent(getActivity(), CommentsActivity.class);
+        intent.putExtra(CommentsActivity.EXTRA_POST_ID, postId);
+        startActivity(intent);
     }
 }
