@@ -59,6 +59,9 @@ router.post('/:conversationId/messages', authenticateUser, async (req, res) => {
       voiceDuration
     } = req.body;
     
+    // Log incoming request for debugging
+    console.log(`📥 [MESSAGE] Received request - Type: ${type}, voiceUrl: ${voiceUrl}, voiceDuration: ${voiceDuration}`);
+    
     // Build message object with only defined fields (no undefined!)
     const message = {
       content: content || '',
@@ -117,7 +120,11 @@ router.post('/:conversationId/messages', authenticateUser, async (req, res) => {
     if (voiceUrl) {
       message.voiceUrl = voiceUrl;
       if (voiceDuration !== undefined) message.voiceDuration = voiceDuration;
+      console.log(`🎤 [VOICE] Voice message - URL: ${voiceUrl}, Duration: ${voiceDuration}`);
     }
+    
+    // Log final message object for debugging
+    console.log(`📤 [MESSAGE] Saving message:`, JSON.stringify(message, null, 2));
     
     const messageRef = await db.collection('conversations').doc(conversationId)
       .collection('messages').add(message);
