@@ -726,22 +726,19 @@ public class StickerRepository {
 
     /**
      * Get or create "My Stickers" pack for user
+     * Pack ID = User ID for personal stickers
      */
     public void getOrCreateUserStickerPack(@NonNull String userId, @NonNull PackCallback callback) {
-        // Check if user already has "My Stickers" pack
+        // Pack ID must be userId - check if it exists
         db.collection(COLLECTION_STICKER_PACKS)
-                .whereEqualTo("creatorId", userId)
-                .whereEqualTo("type", StickerPack.TYPE_USER)
-                .whereEqualTo("name", "My Stickers")
-                .limit(1)
+                .document(userId)
                 .get()
-                .addOnSuccessListener(querySnapshot -> {
-                    if (!querySnapshot.isEmpty()) {
-                        // Pack exists
-                        String packId = querySnapshot.getDocuments().get(0).getId();
-                        callback.onSuccess(packId);
+                .addOnSuccessListener(documentSnapshot -> {
+                    if (documentSnapshot.exists()) {
+                        // Pack with userId as packId exists
+                        callback.onSuccess(userId);
                     } else {
-                        // Create new pack
+                        // Create new pack with userId as packId
                         createMyStickersPackInternal(userId, callback);
                     }
                 })
@@ -752,7 +749,7 @@ public class StickerRepository {
     }
 
     /**
-     * Internal method to create "My Stickers" pack
+     * Internal method to create personal sticker pack with userId as packId
      */
     private void createMyStickersPackInternal(@NonNull String userId, @NonNull PackCallback callback) {
         // Use userId as packId for personal sticker pack
@@ -760,8 +757,8 @@ public class StickerRepository {
 
         StickerPack pack = new StickerPack();
         pack.setId(packId);
-        pack.setName("My Stickers");
-        pack.setDescription("Sticker do tôi tạo");
+        pack.setName("Sticker của tôi");  // Personal sticker pack name
+        pack.setDescription("Bộ sticker cá nhân");
         pack.setCreatorId(userId);
         pack.setType(StickerPack.TYPE_USER);
         pack.setCreatedAt(System.currentTimeMillis());

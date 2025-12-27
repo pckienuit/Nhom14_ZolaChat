@@ -82,15 +82,47 @@ service cloud.firestore {
     // 5. STICKERS (Read Only for users, Write for admin)
     // =================================================================
     // Collection name: stickerPacks (camelCase) - must match admin-web and app
+    // Admin check: via custom claims (request.auth.token.admin == true)
+    
+    function isAdmin() {
+        return request.auth.token.admin == true;
+    }
+    
     match /stickerPacks/{packId} {
-        // Anyone authenticated can read sticker packs
-        allow read: if request.auth != null;
-        // Admin users can write (admin check via custom claims or specific UIDs)
-        allow write: if request.auth != null;
+        // Read rules:
+        // - Official packs (type != 'user'): anyone authenticated can read
+        // - Personal packs (packId = userId): only owner OR admin can read
+        allow read: if request.auth != null && 
+                    (resource.data.type != 'user' || 
+                     resource.data.creatorId == request.auth.uid ||
+                     packId == request.auth.uid ||
+                     isAdmin());
+        
+        // Write rules:
+        // - Personal packs: only owner can write (packId must be userId)
+        // - Official packs: admin only (or API)
+        allow create: if request.auth != null && 
+                      ((request.resource.data.type == 'user' &&
+                        request.resource.data.creatorId == request.auth.uid &&
+                        packId == request.auth.uid) ||
+                       isAdmin());
+        allow update, delete: if request.auth != null && 
+                              (resource.data.creatorId == request.auth.uid ||
+                               packId == request.auth.uid ||
+                               isAdmin());
         
         match /stickers/{stickerId} {
-            allow read: if request.auth != null;
-            allow write: if request.auth != null;
+            // Read: only owner OR admin can read stickers in personal pack
+            allow read: if request.auth != null && 
+                        (get(/databases/$(database)/documents/stickerPacks/$(packId)).data.type != 'user' ||
+                         get(/databases/$(database)/documents/stickerPacks/$(packId)).data.creatorId == request.auth.uid ||
+                         packId == request.auth.uid ||
+                         isAdmin());
+            // Write: only owner OR admin can write stickers in personal pack
+            allow write: if request.auth != null && 
+                         (packId == request.auth.uid ||
+                          get(/databases/$(database)/documents/stickerPacks/$(packId)).data.creatorId == request.auth.uid ||
+                          isAdmin());
         }
     }
     
