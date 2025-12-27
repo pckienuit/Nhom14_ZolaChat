@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">DoAn_ZaloClone</string>
+    <string name="app_name">Zola</string>
     <string name="no_files">Không có file nào</string>
     
     <!-- File Management Strings -->

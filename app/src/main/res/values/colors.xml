@@ -11,6 +11,8 @@
     
     <color name="colorError">#F44336</color>
     <color name="textSecondary">#757575</color>
+    <color name="gray">#9E9E9E</color>
+    <color name="primary_blue">#0068FF</color>
     
     <!-- Zalo Specific UI Colors -->
     <color name="zalo_background_gray">#F2F4F7</color>
