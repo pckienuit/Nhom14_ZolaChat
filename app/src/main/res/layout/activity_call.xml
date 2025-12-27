@@ -120,9 +120,10 @@
             android:id="@+id/rejectButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:src="@drawable/ic_call_end"
-            app:backgroundTint="@android:color/holo_red_dark"
+            android:src="@drawable/ic_phone_reject"
+            app:backgroundTint="#F44336"
             app:tint="@android:color/white"
+            app:fabSize="normal"
             android:layout_marginEnd="32dp" />
 
         <!-- Accept button -->
@@ -130,9 +131,10 @@
             android:id="@+id/acceptButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:src="@drawable/ic_call"
-            app:backgroundTint="@android:color/holo_green_dark"
-            app:tint="@android:color/white" />
+            android:src="@drawable/ic_phone_accept"
+            app:backgroundTint="#4CAF50"
+            app:tint="@android:color/white"
+            app:fabSize="normal" />
     </LinearLayout>
 
     <!-- Outgoing call buttons (Cancel) - For caller -->
@@ -154,9 +156,10 @@
             android:id="@+id/cancelButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:src="@drawable/ic_call_end"
-            app:backgroundTint="@android:color/holo_red_dark"
-            app:tint="@android:color/white" />
+            android:src="@drawable/ic_phone_reject"
+            app:backgroundTint="#F44336"
+            app:tint="@android:color/white"
+            app:fabSize="normal" />
     </LinearLayout>
 
     <!-- Call controls - OUTSIDE overlay so always at bottom -->
@@ -227,8 +230,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_margin="8dp"
-                android:src="@drawable/ic_call_end"
-                app:backgroundTint="@android:color/holo_red_dark"
+                android:src="@drawable/ic_phone_reject"
+                app:backgroundTint="#F44336"
                 app:tint="@android:color/white"
                 app:fabSize="normal" />
         </LinearLayout>
