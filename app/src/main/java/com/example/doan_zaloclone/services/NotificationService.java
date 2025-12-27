@@ -114,6 +114,16 @@ public class NotificationService extends Service {
                         return;
                     }
                     
+                    // Skip call-related messages (to avoid "Unknown" notifications)
+                    if ("call".equalsIgnoreCase(messageType) || 
+                        messageText.contains("Cuộc gọi") ||
+                        messageText.contains("Missed call") ||
+                        messageText.contains("Incoming call") ||
+                        messageText.contains("Outgoing call")) {
+                        Log.d(TAG, "Skipping call notification message");
+                        return;
+                    }
+                    
                     // Format message text based on type
                     String displayText = messageText;
                     if ("image".equals(messageType)) {
