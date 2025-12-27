@@ -16,6 +16,7 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Conversation;
@@ -30,6 +31,7 @@ public class HomeFragment extends Fragment {
 
     private RecyclerView conversationsRecyclerView;
     private ConversationAdapter conversationAdapter;
+    private SwipeRefreshLayout swipeRefreshLayout;
 
     private HomeViewModel homeViewModel;
     private FirebaseAuth firebaseAuth;
@@ -62,6 +64,11 @@ public class HomeFragment extends Fragment {
     private void initViews(View view) {
         conversationsRecyclerView = view.findViewById(R.id.conversationsRecyclerView);
         filterChipsContainer = view.findViewById(R.id.filterChipsContainer);
+        swipeRefreshLayout = view.findViewById(R.id.swipeRefreshLayout);
+        
+        // Setup SwipeRefreshLayout
+        setupSwipeRefresh();
+        
         setupFilterChips();
         
         // Setup inline search EditText
@@ -78,6 +85,40 @@ public class HomeFragment extends Fragment {
         if (btnAdd != null) {
             btnAdd.setOnClickListener(v -> showAddMenu(v));
         }
+    }
+    
+    /**
+     * Setup SwipeRefreshLayout for pull-to-refresh functionality
+     */
+    private void setupSwipeRefresh() {
+        if (swipeRefreshLayout == null) return;
+        
+        // Set Zalo blue color for refresh indicator
+        swipeRefreshLayout.setColorSchemeResources(R.color.colorPrimary);
+        
+        // Set refresh listener
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            if (firebaseAuth.getCurrentUser() != null) {
+                String userId = firebaseAuth.getCurrentUser().getUid();
+                android.util.Log.d("HomeFragment", "Pull-to-refresh: Refreshing conversations");
+                
+                // Refresh conversations
+                homeViewModel.refreshConversations(userId);
+                
+                // Hide refresh indicator after a short delay
+                // The observer in observeViewModel() will update the list
+                new android.os.Handler().postDelayed(() -> {
+                    if (swipeRefreshLayout != null) {
+                        swipeRefreshLayout.setRefreshing(false);
+                    }
+                }, 1500);
+            } else {
+                swipeRefreshLayout.setRefreshing(false);
+                if (getContext() != null) {
+                    Toast.makeText(getContext(), "Vui lòng đăng nhập", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
     }
     
     private void setupSearchEditText(View view) {
