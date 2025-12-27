@@ -79,6 +79,9 @@ public class MainActivity extends AppCompatActivity {
 
         // Create notification channels
         NotificationHelper.createNotificationChannels(this);
+        
+        // Request notification permission for Android 13+
+        requestNotificationPermission();
 
         // Record login timestamp for force logout comparison
         loginTimestamp = System.currentTimeMillis();
@@ -148,6 +151,38 @@ public class MainActivity extends AppCompatActivity {
             startService(serviceIntent);
         }
         Log.d("MainActivity", "NotificationService started");
+    }
+    
+    /**
+     * Request notification permission for Android 13+
+     */
+    private void requestNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) 
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(
+                    new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 
+                    1001
+                );
+                Log.d("MainActivity", "Requesting POST_NOTIFICATIONS permission");
+            } else {
+                Log.d("MainActivity", "POST_NOTIFICATIONS permission already granted");
+            }
+        }
+    }
+    
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 1001) {
+            if (grantResults.length > 0 && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                Log.d("MainActivity", "POST_NOTIFICATIONS permission granted");
+                Toast.makeText(this, "Thông báo đã được bật", Toast.LENGTH_SHORT).show();
+            } else {
+                Log.w("MainActivity", "POST_NOTIFICATIONS permission denied");
+                Toast.makeText(this, "Vui lòng cấp quyền thông báo để nhận tin nhắn", Toast.LENGTH_LONG).show();
+            }
+        }
     }
     
     /**

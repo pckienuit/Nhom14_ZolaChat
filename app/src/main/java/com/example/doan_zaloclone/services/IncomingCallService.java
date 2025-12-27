@@ -70,17 +70,18 @@ public class IncomingCallService extends Service {
         call.setType(isVideo ? Call.TYPE_VIDEO : Call.TYPE_VOICE);
 
         // Start foreground with notification
-        // Conditionally set foreground service type based on call type
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            int serviceType = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
-            if (isVideo) {
-                serviceType |= android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA;
-            }
+        // Use SPECIAL_USE type for incoming call notification (Android 14+ compatible)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            // Android 14+ requires SPECIAL_USE
             startForeground(NOTIFICATION_ID,
                     CallNotificationHelper.createIncomingCallNotification(this, call, callerName, null),
-                    serviceType);
-            Log.d(TAG, "Started with foreground service type: " +
-                    (isVideo ? "camera|microphone" : "microphone"));
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            Log.d(TAG, "Started with foreground service type: specialUse (Android 14+)");
+        } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID,
+                    CallNotificationHelper.createIncomingCallNotification(this, call, callerName, null),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_PHONE_CALL);
+            Log.d(TAG, "Started with foreground service type: phoneCall");
         } else {
             startForeground(NOTIFICATION_ID,
                     CallNotificationHelper.createIncomingCallNotification(this, call, callerName, null));
