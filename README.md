@@ -522,43 +522,45 @@ app/build/outputs/apk/production/release/app-production-release.apk
 11. PROJECT STRUCTURE
 --------------------------------------------------------------------------------
 
+```
 DoAn_ZaloClone/
-|
-|-- app/                          # Android application
-|   |-- src/main/
-|   |   |-- java/.../             # Java source code
-|   |   |   |-- api/              # Retrofit API interfaces
-|   |   |   |-- models/           # Data models
-|   |   |   |-- repository/       # Data repositories
-|   |   |   |-- service/          # Background services
-|   |   |   |-- ui/               # Activities & Fragments
-|   |   |   |-- utils/            # Helper classes
-|   |   |   |-- viewmodel/        # ViewModels (MVVM)
-|   |   |   +-- websocket/        # WebSocket handlers
-|   |   |-- res/                  # Resources (layouts, drawables, strings)
-|   |   +-- AndroidManifest.xml
-|   |-- build.gradle.kts          # App-level build config
-|   +-- google-services.json      # Firebase config
-|
-|-- server/                       # Node.js Backend
-|   |-- src/
-|   |   |-- index.js              # Entry point
-|   |   |-- routes/               # API routes
-|   |   |-- middleware/           # Express middleware
-|   |   +-- websocket/            # Socket.IO handlers
-|   |-- .env                      # Environment variables
-|   |-- package.json              # Dependencies
-|   +-- serviceAccountKey.json    # Firebase Admin SDK key
-|
-|-- admin-web/                    # Admin dashboard (HTML/JS)
-|
-|-- docs/                         # Documentation (92 files)
-|
-|-- landing-page/                 # Landing page website
-|
-|-- local.properties              # Local config (API keys, SDK path)
-|-- build.gradle.kts              # Root build config
-+-- README.md                     # This file
+│
+├── app/                          # Android application
+│   ├── src/main/
+│   │   ├── java/.../             # Java source code
+│   │   │   ├── api/              # Retrofit API interfaces
+│   │   │   ├── models/           # Data models
+│   │   │   ├── repository/       # Data repositories
+│   │   │   ├── service/          # Background services
+│   │   │   ├── ui/               # Activities & Fragments
+│   │   │   ├── utils/            # Helper classes
+│   │   │   ├── viewmodel/        # ViewModels (MVVM)
+│   │   │   └── websocket/        # WebSocket handlers
+│   │   ├── res/                  # Resources (layouts, drawables, strings)
+│   │   └── AndroidManifest.xml
+│   ├── build.gradle.kts          # App-level build config
+│   └── google-services.json      # Firebase config
+│
+├── server/                       # Node.js Backend
+│   ├── src/
+│   │   ├── index.js              # Entry point
+│   │   ├── routes/               # API routes
+│   │   ├── middleware/           # Express middleware
+│   │   └── websocket/            # Socket.IO handlers
+│   ├── .env                      # Environment variables
+│   ├── package.json              # Dependencies
+│   └── serviceAccountKey.json    # Firebase Admin SDK key
+│
+├── admin-web/                    # Admin dashboard (HTML/JS)
+│
+├── docs/                         # Documentation (92 files)
+│
+├── landing-page/                 # Landing page website
+│
+├── local.properties              # Local config (API keys, SDK path)
+├── build.gradle.kts              # Root build config
+└── README.md                     # This file
+```
 
 --------------------------------------------------------------------------------
 12. TROUBLESHOOTING
