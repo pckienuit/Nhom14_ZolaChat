@@ -1970,7 +1970,7 @@ public class RoomActivity extends AppCompatActivity {
     private void setupListeners() {
         sendButton.setOnClickListener(v -> handleSendMessage());
         attachImageButton.setOnClickListener(v -> requestPermissionAndShowPicker());
-        moreActionsButton.setOnClickListener(v -> showActionMenu());
+        moreActionsButton.setOnClickListener(v -> toggleActionMenu());
         backButton.setOnClickListener(v -> hideImagePicker());
         sendImagesButton.setOnClickListener(v -> handleSendImages());
 
@@ -2364,6 +2364,14 @@ public class RoomActivity extends AppCompatActivity {
     }
 
     // ============ ACTION MENU METHODS ============
+
+    private void toggleActionMenu() {
+        if (actionMenuContainer.getVisibility() == View.VISIBLE) {
+            hideActionMenu();
+        } else {
+            showActionMenu();
+        }
+    }
 
     private void showActionMenu() {
         // Hide keyboard
