@@ -115,7 +115,14 @@
             android:parentActivityName=".MainActivity"
             android:windowSoftInputMode="adjustResize" />
             
-                <!-- Profile Card Activity -->
+        <!-- Comments Activity -->
+        <activity
+            android:name=".activities.CommentsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+            
+        <!-- Profile Card Activity -->
         <activity
             android:name=".ui.personal.ProfileCardActivity"
             android:exported="false"
