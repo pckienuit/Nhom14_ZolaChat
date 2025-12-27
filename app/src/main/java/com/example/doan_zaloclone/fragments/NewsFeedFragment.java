@@ -7,7 +7,6 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -16,12 +15,14 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.example.doan_zaloclone.R;
-import com.example.doan_zaloclone.activities.CreatePostActivity; // Đảm bảo bạn đã có Activity này
+// Import đúng đường dẫn Activity (Nếu báo đỏ xem Phần 2 bên dưới)
+import com.example.doan_zaloclone.activities.CreatePostActivity;
 import com.example.doan_zaloclone.models.FireBasePost;
-import com.example.doan_zaloclone.adapters.PostAdapter; // Import đúng Adapter bạn vừa sửa
+import com.example.doan_zaloclone.adapters.PostAdapter;
 
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 
 import java.util.ArrayList;
@@ -35,14 +36,13 @@ public class NewsFeedFragment extends Fragment {
     private FirebaseFirestore db;
     private LinearLayout layoutPostInput;
 
-    // Constructor rỗng bắt buộc
+    private ListenerRegistration postListener;
+
     public NewsFeedFragment() { }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-        // Lưu ý: R.layout.recycler_view là file XML chứa RecyclerView mà bạn đã tạo
-        // Nếu bạn đặt tên file XML khác (ví dụ: fragment_news_feed.xml), hãy sửa lại ở đây
         return inflater.inflate(R.layout.recycler_view, container, false);
     }
 
@@ -50,37 +50,31 @@ public class NewsFeedFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // 1. Khởi tạo Firestore
         db = FirebaseFirestore.getInstance();
 
-        // 2. Ánh xạ View (Khớp ID trong file XML layout của bạn)
         rvPosts = view.findViewById(R.id.rvPosts);
         layoutPostInput = view.findViewById(R.id.layoutPostInput);
 
-        // 3. Setup RecyclerView
-        rvPosts.setLayoutManager(new LinearLayoutManager(getContext()));
+        rvPosts.setLayoutManager(new LinearLayoutManager(requireContext()));
         postList = new ArrayList<>();
 
         // Khởi tạo Adapter
-        postAdapter = new PostAdapter(getContext(), postList);
+        postAdapter = new PostAdapter(requireContext(), postList);
         rvPosts.setAdapter(postAdapter);
 
-        // 4. Sự kiện click vào thanh đăng bài -> Mở màn hình CreatePostActivity
         if (layoutPostInput != null) {
             layoutPostInput.setOnClickListener(v -> {
-                // Kiểm tra xem CreatePostActivity đã tồn tại chưa, nếu chưa hãy tạo nó
-                Intent intent = new Intent(getContext(), CreatePostActivity.class);
+                // Đã sửa lỗi: Gọi trực tiếp class, không cần viết dài dòng package
+                Intent intent = new Intent(requireContext(), CreatePostActivity.class);
                 startActivity(intent);
             });
         }
 
-        // 5. Gọi hàm tải dữ liệu
         loadPostsFromFirebase();
     }
 
     private void loadPostsFromFirebase() {
-        // Lấy dữ liệu từ collection "posts", sắp xếp mới nhất lên đầu
-        db.collection("posts")
+        postListener = db.collection("posts")
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .addSnapshotListener((value, error) -> {
                     if (error != null) {
@@ -89,15 +83,28 @@ public class NewsFeedFragment extends Fragment {
                     }
 
                     if (value != null) {
-                        postList.clear(); // Xóa list cũ
+                        postList.clear();
                         for (DocumentSnapshot doc : value.getDocuments()) {
-                            // Chuyển đổi Document thành Object FireBasePost
-                            FireBasePost post = doc.toObject(FireBasePost.class);
-                            postList.add(post);
+                            try {
+                                FireBasePost post = doc.toObject(FireBasePost.class);
+                                if (post != null) {
+                                    postList.add(post);
+                                }
+                            } catch (Exception e) {
+                                Log.e("NewsFeed", "Lỗi convert data: " + e.getMessage());
+                            }
                         }
-                        // Cập nhật giao diện
                         postAdapter.notifyDataSetChanged();
                     }
                 });
     }
+
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        if (postListener != null) {
+            postListener.remove();
+        }
+    }
 }
+

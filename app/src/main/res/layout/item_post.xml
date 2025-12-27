@@ -1,136 +1,142 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="8dp"
+    android:layout_margin="8dp"
+    app:cardCornerRadius="8dp"
     app:cardElevation="2dp"
-    app:cardCornerRadius="0dp">
+    app:cardBackgroundColor="#FFFFFF">
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:paddingBottom="12dp">
 
-        <!-- Header: Avatar, Tên và Thời gian -->
+        <!-- 1. Avatar User (ID: imgAvatarPost) -->
         <de.hdodenhof.circleimageview.CircleImageView
-            android:id="@+id/imgAvatar"
-            android:layout_width="45dp"
-            android:layout_height="45dp"
-            android:layout_marginStart="12dp"
-            android:layout_marginTop="12dp"
-            android:src="@drawable/ic_avatar"
+            android:id="@+id/imgAvatarPost"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_margin="12dp"
+            android:src="@drawable/ic_launcher_background"
+            app:civ_border_color="#FF000000"
+            app:civ_border_width="0dp"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
 
+        <!-- 2. Tên User (ID: tvUserNamePost) -->
         <TextView
-            android:id="@+id/txtUserName"
+            android:id="@+id/tvUserNamePost"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
+            android:layout_marginTop="14dp"
+            android:layout_marginEnd="8dp"
             android:text="Tên người dùng"
-            android:textColor="@color/black"
-            android:textSize="16sp"
+            android:textColor="#000000"
             android:textStyle="bold"
+            android:textSize="16sp"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toEndOf="@id/imgAvatar"
-            app:layout_constraintTop_toTopOf="@id/imgAvatar" />
+            app:layout_constraintStart_toEndOf="@id/imgAvatarPost"
+            app:layout_constraintTop_toTopOf="parent" />
 
+        <!-- 3. Thời gian đăng (ID: tvTimePost) -->
         <TextView
-            android:id="@+id/txtTimestamp"
+            android:id="@+id/tvTimePost"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="10 phút trước"
+            android:text="1 giờ trước"
             android:textColor="#757575"
             android:textSize="12sp"
-            app:layout_constraintStart_toStartOf="@id/txtUserName"
-            app:layout_constraintTop_toBottomOf="@id/txtUserName" />
+            app:layout_constraintStart_toStartOf="@id/tvUserNamePost"
+            app:layout_constraintTop_toBottomOf="@id/tvUserNamePost" />
 
-        <!-- Content: Nội dung chữ -->
+        <!-- 4. Nội dung bài viết - Text (ID: tvContentPost) -->
         <TextView
-            android:id="@+id/txtContent"
+            android:id="@+id/tvContentPost"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:layout_marginEnd="12dp"
-            android:text="Nội dung bài viết ở đây..."
-            android:textColor="@color/black"
+            android:layout_marginHorizontal="12dp"
+            android:text="Nội dung bài viết sẽ hiển thị ở đây..."
+            android:textColor="#000000"
             android:textSize="15sp"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="@id/imgAvatar"
-            app:layout_constraintTop_toBottomOf="@id/imgAvatar" />
-
-        <!-- Image: Ảnh bài đăng -->
-        <ImageView
-            android:id="@+id/imgPost"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:adjustViewBounds="true"
-            android:scaleType="centerCrop"
-            android:visibility="gone"
-            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/txtContent" />
+            app:layout_constraintTop_toBottomOf="@id/imgAvatarPost" />
 
-        <!-- Footer: Nút Like và Comment -->
+        <!-- 5. Ảnh bài viết (ID: imgContentPost) -->
+        <ImageView
+            android:id="@+id/imgContentPost"
+            android:layout_width="match_parent"
+            android:layout_height="250dp"
+            android:layout_marginTop="12dp"
+            android:scaleType="centerCrop"
+            android:src="@drawable/ic_launcher_background"
+            android:visibility="visible"
+            app:layout_constraintTop_toBottomOf="@id/tvContentPost"
+            tools:layout_editor_absoluteX="0dp" />
+
+        <!-- Đường kẻ phân cách -->
         <View
             android:id="@+id/divider"
             android:layout_width="match_parent"
-            android:layout_height="0.5dp"
+            android:layout_height="1dp"
             android:layout_marginTop="12dp"
-            android:background="#DDDDDD"
-            app:layout_constraintTop_toBottomOf="@id/imgPost" />
+            android:background="#E0E0E0"
+            app:layout_constraintTop_toBottomOf="@id/imgContentPost" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
+        <!-- KHU VỰC TƯƠNG TÁC -->
+
+        <!-- 6. Nút Like (ID: btnLike) -->
+        <ImageView
+            android:id="@+id/btnLike"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginStart="16dp"
+            android:src="@android:drawable/btn_star_big_off"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/divider"
+            app:tint="#616161" />
+
+        <!-- 7. Số lượng Like (ID: tvLikeCount) -->
+        <TextView
+            android:id="@+id/tvLikeCount"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:weightSum="2"
-            app:layout_constraintTop_toBottomOf="@id/divider">
+            android:layout_marginStart="8dp"
+            android:text="0"
+            android:gravity="center_vertical"
+            app:layout_bottom_toBottomOf="@id/btnLike"
+            app:layout_constraintStart_toEndOf="@id/btnLike"
+            app:layout_constraintTop_toTopOf="@id/btnLike" />
 
-            <LinearLayout
-                android:id="@+id/btnLike"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackground"
-                android:gravity="center"
-                android:padding="10dp">
+        <!-- 8. Nút Bình luận (ID: btnComment) -->
+        <ImageView
+            android:id="@+id/btnComment"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="32dp"
+            android:src="@android:drawable/stat_notify_chat"
+            app:layout_bottom_toBottomOf="@id/btnLike"
+            app:layout_constraintStart_toEndOf="@id/tvLikeCount"
+            app:layout_constraintTop_toTopOf="@id/btnLike"
+            app:tint="#616161" />
 
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_like" /> <!-- Thay bằng icon của bạn -->
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="Thích" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/btnComment"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="?attr/selectableItemBackground"
-                android:gravity="center"
-                android:padding="10dp">
-
-                <ImageView
-                    android:layout_width="20dp"
-                    android:layout_height="20dp"
-                    android:src="@drawable/ic_comment" /> <!-- Thay bằng icon của bạn -->
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:text="Bình luận" />
-            </LinearLayout>
-        </LinearLayout>
+        <!-- 9. Số lượng Bình luận (ID: tvCommentCount) -->
+        <TextView
+            android:id="@+id/tvCommentCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="Bình luận"
+            android:gravity="center_vertical"
+            app:layout_bottom_toBottomOf="@id/btnComment"
+            app:layout_constraintStart_toEndOf="@id/btnComment"
+            app:layout_constraintTop_toTopOf="@id/btnComment" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </androidx.cardview.widget.CardView>

@@ -109,6 +109,9 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
     /**
      * ViewHolder class để ánh xạ các view từ item_post.xml
      */
+    /**
+     * ViewHolder class để ánh xạ các view từ item_post.xml
+     */
     public static class PostViewHolder extends RecyclerView.ViewHolder {
 
         CircleImageView imgAvatar;
@@ -118,23 +121,25 @@ public class PostAdapter extends RecyclerView.Adapter<PostAdapter.PostViewHolder
         public PostViewHolder(@NonNull View itemView) {
             super(itemView);
 
-            // Ánh xạ ID tương ứng trong file item_post.xml
-            // Đảm bảo các ID này trùng khớp với file XML item_post.xml bạn đã tạo
-            // Ánh xạ ID tương ứng trong file item_post.xml
-            // Đảm bảo các ID này trùng khớp với file XML item_post.xml bạn đã tạo
+            // Ánh xạ trực tiếp ID từ file item_post.xml
+            // Không cần logic fallback (if null) vì ID trong XML là cố định
+
+            // 1. Thông tin người dùng
             imgAvatar = itemView.findViewById(R.id.imgAvatarPost);
             tvUserName = itemView.findViewById(R.id.tvUserNamePost);
             tvTime = itemView.findViewById(R.id.tvTimePost);
+
+            // 2. Nội dung bài viết
             tvContent = itemView.findViewById(R.id.tvContentPost);
             imgContent = itemView.findViewById(R.id.imgContentPost);
 
-            // Các nút tương tác
+            // 3. Tương tác (Like/Comment)
             btnLike = itemView.findViewById(R.id.btnLike);
             tvLikeCount = itemView.findViewById(R.id.tvLikeCount);
             btnComment = itemView.findViewById(R.id.btnComment);
             tvCommentCount = itemView.findViewById(R.id.tvCommentCount);
-
         }
     }
+
 }
 
