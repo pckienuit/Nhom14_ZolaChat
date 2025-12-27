@@ -60,6 +60,7 @@ public class RoomActivity extends AppCompatActivity {
     private final List<FilePreviewAdapter.FileItem> selectedFilesForPreview = new ArrayList<>();
     private Toolbar toolbar;
     private TextView titleTextView;
+    private TextView subtitleTextView;
     private RecyclerView messagesRecyclerView;
     private EditText messageEditText;
     private ImageButton sendButton;
@@ -325,6 +326,7 @@ public class RoomActivity extends AppCompatActivity {
 
         toolbar = findViewById(R.id.toolbar);
         titleTextView = findViewById(R.id.titleTextView);
+        subtitleTextView = findViewById(R.id.subtitleTextView);
         messagesRecyclerView = findViewById(R.id.messagesRecyclerView);
         messageEditText = findViewById(R.id.messageEditText);
         sendButton = findViewById(R.id.sendButton);
@@ -1926,6 +1928,8 @@ public class RoomActivity extends AppCompatActivity {
                                     if (!memberId.equals(currentUserId)) {
                                         otherUserId = memberId;
                                         checkFriendship();
+                                        // Fetch and display last seen status
+                                        fetchUserOnlineStatus(memberId);
                                         break;
                                     }
                                 }
@@ -1934,6 +1938,10 @@ public class RoomActivity extends AppCompatActivity {
                             // For group chats, no message limit
                             areFriends = true; // Treat as friends to bypass limit
                             android.util.Log.d("RoomActivity", "Group chat - no message limit");
+                            // Hide subtitle for group chats
+                            if (subtitleTextView != null) {
+                                subtitleTextView.setVisibility(View.GONE);
+                            }
                         }
                     }
                 });
@@ -1952,6 +1960,89 @@ public class RoomActivity extends AppCompatActivity {
                 areFriends = false;
             }
         });
+    }
+
+    /**
+     * Fetch and display user's online status (last seen) in the subtitle
+     */
+    private void fetchUserOnlineStatus(String userId) {
+        if (userId == null || userId.isEmpty()) return;
+
+        com.example.doan_zaloclone.services.FirestoreManager.getInstance()
+                .getFirestore()
+                .collection("users")
+                .document(userId)
+                .addSnapshotListener((doc, error) -> {
+                    if (error != null) {
+                        android.util.Log.e("RoomActivity", "Error listening to user status", error);
+                        return;
+                    }
+
+                    if (doc != null && doc.exists()) {
+                        Boolean isOnline = doc.getBoolean("isOnline");
+                        Long lastSeen = doc.getLong("lastSeen");
+
+                        updateLastSeenSubtitle(isOnline != null && isOnline, lastSeen);
+                    }
+                });
+    }
+
+    /**
+     * Update the subtitle text view with online/last seen status
+     */
+    private void updateLastSeenSubtitle(boolean isOnline, Long lastSeenTimestamp) {
+        if (subtitleTextView == null) return;
+
+        runOnUiThread(() -> {
+            if (isOnline) {
+                // Check if last seen is within 5 minutes (not stale)
+                long now = System.currentTimeMillis();
+                boolean isRecent = lastSeenTimestamp != null && (now - lastSeenTimestamp) < 5 * 60 * 1000;
+                
+                if (isRecent || lastSeenTimestamp == null) {
+                    subtitleTextView.setText("Đang hoạt động");
+                    subtitleTextView.setVisibility(View.VISIBLE);
+                } else {
+                    // isOnline but stale lastSeen - treat as offline
+                    String lastSeenText = formatLastSeen(lastSeenTimestamp);
+                    subtitleTextView.setText(lastSeenText);
+                    subtitleTextView.setVisibility(View.VISIBLE);
+                }
+            } else if (lastSeenTimestamp != null && lastSeenTimestamp > 0) {
+                String lastSeenText = formatLastSeen(lastSeenTimestamp);
+                subtitleTextView.setText(lastSeenText);
+                subtitleTextView.setVisibility(View.VISIBLE);
+            } else {
+                subtitleTextView.setVisibility(View.GONE);
+            }
+        });
+    }
+
+    /**
+     * Format timestamp to human readable "last seen" text
+     */
+    private String formatLastSeen(long timestamp) {
+        long now = System.currentTimeMillis();
+        long diff = now - timestamp;
+
+        // Convert to minutes
+        long minutes = diff / (1000 * 60);
+        long hours = diff / (1000 * 60 * 60);
+        long days = diff / (1000 * 60 * 60 * 24);
+
+        if (minutes < 1) {
+            return "Vừa mới truy cập";
+        } else if (minutes < 60) {
+            return "Hoạt động " + minutes + " phút trước";
+        } else if (hours < 24) {
+            return "Hoạt động " + hours + " giờ trước";
+        } else if (days < 7) {
+            return "Hoạt động " + days + " ngày trước";
+        } else {
+            // Format as date
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault());
+            return "Hoạt động " + sdf.format(new java.util.Date(timestamp));
+        }
     }
 
     private int countMyMessages() {
