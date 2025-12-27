@@ -34,6 +34,11 @@ public class NotificationService extends Service {
     // WebSocket manager
     private SocketManager socketManager;
     
+    // Call listener
+    private com.example.doan_zaloclone.repository.CallRepository callRepository;
+    private com.google.firebase.firestore.ListenerRegistration incomingCallListener;
+    private String lastHandledCallId = null;
+    
     @Override
     public void onCreate() {
         super.onCreate();
@@ -53,6 +58,9 @@ public class NotificationService extends Service {
         
         // Setup notification listener
         setupNotificationListener();
+        
+        // Setup incoming call listener
+        setupIncomingCallListener();
     }
     
     @Override
@@ -259,6 +267,106 @@ public class NotificationService extends Service {
         context.startService(intent);
     }
     
+    /**
+     * Setup listener for incoming calls
+     * This allows the service to receive calls even when app is in background
+     */
+    private void setupIncomingCallListener() {
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        if (currentUser == null) {
+            Log.w(TAG, "Cannot setup call listener - no user logged in");
+            return;
+        }
+        
+        final String currentUserId = currentUser.getUid();
+        Log.d(TAG, "Setting up incoming call listener for user: " + currentUserId);
+        
+        callRepository = new com.example.doan_zaloclone.repository.CallRepository();
+        incomingCallListener = callRepository.listenToIncomingCalls(
+                currentUserId,
+                new com.example.doan_zaloclone.repository.CallRepository.OnIncomingCallListener() {
+                    @Override
+                    public void onIncomingCall(com.example.doan_zaloclone.models.Call call) {
+                        Log.d(TAG, "Incoming call detected: " + call.getId());
+                        
+                        // Prevent duplicate calls
+                        if (call.getId().equals(lastHandledCallId)) {
+                            Log.d(TAG, "Skipping duplicate call: " + call.getId());
+                            return;
+                        }
+                        
+                        // Reject old calls (> 60 seconds)
+                        if (call.getStartTime() > 0) {
+                            long callAge = System.currentTimeMillis() - call.getStartTime();
+                            if (callAge > 60000) {
+                                Log.w(TAG, "Rejecting old call: " + call.getId() + ", age: " + callAge + "ms");
+                                return;
+                            }
+                        }
+                        
+                        lastHandledCallId = call.getId();
+                        Log.d(TAG, "Processing incoming call: " + call.getId());
+                        
+                        // Fetch caller name and launch IncomingCallService
+                        fetchCallerNameAndLaunchService(call, currentUserId);
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        Log.e(TAG, "Error listening for incoming calls: " + error);
+                    }
+                }
+        );
+        
+        Log.d(TAG, "Incoming call listener setup complete");
+    }
+    
+    /**
+     * Fetch caller name from Firestore and launch IncomingCallService
+     */
+    private void fetchCallerNameAndLaunchService(com.example.doan_zaloclone.models.Call call, String currentUserId) {
+        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                .collection("users")
+                .document(call.getCallerId())
+                .get()
+                .addOnSuccessListener(doc -> {
+                    String callerName = "Unknown";
+                    if (doc.exists() && doc.contains("name")) {
+                        callerName = doc.getString("name");
+                    }
+                    
+                    launchIncomingCallService(call, currentUserId, callerName);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Failed to fetch caller name", e);
+                    launchIncomingCallService(call, currentUserId, "Unknown");
+                });
+    }
+    
+    /**
+     * Launch IncomingCallService with call details
+     */
+    private void launchIncomingCallService(com.example.doan_zaloclone.models.Call call, 
+                                            String receiverId, String callerName) {
+        Intent serviceIntent = new Intent(this, IncomingCallService.class);
+        serviceIntent.putExtra("call_id", call.getId());
+        serviceIntent.putExtra("caller_id", call.getCallerId());
+        serviceIntent.putExtra("caller_name", callerName);
+        serviceIntent.putExtra("receiver_id", receiverId);
+        serviceIntent.putExtra("conversation_id", call.getConversationId());
+        serviceIntent.putExtra("is_video", com.example.doan_zaloclone.models.Call.TYPE_VIDEO.equals(call.getType()));
+        
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent);
+        } else {
+            startService(serviceIntent);
+        }
+        
+        Log.d(TAG, "Launched IncomingCallService for call: " + call.getId() + 
+                ", caller: " + callerName + ", isVideo: " + 
+                com.example.doan_zaloclone.models.Call.TYPE_VIDEO.equals(call.getType()));
+    }
+    
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
@@ -269,6 +377,13 @@ public class NotificationService extends Service {
     public void onDestroy() {
         super.onDestroy();
         Log.d(TAG, "NotificationService destroyed");
+        
+        // Cleanup incoming call listener
+        if (incomingCallListener != null) {
+            incomingCallListener.remove();
+            incomingCallListener = null;
+            Log.d(TAG, "Incoming call listener removed");
+        }
         
         // Note: We don't disconnect WebSocket here because MainActivity
         // might still be running. MainActivity will handle disconnect on its own destroy.
