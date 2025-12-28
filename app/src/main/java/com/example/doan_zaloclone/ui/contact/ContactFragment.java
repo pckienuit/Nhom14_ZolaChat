@@ -441,6 +441,7 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
 
         // Use ViewModel to find existing conversation - observe only once
+        android.util.Log.d("ContactFragment", "onUserClick: Finding conversation for " + currentUserId + " <-> " + user.getId());
         LiveData<Resource<Conversation>> liveData = contactViewModel.findExistingConversation(currentUserId, user.getId());
         liveData.observe(getViewLifecycleOwner(), new androidx.lifecycle.Observer<Resource<Conversation>>() {
             @Override
@@ -455,19 +456,25 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
 
                 if (resource.isSuccess()) {
                     Conversation conversation = resource.getData();
+                    android.util.Log.d("ContactFragment", "onUserClick result: conversation=" + 
+                        (conversation != null ? "exists, id=" + conversation.getId() : "null"));
+                    
                     if (conversation != null && conversation.getId() != null && !conversation.getId().isEmpty()) {
                         // Found existing conversation with valid ID
+                        android.util.Log.d("ContactFragment", "✅ Opening existing conversation: " + conversation.getId());
                         if (getActivity() != null) {
                             openChatRoom(conversation);
                         }
                     } else {
                         // No conversation found or invalid ID, create new one
+                        android.util.Log.d("ContactFragment", "⚠️ No valid conversation found, creating new one...");
                         String currentUserName = firebaseAuth.getCurrentUser().getDisplayName() != null
                                 ? firebaseAuth.getCurrentUser().getDisplayName()
                                 : "User";
                         createNewConversation(currentUserId, currentUserName, user);
                     }
                 } else if (resource.isError()) {
+                    android.util.Log.e("ContactFragment", "❌ Error finding conversation: " + resource.getMessage());
                     if (getContext() != null) {
                         Toast.makeText(getContext(), "Error: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
                     }
