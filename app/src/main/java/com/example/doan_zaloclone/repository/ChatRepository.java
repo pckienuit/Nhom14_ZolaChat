@@ -396,6 +396,17 @@ public class ChatRepository {
     public ListenerRegistration listenToMessages(String conversationId, MessagesListener listener) {
         Log.d("ChatRepository", "🎯 listenToMessages called for: " + conversationId);
         
+        // Null check để tránh crash trong các closure
+        if (conversationId == null || conversationId.isEmpty()) {
+            Log.e("ChatRepository", "listenToMessages: conversationId is null or empty");
+            return new ListenerRegistration() {
+                @Override
+                public void remove() {
+                    // Empty implementation - no listener was created
+                }
+            };
+        }
+        
         // Leave previous conversation room if different
         if (currentConversationId != null && !currentConversationId.equals(conversationId)) {
             Log.d("ChatRepository", "📤 Leaving previous conversation: " + currentConversationId);
@@ -716,8 +727,8 @@ public class ChatRepository {
                 // Remove the message listener properly!
                 socketManager.removeMessageListener(wsMessageListener);
                 
-                // Leave WebSocket room
-                if (conversationId.equals(currentConversationId)) {
+                // Leave WebSocket room - null check to avoid crash
+                if (conversationId != null && conversationId.equals(currentConversationId)) {
                     socketManager.leaveConversation(conversationId);
                     currentConversationId = null;
                     cachedMessages.clear();

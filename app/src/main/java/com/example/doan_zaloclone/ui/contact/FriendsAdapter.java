@@ -60,9 +60,9 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
 
     public interface OnFriendClickListener {
         void onMessageClick(User friend);
-
+        void onVoiceCallClick(User friend);
+        void onVideoCallClick(User friend);
         void onUnfriendClick(User friend);
-        
         void onFriendLongClick(View view, User friend);
     }
 
@@ -157,13 +157,12 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
                 return false;
             });
 
-            // Call button
+            // Call button - Voice Call
             if (btnCall != null) {
                 btnCall.setOnClickListener(v -> {
-                    // TODO: Implement voice call
                     int position = getAdapterPosition();
                     if (position != RecyclerView.NO_POSITION && listener != null) {
-                        listener.onMessageClick(friends.get(position)); // Reusing message click for now as placeholder
+                        listener.onVoiceCallClick(friends.get(position));
                     }
                 });
             }
@@ -171,10 +170,9 @@ public class FriendsAdapter extends RecyclerView.Adapter<FriendsAdapter.ViewHold
             // Video Call button
             if (btnVideoCall != null) {
                 btnVideoCall.setOnClickListener(v -> {
-                    // TODO: Implement video call
-                     int position = getAdapterPosition();
+                    int position = getAdapterPosition();
                     if (position != RecyclerView.NO_POSITION && listener != null) {
-                        listener.onMessageClick(friends.get(position)); 
+                        listener.onVideoCallClick(friends.get(position));
                     }
                 });
             }

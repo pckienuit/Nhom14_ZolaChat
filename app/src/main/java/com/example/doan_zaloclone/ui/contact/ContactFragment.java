@@ -724,6 +724,94 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     }
 
     @Override
+    public void onVoiceCallClick(User friend) {
+        startCallWithFriend(friend, false);
+    }
+
+    @Override
+    public void onVideoCallClick(User friend) {
+        startCallWithFriend(friend, true);
+    }
+
+    /**
+     * Mở chat với bạn bè và tự động bắt đầu cuộc gọi
+     */
+    private void startCallWithFriend(User friend, boolean isVideo) {
+        if (firebaseAuth.getCurrentUser() == null) {
+            Toast.makeText(getContext(), "Bạn cần đăng nhập để thực hiện cuộc gọi", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        
+        // Tìm hoặc tạo conversation
+        contactViewModel.findExistingConversation(currentUserId, friend.getId()).observe(this, resource -> {
+            if (resource == null) return;
+
+            if (resource.isSuccess()) {
+                Conversation conversation = resource.getData();
+                if (conversation != null && conversation.getId() != null) {
+                    // Mở RoomActivity với flag auto-start call
+                    openChatAndStartCall(conversation, friend.getName(), isVideo);
+                } else {
+                    // Tạo conversation mới trước
+                    createConversationAndStartCall(currentUserId, friend, isVideo);
+                }
+            } else if (resource.isError()) {
+                Toast.makeText(getContext(), "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
+    private void openChatAndStartCall(Conversation conversation, String friendName, boolean isVideo) {
+        if (getActivity() == null) return;
+        
+        String currentUserId = firebaseAuth.getCurrentUser().getUid();
+        Intent intent = new Intent(getActivity(), RoomActivity.class);
+        intent.putExtra("conversationId", conversation.getId());
+        
+        // Get proper conversation name
+        String conversationName = conversation.getName();
+        if (conversationName == null || conversationName.isEmpty()) {
+            conversationName = friendName != null ? friendName : conversation.getOtherUserName(currentUserId);
+        }
+        intent.putExtra("conversationName", conversationName);
+        
+        // Thêm flag để tự động bắt đầu cuộc gọi
+        intent.putExtra(RoomActivity.EXTRA_AUTO_START_CALL, true);
+        intent.putExtra(RoomActivity.EXTRA_IS_VIDEO_CALL, isVideo);
+        
+        startActivity(intent);
+    }
+
+    private void createConversationAndStartCall(String currentUserId, User friend, boolean isVideo) {
+        if (getActivity() == null) return;
+
+        String currentUserName = firebaseAuth.getCurrentUser().getDisplayName() != null
+                ? firebaseAuth.getCurrentUser().getDisplayName()
+                : "User";
+
+        ConversationRepository conversationRepository = ConversationRepository.getInstance();
+        List<String> participants = Arrays.asList(currentUserId, friend.getId());
+
+        conversationRepository.createConversation(participants, false, null)
+                .observe(getViewLifecycleOwner(), resource -> {
+                    if (resource == null) return;
+
+                    if (resource.isSuccess() && resource.getData() != null) {
+                        String conversationId = resource.getData();
+                        // Mở RoomActivity với flag auto-start call
+                        Conversation conversation = new Conversation();
+                        conversation.setId(conversationId);
+                        conversation.setMemberIds(participants);
+                        openChatAndStartCall(conversation, friend.getName(), isVideo);
+                    } else if (resource.isError()) {
+                        Toast.makeText(getContext(), "Lỗi tạo cuộc hội thoại: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                });
+    }
+
+    @Override
     public void onFriendLongClick(View view, User friend) {
         android.widget.PopupMenu popup = new android.widget.PopupMenu(getContext(), view);
         popup.getMenu().add("Xóa bạn bè");

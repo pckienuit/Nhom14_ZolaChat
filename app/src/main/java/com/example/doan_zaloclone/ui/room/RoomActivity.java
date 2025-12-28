@@ -1943,6 +1943,12 @@ public class RoomActivity extends AppCompatActivity {
     }
 
     private void extractOtherUserIdAndCheckFriendship() {
+        // Null check để tránh crash
+        if (conversationId == null || conversationId.isEmpty()) {
+            android.util.Log.e("RoomActivity", "extractOtherUserIdAndCheckFriendship: conversationId is null or empty");
+            return;
+        }
+        
         // Get current user
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
 
