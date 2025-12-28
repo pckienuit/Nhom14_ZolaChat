@@ -662,7 +662,7 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         } else if (holder instanceof ImageSentViewHolder) {
             ((ImageSentViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof LiveLocationMessageViewHolder) {
-            ((LiveLocationMessageViewHolder) holder).bind(message, currentUserId);
+            ((LiveLocationMessageViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof ImageReceivedViewHolder) {
             ((ImageReceivedViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof FileMessageSentViewHolder) {
@@ -676,11 +676,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
         } else if (holder instanceof ContactMessageViewHolder) {
             ((ContactMessageViewHolder) holder).bind(message, currentUserId);
         } else if (holder instanceof LocationMessageViewHolder) {
-            ((LocationMessageViewHolder) holder).bind(message);
+            ((LocationMessageViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof StickerMessageViewHolder) {
             ((StickerMessageViewHolder) holder).bind(message, isGroupChat, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof com.example.doan_zaloclone.adapters.VoiceMessageViewHolder) {
-            ((com.example.doan_zaloclone.adapters.VoiceMessageViewHolder) holder).bind(message);
+            ((com.example.doan_zaloclone.adapters.VoiceMessageViewHolder) holder).bind(message, longClickListener, replyListener, replyPreviewClickListener, recallListener, forwardListener, editListener, deleteListener, currentUserId, isPinned, isHighlighted, reactionListener);
         } else if (holder instanceof RecalledMessageViewHolder) {
             // Recalled messages just display static text, no binding needed
         }
@@ -2414,7 +2414,28 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             messageCard = itemView.findViewById(R.id.messageCard);
         }
 
+        /**
+         * Legacy bind method for compatibility
+         */
         public void bind(Message message) {
+            bind(message, null, null, null, null, null, null, null, null, false, false, null);
+        }
+
+        /**
+         * Full bind method with all listeners for context menu and reactions
+         */
+        public void bind(Message message,
+                         OnMessageLongClickListener longClickListener,
+                         OnMessageReplyListener replyListener,
+                         OnReplyPreviewClickListener replyPreviewClickListener,
+                         OnMessageRecallListener recallListener,
+                         OnMessageForwardListener forwardListener,
+                         OnMessageEditListener editListener,
+                         OnMessageDeleteListener deleteListener,
+                         String currentUserId,
+                         boolean isPinned,
+                         boolean isHighlighted,
+                         OnMessageReactionListener reactionListener) {
             // Set location name
             String locationName = message.getLocationName();
             if (locationName != null && !locationName.isEmpty()) {
@@ -2461,9 +2482,22 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 }
             });
 
-            // Set timestamp
-            if (timestampTextView != null) {
-                timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            // Apply pin indicator and highlight effect
+            applyPinAndHighlight(itemView, isPinned, isHighlighted);
+
+            // Bind reaction indicator
+            if (currentUserId != null && reactionListener != null) {
+                bindReactionIndicator(itemView, message, currentUserId, reactionListener);
+            }
+
+            // Setup long click for context menu
+            if (longClickListener != null || replyListener != null || recallListener != null || forwardListener != null) {
+                messageCard.setOnLongClickListener(v -> {
+                    showMessageContextMenu(v, message, longClickListener, replyListener,
+                            recallListener, forwardListener, editListener, deleteListener, 
+                            isPinned, currentUserId);
+                    return true;
+                });
             }
         }
     }
@@ -2516,7 +2550,28 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             mapView.setUseDataConnection(true);
         }
 
+        /**
+         * Legacy bind method for compatibility
+         */
         public void bind(Message message, String currentUserId) {
+            bind(message, null, null, null, null, null, null, null, currentUserId, false, false, null);
+        }
+
+        /**
+         * Full bind method with all listeners for context menu and reactions
+         */
+        public void bind(Message message,
+                         OnMessageLongClickListener longClickListener,
+                         OnMessageReplyListener replyListener,
+                         OnReplyPreviewClickListener replyPreviewClickListener,
+                         OnMessageRecallListener recallListener,
+                         OnMessageForwardListener forwardListener,
+                         OnMessageEditListener editListener,
+                         OnMessageDeleteListener deleteListener,
+                         String currentUserId,
+                         boolean isPinned,
+                         boolean isHighlighted,
+                         OnMessageReactionListener reactionListener) {
             String sessionId = message.getLiveLocationSessionId();
             if (sessionId == null) return;
 
@@ -2556,6 +2611,24 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             // Set timestamp
             if (timestampTextView != null) {
                 timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
+            }
+
+            // Apply pin indicator and highlight effect
+            applyPinAndHighlight(itemView, isPinned, isHighlighted);
+
+            // Bind reaction indicator
+            if (currentUserId != null && reactionListener != null) {
+                bindReactionIndicator(itemView, message, currentUserId, reactionListener);
+            }
+
+            // Setup long click for context menu
+            if (longClickListener != null || replyListener != null || recallListener != null || forwardListener != null) {
+                messageCard.setOnLongClickListener(v -> {
+                    showMessageContextMenu(v, message, longClickListener, replyListener,
+                            recallListener, forwardListener, editListener, deleteListener,
+                            isPinned, currentUserId);
+                    return true;
+                });
             }
 
             // Handle view detachment to cleanup listener
@@ -2732,6 +2805,11 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
             // Apply pin and highlight effects
             applyPinAndHighlight(itemView, isPinned, isHighlighted);
+
+            // Bind reaction indicator
+            if (currentUserId != null && reactionListener != null) {
+                bindReactionIndicator(itemView, message, currentUserId, reactionListener);
+            }
 
             // Long click for context menu
             itemView.setOnLongClickListener(v -> {
