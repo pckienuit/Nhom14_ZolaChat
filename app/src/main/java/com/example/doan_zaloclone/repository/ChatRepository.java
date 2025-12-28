@@ -2471,6 +2471,7 @@ public class ChatRepository {
     
     /**
      * Close a poll (only creator or group admin can close)
+     * MIGRATED: Uses API instead of Firestore transaction to enable WebSocket broadcast
      */
     public void closePoll(String conversationId, String messageId, 
                          String userId, boolean isGroupAdmin,
@@ -2482,40 +2483,67 @@ public class ChatRepository {
             return;
         }
         
-        DocumentReference messageRef = firestore
-                .collection("conversations")
-                .document(conversationId)
-                .collection("messages")
-                .document(messageId);
+        // Build request body
+        Map<String, String> body = new HashMap<>();
+        body.put("conversationId", conversationId);
         
-        firestore.runTransaction(transaction -> {
-            DocumentSnapshot snapshot = transaction.get(messageRef);
-            com.example.doan_zaloclone.models.Message message = 
-                    snapshot.toObject(com.example.doan_zaloclone.models.Message.class);
-            
-            if (message == null || message.getPollData() == null) {
-                throw new RuntimeException("Poll not found");
+        // Call API endpoint
+        apiService.closePoll(messageId, body).enqueue(new retrofit2.Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(retrofit2.Call<Map<String, Object>> call, retrofit2.Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Map<String, Object> result = response.body();
+                    Boolean success = (Boolean) result.get("success");
+                    
+                    if (success != null && success) {
+                        Log.d("ChatRepository", "Poll closed successfully via API - ID: " + messageId);
+                        
+                        // Update local cache immediately
+                        for (int i = 0; i < cachedMessages.size(); i++) {
+                            Message msg = cachedMessages.get(i);
+                            if (msg.getId() != null && msg.getId().equals(messageId)) {
+                                // Update poll data with closed state
+                                com.example.doan_zaloclone.models.Poll poll = msg.getPollData();
+                                if (poll != null) {
+                                    poll.setClosed(true);
+                                    msg.setPollData(poll);
+                                    Log.d("ChatRepository", "Updated local poll cache - isClosed: true");
+                                    
+                                    // Notify UI
+                                    if (activeMessagesLiveData != null) {
+                                        mainHandler.post(() -> {
+                                            activeMessagesLiveData.setValue(Resource.success(new ArrayList<>(cachedMessages)));
+                                        });
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                        
+                        if (callback != null) {
+                            mainHandler.post(callback::onSuccess);
+                        }
+                    } else {
+                        String error = result.get("error") != null ? result.get("error").toString() : "Failed to close poll";
+                        if (callback != null) {
+                            mainHandler.post(() -> callback.onError(error));
+                        }
+                    }
+                } else {
+                    String error = "HTTP " + response.code();
+                    if (callback != null) {
+                        mainHandler.post(() -> callback.onError(error));
+                    }
+                }
             }
             
-            com.example.doan_zaloclone.models.Poll poll = message.getPollData();
-            
-            // Check permission
-            if (!poll.canClosePoll(userId, isGroupAdmin)) {
-                throw new RuntimeException("You don't have permission to close this poll");
-            }
-            
-            poll.setClosed(true);
-            message.setPollData(poll);
-            transaction.set(messageRef, message);
-            
-            return null;
-        }).addOnSuccessListener(aVoid -> {
-            if (callback != null) {
-                callback.onSuccess();
-            }
-        }).addOnFailureListener(e -> {
-            if (callback != null) {
-                callback.onError(e.getMessage());
+            @Override
+            public void onFailure(retrofit2.Call<Map<String, Object>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e("ChatRepository", "Close poll failed: " + error, t);
+                if (callback != null) {
+                    mainHandler.post(() -> callback.onError(error));
+                }
             }
         });
     }

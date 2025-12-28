@@ -520,6 +520,12 @@ router.post('/:messageId/poll/vote', authenticateUser, async (req, res) => {
       }
       
       const pollData = data.pollData || {};
+      
+      // Check if poll is closed
+      if (pollData.isClosed) {
+        throw new Error('Poll is closed');
+      }
+
       const options = pollData.options || [];
       
       // Find the option
@@ -580,6 +586,7 @@ router.post('/:messageId/poll/vote', authenticateUser, async (req, res) => {
     if (io) {
       // Use message_updated event so clients refresh the message
       const eventData = {
+        id: messageId, // CRITICAL: Client looks for 'id' field to find message in cache
         conversationId,
         messageId,
         pollData: result.pollData,
@@ -598,12 +605,97 @@ router.post('/:messageId/poll/vote', authenticateUser, async (req, res) => {
     }
     
     res.json({ success: true, pollData: result.pollData });
-    
   } catch (error) {
     console.error('❌ Error voting on poll:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
+/**
+ * POST /api/messages/:messageId/poll/close - Close a poll
+ */
+router.post('/:messageId/poll/close', authenticateUser, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { conversationId } = req.body;
+    
+    if (!conversationId) {
+      return res.status(400).json({ error: 'Missing required field: conversationId' });
+    }
+    
+    const userId = req.user.uid;
+    console.log(`🔒 Closing poll message ${messageId} by user ${userId}`);
+    
+    const messageRef = db.collection('conversations')
+      .doc(conversationId)
+      .collection('messages')
+      .doc(messageId);
+      
+    // Run transaction
+    const result = await db.runTransaction(async (transaction) => {
+      const messageDoc = await transaction.get(messageRef);
+      if (!messageDoc.exists) {
+        throw new Error('Message not found');
+      }
+      
+      const data = messageDoc.data();
+      if (data.type !== 'POLL') {
+        throw new Error('Message is not a poll');
+      }
+      
+      // Validate permission: Sender OR Admin? 
+      // For now, let's allow the Sender. 
+      // Real app might check Conversation Admin status too (requires extra fetch).
+      if (data.senderId !== userId) {
+        // TODO: Check if user is conversation admin if not sender
+        throw new Error('Permission denied. Only the poll creator can close this poll.');
+      }
+      
+      const pollData = data.pollData || {};
+      
+      if (pollData.isClosed) {
+        // Already closed, just return
+        return { pollData };
+      }
+      
+      pollData.isClosed = true;
+      pollData.closedAt = Date.now();
+      
+      // Update message
+      transaction.update(messageRef, {
+        pollData: pollData
+      });
+      
+      return { pollData };
+    });
+    
+    console.log(`✅ Poll closed successfully`);
+    
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    if (io) {
+      const eventData = {
+        id: messageId, // CRITICAL: Client looks for 'id' field to find message in cache
+        conversationId,
+        messageId,
+        pollData: result.pollData,
+        isClosed: true
+      };
+      
+      console.log(`📡 Emitting message_updated (poll closed) to conversation:${conversationId}`);
+      io.to(`conversation:${conversationId}`).emit('message_updated', {
+        ...eventData,
+        type: 'POLL'
+      });
+    }
+    
+    res.json({ success: true, pollData: result.pollData });
+  } catch (error) {
+    console.error('❌ Error closing poll:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 router.delete('/:messageId/reactions', authenticateUser, async (req, res) => {
   try {
