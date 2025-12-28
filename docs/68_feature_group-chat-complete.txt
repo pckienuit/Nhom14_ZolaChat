@@ -440,4 +440,4 @@ Tính năng Group Chat đã được triển khai hoàn chỉnh qua 4 phases:
 **Thời gian triển khai**: 4 phases (Phase 1-4)
 **Test coverage**: 5 main scenarios documented
 
-Ứng dụng Zalo Clone đã có đầy đủ chức năng Group Chat chuyên nghiệp! 🎉
+Ứng dụng Zola Chat đã có đầy đủ chức năng Group Chat chuyên nghiệp! 🎉

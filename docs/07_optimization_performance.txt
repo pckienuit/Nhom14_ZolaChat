@@ -1,4 +1,4 @@
-# Performance Optimization Summary - Zalo Clone
+# Performance Optimization Summary - Zola Chat
 
 Date: 11/12/2025
 

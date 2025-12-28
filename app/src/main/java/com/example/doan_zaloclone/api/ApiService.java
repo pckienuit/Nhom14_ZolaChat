@@ -145,6 +145,20 @@ public interface ApiService {
             @Path("messageId") String messageId,
             @Query("conversationId") String conversationId
     );
+    
+    // Vote on a poll (new API)
+    @POST("messages/{messageId}/poll/vote")
+    Call<Map<String, Object>> votePoll(
+            @Path("messageId") String messageId,
+            @Body Map<String, String> body
+    );
+    
+    // Close a poll (new API)
+    @POST("messages/{messageId}/poll/close")
+    Call<Map<String, Object>> closePoll(
+            @Path("messageId") String messageId,
+            @Body Map<String, String> body
+    );
 
 
     // Remove reaction

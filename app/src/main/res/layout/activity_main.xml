@@ -17,7 +17,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:popupTheme="@style/ThemeOverlay.AppCompat.Light"
-        app:title="Zalo Clone"
+        app:title="Zola Chat"
         android:visibility="gone" />
 
     <FrameLayout

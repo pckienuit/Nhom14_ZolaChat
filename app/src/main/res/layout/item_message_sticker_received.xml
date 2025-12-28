@@ -49,14 +49,96 @@
 
         </FrameLayout>
 
-        <!-- Timestamp -->
-        <TextView
-            android:id="@+id/timestampTextView"
+        <!-- Timestamp and Reaction row -->
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textSize="12sp"
-            android:textColor="#999999" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical|start"
+            android:layout_marginTop="4dp">
+
+            <!-- Timestamp -->
+            <TextView
+                android:id="@+id/timestampTextView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="#999999" />
+
+            <!-- Reaction container -->
+            <LinearLayout
+                android:id="@+id/reactionContainer"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginStart="8dp"
+                android:visibility="visible">
+
+                <!-- Existing reactions with counts -->
+                <LinearLayout
+                    android:id="@+id/existingReactionsLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="@drawable/bg_reaction_container"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp"
+                    android:visibility="gone">
+
+                    <!-- Heart reaction -->
+                    <LinearLayout android:id="@+id/heartReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                        <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_heart" />
+                        <TextView android:id="@+id/heartReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                    </LinearLayout>
+
+                    <!-- Like reaction -->
+                    <LinearLayout android:id="@+id/likeReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                        <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_like" />
+                        <TextView android:id="@+id/likeReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                    </LinearLayout>
+
+                    <!-- Haha reaction -->
+                    <LinearLayout android:id="@+id/hahaReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                        <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_haha" />
+                        <TextView android:id="@+id/hahaReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                    </LinearLayout>
+
+                    <!-- Sad reaction -->
+                    <LinearLayout android:id="@+id/sadReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                        <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_sad" />
+                        <TextView android:id="@+id/sadReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                    </LinearLayout>
+
+                    <!-- Angry reaction -->
+                    <LinearLayout android:id="@+id/angryReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                        <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_angry" />
+                        <TextView android:id="@+id/angryReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                    </LinearLayout>
+
+                    <!-- Wow reaction -->
+                    <LinearLayout android:id="@+id/wowReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                        <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_wow" />
+                        <TextView android:id="@+id/wowReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                    </LinearLayout>
+
+                </LinearLayout>
+
+                <!-- Add reaction button -->
+                <ImageView
+                    android:id="@+id/addReactionButton"
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:src="@drawable/ic_reaction_heart_outline"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Add reaction" />
+
+            </LinearLayout>
+
+        </LinearLayout>
 
     </LinearLayout>
 

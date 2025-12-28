@@ -1,4 +1,4 @@
-# UI Theme Updates - Zalo Clone
+# UI Theme Updates - Zola Chat
 
 ## Overview
 Updated the ZaloClone application and web interfaces to use a consistent light theme with Zalo blue primary colors.

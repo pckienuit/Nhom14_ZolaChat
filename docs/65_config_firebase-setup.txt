@@ -56,14 +56,14 @@ users/
 ### Bước 1: Tạo Firebase Project
 1. Truy cập [Firebase Console](https://console.firebase.google.com/)
 2. Click "Add project"
-3. Đặt tên project: "Zalo Clone" hoặc tên bạn muốn
+3. Đặt tên project: "Zola Chat" hoặc tên bạn muốn
 4. Disable Google Analytics (optional)
 5. Click "Create project"
 
 ### Bước 2: Add Android App
 1. Trong Firebase Console, click icon Android
 2. **Package name**: `com.example.doan_zaloclone`
-3. **App nickname**: "Zalo Clone Android"
+3. **App nickname**: "Zola Chat Android"
 4. **SHA-1**: (Optional - dùng cho Google Sign-In sau này)
    ```bash
    # Windows - lấy SHA-1

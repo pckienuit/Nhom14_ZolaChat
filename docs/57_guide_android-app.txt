@@ -1,4 +1,4 @@
-# Zalo Clone - Android App Documentation
+# Zola Chat - Android App Documentation
 
 ## Tổng quan
 Ứng dụng Android được tạo dựa trên codebase React, bao gồm các màn hình chính:

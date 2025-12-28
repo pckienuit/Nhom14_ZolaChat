@@ -24,88 +24,179 @@
             app:strokeColor="#D0D0D0"
             app:strokeWidth="1.5dp">
 
-            <LinearLayout
+            <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp"
-                android:background="#FFFFFF">
+                android:layout_height="wrap_content">
 
-                <!-- Location Icon and Name -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
+                    android:orientation="vertical"
+                    android:padding="12dp"
+                    android:background="#FFFFFF">
 
-                    <ImageView
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:src="@drawable/ic_map_marker"
-                        android:contentDescription="Location icon" />
-
-                    <TextView
-                        android:id="@+id/locationNameText"
-                        android:layout_width="0dp"
+                    <!-- Location Icon and Name -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="8dp"
-                        android:text="Vị trí"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="#000000" />
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <ImageView
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:src="@drawable/ic_map_marker"
+                            android:contentDescription="Location icon" />
+
+                        <TextView
+                            android:id="@+id/locationNameText"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="8dp"
+                            android:text="Vị trí"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="#000000" />
+
+                    </LinearLayout>
+
+                    <!-- Address -->
+                    <TextView
+                        android:id="@+id/locationAddressText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Địa chỉ"
+                        android:textSize="12sp"
+                        android:textColor="#666666"
+                        android:maxLines="2"
+                        android:ellipsize="end" />
+
+                    <!-- Coordinates -->
+                    <TextView
+                        android:id="@+id/coordinatesText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="📍 0.0000, 0.0000"
+                        android:textSize="11sp"
+                        android:textColor="#999999" />
+
+                    <!-- Open in Maps prompt -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="👆 Nhấn để mở bản đồ"
+                        android:textSize="11sp"
+                        android:textColor="#4CAF50"
+                        android:textStyle="italic"
+                        android:gravity="start" />
 
                 </LinearLayout>
 
-                <!-- Address -->
-                <TextView
-                    android:id="@+id/locationAddressText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="Địa chỉ"
-                    android:textSize="12sp"
-                    android:textColor="#666666"
-                    android:maxLines="2"
-                    android:ellipsize="end" />
+                <!-- Pin indicator -->
+                <ImageView
+                    android:id="@+id/pinIndicator"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="top|end"
+                    android:layout_margin="4dp"
+                    android:src="@drawable/ic_pin"
+                    android:visibility="gone"
+                    android:contentDescription="Pinned" />
 
-                <!-- Coordinates -->
-                <TextView
-                    android:id="@+id/coordinatesText"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="📍 0.0000, 0.0000"
-                    android:textSize="11sp"
-                    android:textColor="#999999" />
-
-                <!-- Open in Maps prompt -->
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="👆 Nhấn để mở bản đồ"
-                    android:textSize="11sp"
-                    android:textColor="#4CAF50"
-                    android:textStyle="italic"
-                    android:gravity="start" />
-
-            </LinearLayout>
+            </FrameLayout>
 
         </com.google.android.material.card.MaterialCardView>
 
     </LinearLayout>
 
-    <!-- Timestamp -->
-    <TextView
-        android:id="@+id/timestampTextView"
+    <!-- Timestamp and Reaction row -->
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="start"
+        android:orientation="horizontal"
+        android:gravity="center_vertical|start"
         android:layout_marginTop="2dp"
-        android:layout_marginStart="4dp"
-        android:text="12:00"
-        android:textSize="10sp"
-        android:textColor="#666666" />
+        android:layout_marginStart="4dp">
+
+        <TextView
+            android:id="@+id/timestampTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="12:00"
+            android:textSize="10sp"
+            android:textColor="#666666" />
+
+        <!-- Reaction container -->
+        <LinearLayout
+            android:id="@+id/reactionContainer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="8dp"
+            android:visibility="visible">
+
+            <!-- Existing reactions with counts -->
+            <LinearLayout
+                android:id="@+id/existingReactionsLayout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/bg_reaction_container"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:visibility="gone">
+
+                <LinearLayout android:id="@+id/heartReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_heart" />
+                    <TextView android:id="@+id/heartReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/likeReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_like" />
+                    <TextView android:id="@+id/likeReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/hahaReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_haha" />
+                    <TextView android:id="@+id/hahaReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/sadReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_sad" />
+                    <TextView android:id="@+id/sadReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/angryReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_angry" />
+                    <TextView android:id="@+id/angryReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+                <LinearLayout android:id="@+id/wowReactionLayout" android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:visibility="gone">
+                    <ImageView android:layout_width="14dp" android:layout_height="14dp" android:src="@drawable/ic_reaction_wow" />
+                    <TextView android:id="@+id/wowReactionCount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="10sp" android:textColor="#333333" android:layout_marginStart="1dp" android:layout_marginEnd="3dp" />
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Add reaction button -->
+            <ImageView
+                android:id="@+id/addReactionButton"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:src="@drawable/ic_reaction_heart_outline"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Add reaction" />
+
+        </LinearLayout>
+
+    </LinearLayout>
 
 </LinearLayout>

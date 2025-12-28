@@ -328,6 +328,16 @@ public class RoomActivity extends AppCompatActivity {
         toolbar = findViewById(R.id.toolbar);
         titleTextView = findViewById(R.id.titleTextView);
         subtitleTextView = findViewById(R.id.subtitleTextView);
+        
+        // Set white tint for navigation icon (back arrow)
+        if (toolbar != null) {
+            toolbar.setNavigationOnClickListener(v -> finish());
+            // Force white color for navigation icon
+            android.graphics.drawable.Drawable navIcon = toolbar.getNavigationIcon();
+            if (navIcon != null) {
+                navIcon.setTint(getResources().getColor(R.color.white));
+            }
+        }
         swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
         messagesRecyclerView = findViewById(R.id.messagesRecyclerView);
         messageEditText = findViewById(R.id.messageEditText);
@@ -1455,8 +1465,17 @@ public class RoomActivity extends AppCompatActivity {
 
             @Override
             public void onUnpinClick(Message message) {
-                // Unpin message via ViewModel
-                roomViewModel.unpinMessage(conversationId, message.getId());
+                // Show confirmation dialog before unpinning
+                new android.app.AlertDialog.Builder(RoomActivity.this)
+                        .setTitle("Bỏ ghim tin nhắn")
+                        .setMessage("Bạn có chắc muốn bỏ ghim tin nhắn này?")
+                        .setPositiveButton("Bỏ ghim", (dialog, which) -> {
+                            // Unpin message via ViewModel
+                            roomViewModel.unpinMessage(conversationId, message.getId());
+                            Toast.makeText(RoomActivity.this, "Đã bỏ ghim tin nhắn", Toast.LENGTH_SHORT).show();
+                        })
+                        .setNegativeButton("Hủy", null)
+                        .show();
             }
         });
 
@@ -1943,6 +1962,12 @@ public class RoomActivity extends AppCompatActivity {
     }
 
     private void extractOtherUserIdAndCheckFriendship() {
+        // Null check để tránh crash
+        if (conversationId == null || conversationId.isEmpty()) {
+            android.util.Log.e("RoomActivity", "extractOtherUserIdAndCheckFriendship: conversationId is null or empty");
+            return;
+        }
+        
         // Get current user
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
 

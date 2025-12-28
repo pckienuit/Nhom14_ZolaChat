@@ -35,15 +35,11 @@ public class AddFriendActivity extends AppCompatActivity {
     private LinearLayout otherOptions;
     private TextView tvNotFound;
     
-    // Result View
-    private ImageView imgAvatar;
-    private TextView tvName;
-    private TextView tvPhone;
-    private Button btnAddFriend;
+    // RecyclerView for results
+    private androidx.recyclerview.widget.RecyclerView recyclerSearchResults;
+    private SearchResultAdapter searchResultAdapter;
     
     private ContactViewModel viewModel;
-    private User foundUser;
-    private String currentRequestId = null; // Track current friend request ID
     private SocketManager.OnFriendEventListener friendEventListener;
 
     @Override
@@ -84,11 +80,32 @@ public class AddFriendActivity extends AppCompatActivity {
         searchResultContainer = findViewById(R.id.searchResultContainer);
         otherOptions = findViewById(R.id.otherOptions);
         tvNotFound = findViewById(R.id.tvNotFound);
+        recyclerSearchResults = findViewById(R.id.recyclerSearchResults);
         
-        imgAvatar = findViewById(R.id.imgAvatar);
-        tvName = findViewById(R.id.tvName);
-        tvPhone = findViewById(R.id.tvPhone);
-        btnAddFriend = findViewById(R.id.btnAddFriend);
+        // Setup "Mã QR của tôi" button
+        TextView tvMyQr = findViewById(R.id.tvMyQr);
+        tvMyQr.setOnClickListener(v -> {
+            // Navigate to My QR Code activity
+            android.content.Intent intent = new android.content.Intent(this, 
+                com.example.doan_zaloclone.ui.qr.MyQRCodeActivity.class);
+            startActivity(intent);
+        });
+        
+        // Setup RecyclerView with both callbacks
+        String currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().getUid();
+        searchResultAdapter = new SearchResultAdapter(currentUserId, new SearchResultAdapter.OnUserActionListener() {
+            @Override
+            public void onAddFriendClick(User user) {
+                sendFriendRequest(user);
+            }
+            
+            @Override
+            public void onCancelRequestClick(String userId, String requestId) {
+                cancelFriendRequest(userId, requestId);
+            }
+        });
+        recyclerSearchResults.setLayoutManager(new androidx.recyclerview.widget.LinearLayoutManager(this));
+        recyclerSearchResults.setAdapter(searchResultAdapter);
     }
     
     /**
@@ -103,25 +120,19 @@ public class AddFriendActivity extends AppCompatActivity {
 
             @Override
             public void onFriendRequestAccepted(String userId) {
-                // Request was accepted - reset button
-                if (foundUser != null && foundUser.getId().equals(userId)) {
-                    runOnUiThread(() -> {
-                        btnAddFriend.setText("ĐÃ LÀ BẠN BÈ");
-                        btnAddFriend.setEnabled(false);
-                        currentRequestId = null;
-                    });
-                }
+                // Request was accepted - update button state
+                runOnUiThread(() -> {
+                    searchResultAdapter.updateButtonState(userId, "ĐÃ LÀ BẠN BÈ", null);
+                });
             }
 
             @Override
             public void onFriendRequestRejected(String userId) {
                 // Request was rejected - reset to allow re-sending
-                if (foundUser != null && foundUser.getId().equals(userId)) {
-                    runOnUiThread(() -> {
-                        Toast.makeText(AddFriendActivity.this, "Lời mời đã bị từ chối", Toast.LENGTH_SHORT).show();
-                        resetButtonToAddFriend();
-                    });
-                }
+                runOnUiThread(() -> {
+                    Toast.makeText(AddFriendActivity.this, "Lời mời đã bị từ chối", Toast.LENGTH_SHORT).show();
+                    searchResultAdapter.updateButtonState(userId, "KẾT BẠN", null);
+                });
             }
             
             @Override
@@ -131,19 +142,18 @@ public class AddFriendActivity extends AppCompatActivity {
 
             @Override
             public void onFriendAdded(String userId) {
-                // Friend added
-                if (foundUser != null && foundUser.getId().equals(userId)) {
-                    runOnUiThread(() -> {
-                        btnAddFriend.setText("ĐÃ LÀ BẠN BÈ");
-                        btnAddFriend.setEnabled(false);
-                        currentRequestId = null;
-                    });
-                }
+                // Friend added - update button state
+                runOnUiThread(() -> {
+                    searchResultAdapter.updateButtonState(userId, "ĐÃ LÀ BẠN BÈ", null);
+                });
             }
 
             @Override
             public void onFriendRemoved(String userId) {
-                // Not relevant
+                // Friend removed - reset button
+                runOnUiThread(() -> {
+                    searchResultAdapter.updateButtonState(userId, "KẾT BẠN", null);
+                });
             }
             
             @Override
@@ -180,28 +190,24 @@ public class AddFriendActivity extends AppCompatActivity {
                 performSearch(query);
             }
         });
-        
-        btnAddFriend.setOnClickListener(v -> {
-            if (foundUser != null) {
-                String buttonText = btnAddFriend.getText().toString();
-                
-                if (buttonText.equals("THU HỒI")) {
-                    // Cancel the friend request
-                    cancelFriendRequest();
-                } else if (buttonText.equals("KẾT BẠN")) {
-                    // Send friend request
-                    sendFriendRequest(foundUser);
-                }
-            }
-        });
     }
 
     private void performSearch(String query) {
+        // Clear kết quả cũ trước khi tìm kiếm mới
+        viewModel.clearSearchResults();
+        // Thực hiện tìm kiếm
         viewModel.searchUsers(query);
     }
     
     private void sendFriendRequest(User user) {
         String currentUserId = FirebaseAuth.getInstance().getUid();
+        
+        // Kiểm tra không cho gửi lời mời cho chính mình
+        if (currentUserId.equals(user.getId())) {
+            Toast.makeText(this, "Không thể gửi lời mời kết bạn cho chính mình", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
         String currentUserName = FirebaseAuth.getInstance().getCurrentUser().getDisplayName();
         if (currentUserName == null) currentUserName = "User";
         
@@ -217,18 +223,14 @@ public class AddFriendActivity extends AppCompatActivity {
                             if (requests != null) {
                                 for (FriendRequest req : requests) {
                                     if (req.getToUserId().equals(user.getId())) {
-                                        currentRequestId = req.getId();
+                                        // Cập nhật button state trong adapter
+                                        searchResultAdapter.updateButtonState(user.getId(), "THU HỒI", req.getId());
                                         break;
                                     }
                                 }
                             }
                         }
                     });
-                    
-                    // Change button to "THU HỒI" (Recall)
-                    btnAddFriend.setText("THU HỒI");
-                    btnAddFriend.setEnabled(true);
-                    btnAddFriend.setBackgroundTintList(getColorStateList(android.R.color.holo_red_light));
                     
                 } else if (resource.getStatus() == Resource.Status.ERROR) {
                     Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
@@ -239,34 +241,27 @@ public class AddFriendActivity extends AppCompatActivity {
     /**
      * Cancel the current friend request
      */
-    private void cancelFriendRequest() {
-        if (currentRequestId == null) {
+    private void cancelFriendRequest(String userId, String requestId) {
+        if (requestId == null) {
             Toast.makeText(this, "Không tìm thấy lời mời để thu hồi", Toast.LENGTH_SHORT).show();
             return;
         }
         
         // Create a temporary FriendRequest object with ID
         FriendRequest tempRequest = new FriendRequest();
-        tempRequest.setId(currentRequestId);
+        tempRequest.setId(requestId);
         
         viewModel.cancelFriendRequest(tempRequest).observe(this, resource -> {
             if (resource.getStatus() == Resource.Status.SUCCESS) {
                 Toast.makeText(this, "Đã thu hồi lời mời", Toast.LENGTH_SHORT).show();
-                resetButtonToAddFriend();
+                
+                // Reset button state trong adapter
+                searchResultAdapter.updateButtonState(userId, "KẾT BẠN", null);
+                
             } else if (resource.getStatus() == Resource.Status.ERROR) {
                 Toast.makeText(this, "Lỗi: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
-    }
-    
-    /**
-     * Reset button back to "KẾT BẠN" state
-     */
-    private void resetButtonToAddFriend() {
-        btnAddFriend.setText("KẾT BẠN");
-        btnAddFriend.setEnabled(true);
-        btnAddFriend.setBackgroundTintList(getColorStateList(R.color.colorPrimary));
-        currentRequestId = null;
     }
 
     private void observeViewModel() {
@@ -277,7 +272,10 @@ public class AddFriendActivity extends AppCompatActivity {
                 // Show loading?
             } else if (resource.getStatus() == Resource.Status.SUCCESS) {
                 List<User> users = resource.getData();
-                processSearchResults(users);
+                // Bỏ qua nếu data là null (từ clearSearchResults)
+                if (users != null) {
+                    processSearchResults(users);
+                }
             } else if (resource.getStatus() == Resource.Status.ERROR) {
                 Toast.makeText(this, "Lỗi tìm kiếm: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
             }
@@ -289,28 +287,20 @@ public class AddFriendActivity extends AppCompatActivity {
         searchResultContainer.setVisibility(View.VISIBLE);
         
         if (users != null && !users.isEmpty()) {
-            foundUser = users.get(0);
-            
-            tvNotFound.setVisibility(View.GONE);
-            ((View)imgAvatar.getParent().getParent()).setVisibility(View.VISIBLE);
-            
-            tvName.setText(foundUser.getName());
-            tvPhone.setText(foundUser.getEmail());
-            
-            if (foundUser.getAvatarUrl() != null && !foundUser.getAvatarUrl().isEmpty()) {
-                Glide.with(this).load(foundUser.getAvatarUrl()).circleCrop().into(imgAvatar);
-            } else {
-                imgAvatar.setImageResource(R.drawable.ic_avatar);
+            // Giới hạn tối đa 10 kết quả
+            List<User> limitedUsers = users;
+            if (users.size() > 10) {
+                limitedUsers = users.subList(0, 10);
             }
             
-            // Reset to default "KẾT BẠN" state
-            resetButtonToAddFriend();
-            
+            // Hiển thị RecyclerView
+            tvNotFound.setVisibility(View.GONE);
+            recyclerSearchResults.setVisibility(View.VISIBLE);
+            searchResultAdapter.setUsers(limitedUsers);
         } else {
-            foundUser = null;
-            currentRequestId = null;
+            // Hiển thị thông báo không tìm thấy
             tvNotFound.setVisibility(View.VISIBLE);
-            ((View)imgAvatar.getParent().getParent()).setVisibility(View.GONE);
+            recyclerSearchResults.setVisibility(View.GONE);
         }
     }
     

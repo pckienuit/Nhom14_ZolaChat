@@ -92,8 +92,58 @@ router.post('/', authenticateUser, async (req, res) => {
     
     console.log('📝 Creating conversation:', { type: conversationType, name: conversationName, members });
     
+    // For 1-on-1 conversations, check if one already exists
+    if (!isGroup && conversationType !== 'GROUP' && members.length === 2) {
+      console.log('🔍 Checking for existing 1-on-1 conversation...');
+      
+      // Query for existing conversation between these two users
+      const existingSnapshot = await db.collection('conversations')
+        .where('memberIds', 'array-contains', members[0])
+        .get();
+      
+      for (const doc of existingSnapshot.docs) {
+        const data = doc.data();
+        // Check if this is a 1-on-1 conversation with exactly these two members
+        if (data.memberIds && 
+            data.memberIds.length === 2 && 
+            data.memberIds.includes(members[0]) && 
+            data.memberIds.includes(members[1]) &&
+            data.type !== 'GROUP') {
+          console.log('✅ Found existing conversation:', doc.id);
+          // Return existing conversation
+          return res.json({ 
+            success: true, 
+            conversationId: doc.id,
+            conversation: { id: doc.id, ...data },
+            existing: true
+          });
+        }
+      }
+      
+      console.log('No existing conversation found, creating new one...');
+    }
+    
+    // Fetch member names from users collection
+    const memberNames = {};
+    try {
+      for (const memberId of members) {
+        const userDoc = await db.collection('users').doc(memberId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          memberNames[memberId] = userData.name || userData.displayName || 'User';
+        } else {
+          memberNames[memberId] = 'User';
+        }
+      }
+      console.log('📛 Fetched member names:', memberNames);
+    } catch (nameError) {
+      console.error('⚠️ Error fetching member names:', nameError.message);
+      // Continue with empty names if fetch fails
+    }
+    
     const conversation = {
       memberIds: members,
+      memberNames: memberNames,  // Store member names for display
       type: conversationType,
       name: conversationName,
       adminIds: adminId ? [adminId] : [userId],
@@ -398,10 +448,57 @@ router.post('/', authenticateUser, async (req, res) => {
     
     console.log(`📤 Creating ${type} conversation with ${memberIds.length} members`);
     
+    // For PRIVATE (1-on-1) conversations, check if one already exists
+    if (type === 'PRIVATE' || type === 'FRIEND') {
+      console.log('🔍 Checking for existing private conversation...');
+      
+      const existingSnapshot = await db.collection('conversations')
+        .where('memberIds', 'array-contains', memberIds[0])
+        .get();
+      
+      for (const doc of existingSnapshot.docs) {
+        const data = doc.data();
+        // Check if this is a 1-on-1 conversation with exactly these two members
+        if (data.memberIds && 
+            data.memberIds.length === 2 && 
+            data.memberIds.includes(memberIds[0]) && 
+            data.memberIds.includes(memberIds[1]) &&
+            data.type !== 'GROUP') {
+          console.log('✅ Found existing private conversation:', doc.id);
+          return res.json({ 
+            success: true, 
+            conversationId: doc.id,
+            conversation: { id: doc.id, ...data },
+            existing: true
+          });
+        }
+      }
+      
+      console.log('No existing private conversation found, creating new one...');
+    }
+    
+    // Fetch member names from users collection
+    const memberNames = {};
+    try {
+      for (const memberId of memberIds) {
+        const userDoc = await db.collection('users').doc(memberId).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          memberNames[memberId] = userData.name || userData.displayName || 'User';
+        } else {
+          memberNames[memberId] = 'User';
+        }
+      }
+      console.log('📛 Fetched member names:', memberNames);
+    } catch (nameError) {
+      console.error('⚠️ Error fetching member names:', nameError.message);
+    }
+    
     // Create conversation document
     const conversationData = {
       type,
       memberIds,
+      memberNames,  // Store member names for display
       createdAt: Date.now(),
       timestamp: Date.now(),
       lastMessageAt: Date.now(),

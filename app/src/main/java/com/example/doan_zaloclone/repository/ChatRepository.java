@@ -396,6 +396,17 @@ public class ChatRepository {
     public ListenerRegistration listenToMessages(String conversationId, MessagesListener listener) {
         Log.d("ChatRepository", "🎯 listenToMessages called for: " + conversationId);
         
+        // Null check để tránh crash trong các closure
+        if (conversationId == null || conversationId.isEmpty()) {
+            Log.e("ChatRepository", "listenToMessages: conversationId is null or empty");
+            return new ListenerRegistration() {
+                @Override
+                public void remove() {
+                    // Empty implementation - no listener was created
+                }
+            };
+        }
+        
         // Leave previous conversation room if different
         if (currentConversationId != null && !currentConversationId.equals(conversationId)) {
             Log.d("ChatRepository", "📤 Leaving previous conversation: " + currentConversationId);
@@ -472,17 +483,45 @@ public class ChatRepository {
                     for (int i = 0; i < cachedMessages.size(); i++) {
                         Message msg = cachedMessages.get(i);
                         if (msg.getId() != null && msg.getId().equals(messageId)) {
-                            // Parse updated message
-                            Message updatedMessage = parseMessageFromJson(messageData);
+                            // Parse updates from JSON
+                            // WE MERGE UPDATES instead of replacing the whole object to avoid data loss
+                            // (since WebSocket event might only contain changed fields)
                             
-                            // Replace in cache
-                            cachedMessages.set(i, updatedMessage);
+                            // Create a copy of the message to ensure DiffUtil detects the change
+                            // (Since Message class has a copy constructor)
+                            Message updatedMsg = new Message(msg);
+                            
+                            // 1. Content update (Edit)
+                            if (messageData.has("content")) {
+                                updatedMsg.setContent(messageData.optString("content"));
+                            }
+                            
+                            // 2. Recall update
+                            if (messageData.has("isRecalled")) {
+                                updatedMsg.setRecalled(messageData.optBoolean("isRecalled"));
+                            }
+                            
+                            // 3. Poll data update
+                            if (messageData.has("pollData")) {
+                                Message tempMsg = parseMessageFromJson(messageData); 
+                                if (tempMsg.getPollData() != null) {
+                                    updatedMsg.setPollData(tempMsg.getPollData());
+                                    Log.d("ChatRepository", "Updated poll data for message: " + messageId);
+                                }
+                            }
+                            
+                            // 4. Other fields
+                            if (messageData.has("editedAt")) {
+                                // optional handling
+                            }
+                            
+                            // Replace in cache with the NEW object
+                            cachedMessages.set(i, updatedMsg);
                             found = true;
                             
-                            Log.d("ChatRepository", "Message updated in cache - isRecalled: " + 
-                                updatedMessage.isRecalled() + ", content: " + updatedMessage.getContent());
+                            Log.d("ChatRepository", "Message updated & replaced in cache - ID: " + messageId);
                             
-                            // Notify UI
+                            // Notify UI with a new list
                             mainHandler.post(() -> {
                                 listener.onMessagesChanged(new ArrayList<>(cachedMessages));
                             });
@@ -716,8 +755,8 @@ public class ChatRepository {
                 // Remove the message listener properly!
                 socketManager.removeMessageListener(wsMessageListener);
                 
-                // Leave WebSocket room
-                if (conversationId.equals(currentConversationId)) {
+                // Leave WebSocket room - null check to avoid crash
+                if (conversationId != null && conversationId.equals(currentConversationId)) {
                     socketManager.leaveConversation(conversationId);
                     currentConversationId = null;
                     cachedMessages.clear();
@@ -890,6 +929,77 @@ public class ChatRepository {
         if (messageData.has("voiceDuration")) {
             message.setVoiceDuration(messageData.optInt("voiceDuration", 0));
             Log.d("ChatRepository", "parseMessageFromJson - voiceDuration parsed: " + message.getVoiceDuration());
+        }
+        
+        // Poll fields (Important for realtime updates)
+        if (messageData.has("pollData")) {
+            org.json.JSONObject pollJson = messageData.optJSONObject("pollData");
+            if (pollJson != null) {
+                com.example.doan_zaloclone.models.Poll poll = new com.example.doan_zaloclone.models.Poll();
+                poll.setQuestion(pollJson.optString("question"));
+                poll.setCreatorId(pollJson.optString("creatorId"));
+                poll.setAllowMultipleChoice(pollJson.optBoolean("allowMultipleChoice"));
+                poll.setAllowAddOptions(pollJson.optBoolean("allowAddOption"));
+                poll.setAnonymous(pollJson.optBoolean("hideVoters"));
+                poll.setExpiresAt(pollJson.optLong("expiresAt"));
+                poll.setClosed(pollJson.optBoolean("isClosed"));
+                
+                // Parse options
+                org.json.JSONArray optionsJson = pollJson.optJSONArray("options");
+                if (optionsJson != null) {
+                    List<com.example.doan_zaloclone.models.PollOption> options = new ArrayList<>();
+                    for (int i = 0; i < optionsJson.length(); i++) {
+                        org.json.JSONObject optJson = optionsJson.optJSONObject(i);
+                        if (optJson != null) {
+                            com.example.doan_zaloclone.models.PollOption option = new com.example.doan_zaloclone.models.PollOption();
+                            option.setId(optJson.optString("id"));
+                            option.setText(optJson.optString("text"));
+                            
+                            // Parse voterIds
+                            org.json.JSONArray voterIdsJson = optJson.optJSONArray("voterIds");
+                            if (voterIdsJson != null) {
+                                List<String> voterIds = new ArrayList<>();
+                                for (int j = 0; j < voterIdsJson.length(); j++) {
+                                    voterIds.add(voterIdsJson.optString(j));
+                                }
+                                option.setVoterIds(voterIds);
+                            }
+                            
+                            // Parse voterNames using 'voters' array from server which contains {userId, userName}
+                            // OR 'voterNames' map if available
+                            org.json.JSONArray votersJson = optJson.optJSONArray("voters");
+                            Map<String, String> voterNames = new HashMap<>();
+                            
+                            if (votersJson != null) {
+                                for (int j = 0; j < votersJson.length(); j++) {
+                                    org.json.JSONObject voterObj = votersJson.optJSONObject(j);
+                                    if (voterObj != null) {
+                                        String uid = voterObj.optString("userId");
+                                        String uname = voterObj.optString("userName", "User");
+                                        if (uid != null && !uid.isEmpty()) {
+                                            voterNames.put(uid, uname);
+                                        }
+                                    }
+                                }
+                            } else if (optJson.has("voterNames")) {
+                                org.json.JSONObject namesJson = optJson.optJSONObject("voterNames");
+                                if (namesJson != null) {
+                                    java.util.Iterator<String> keys = namesJson.keys();
+                                    while (keys.hasNext()) {
+                                        String key = keys.next();
+                                        voterNames.put(key, namesJson.optString(key));
+                                    }
+                                }
+                            }
+                            
+                            option.setVoterNames(voterNames);
+                            options.add(option);
+                        }
+                    }
+                    poll.setOptions(options);
+                }
+                message.setPollData(poll);
+            }
         }
         
         return message;
@@ -2125,53 +2235,45 @@ public class ChatRepository {
     
     /**
      * Create a new conversation with a friend
-     * Fetches user names from Firestore to properly populate memberNames
+     * Uses REST API to comply with Firestore security rules that block client-side writes
      */
     private void createConversationWithFriend(String currentUserId, String friendId, ConversationCallback callback) {
-        // First, fetch both user names
-        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> currentUserTask = 
-            firestore.collection("users").document(currentUserId).get();
-        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> friendTask = 
-            firestore.collection("users").document(friendId).get();
+        android.util.Log.d("ChatRepository", "createConversationWithFriend via REST API - currentUserId: " + currentUserId + ", friendId: " + friendId);
         
-        com.google.android.gms.tasks.Tasks.whenAllSuccess(currentUserTask, friendTask)
-            .addOnSuccessListener(results -> {
-                com.google.firebase.firestore.DocumentSnapshot currentUserDoc = 
-                    (com.google.firebase.firestore.DocumentSnapshot) results.get(0);
-                com.google.firebase.firestore.DocumentSnapshot friendDoc = 
-                    (com.google.firebase.firestore.DocumentSnapshot) results.get(1);
-                
-                String currentUserName = currentUserDoc.exists() && currentUserDoc.getString("name") != null 
-                    ? currentUserDoc.getString("name") : "User";
-                String friendName = friendDoc.exists() && friendDoc.getString("name") != null 
-                    ? friendDoc.getString("name") : "User";
-                
-                // Create conversation with proper memberNames
-                java.util.Map<String, Object> conversationData = new java.util.HashMap<>();
-                java.util.List<String> memberIds = java.util.Arrays.asList(currentUserId, friendId);
-                conversationData.put("memberIds", memberIds);
-                conversationData.put("type", "FRIEND");
-                conversationData.put("name", ""); // Empty for 1-1 chats
-                conversationData.put("timestamp", System.currentTimeMillis());
-                conversationData.put("lastMessage", "");
-                
-                // Store member names for proper display
-                java.util.Map<String, String> memberNames = new java.util.HashMap<>();
-                memberNames.put(currentUserId, currentUserName);
-                memberNames.put(friendId, friendName);
-                conversationData.put("memberNames", memberNames);
-                
-                firestore.collection("conversations")
-                    .add(conversationData)
-                    .addOnSuccessListener(docRef -> {
-                        // Update document with its own ID
-                        docRef.update("id", docRef.getId())
-                            .addOnSuccessListener(aVoid -> callback.onSuccess(docRef.getId()))
-                            .addOnFailureListener(e -> callback.onSuccess(docRef.getId())); // Still succeed even if id update fails
-                    })
-                    .addOnFailureListener(e -> callback.onError(e.getMessage()));
-            })
-            .addOnFailureListener(e -> callback.onError("Failed to fetch user names: " + e.getMessage()));
+        // Prepare request body for REST API
+        java.util.Map<String, Object> conversationData = new java.util.HashMap<>();
+        java.util.List<String> participants = java.util.Arrays.asList(currentUserId, friendId);
+        conversationData.put("participants", participants);
+        conversationData.put("isGroup", false);
+        
+        // Call REST API instead of direct Firestore write
+        apiService.createConversation(conversationData).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String conversationId = (String) response.body().get("conversationId");
+                    android.util.Log.d("ChatRepository", "Created conversation via API: " + conversationId);
+                    callback.onSuccess(conversationId);
+                } else {
+                    String error = "HTTP " + response.code();
+                    try {
+                        if (response.errorBody() != null) {
+                            error = response.errorBody().string();
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+                    android.util.Log.e("ChatRepository", "Failed to create conversation: " + error);
+                    callback.onError("Failed to create conversation: " + error);
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                android.util.Log.e("ChatRepository", "Network error creating conversation", t);
+                callback.onError("Network error: " + t.getMessage());
+            }
+        });
     }
     
     // ===================== POLL METHODS =====================
@@ -2189,63 +2291,67 @@ public class ChatRepository {
             return;
         }
         
-        // Create message document reference
-        DocumentReference messageRef = firestore
-                .collection("conversations")
-                .document(conversationId)
-                .collection("messages")
-                .document();
-        
-        // Create message object
-        com.example.doan_zaloclone.models.Message message = 
-                new com.example.doan_zaloclone.models.Message();
-        message.setId(messageRef.getId());
+        // Use API to send poll message to ensure WebSocket events are triggered
+        com.example.doan_zaloclone.models.Message message = new com.example.doan_zaloclone.models.Message();
         message.setSenderId(senderId);
         message.setType(com.example.doan_zaloclone.models.Message.TYPE_POLL);
-        message.setTimestamp(System.currentTimeMillis());
         message.setPollData(poll);
+        message.setContent("📊 Bình chọn: " + poll.getQuestion());
         
-        // Fetch sender name before saving
-        firestore.collection("users")
-                .document(senderId)
-                .get()
-                .addOnSuccessListener(doc -> {
-                    if (doc.exists()) {
-                        String name = doc.getString("name");
-                        if (name != null && !name.isEmpty()) {
-                            message.setSenderName(name);
-                        }
-                    }
-                    // Save to Firestore
-                    savePollMessage(messageRef, message, conversationId, poll, callback);
-                })
-                .addOnFailureListener(e -> {
-                    // Save anyway without sender name
-                    savePollMessage(messageRef, message, conversationId, poll, callback);
-                });
-    }
-    
-    private void savePollMessage(DocumentReference messageRef, 
-                                 com.example.doan_zaloclone.models.Message message,
-                                 String conversationId,
-                                 com.example.doan_zaloclone.models.Poll poll,
-                                 SendMessageCallback callback) {
-        messageRef.set(message)
-                .addOnSuccessListener(aVoid -> {
-                    // Update conversation's lastMessage
-                    updateConversationLastMessage(conversationId, 
-                            "📊 Bình chọn: " + poll.getQuestion(), 
-                            message.getTimestamp());
+        // Use existing API flow via SendMessageRequest
+        SendMessageRequest request = new SendMessageRequest(message);
+        // Important: set conversationId which is not part of Message wrapper but required by API payload
+        // The API payload structure for SendMessageRequest actually doesn't include conversationId directly 
+        // if we just use the constructor, but the API endpoint expects it in the body.
+        // Let's check apiService.sendMessage definition.
+        
+        // Wait, SendMessageRequest usually maps fields. 
+        // We need to pass conversationId separately or ensure it's in the request body map if using raw map.
+        // But apiService.sendMessage takes SendMessageRequest object.
+        // Let's check SendMessageRequest.java again. It doesn't seem to have conversationId field in Step 550.
+        // The server expects `conversationId` in body.
+        // We must ensure the `apiService.sendMessage` signature allows passing conversationId
+        // OR we use a Map<String, Object> like createConversationWithFriend does.
+        
+        // Let's use Map<String, Object> to be safe and consistent with server expectation
+        Map<String, Object> messageData = new HashMap<>();
+        messageData.put("conversationId", conversationId);
+        messageData.put("type", "POLL");
+        messageData.put("content", "📊 Bình chọn: " + poll.getQuestion());
+        messageData.put("pollData", poll);
+        
+        apiService.sendMessageV2(messageData).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    // Update conversation's lastMessage locally/optimistically isn't needed as socket will do it
+                    // But we might want to ensure lastMessage is updated in Firestore (Server does it now)
                     
                     if (callback != null) {
                         callback.onSuccess();
                     }
-                })
-                .addOnFailureListener(e -> {
+                } else {
+                    String error = "HTTP " + response.code();
+                    try {
+                        if (response.errorBody() != null) {
+                            error = response.errorBody().string();
+                        }
+                    } catch (Exception e) {}
+                    Log.e(TAG, "Failed to send poll message: " + error);
                     if (callback != null) {
-                        callback.onError(e.getMessage());
+                        callback.onError(error);
                     }
-                });
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                Log.e(TAG, "Network error sending poll message", t);
+                if (callback != null) {
+                    callback.onError(t.getMessage());
+                }
+            }
+        });
     }
     
     /**
@@ -2284,71 +2390,88 @@ public class ChatRepository {
     /**
      * Execute the actual vote transaction
      */
+    /**
+     * Execute the actual vote transaction
+     */
     private void executeVotePoll(String conversationId, String messageId, 
                                  String optionId, String userId, String userName,
                                  VotePollCallback callback) {
-        DocumentReference messageRef = firestore
-                .collection("conversations")
-                .document(conversationId)
-                .collection("messages")
-                .document(messageId);
+        Map<String, String> body = new java.util.HashMap<>();
+        body.put("conversationId", conversationId);
+        body.put("optionId", optionId);
         
-        firestore.runTransaction(transaction -> {
-            DocumentSnapshot snapshot = transaction.get(messageRef);
-            com.example.doan_zaloclone.models.Message message = 
-                    snapshot.toObject(com.example.doan_zaloclone.models.Message.class);
-            
-            if (message == null || message.getPollData() == null) {
-                throw new RuntimeException("Poll not found");
-            }
-            
-            com.example.doan_zaloclone.models.Poll poll = message.getPollData();
-            
-            // Check if poll is still open
-            if (!poll.canVote()) {
-                throw new RuntimeException("Poll is closed or expired");
-            }
-            
-            // Find the option
-            com.example.doan_zaloclone.models.PollOption option = poll.getOptionById(optionId);
-            if (option == null) {
-                throw new RuntimeException("Option not found");
-            }
-            
-            // Check if user already voted for this option
-            if (option.hasUserVoted(userId)) {
-                // User already voted for this option - unvote it
-                option.removeVote(userId);
-            } else {
-                // If single choice, remove user's other votes first
-                if (!poll.isAllowMultipleChoice()) {
-                    for (com.example.doan_zaloclone.models.PollOption opt : poll.getOptions()) {
-                        opt.removeVote(userId);
+        apiService.votePoll(messageId, body).enqueue(new retrofit2.Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(retrofit2.Call<Map<String, Object>> call, retrofit2.Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    try {
+                        // MANUAL CACHE UPDATE FOR INSTANT FEEDBACK
+                        Object pollDataObj = response.body().get("pollData");
+                        if (pollDataObj instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> pollMap = (Map<String, Object>) pollDataObj;
+                            
+                            // Convert Map to JSONObject to reuse parsing logic (safest way without Gson instance)
+                            JSONObject pollJson = new JSONObject(pollMap);
+                            JSONObject messageData = new JSONObject();
+                            messageData.put("pollData", pollJson);
+                            
+                            // Finds and temporarily updates valid message in cache using helper
+                            for (int i = 0; i < cachedMessages.size(); i++) {
+                                Message msg = cachedMessages.get(i);
+                                if (msg.getId() != null && msg.getId().equals(messageId)) {
+                                    Message updatedMsg = new Message(msg);
+                                    
+                                    // Parse just the poll part
+                                    Message tempMsg = parseMessageFromJson(messageData);
+                                    if (tempMsg.getPollData() != null) {
+                                        updatedMsg.setPollData(tempMsg.getPollData());
+                                        
+                                        // Update cache
+                                        cachedMessages.set(i, updatedMsg);
+                                        
+                                        // Notify UI
+                                        mainHandler.post(() -> {
+                                            if (activeMessagesListener != null) {
+                                                activeMessagesListener.onMessagesChanged(new ArrayList<>(cachedMessages));
+                                            }
+                                        });
+                                        Log.d("ChatRepository", "Manual poll update applied for: " + messageId);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        Log.e("ChatRepository", "Error applying manual poll update", e);
                     }
+
+                    if (callback != null) callback.onSuccess();
+                } else {
+                    String errorMsg = "Unknown error";
+                    try {
+                        if (response.errorBody() != null) {
+                            errorMsg = response.errorBody().string();
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    Log.e("ChatRepository", "Vote poll failed: " + errorMsg);
+                    if (callback != null) callback.onError(errorMsg);
                 }
-                
-                // Add vote to selected option WITH USER NAME
-                option.addVote(userId, userName);
             }
-            
-            // Update message
-            message.setPollData(poll);
-            transaction.set(messageRef, message);
-            
-            return null;
-        }).addOnSuccessListener(aVoid -> {
-            if (callback != null) {
-                callback.onSuccess();
-            }
-        }).addOnFailureListener(e -> {
-            if (callback != null) {
-                callback.onError(e.getMessage());
+
+            @Override
+            public void onFailure(retrofit2.Call<Map<String, Object>> call, Throwable t) {
+                Log.e("ChatRepository", "Vote poll API error", t);
+                if (callback != null) callback.onError(t.getMessage());
             }
         });
     }
     
     /**
      * Close a poll (only creator or group admin can close)
+     * MIGRATED: Uses API instead of Firestore transaction to enable WebSocket broadcast
      */
     public void closePoll(String conversationId, String messageId, 
                          String userId, boolean isGroupAdmin,
@@ -2360,40 +2483,67 @@ public class ChatRepository {
             return;
         }
         
-        DocumentReference messageRef = firestore
-                .collection("conversations")
-                .document(conversationId)
-                .collection("messages")
-                .document(messageId);
+        // Build request body
+        Map<String, String> body = new HashMap<>();
+        body.put("conversationId", conversationId);
         
-        firestore.runTransaction(transaction -> {
-            DocumentSnapshot snapshot = transaction.get(messageRef);
-            com.example.doan_zaloclone.models.Message message = 
-                    snapshot.toObject(com.example.doan_zaloclone.models.Message.class);
-            
-            if (message == null || message.getPollData() == null) {
-                throw new RuntimeException("Poll not found");
+        // Call API endpoint
+        apiService.closePoll(messageId, body).enqueue(new retrofit2.Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(retrofit2.Call<Map<String, Object>> call, retrofit2.Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    Map<String, Object> result = response.body();
+                    Boolean success = (Boolean) result.get("success");
+                    
+                    if (success != null && success) {
+                        Log.d("ChatRepository", "Poll closed successfully via API - ID: " + messageId);
+                        
+                        // Update local cache immediately
+                        for (int i = 0; i < cachedMessages.size(); i++) {
+                            Message msg = cachedMessages.get(i);
+                            if (msg.getId() != null && msg.getId().equals(messageId)) {
+                                // Update poll data with closed state
+                                com.example.doan_zaloclone.models.Poll poll = msg.getPollData();
+                                if (poll != null) {
+                                    poll.setClosed(true);
+                                    msg.setPollData(poll);
+                                    Log.d("ChatRepository", "Updated local poll cache - isClosed: true");
+                                    
+                                    // Notify UI
+                                    if (activeMessagesLiveData != null) {
+                                        mainHandler.post(() -> {
+                                            activeMessagesLiveData.setValue(Resource.success(new ArrayList<>(cachedMessages)));
+                                        });
+                                    }
+                                }
+                                break;
+                            }
+                        }
+                        
+                        if (callback != null) {
+                            mainHandler.post(callback::onSuccess);
+                        }
+                    } else {
+                        String error = result.get("error") != null ? result.get("error").toString() : "Failed to close poll";
+                        if (callback != null) {
+                            mainHandler.post(() -> callback.onError(error));
+                        }
+                    }
+                } else {
+                    String error = "HTTP " + response.code();
+                    if (callback != null) {
+                        mainHandler.post(() -> callback.onError(error));
+                    }
+                }
             }
             
-            com.example.doan_zaloclone.models.Poll poll = message.getPollData();
-            
-            // Check permission
-            if (!poll.canClosePoll(userId, isGroupAdmin)) {
-                throw new RuntimeException("You don't have permission to close this poll");
-            }
-            
-            poll.setClosed(true);
-            message.setPollData(poll);
-            transaction.set(messageRef, message);
-            
-            return null;
-        }).addOnSuccessListener(aVoid -> {
-            if (callback != null) {
-                callback.onSuccess();
-            }
-        }).addOnFailureListener(e -> {
-            if (callback != null) {
-                callback.onError(e.getMessage());
+            @Override
+            public void onFailure(retrofit2.Call<Map<String, Object>> call, Throwable t) {
+                String error = t.getMessage() != null ? t.getMessage() : "Network error";
+                Log.e("ChatRepository", "Close poll failed: " + error, t);
+                if (callback != null) {
+                    mainHandler.post(() -> callback.onError(error));
+                }
             }
         });
     }

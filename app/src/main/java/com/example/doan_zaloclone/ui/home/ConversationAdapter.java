@@ -244,7 +244,33 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             }
 
             nameTextView.setText(displayName);
-            lastMessageTextView.setText(conversation.getLastMessage());
+            
+            // Format last message for display
+            String lastMessage = conversation.getLastMessage();
+            if (lastMessage != null && !lastMessage.isEmpty()) {
+                // Check if it's a Cloudinary URL or file path (image/file message)
+                if (lastMessage.startsWith("http") && 
+                    (lastMessage.contains("cloudinary.com") || lastMessage.contains("res.cloudinary.com"))) {
+                    // It's a Cloudinary URL - determine if image or file
+                    if (lastMessage.contains("/image/") || lastMessage.matches(".*\\.(jpg|jpeg|png|gif|webp|bmp).*")) {
+                        lastMessageTextView.setText("📷 Đã gửi một ảnh");
+                    } else {
+                        lastMessageTextView.setText("📎 Đã gửi một file");
+                    }
+                } else if (lastMessage.startsWith("http") && lastMessage.contains("/uploads/")) {
+                    // It's an uploaded file URL
+                    if (lastMessage.matches(".*\\.(jpg|jpeg|png|gif|webp|bmp)$")) {
+                        lastMessageTextView.setText("📷 Đã gửi một ảnh");
+                    } else {
+                        lastMessageTextView.setText("📎 Đã gửi một file");
+                    }
+                } else {
+                    // Regular text message
+                    lastMessageTextView.setText(lastMessage);
+                }
+            } else {
+                lastMessageTextView.setText("");
+            }
 
             // --- Format Timestamp ---
             if (conversation.getTimestamp() > 0) {

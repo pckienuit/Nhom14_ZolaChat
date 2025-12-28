@@ -267,25 +267,42 @@ public class FirestoreManager {
                 .addOnSuccessListener(new OnSuccessListener<QuerySnapshot>() {
                     @Override
                     public void onSuccess(QuerySnapshot querySnapshot) {
-                        // Lọc thêm để tìm conversation có cả 2 users VÀ là loại FRIEND (hoặc không có type)
+                        Log.d(TAG, "findExistingConversation: Found " + querySnapshot.size() + " conversations for user");
+                        
+                        // Lọc thêm để tìm conversation có cả 2 users VÀ là loại 1-on-1
                         for (DocumentSnapshot document : querySnapshot.getDocuments()) {
                             Conversation conversation = document.toObject(Conversation.class);
-                            if (conversation != null &&
-                                    conversation.getMemberIds() != null &&
-                                    conversation.getMemberIds().contains(otherUserId) &&
-                                    conversation.getMemberIds().size() == 2) {
-                                // Check if this is a 1-1 conversation (FRIEND type, null, or empty)
-                                String type = conversation.getType();
-                                if (type == null || type.isEmpty() || Conversation.TYPE_FRIEND.equals(type)) {
-                                    // Tìm thấy friend conversation (not group)
-                                    Log.d(TAG, "Found existing friend conversation: " + conversation.getId());
-                                    listener.onFound(conversation);
-                                    return;
+                            if (conversation != null) {
+                                // IMPORTANT: Set document ID manually (Firestore doesn't auto-populate it)
+                                conversation.setId(document.getId());
+                                
+                                Log.d(TAG, "  Checking conversation: " + conversation.getId() + 
+                                    ", type=" + conversation.getType() + 
+                                    ", memberIds=" + conversation.getMemberIds());
+                                
+                                if (conversation.getMemberIds() != null &&
+                                        conversation.getMemberIds().contains(otherUserId) &&
+                                        conversation.getMemberIds().size() == 2) {
+                                    // Check if this is a 1-1 conversation (NOT GROUP)
+                                    String type = conversation.getType();
+                                    // Accept: FRIEND, PRIVATE, null, empty, or any type that's NOT GROUP
+                                    boolean isOneOnOne = type == null || 
+                                                         type.isEmpty() || 
+                                                         Conversation.TYPE_FRIEND.equals(type) ||
+                                                         "PRIVATE".equals(type) ||
+                                                         !"GROUP".equals(type);
+                                    
+                                    if (isOneOnOne) {
+                                        // Tìm thấy 1-on-1 conversation
+                                        Log.d(TAG, "✅ Found existing 1-on-1 conversation: " + conversation.getId());
+                                        listener.onFound(conversation);
+                                        return;
+                                    }
                                 }
                             }
                         }
                         // Không tìm thấy
-                        Log.d(TAG, "No existing conversation found");
+                        Log.d(TAG, "❌ No existing 1-on-1 conversation found between " + currentUserId + " and " + otherUserId);
                         listener.onNotFound();
                     }
                 })
@@ -300,6 +317,9 @@ public class FirestoreManager {
 
     /**
      * Tạo conversation mới giữa 2 users
+     * 
+     * @deprecated This method writes directly to Firestore which is blocked by security rules.
+     * Use ConversationRepository.createConversation(List, boolean, String) instead which uses REST API.
      *
      * @param currentUserId   ID của user hiện tại
      * @param currentUserName Tên của user hiện tại
@@ -307,6 +327,7 @@ public class FirestoreManager {
      * @param otherUserName   Tên của user kia
      * @param listener        Callback để xử lý kết quả
      */
+    @Deprecated
     public void createConversation(@NonNull String currentUserId,
                                    @NonNull String currentUserName,
                                    @NonNull String otherUserId,
