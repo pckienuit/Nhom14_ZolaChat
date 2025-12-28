@@ -72,6 +72,17 @@ public class ProfileCardActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Enable edge-to-edge display
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            getWindow().setDecorFitsSystemWindows(false);
+        } else {
+            getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            );
+        }
+        
         setContentView(R.layout.activity_profile_card);
 
         // Get extras
@@ -166,6 +177,29 @@ public class ProfileCardActivity extends AppCompatActivity {
         nameContainer = findViewById(R.id.nameContainer);
         bioContainer = findViewById(R.id.bioContainer);
         btnAddFriend = findViewById(R.id.btnAddFriend);
+        
+        // Apply window insets for edge-to-edge
+        View appBarLayout = findViewById(R.id.appBarLayout);
+        if (appBarLayout != null) {
+            androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(appBarLayout, (v, insets) -> {
+                androidx.core.graphics.Insets systemBars = insets.getInsets(
+                    androidx.core.view.WindowInsetsCompat.Type.systemBars()
+                );
+                
+                // Apply top padding to toolbar for status bar
+                View toolbar = findViewById(R.id.toolbar);
+                if (toolbar != null) {
+                    toolbar.setPadding(
+                        toolbar.getPaddingLeft(),
+                        systemBars.top,
+                        toolbar.getPaddingRight(),
+                        toolbar.getPaddingBottom()
+                    );
+                }
+                
+                return insets;
+            });
+        }
     }
 
     private void setupToolbar() {

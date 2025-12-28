@@ -328,6 +328,16 @@ public class RoomActivity extends AppCompatActivity {
         toolbar = findViewById(R.id.toolbar);
         titleTextView = findViewById(R.id.titleTextView);
         subtitleTextView = findViewById(R.id.subtitleTextView);
+        
+        // Set white tint for navigation icon (back arrow)
+        if (toolbar != null) {
+            toolbar.setNavigationOnClickListener(v -> finish());
+            // Force white color for navigation icon
+            android.graphics.drawable.Drawable navIcon = toolbar.getNavigationIcon();
+            if (navIcon != null) {
+                navIcon.setTint(getResources().getColor(R.color.white));
+            }
+        }
         swipeRefreshLayout = findViewById(R.id.swipeRefreshLayout);
         messagesRecyclerView = findViewById(R.id.messagesRecyclerView);
         messageEditText = findViewById(R.id.messageEditText);
