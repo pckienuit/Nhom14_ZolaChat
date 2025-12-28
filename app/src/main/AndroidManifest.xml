@@ -115,6 +115,20 @@
             android:exported="false"
             android:parentActivityName=".ui.room.RoomActivity"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- Create Post Activity -->
+        <activity
+            android:name=".activities.CreatePostActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+            
+        <!-- Comments Activity -->
+        <activity
+            android:name=".activities.CommentsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:windowSoftInputMode="adjustResize" />
             
         <!-- Create Sticker Activity -->
         <activity
@@ -142,7 +156,7 @@
             android:exported="false"
             android:parentActivityName=".ui.sticker.StickerStoreActivity" />
             
-                <!-- Profile Card Activity -->
+        <!-- Profile Card Activity -->
         <activity
             android:name=".ui.personal.ProfileCardActivity"
             android:exported="false"

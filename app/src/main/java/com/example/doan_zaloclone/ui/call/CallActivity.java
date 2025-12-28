@@ -1234,7 +1234,7 @@ public class CallActivity extends AppCompatActivity {
         
         // Disable transition animations for seamless switch
         overridePendingTransition(0, 0);
-        
+
         finish();
     }
 

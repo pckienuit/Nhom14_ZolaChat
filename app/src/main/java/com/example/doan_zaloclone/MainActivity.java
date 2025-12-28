@@ -19,6 +19,7 @@ import com.example.doan_zaloclone.ui.call.CallActivity;
 import com.example.doan_zaloclone.ui.contact.ContactFragment;
 import com.example.doan_zaloclone.ui.home.HomeFragment;
 import com.example.doan_zaloclone.ui.login.LoginActivity;
+import com.example.doan_zaloclone.ui.newsfeed.NewsfeedFragment;
 import com.example.doan_zaloclone.ui.personal.PersonalFragment;
 import com.example.doan_zaloclone.utils.NotificationHelper;
 import com.example.doan_zaloclone.viewmodel.MainViewModel;
@@ -46,6 +47,7 @@ public class MainActivity extends AppCompatActivity {
     // Cache fragments to preserve state
     private HomeFragment homeFragment;
     private ContactFragment contactFragment;
+    private NewsfeedFragment newsfeedFragment;
     private PersonalFragment personalFragment;
 
     // Incoming call listener
@@ -746,6 +748,7 @@ public class MainActivity extends AppCompatActivity {
         // Hide all fragments first
         if (homeFragment != null) transaction.hide(homeFragment);
         if (contactFragment != null) transaction.hide(contactFragment);
+        if (newsfeedFragment != null) transaction.hide(newsfeedFragment);
         if (personalFragment != null) transaction.hide(personalFragment);
         
         // Update UI
@@ -776,7 +779,12 @@ public class MainActivity extends AppCompatActivity {
                  // Ideally create a placeholder fragment.
                 break;
             case 3: // Timeline - Placeholder
-                 Toast.makeText(this, "Timeline Coming Soon", Toast.LENGTH_SHORT).show();
+                if (newsfeedFragment == null) {
+                    newsfeedFragment = new NewsfeedFragment();
+                    transaction.add(R.id.fragmentContainer, newsfeedFragment, "TIMELINE");
+                } else {
+                    transaction.show(newsfeedFragment);
+                }
                 break;
             case 4: // Personal
                 if (personalFragment == null) {

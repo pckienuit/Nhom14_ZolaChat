@@ -1,10 +1,10 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.google.services)
 }
-
-import java.util.Properties
-import java.io.FileInputStream
 
 android {
     namespace = "com.example.doan_zaloclone"
@@ -112,7 +112,10 @@ android {
     }
     buildFeatures {
         viewBinding = true
-        buildConfig = true  // Enable BuildConfig generation
+        buildConfig = true // BẬT LẠI TÍNH NĂNG BUILDCONFIG
+    }
+    packagingOptions {
+        exclude("META-INF/DEPENDENCIES")
     }
 }
 
@@ -159,6 +162,9 @@ dependencies {
     // Location services (FREE)
     implementation("com.google.android.gms:play-services-location:21.0.1")
     
+    implementation("com.google.apis:google-api-services-youtube:v3-rev20210915-1.32.1")
+    implementation("com.google.http-client:google-http-client-android:1.41.0")
+    implementation("com.google.api-client:google-api-client-gson:1.32.1")
     // OkHttp for HTTP requests (background removal API)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
@@ -181,6 +187,11 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+    // Thư viện bo tròn ảnh (CircleImageView) - Cần cho Newsfeed
+    implementation("de.hdodenhof:circleimageview:3.1.0")
 
-    
+    // (Tùy chọn) Thư viện hiển thị thời gian kiểu "vừa xong", "1 giờ trước"
+    implementation("org.ocpsoft.prettytime:prettytime:5.0.4.Final")
+
+
 }
