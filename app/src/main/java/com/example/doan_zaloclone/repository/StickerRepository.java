@@ -735,8 +735,16 @@ public class StickerRepository {
                 .get()
                 .addOnSuccessListener(documentSnapshot -> {
                     if (documentSnapshot.exists()) {
-                        // Pack with userId as packId exists
-                        callback.onSuccess(userId);
+                        // Verify creatorId matches current user to prevent using another user's pack
+                        String creatorId = documentSnapshot.getString("creatorId");
+                        if (userId.equals(creatorId)) {
+                            // Pack with userId as packId exists and belongs to current user
+                            callback.onSuccess(userId);
+                        } else {
+                            // Pack exists but belongs to another user - recreate for current user
+                            Log.w(TAG, "Pack exists but creatorId mismatch. Recreating pack for user: " + userId);
+                            createMyStickersPackInternal(userId, callback);
+                        }
                     } else {
                         // Create new pack with userId as packId
                         createMyStickersPackInternal(userId, callback);

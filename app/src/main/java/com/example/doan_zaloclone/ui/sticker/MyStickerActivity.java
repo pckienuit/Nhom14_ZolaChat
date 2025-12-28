@@ -133,22 +133,37 @@ public class MyStickerActivity extends AppCompatActivity {
     private void loadMyStickers() {
         progressBar.setVisibility(View.VISIBLE);
         
-        // Use userId as packId for personal stickers
-        stickerRepository.getStickersInPack(currentUserId).observe(this, resource -> {
-            progressBar.setVisibility(View.GONE);
-            swipeRefreshLayout.setRefreshing(false);
+        // First ensure pack exists for current user, then load stickers
+        stickerRepository.getOrCreateUserStickerPack(currentUserId, new StickerRepository.PackCallback() {
+            @Override
+            public void onSuccess(String packId) {
+                // Now load stickers for this user's pack
+                stickerRepository.getStickersInPack(packId).observe(MyStickerActivity.this, resource -> {
+                    progressBar.setVisibility(View.GONE);
+                    swipeRefreshLayout.setRefreshing(false);
 
-            if (resource.isSuccess()) {
-                List<Sticker> stickers = resource.getData();
-                if (stickers != null && !stickers.isEmpty()) {
-                    adapter.updateStickers(stickers);
-                    updateStickerCount(stickers.size());
-                    showContent();
-                } else {
-                    showEmptyState();
-                }
-            } else if (resource.isError()) {
-                Toast.makeText(this, "Lỗi: " + resource.getMessage(), 
+                    if (resource.isSuccess()) {
+                        List<Sticker> stickers = resource.getData();
+                        if (stickers != null && !stickers.isEmpty()) {
+                            adapter.updateStickers(stickers);
+                            updateStickerCount(stickers.size());
+                            showContent();
+                        } else {
+                            showEmptyState();
+                        }
+                    } else if (resource.isError()) {
+                        Toast.makeText(MyStickerActivity.this, "Lỗi: " + resource.getMessage(), 
+                            Toast.LENGTH_SHORT).show();
+                        showEmptyState();
+                    }
+                });
+            }
+
+            @Override
+            public void onError(String error) {
+                progressBar.setVisibility(View.GONE);
+                swipeRefreshLayout.setRefreshing(false);
+                Toast.makeText(MyStickerActivity.this, "Lỗi tạo pack: " + error, 
                     Toast.LENGTH_SHORT).show();
                 showEmptyState();
             }
