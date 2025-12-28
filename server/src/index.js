@@ -16,6 +16,7 @@ const callRoutes = require('./routes/calls');
 const friendRoutes = require('./routes/friends');
 const stickerRoutes = require('./routes/stickers');
 const messageRoutes = require('./routes/messages');
+const janusRoutes = require('../routes/janus');  // Janus SFU routes
 
 const app = express();
 const server = http.createServer(app);
@@ -86,7 +87,8 @@ app.get('/health', (req, res) => {
       calls: '/api/calls',
       friends: '/api/friends',
       stickers: '/api/stickers',
-      messages: '/api/messages'
+      messages: '/api/messages',
+      janus: '/api/janus'
     },
     version: process.env.npm_package_version || '1.0.0'
   });
@@ -101,6 +103,7 @@ app.use('/api/calls', callRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/stickers', stickerRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/janus', janusRoutes);  // Janus SFU endpoints
 
 
 // 404 handler

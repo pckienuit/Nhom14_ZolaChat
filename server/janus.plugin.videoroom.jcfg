@@ -1,0 +1,15 @@
+# VideoRoom plugin configuration for ZolaChat
+
+general: {
+    # Enable string IDs for rooms (we'll use call IDs)
+    string_ids = true
+    
+    # Admin API for room management
+    admin_key = "ZolaChat2025AdminKey"
+    
+    # Lock to prevent unauthorized room creation
+    lock_rtp_forward = true
+}
+
+# Optional: Pre-create rooms or allow dynamic creation
+# For ZolaChat, we'll create rooms dynamically via API
