@@ -1465,8 +1465,17 @@ public class RoomActivity extends AppCompatActivity {
 
             @Override
             public void onUnpinClick(Message message) {
-                // Unpin message via ViewModel
-                roomViewModel.unpinMessage(conversationId, message.getId());
+                // Show confirmation dialog before unpinning
+                new android.app.AlertDialog.Builder(RoomActivity.this)
+                        .setTitle("Bỏ ghim tin nhắn")
+                        .setMessage("Bạn có chắc muốn bỏ ghim tin nhắn này?")
+                        .setPositiveButton("Bỏ ghim", (dialog, which) -> {
+                            // Unpin message via ViewModel
+                            roomViewModel.unpinMessage(conversationId, message.getId());
+                            Toast.makeText(RoomActivity.this, "Đã bỏ ghim tin nhắn", Toast.LENGTH_SHORT).show();
+                        })
+                        .setNegativeButton("Hủy", null)
+                        .show();
             }
         });
 

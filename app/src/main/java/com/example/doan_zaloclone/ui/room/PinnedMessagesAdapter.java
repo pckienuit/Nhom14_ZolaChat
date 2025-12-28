@@ -134,6 +134,18 @@ public class PinnedMessagesAdapter extends RecyclerView.Adapter<PinnedMessagesAd
                         return "📎 " + fileName;
                     }
                     return "📎 File";
+                case Message.TYPE_VOICE:
+                    return "🎤 Tin nhắn thoại";
+                case Message.TYPE_STICKER:
+                    return "😊 Sticker";
+                case Message.TYPE_LOCATION:
+                    return "📍 Vị trí";
+                case Message.TYPE_LIVE_LOCATION:
+                    return "📍 Vị trí trực tiếp";
+                case Message.TYPE_CONTACT:
+                    return "👤 Danh thiếp";
+                case Message.TYPE_POLL:
+                    return "📊 Bình chọn";
                 case Message.TYPE_CALL:
                     return "📞 Cuộc gọi";
                 case Message.TYPE_TEXT:

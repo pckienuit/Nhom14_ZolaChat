@@ -51,7 +51,7 @@
 
     </LinearLayout>
 
-    <!-- Unpin button (optional, can also use long-press) -->
+    <!-- Unpin button - allows direct unpinning from pinned messages list -->
     <ImageButton
         android:id="@+id/unpinButton"
         android:layout_width="32dp"
@@ -61,6 +61,6 @@
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/unpin_message"
         android:tint="#757575"
-        android:visibility="gone" />
+        android:visibility="visible" />
 
 </LinearLayout>
