@@ -1,0 +1,57 @@
+# Janus Gateway Configuration for ZolaChat Video Calls
+
+## VideoRoom Plugin Settings
+videoroom: {
+    # Room settings
+    string_ids = true
+    
+    # Recording (optional)
+    # record = true
+    # rec_dir = "/opt/janus/recordings"
+}
+
+## General Settings
+general: {
+    configs_folder = "/opt/janus/etc/janus"
+    plugins_folder = "/opt/janus/lib/janus/plugins"
+    transports_folder = "/opt/janus/lib/janus/transports"
+    
+    # API secret (change this!)
+    api_secret = "ZolaChat2025SecretKey"
+    
+    # Admin API
+    admin_secret = "ZolaChat2025AdminKey"
+    
+    # Session timeout
+    session_timeout = 60
+    
+    # Enable debug logs (disable in production)
+    debug_level = 4
+    debug_timestamps = true
+}
+
+## NAT Configuration
+nat: {
+    # Force specific IP for ICE candidates
+    ice_enforce_list = "163.61.182.20"
+    
+    # STUN server (use your existing one)
+    stun_server = "163.61.182.20"
+    stun_port = 3478
+    
+    # TURN server (optional, use your existing one)
+    turn_server = "163.61.182.20"
+    turn_port = 3478
+    turn_type = "udp"
+    # turn_user = "username"
+    # turn_pwd = "password"
+}
+
+## Media Configuration
+media: {
+    # RTP port range
+    rtp_port_range = "10000-10200"
+    
+    # Enable IPv6
+    ipv6 = false
+}
