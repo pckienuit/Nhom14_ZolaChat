@@ -51,18 +51,30 @@ public class SwipeToReplyCallback extends ItemTouchHelper.SimpleCallback {
         // Sent messages can only swipe LEFT
         if (viewType == MessageAdapter.VIEW_TYPE_SENT ||
                 viewType == MessageAdapter.VIEW_TYPE_IMAGE_SENT ||
-                viewType == MessageAdapter.VIEW_TYPE_FILE_SENT) {
+                viewType == MessageAdapter.VIEW_TYPE_FILE_SENT ||
+                viewType == MessageAdapter.VIEW_TYPE_VOICE_SENT ||
+                viewType == MessageAdapter.VIEW_TYPE_STICKER_SENT ||
+                viewType == MessageAdapter.VIEW_TYPE_LOCATION_SENT ||
+                viewType == MessageAdapter.VIEW_TYPE_LIVE_LOCATION_SENT ||
+                viewType == MessageAdapter.VIEW_TYPE_CONTACT_SENT ||
+                viewType == MessageAdapter.VIEW_TYPE_POLL_SENT) {
             return ItemTouchHelper.LEFT;
         }
 
         // Received messages can only swipe RIGHT
         if (viewType == MessageAdapter.VIEW_TYPE_RECEIVED ||
                 viewType == MessageAdapter.VIEW_TYPE_IMAGE_RECEIVED ||
-                viewType == MessageAdapter.VIEW_TYPE_FILE_RECEIVED) {
+                viewType == MessageAdapter.VIEW_TYPE_FILE_RECEIVED ||
+                viewType == MessageAdapter.VIEW_TYPE_VOICE_RECEIVED ||
+                viewType == MessageAdapter.VIEW_TYPE_STICKER_RECEIVED ||
+                viewType == MessageAdapter.VIEW_TYPE_LOCATION_RECEIVED ||
+                viewType == MessageAdapter.VIEW_TYPE_LIVE_LOCATION_RECEIVED ||
+                viewType == MessageAdapter.VIEW_TYPE_CONTACT_RECEIVED ||
+                viewType == MessageAdapter.VIEW_TYPE_POLL_RECEIVED) {
             return ItemTouchHelper.RIGHT;
         }
 
-        // Call history messages - no swipe
+        // Call history and recalled messages - no swipe
         return 0;
     }
 
