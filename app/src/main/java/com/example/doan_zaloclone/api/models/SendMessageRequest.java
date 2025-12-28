@@ -153,6 +153,11 @@ public class SendMessageRequest {
             this.voiceDuration = message.getVoiceDuration() > 0 ? message.getVoiceDuration() : null;
             android.util.Log.d("SendMessageRequest", "Voice message - URL: " + this.voiceUrl + ", Duration: " + this.voiceDuration);
         }
+
+        // Poll
+        if (Message.TYPE_POLL.equals(message.getType())) {
+            this.pollData = message.getPollData();
+        }
     }
 
     @SerializedName("voiceUrl")
@@ -160,6 +165,9 @@ public class SendMessageRequest {
 
     @SerializedName("voiceDuration")
     private Integer voiceDuration;
+
+    @SerializedName("pollData")
+    private com.example.doan_zaloclone.models.Poll pollData;
 
     // Getters and setters
     public String getContent() {

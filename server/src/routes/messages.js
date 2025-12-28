@@ -5,9 +5,24 @@ const { authenticateUser, db, admin } = require('../middleware/auth');
 /**
  * POST /api/messages - Send a new message
  */
+/**
+ * POST /api/messages - Send a new message
+ */
 router.post('/', authenticateUser, async (req, res) => {
   try {
-    const { conversationId, type, content, fileName, fileSize, fileMimeType } = req.body;
+    const { 
+      conversationId, type, content, 
+      fileName, fileSize, fileMimeType,
+      senderName,
+      replyToId, replyToContent, replyToSenderId, replyToSenderName,
+      isForwarded, originalSenderId, originalSenderName,
+      contactUserId,
+      latitude, longitude, locationName, locationAddress,
+      liveLocationSessionId,
+      stickerId, stickerPackId, stickerUrl, isStickerAnimated,
+      voiceUrl, voiceDuration,
+      pollData
+    } = req.body;
     
     // Validate required fields
     if (!conversationId || !type) {
@@ -25,17 +40,76 @@ router.post('/', authenticateUser, async (req, res) => {
       reactions: {},
       reactionCounts: {}
     };
-    
-    // Add file metadata if present (for IMAGE, VIDEO, AUDIO, FILE types)
-    if (fileName) {
-      message.fileName = fileName;
-      message.fileSize = fileSize || 0;
-      if (fileMimeType) {
-        message.fileMimeType = fileMimeType;
+
+    // If senderName is not provided, fetch it
+    if (senderName) {
+      message.senderName = senderName;
+    } else {
+      try {
+        const userDoc = await db.collection('users').doc(req.user.uid).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          message.senderName = userData.name || userData.displayName || 'Unknown';
+        } else {
+          message.senderName = 'Unknown';
+        }
+      } catch (e) {
+        console.error('Error fetching sender name:', e);
+        message.senderName = 'Unknown';
       }
     }
     
+    // Add optional fields if present
+    const addIfPresent = (key, value) => {
+      if (value !== undefined && value !== null) {
+        message[key] = value;
+      }
+    };
+
+    addIfPresent('fileName', fileName);
+    addIfPresent('fileSize', fileSize);
+    addIfPresent('fileMimeType', fileMimeType);
+    
+    // Reply fields
+    addIfPresent('replyToId', replyToId);
+    addIfPresent('replyToContent', replyToContent);
+    addIfPresent('replyToSenderId', replyToSenderId);
+    addIfPresent('replyToSenderName', replyToSenderName);
+    
+    // Forward fields
+    if (isForwarded) {
+      message.isForwarded = true;
+      addIfPresent('originalSenderId', originalSenderId);
+      addIfPresent('originalSenderName', originalSenderName);
+    }
+    
+    // Contact
+    addIfPresent('contactUserId', contactUserId);
+    
+    // Location
+    addIfPresent('latitude', latitude);
+    addIfPresent('longitude', longitude);
+    addIfPresent('locationName', locationName);
+    addIfPresent('locationAddress', locationAddress);
+    
+    // Live Location
+    addIfPresent('liveLocationSessionId', liveLocationSessionId);
+    
+    // Sticker
+    addIfPresent('stickerId', stickerId);
+    addIfPresent('stickerPackId', stickerPackId);
+    addIfPresent('stickerUrl', stickerUrl);
+    addIfPresent('isStickerAnimated', isStickerAnimated);
+    
+    // Voice
+    addIfPresent('voiceUrl', voiceUrl);
+    addIfPresent('voiceDuration', voiceDuration);
+
+    // Poll
+    addIfPresent('pollData', pollData);
+    
     console.log(`📤 Sending ${type} message in conversation ${conversationId} from ${req.user.uid}`);
+    if (type === 'POLL') console.log('📊 Poll question:', pollData?.question);
     
     // Save to Firestore
     const messageRef = await db.collection('conversations')
@@ -49,7 +123,7 @@ router.post('/', authenticateUser, async (req, res) => {
     await db.collection('conversations').doc(conversationId).update({
       lastMessage: content || `[${type}]`,
       lastMessageTime: message.timestamp,
-      timestamp: message.timestamp  // Also update timestamp for Android client compatibility
+      timestamp: message.timestamp
     });
     
     // Increment unreadCounts for all members except sender
@@ -60,78 +134,43 @@ router.post('/', authenticateUser, async (req, res) => {
         const members = convData.memberIds || convData.participantIds || [];
         const unreadUpdates = {};
         
-        console.log(`📊 Conversation ${conversationId} members: ${JSON.stringify(members)}, sender: ${req.user.uid}`);
-        
         members.forEach(memberId => {
           if (memberId !== req.user.uid) {
-            // Use concatenation to avoid potential template literal issues
             unreadUpdates['unreadCounts.' + memberId] = admin.firestore.FieldValue.increment(1);
-            console.log(`📊 Will increment unreadCounts for member: ${memberId}`);
-          } else {
-            console.log(`📊 Skipping sender: ${memberId}`);
           }
         });
         
-        console.log('📊 Unread updates to apply:', JSON.stringify(unreadUpdates));
-        
         if (Object.keys(unreadUpdates).length > 0) {
           await db.collection('conversations').doc(conversationId).update(unreadUpdates);
-          console.log(`📊 ✅ Successfully incremented unreadCounts for ${Object.keys(unreadUpdates).length} members`);
-        } else {
-          console.log(`📊 ⚠️ No unread updates to apply (members: ${members.length}, sender in list: ${members.includes(req.user.uid)})`);
         }
-      } else {
-        console.log(`📊 ⚠️ Conversation ${conversationId} not found for unread update`);
       }
     } catch (unreadErr) {
       console.error('❌ Failed to update unreadCounts:', unreadErr);
-      // Don't fail the request if unread update fails
     }
     
     // Emit WebSocket event
     const io = req.app.get('io');
     if (io) {
-      // Fetch sender name for notifications
-      let senderName = 'Unknown';
-      try {
-        const senderDoc = await db.collection('users').doc(req.user.uid).get();
-        if (senderDoc.exists) {
-          const senderData = senderDoc.data();
-          senderName = senderData.name || senderData.displayName || 'Unknown';
-        }
-      } catch (err) {
-        console.error('Failed to fetch sender name:', err);
-      }
+      // Ensure senderName is populated (client should send it, but we can double check or just use what client sent)
+      // Since we already saved senderName (if provided), we use it.
       
-      const messageWithId = { ...message, id: messageRef.id, senderName };
-      console.log(`📡 Emitting new_message to conversation:${conversationId} with senderName: ${senderName}`);
+      const messageWithId = { ...message, id: messageRef.id };
+      console.log(`📡 Emitting new_message to conversation:${conversationId}`);
       io.to(`conversation:${conversationId}`).emit('new_message', messageWithId);
 
-      // Notification for Home Screen Preview (emit to each user's room)
+      // Notification for Home Screen Preview
       try {
         const conversationDoc = await db.collection('conversations').doc(conversationId).get();
         if (conversationDoc.exists) {
-          const data = conversationDoc.data();
-          // Support multiple field names for legacy compatibility
-          const members = data.memberIds || data.participantIds || data.participants || [];
-          
-          console.log(`DEBUG_V3: Conversation ${conversationId} has members: ${JSON.stringify(members)}`);
-          
-          members.forEach(memberId => {
-            // Avoid sending double to sender (optional, but sender already has it via API response)
-            // But sender might need it for Home screen update if they go back quickly?
-            // Let's send to everyone. Client handles duplicates.
-            io.to(`user:${memberId}`).emit('new_message', messageWithId);
-            console.log(`DEBUG_V3: Emitted to user:${memberId}`);
-          });
-        } else {
-            console.warn(`DEBUG_V3: Conversation ${conversationId} not found in Firestore`);
+            const data = conversationDoc.data();
+            const members = data.memberIds || data.participantIds || data.participants || [];
+            members.forEach(memberId => {
+                io.to(`user:${memberId}`).emit('new_message', messageWithId);
+            });
         }
       } catch (err) {
         console.error('Failed to send notifications to members', err);
       }
-    } else {
-      console.warn('⚠️ io is null, cannot emit new_message event');
     }
     
     res.json({ 
@@ -435,9 +474,137 @@ router.post('/:messageId/reactions', authenticateUser, async (req, res) => {
   }
 });
 
+
 /**
- * DELETE /api/messages/:messageId/reactions - Clear ALL reactions on a message
+ * POST /api/messages/:messageId/poll/vote - Vote on a poll
  */
+router.post('/:messageId/poll/vote', authenticateUser, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { conversationId, optionId } = req.body;
+    
+    if (!conversationId || !optionId) {
+      return res.status(400).json({ error: 'Missing required fields: conversationId, optionId' });
+    }
+    
+    const userId = req.user.uid;
+    console.log(`🗳️ Voting on poll message ${messageId}: user=${userId}, option=${optionId}`);
+    
+    const messageRef = db.collection('conversations')
+      .doc(conversationId)
+      .collection('messages')
+      .doc(messageId);
+    
+    // Get user name for display
+    let userName = 'User';
+    try {
+      const userDoc = await db.collection('users').doc(userId).get();
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        userName = userData.name || userData.displayName || 'User';
+      }
+    } catch (e) {
+      console.warn('Failed to fetch user name for poll vote', e);
+    }
+
+    // Run transaction
+    const result = await db.runTransaction(async (transaction) => {
+      const messageDoc = await transaction.get(messageRef);
+      if (!messageDoc.exists) {
+        throw new Error('Message not found');
+      }
+      
+      const data = messageDoc.data();
+      if (data.type !== 'POLL') {
+        throw new Error('Message is not a poll');
+      }
+      
+      const pollData = data.pollData || {};
+      const options = pollData.options || [];
+      
+      // Find the option
+      const optionIndex = options.findIndex(opt => opt.id === optionId);
+      if (optionIndex === -1) {
+        throw new Error('Poll option not found');
+      }
+      
+      // Check if user already voted for ANY option (if single choice)
+      // For now, let's assume multiple choice is allowed or handled by client?
+      // Re-reading requirements: usually poll allows removing vote or changing vote.
+      // Let's implement toggle logic similar to reactions:
+      // If user checks the same option -> remove vote
+      // If user checks different option -> allow (multiple choice) OR switch (single choice)
+      // The current client implementation seems to just send "vote".
+      
+      // Update the specific option
+      const currentOption = options[optionIndex];
+      const voters = currentOption.voters || [];
+      const voterIds = currentOption.voterIds || [];
+      
+      // Check if user already voted for THIS option
+      const existingVoteIndex = voters.findIndex(v => v.userId === userId);
+      
+      if (existingVoteIndex !== -1) {
+        // Remove vote (toggle off)
+        voters.splice(existingVoteIndex, 1);
+        const idIndex = voterIds.indexOf(userId);
+        if (idIndex !== -1) voterIds.splice(idIndex, 1);
+        currentOption.voteCount = Math.max(0, (currentOption.voteCount || 0) - 1);
+      } else {
+        // Add vote (toggle on)
+        voters.push({
+          userId,
+          userName,
+          votedAt: Date.now()
+        });
+        voterIds.push(userId);
+        currentOption.voteCount = (currentOption.voteCount || 0) + 1;
+      }
+      
+      currentOption.voters = voters;
+      currentOption.voterIds = voterIds;
+      options[optionIndex] = currentOption;
+      
+      // Update message
+      transaction.update(messageRef, {
+        'pollData.options': options
+      });
+      
+      return { pollData: { ...pollData, options } };
+    });
+    
+    console.log(`✅ Poll vote recorded`);
+    
+    // Emit WebSocket event
+    const io = req.app.get('io');
+    if (io) {
+      // Use message_updated event so clients refresh the message
+      const eventData = {
+        conversationId,
+        messageId,
+        pollData: result.pollData,
+        // Helper fields for easier client updates if needed
+        updatedOptionId: optionId, 
+        userId,
+        userName
+      };
+      
+      console.log(`📡 Emitting message_updated (poll) to conversation:${conversationId}`);
+      io.to(`conversation:${conversationId}`).emit('message_updated', {
+        ...eventData,
+        // Include minimal fields to identify this is a poll update
+         type: 'POLL'
+      });
+    }
+    
+    res.json({ success: true, pollData: result.pollData });
+    
+  } catch (error) {
+    console.error('❌ Error voting on poll:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.delete('/:messageId/reactions', authenticateUser, async (req, res) => {
   try {
     const { messageId } = req.params;
