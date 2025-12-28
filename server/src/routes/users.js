@@ -82,42 +82,61 @@ router.post('/:userId/ban', authenticateUser, requireAdmin, async (req, res) => 
 router.post('/search', authenticateUser, async (req, res) => {
   try {
     const { query } = req.body;
-    if (!query || query.length < 2) {
+    if (!query || query.length < 1) {  // Cho phép tìm từ 1 ký tự
       return res.json({ users: [] });
     }
     
-    const queryLower = query.toLowerCase();
+    const queryLower = query.toLowerCase().trim();
+    console.log(`🔍 Search query: "${query}" (normalized: "${queryLower}")`);
     
-    // Search by name (case-insensitive)
-    const nameSnapshot = await db.collection('users')
-      .orderBy('nameLowerCase')
-      .startAt(queryLower)
-      .endAt(queryLower + '\uf8ff')
-      .limit(20)
+    // Vì Firestore không hỗ trợ substring search, ta phải lấy nhiều users và filter
+    // Lấy tất cả users (hoặc limit cao) để có thể filter
+    const allUsersSnapshot = await db.collection('users')
+      .limit(500)  // Lấy tối đa 500 users
       .get();
     
-    // Search by email
-    const emailSnapshot = await db.collection('users')
-      .where('email', '>=', queryLower)
-      .where('email', '<=', queryLower + '\uf8ff')
-      .limit(20)
-      .get();
+    const matchedUsers = [];
     
-    // Merge results and remove duplicates
-    const usersMap = new Map();
-    nameSnapshot.forEach(doc => {
-      usersMap.set(doc.id, { id: doc.id, ...doc.data() });
-    });
-    emailSnapshot.forEach(doc => {
-      if (!usersMap.has(doc.id)) {
-        usersMap.set(doc.id, { id: doc.id, ...doc.data() });
+    allUsersSnapshot.forEach(doc => {
+      const userData = doc.data();
+      const name = (userData.name || '').toLowerCase();
+      const email = (userData.email || '').toLowerCase();
+      const nameLowerCase = (userData.nameLowerCase || '').toLowerCase();
+      
+      // Kiểm tra nếu query có trong name hoặc email (substring matching)
+      if (name.includes(queryLower) || 
+          email.includes(queryLower) || 
+          nameLowerCase.includes(queryLower)) {
+        matchedUsers.push({ id: doc.id, ...userData });
       }
     });
     
-    const users = Array.from(usersMap.values());
+    // Sắp xếp kết quả: ưu tiên những kết quả match ở đầu
+    matchedUsers.sort((a, b) => {
+      const aName = (a.name || '').toLowerCase();
+      const bName = (b.name || '').toLowerCase();
+      const aEmail = (a.email || '').toLowerCase();
+      const bEmail = (b.email || '').toLowerCase();
+      
+      const aNameStartsWith = aName.startsWith(queryLower);
+      const bNameStartsWith = bName.startsWith(queryLower);
+      const aEmailStartsWith = aEmail.startsWith(queryLower);
+      const bEmailStartsWith = bEmail.startsWith(queryLower);
+      
+      // Ưu tiên name starts with > email starts with > name contains > email contains
+      if (aNameStartsWith && !bNameStartsWith) return -1;
+      if (!aNameStartsWith && bNameStartsWith) return 1;
+      if (aEmailStartsWith && !bEmailStartsWith) return -1;
+      if (!aEmailStartsWith && bEmailStartsWith) return 1;
+      
+      return 0;
+    });
     
-    console.log(`🔍 Search query: "${query}" - Found ${users.length} users`);
-    res.json({ users });
+    // Giới hạn kết quả trả về (top 20)
+    const limitedUsers = matchedUsers.slice(0, 20);
+    
+    console.log(`✅ Search found ${matchedUsers.length} users (returning ${limitedUsers.length})`);
+    res.json({ users: limitedUsers });
   } catch (error) {
     console.error('Search error:', error);
     res.status(500).json({ error: error.message });

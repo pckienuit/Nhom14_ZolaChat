@@ -278,10 +278,16 @@ public class AddFriendActivity extends AppCompatActivity {
         searchResultContainer.setVisibility(View.VISIBLE);
         
         if (users != null && !users.isEmpty()) {
+            // Giới hạn tối đa 10 kết quả
+            List<User> limitedUsers = users;
+            if (users.size() > 10) {
+                limitedUsers = users.subList(0, 10);
+            }
+            
             // Hiển thị RecyclerView
             tvNotFound.setVisibility(View.GONE);
             recyclerSearchResults.setVisibility(View.VISIBLE);
-            searchResultAdapter.setUsers(users);
+            searchResultAdapter.setUsers(limitedUsers);
         } else {
             // Hiển thị thông báo không tìm thấy
             tvNotFound.setVisibility(View.VISIBLE);
