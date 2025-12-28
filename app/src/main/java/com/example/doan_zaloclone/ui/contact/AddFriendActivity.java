@@ -197,11 +197,21 @@ public class AddFriendActivity extends AppCompatActivity {
     }
 
     private void performSearch(String query) {
+        // Clear kết quả cũ trước khi tìm kiếm mới
+        viewModel.clearSearchResults();
+        // Thực hiện tìm kiếm
         viewModel.searchUsers(query);
     }
     
     private void sendFriendRequest(User user) {
         String currentUserId = FirebaseAuth.getInstance().getUid();
+        
+        // Kiểm tra không cho gửi lời mời cho chính mình
+        if (currentUserId.equals(user.getId())) {
+            Toast.makeText(this, "Không thể gửi lời mời kết bạn cho chính mình", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
         String currentUserName = FirebaseAuth.getInstance().getCurrentUser().getDisplayName();
         if (currentUserName == null) currentUserName = "User";
         
@@ -277,7 +287,10 @@ public class AddFriendActivity extends AppCompatActivity {
                 // Show loading?
             } else if (resource.getStatus() == Resource.Status.SUCCESS) {
                 List<User> users = resource.getData();
-                processSearchResults(users);
+                // Bỏ qua nếu data là null (từ clearSearchResults)
+                if (users != null) {
+                    processSearchResults(users);
+                }
             } else if (resource.getStatus() == Resource.Status.ERROR) {
                 Toast.makeText(this, "Lỗi tìm kiếm: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
             }
@@ -290,6 +303,7 @@ public class AddFriendActivity extends AppCompatActivity {
         
         if (users != null && !users.isEmpty()) {
             foundUser = users.get(0);
+            String currentUserId = FirebaseAuth.getInstance().getUid();
             
             tvNotFound.setVisibility(View.GONE);
             ((View)imgAvatar.getParent().getParent()).setVisibility(View.VISIBLE);
@@ -303,8 +317,15 @@ public class AddFriendActivity extends AppCompatActivity {
                 imgAvatar.setImageResource(R.drawable.ic_avatar);
             }
             
-            // Reset to default "KẾT BẠN" state
-            resetButtonToAddFriend();
+            // Kiểm tra nếu đang tìm chính mình
+            if (currentUserId.equals(foundUser.getId())) {
+                btnAddFriend.setText("CHÍNH BẠN");
+                btnAddFriend.setEnabled(false);
+                btnAddFriend.setBackgroundTintList(getColorStateList(android.R.color.darker_gray));
+            } else {
+                // Reset to default "KẾT BẠN" state
+                resetButtonToAddFriend();
+            }
             
         } else {
             foundUser = null;
