@@ -13,6 +13,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.lifecycle.LiveData;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -439,28 +440,37 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
 
         String currentUserId = firebaseAuth.getCurrentUser().getUid();
 
-        // Use ViewModel to find existing conversation
-        contactViewModel.findExistingConversation(currentUserId, user.getId()).observe(this, resource -> {
-            if (resource == null) return;
+        // Use ViewModel to find existing conversation - observe only once
+        LiveData<Resource<Conversation>> liveData = contactViewModel.findExistingConversation(currentUserId, user.getId());
+        liveData.observe(getViewLifecycleOwner(), new androidx.lifecycle.Observer<Resource<Conversation>>() {
+            @Override
+            public void onChanged(Resource<Conversation> resource) {
+                if (resource == null) return;
+                
+                // Skip loading state
+                if (resource.isLoading()) return;
+                
+                // Remove observer immediately after receiving non-loading result
+                liveData.removeObserver(this);
 
-            if (resource.isSuccess()) {
-                Conversation conversation = resource.getData();
-                if (conversation != null) {
-                    // Found existing conversation
-                    if (getActivity() != null) {
-                        Toast.makeText(getContext(), "Opening existing chat", Toast.LENGTH_SHORT).show();
-                        openChatRoom(conversation);
+                if (resource.isSuccess()) {
+                    Conversation conversation = resource.getData();
+                    if (conversation != null && conversation.getId() != null && !conversation.getId().isEmpty()) {
+                        // Found existing conversation with valid ID
+                        if (getActivity() != null) {
+                            openChatRoom(conversation);
+                        }
+                    } else {
+                        // No conversation found or invalid ID, create new one
+                        String currentUserName = firebaseAuth.getCurrentUser().getDisplayName() != null
+                                ? firebaseAuth.getCurrentUser().getDisplayName()
+                                : "User";
+                        createNewConversation(currentUserId, currentUserName, user);
                     }
-                } else {
-                    // No conversation found, create new one
-                    String currentUserName = firebaseAuth.getCurrentUser().getDisplayName() != null
-                            ? firebaseAuth.getCurrentUser().getDisplayName()
-                            : "User";
-                    createNewConversation(currentUserId, currentUserName, user);
-                }
-            } else if (resource.isError()) {
-                if (getContext() != null) {
-                    Toast.makeText(getContext(), "Error: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                } else if (resource.isError()) {
+                    if (getContext() != null) {
+                        Toast.makeText(getContext(), "Error: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
                 }
             }
         });
@@ -523,36 +533,43 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
         ConversationRepository conversationRepository = ConversationRepository.getInstance();
         List<String> participants = Arrays.asList(currentUserId, otherUser.getId());
         
-        conversationRepository.createConversation(participants, false, null)
-                .observe(getViewLifecycleOwner(), resource -> {
-                    if (resource == null) return;
-                    
-                    if (resource.isLoading()) {
-                        // Optionally show loading state
-                        return;
+        // Observe only once to avoid duplicate calls
+        LiveData<Resource<String>> liveData = conversationRepository.createConversation(participants, false, null);
+        liveData.observe(getViewLifecycleOwner(), new androidx.lifecycle.Observer<Resource<String>>() {
+            @Override
+            public void onChanged(Resource<String> resource) {
+                if (resource == null) return;
+                
+                if (resource.isLoading()) {
+                    // Optionally show loading state
+                    return;
+                }
+                
+                // Remove observer immediately after receiving non-loading result
+                liveData.removeObserver(this);
+                
+                if (resource.isSuccess() && resource.getData() != null) {
+                    String conversationId = resource.getData();
+                    if (getActivity() != null) {
+                        Toast.makeText(getContext(), "New chat created!", Toast.LENGTH_SHORT).show();
+                        // Create conversation object for navigation
+                        Conversation conversation = new Conversation();
+                        conversation.setId(conversationId);
+                        conversation.setMemberIds(participants);
+                        // Set the other user's name for display
+                        java.util.Map<String, String> memberNames = new java.util.HashMap<>();
+                        memberNames.put(currentUserId, currentUserName);
+                        memberNames.put(otherUser.getId(), otherUser.getName());
+                        conversation.setMemberNames(memberNames);
+                        openChatRoom(conversation);
                     }
-                    
-                    if (resource.isSuccess() && resource.getData() != null) {
-                        String conversationId = resource.getData();
-                        if (getActivity() != null) {
-                            Toast.makeText(getContext(), "New chat created!", Toast.LENGTH_SHORT).show();
-                            // Create conversation object for navigation
-                            Conversation conversation = new Conversation();
-                            conversation.setId(conversationId);
-                            conversation.setMemberIds(participants);
-                            // Set the other user's name for display
-                            java.util.Map<String, String> memberNames = new java.util.HashMap<>();
-                            memberNames.put(currentUserId, currentUserName);
-                            memberNames.put(otherUser.getId(), otherUser.getName());
-                            conversation.setMemberNames(memberNames);
-                            openChatRoom(conversation);
-                        }
-                    } else if (resource.isError()) {
-                        if (getActivity() != null) {
-                            Toast.makeText(getContext(), "Error creating chat: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
-                        }
+                } else if (resource.isError()) {
+                    if (getActivity() != null) {
+                        Toast.makeText(getContext(), "Error creating chat: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
                     }
-                });
+                }
+            }
+        });
     }
 
     private void openChatRoom(Conversation conversation) {
@@ -851,20 +868,76 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     }
 
     private void removeFriend(String currentUserId, String friendId) {
-        contactViewModel.removeFriend(currentUserId, friendId)
-                .observe(getViewLifecycleOwner(), resource -> {
-                    if (resource == null) return;
+        android.util.Log.d("ContactFragment", "removeFriend called: " + currentUserId + " -> " + friendId);
+        
+        // First, find and delete the conversation between these two users
+        ConversationRepository conversationRepository = ConversationRepository.getInstance();
+        
+        LiveData<Resource<Conversation>> findConversation = contactViewModel.findExistingConversation(currentUserId, friendId);
+        findConversation.observe(getViewLifecycleOwner(), new androidx.lifecycle.Observer<Resource<Conversation>>() {
+            @Override
+            public void onChanged(Resource<Conversation> resource) {
+                if (resource == null || resource.isLoading()) return;
+                
+                // Remove observer immediately
+                findConversation.removeObserver(this);
+                
+                android.util.Log.d("ContactFragment", "findExistingConversation result: " + 
+                    (resource.isSuccess() ? "success" : "error") + 
+                    ", data: " + (resource.getData() != null ? resource.getData().getId() : "null"));
+                
+                // If conversation exists, delete it
+                if (resource.isSuccess() && resource.getData() != null && resource.getData().getId() != null) {
+                    String conversationId = resource.getData().getId();
+                    android.util.Log.d("ContactFragment", "Deleting conversation: " + conversationId);
+                    
+                    LiveData<Resource<Void>> deleteLiveData = conversationRepository.deleteConversation(conversationId);
+                    deleteLiveData.observe(getViewLifecycleOwner(), new androidx.lifecycle.Observer<Resource<Void>>() {
+                        @Override
+                        public void onChanged(Resource<Void> deleteResource) {
+                            if (deleteResource == null || deleteResource.isLoading()) return;
+                            
+                            // Remove observer
+                            deleteLiveData.removeObserver(this);
+                            
+                            if (deleteResource.isSuccess()) {
+                                android.util.Log.d("ContactFragment", "✅ Conversation deleted: " + conversationId);
+                            } else {
+                                android.util.Log.e("ContactFragment", "❌ Failed to delete conversation: " + 
+                                    (deleteResource.getMessage() != null ? deleteResource.getMessage() : "unknown error"));
+                            }
+                        }
+                    });
+                } else {
+                    android.util.Log.d("ContactFragment", "No conversation found to delete");
+                }
+                
+                // Now remove the friend
+                android.util.Log.d("ContactFragment", "Removing friend...");
+                LiveData<Resource<Boolean>> removeFriendLiveData = contactViewModel.removeFriend(currentUserId, friendId);
+                removeFriendLiveData.observe(getViewLifecycleOwner(), new androidx.lifecycle.Observer<Resource<Boolean>>() {
+                    @Override
+                    public void onChanged(Resource<Boolean> removeFriendResource) {
+                        if (removeFriendResource == null || removeFriendResource.isLoading()) return;
+                        
+                        // Remove observer
+                        removeFriendLiveData.removeObserver(this);
 
-                    if (resource.isSuccess()) {
-                        Toast.makeText(getContext(), "Friend removed successfully",
-                                Toast.LENGTH_SHORT).show();
-                        // Reload friends list after removing
-                        reloadFriendData();
-                    } else if (resource.isError()) {
-                        Toast.makeText(getContext(), "Error: " + resource.getMessage(),
-                                Toast.LENGTH_SHORT).show();
+                        if (removeFriendResource.isSuccess()) {
+                            Toast.makeText(getContext(), "Friend removed successfully",
+                                    Toast.LENGTH_SHORT).show();
+                            android.util.Log.d("ContactFragment", "✅ Friend removed successfully");
+                            // Reload friends list after removing
+                            reloadFriendData();
+                        } else if (removeFriendResource.isError()) {
+                            Toast.makeText(getContext(), "Error: " + removeFriendResource.getMessage(),
+                                    Toast.LENGTH_SHORT).show();
+                            android.util.Log.e("ContactFragment", "❌ Failed to remove friend: " + removeFriendResource.getMessage());
+                        }
                     }
                 });
+            }
+        });
     }
 
     private void loadFriendRequests() {
