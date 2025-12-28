@@ -46,6 +46,9 @@ public class MyStickerActivity extends AppCompatActivity {
     private LinearLayout emptyState;
     private ProgressBar progressBar;
 
+    public static final String EXTRA_RETURN_STICKER = "return_sticker";
+    private boolean returnStickerToCaller = false;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -58,6 +61,9 @@ public class MyStickerActivity extends AppCompatActivity {
             return;
         }
         currentUserId = auth.getCurrentUser().getUid();
+
+        // Check if opened for result (from Room)
+        returnStickerToCaller = getIntent().getBooleanExtra(EXTRA_RETURN_STICKER, false);
 
         // Initialize Repository
         stickerRepository = StickerRepository.getInstance();
@@ -100,9 +106,13 @@ public class MyStickerActivity extends AppCompatActivity {
         adapter.setListener(new MyStickerAdapter.OnStickerClickListener() {
             @Override
             public void onStickerClick(Sticker sticker) {
-                // Preview sticker
-                Toast.makeText(MyStickerActivity.this, 
-                    sticker.getId(), Toast.LENGTH_SHORT).show();
+                // Luôn trả sticker về cho caller (RoomActivity sẽ xử lý gửi sticker)
+                Intent result = new Intent();
+                result.putExtra("sticker_id", sticker.getId());
+                result.putExtra("sticker_url", sticker.getImageUrl());
+                result.putExtra("sticker_pack_id", sticker.getPackId());
+                setResult(RESULT_OK, result);
+                finish();
             }
 
             @Override

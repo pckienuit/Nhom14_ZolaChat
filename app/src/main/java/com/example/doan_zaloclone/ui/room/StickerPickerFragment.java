@@ -1,7 +1,11 @@
 package com.example.doan_zaloclone.ui.room;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -55,6 +59,28 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
 
     // Callback
     private OnStickerSelectedListener stickerSelectedListener;
+
+    // ActivityResultLauncher để xử lý kết quả từ MyStickerActivity
+    private final ActivityResultLauncher<Intent> myStickerLauncher = 
+            registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
+                if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                    Intent data = result.getData();
+                    String stickerId = data.getStringExtra("sticker_id");
+                    String stickerUrl = data.getStringExtra("sticker_url");
+                    String stickerPackId = data.getStringExtra("sticker_pack_id");
+                    
+                    if (stickerId != null && stickerUrl != null) {
+                        // Tạo Sticker object từ dữ liệu trả về
+                        Sticker sticker = new Sticker();
+                        sticker.setId(stickerId);
+                        sticker.setImageUrl(stickerUrl);
+                        sticker.setPackId(stickerPackId != null ? stickerPackId : currentUserId);
+                        
+                        // Gửi sticker
+                        onStickerSelected(sticker);
+                    }
+                }
+            });
 
     public void setOnStickerSelectedListener(OnStickerSelectedListener listener) {
         this.stickerSelectedListener = listener;
@@ -171,10 +197,11 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
         });
 
 
-        // My stickers button
+        // My stickers button - sử dụng launcher để nhận kết quả
         btnMyStickers.setOnClickListener(v -> {
             Intent intent = new Intent(requireContext(), MyStickerActivity.class);
-            startActivity(intent);
+            intent.putExtra(MyStickerActivity.EXTRA_RETURN_STICKER, true);
+            myStickerLauncher.launch(intent);
         });
     }
 
@@ -185,15 +212,96 @@ public class StickerPickerFragment extends BottomSheetDialogFragment {
                 getResources().getColor(android.R.color.transparent, null));
     }
 
+
     private void loadData() {
-        // Load user's saved packs
         if (currentUserId != null) {
-            loadUserSavedPacks();
+            // Đảm bảo pack cá nhân luôn có
+            stickerRepository.getOrCreateUserStickerPack(currentUserId, new StickerRepository.PackCallback() {
+                @Override
+                public void onSuccess(String myPackId) {
+                    // Sau khi chắc chắn pack cá nhân tồn tại, load saved packs và recent
+                    loadUserSavedPacksWithMyPack(myPackId);
+                    loadRecentStickers();
+                }
+                @Override
+                public void onError(String error) {
+                    // Nếu lỗi vẫn load bình thường (không có pack cá nhân)
+                    loadUserSavedPacksWithMyPack(null);
+                    loadRecentStickers();
+                }
+            });
+        } else {
+            loadUserSavedPacksWithMyPack(null);
             loadRecentStickers();
         }
-
-        // Load official packs
         loadOfficialPacks();
+    }
+
+    // Thay thế cho loadUserSavedPacks, đảm bảo pack cá nhân luôn ở đầu
+    private void loadUserSavedPacksWithMyPack(String myPackId) {
+        stickerRepository.getUserSavedPacks(currentUserId).observe(getViewLifecycleOwner(), resource -> {
+            if (resource.isSuccess() && resource.getData() != null) {
+                List<StickerPack> allPacks = new ArrayList<>();
+                // Nếu có pack cá nhân, thêm vào đầu
+                if (myPackId != null) {
+                    stickerRepository.getStickersInPack(myPackId).observe(getViewLifecycleOwner(), stickersRes -> {
+                        // Tạo StickerPack tạm nếu chưa có trong saved
+                        boolean found = false;
+                        for (StickerPack p : resource.getData()) {
+                            if (p.getId().equals(myPackId)) {
+                                allPacks.add(p);
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            // Nếu chưa có, tạo StickerPack tạm
+                            StickerPack myPack = new StickerPack();
+                            myPack.setId(myPackId);
+                            myPack.setName("Sticker của tôi");
+                            myPack.setType(StickerPack.TYPE_USER);
+                            allPacks.add(myPack);
+                        }
+                        // Thêm các pack còn lại
+                        for (StickerPack p : resource.getData()) {
+                            if (!p.getId().equals(myPackId)) {
+                                allPacks.add(p);
+                            }
+                        }
+                        // Merge với official packs
+                        for (StickerPack pack : stickerPacks) {
+                            boolean exists = false;
+                            for (StickerPack savedPack : allPacks) {
+                                if (savedPack.getId().equals(pack.getId())) {
+                                    exists = true;
+                                    break;
+                                }
+                            }
+                            if (!exists) {
+                                allPacks.add(pack);
+                            }
+                        }
+                        updatePacksUI(allPacks);
+                    });
+                } else {
+                    // Không có pack cá nhân, giữ nguyên logic cũ
+                    allPacks.addAll(resource.getData());
+                    for (StickerPack pack : stickerPacks) {
+                        boolean exists = false;
+                        for (StickerPack savedPack : allPacks) {
+                            if (savedPack.getId().equals(pack.getId())) {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists) {
+                            allPacks.add(pack);
+                        }
+                    }
+                    updatePacksUI(allPacks);
+                }
+            }
+        });
     }
 
     private void loadUserSavedPacks() {

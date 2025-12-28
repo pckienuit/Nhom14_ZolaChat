@@ -765,7 +765,7 @@ public class StickerRepository {
 
         StickerPack pack = new StickerPack();
         pack.setId(packId);
-        pack.setName("Sticker của tôi");  // Personal sticker pack name
+        pack.setName("Sticker của tôi");
         pack.setDescription("Bộ sticker cá nhân");
         pack.setCreatorId(userId);
         pack.setType(StickerPack.TYPE_USER);
