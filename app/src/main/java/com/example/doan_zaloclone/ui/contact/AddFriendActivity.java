@@ -82,6 +82,15 @@ public class AddFriendActivity extends AppCompatActivity {
         tvNotFound = findViewById(R.id.tvNotFound);
         recyclerSearchResults = findViewById(R.id.recyclerSearchResults);
         
+        // Setup "Mã QR của tôi" button
+        TextView tvMyQr = findViewById(R.id.tvMyQr);
+        tvMyQr.setOnClickListener(v -> {
+            // Navigate to My QR Code activity
+            android.content.Intent intent = new android.content.Intent(this, 
+                com.example.doan_zaloclone.ui.qr.MyQRCodeActivity.class);
+            startActivity(intent);
+        });
+        
         // Setup RecyclerView with both callbacks
         String currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance().getUid();
         searchResultAdapter = new SearchResultAdapter(currentUserId, new SearchResultAdapter.OnUserActionListener() {
