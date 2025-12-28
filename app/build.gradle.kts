@@ -96,6 +96,7 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:3000/api/\"")
             buildConfigField("String", "SOCKET_URL", "\"http://10.0.2.2:3000\"")
             buildConfigField("String", "VPS_BASE_URL", "\"http://10.0.2.2:3000\"")
+            buildConfigField("String", "JANUS_WS_URL", "\"ws://10.0.2.2:8188\"")
         }
         
         create("production") {
@@ -103,6 +104,7 @@ android {
             buildConfigField("String", "API_BASE_URL", "\"https://zolachat.site/api/\"")
             buildConfigField("String", "SOCKET_URL", "\"https://zolachat.site\"")
             buildConfigField("String", "VPS_BASE_URL", "\"https://zolachat.site\"")
+            buildConfigField("String", "JANUS_WS_URL", "\"wss://163.61.182.20:8989\"")
         }
     }
     
