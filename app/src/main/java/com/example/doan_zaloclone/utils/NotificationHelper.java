@@ -304,7 +304,7 @@ public class NotificationHelper {
     public static Notification createServiceNotification(Context context) {
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID_SERVICE)
                 .setSmallIcon(R.drawable.ic_message)
-                .setContentTitle("Zalo Clone")
+                .setContentTitle("Zola Chat")
                 .setContentText("Đang lắng nghe thông báo")
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setOngoing(true);

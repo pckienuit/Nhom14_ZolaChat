@@ -251,7 +251,7 @@ STEP 4: Register Android App
 - Click Android icon
 - Fill in:
   + Package name: com.example.doan_zaloclone
-  + App nickname: Zalo Clone
+  + App nickname: Zola Chat
   + Debug signing certificate SHA-1: (see instructions below)
 - Click "Register app"
 

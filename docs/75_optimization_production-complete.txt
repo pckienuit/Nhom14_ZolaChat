@@ -1,4 +1,4 @@
-# Production Optimization - Zalo Clone Android
+# Production Optimization - Zola Chat Android
 
 ## ✅ Hoàn Thành Tối Ưu Production (27/12/2025)
 
