@@ -300,6 +300,9 @@ public class FirestoreManager {
 
     /**
      * Tạo conversation mới giữa 2 users
+     * 
+     * @deprecated This method writes directly to Firestore which is blocked by security rules.
+     * Use ConversationRepository.createConversation(List, boolean, String) instead which uses REST API.
      *
      * @param currentUserId   ID của user hiện tại
      * @param currentUserName Tên của user hiện tại
@@ -307,6 +310,7 @@ public class FirestoreManager {
      * @param otherUserName   Tên của user kia
      * @param listener        Callback để xử lý kết quả
      */
+    @Deprecated
     public void createConversation(@NonNull String currentUserId,
                                    @NonNull String currentUserName,
                                    @NonNull String otherUserId,

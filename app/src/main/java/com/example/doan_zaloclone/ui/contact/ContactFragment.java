@@ -21,13 +21,16 @@ import com.example.doan_zaloclone.R;
 import com.example.doan_zaloclone.models.Conversation;
 import com.example.doan_zaloclone.models.FriendRequest;
 import com.example.doan_zaloclone.models.User;
+import com.example.doan_zaloclone.repository.ConversationRepository;
 import com.example.doan_zaloclone.services.FirestoreManager;
 import com.example.doan_zaloclone.ui.room.RoomActivity;
+import com.example.doan_zaloclone.utils.Resource;
 import com.example.doan_zaloclone.viewmodel.ContactViewModel;
 import com.example.doan_zaloclone.websocket.SocketManager;
 import com.google.firebase.auth.FirebaseAuth;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class ContactFragment extends Fragment implements UserAdapter.OnUserActionListener, FriendsAdapter.OnFriendClickListener {
@@ -516,24 +519,37 @@ public class ContactFragment extends Fragment implements UserAdapter.OnUserActio
     private void createNewConversation(String currentUserId, String currentUserName, User otherUser) {
         if (getActivity() == null) return;
 
-        firestoreManager.createConversation(
-                currentUserId,
-                currentUserName,
-                otherUser.getId(),
-                otherUser.getName(),
-                new FirestoreManager.OnConversationCreatedListener() {
-                    @Override
-                    public void onSuccess(Conversation conversation) {
+        // Use REST API instead of direct Firestore write to comply with security rules
+        ConversationRepository conversationRepository = ConversationRepository.getInstance();
+        List<String> participants = Arrays.asList(currentUserId, otherUser.getId());
+        
+        conversationRepository.createConversation(participants, false, null)
+                .observe(getViewLifecycleOwner(), resource -> {
+                    if (resource == null) return;
+                    
+                    if (resource.isLoading()) {
+                        // Optionally show loading state
+                        return;
+                    }
+                    
+                    if (resource.isSuccess() && resource.getData() != null) {
+                        String conversationId = resource.getData();
                         if (getActivity() != null) {
                             Toast.makeText(getContext(), "New chat created!", Toast.LENGTH_SHORT).show();
+                            // Create conversation object for navigation
+                            Conversation conversation = new Conversation();
+                            conversation.setId(conversationId);
+                            conversation.setMemberIds(participants);
+                            // Set the other user's name for display
+                            java.util.Map<String, String> memberNames = new java.util.HashMap<>();
+                            memberNames.put(currentUserId, currentUserName);
+                            memberNames.put(otherUser.getId(), otherUser.getName());
+                            conversation.setMemberNames(memberNames);
                             openChatRoom(conversation);
                         }
-                    }
-
-                    @Override
-                    public void onFailure(Exception e) {
+                    } else if (resource.isError()) {
                         if (getActivity() != null) {
-                            Toast.makeText(getContext(), "Error creating chat: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            Toast.makeText(getContext(), "Error creating chat: " + resource.getMessage(), Toast.LENGTH_SHORT).show();
                         }
                     }
                 });

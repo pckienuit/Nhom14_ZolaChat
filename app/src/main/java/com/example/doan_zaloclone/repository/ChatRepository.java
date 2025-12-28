@@ -2125,53 +2125,45 @@ public class ChatRepository {
     
     /**
      * Create a new conversation with a friend
-     * Fetches user names from Firestore to properly populate memberNames
+     * Uses REST API to comply with Firestore security rules that block client-side writes
      */
     private void createConversationWithFriend(String currentUserId, String friendId, ConversationCallback callback) {
-        // First, fetch both user names
-        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> currentUserTask = 
-            firestore.collection("users").document(currentUserId).get();
-        com.google.android.gms.tasks.Task<com.google.firebase.firestore.DocumentSnapshot> friendTask = 
-            firestore.collection("users").document(friendId).get();
+        android.util.Log.d("ChatRepository", "createConversationWithFriend via REST API - currentUserId: " + currentUserId + ", friendId: " + friendId);
         
-        com.google.android.gms.tasks.Tasks.whenAllSuccess(currentUserTask, friendTask)
-            .addOnSuccessListener(results -> {
-                com.google.firebase.firestore.DocumentSnapshot currentUserDoc = 
-                    (com.google.firebase.firestore.DocumentSnapshot) results.get(0);
-                com.google.firebase.firestore.DocumentSnapshot friendDoc = 
-                    (com.google.firebase.firestore.DocumentSnapshot) results.get(1);
-                
-                String currentUserName = currentUserDoc.exists() && currentUserDoc.getString("name") != null 
-                    ? currentUserDoc.getString("name") : "User";
-                String friendName = friendDoc.exists() && friendDoc.getString("name") != null 
-                    ? friendDoc.getString("name") : "User";
-                
-                // Create conversation with proper memberNames
-                java.util.Map<String, Object> conversationData = new java.util.HashMap<>();
-                java.util.List<String> memberIds = java.util.Arrays.asList(currentUserId, friendId);
-                conversationData.put("memberIds", memberIds);
-                conversationData.put("type", "FRIEND");
-                conversationData.put("name", ""); // Empty for 1-1 chats
-                conversationData.put("timestamp", System.currentTimeMillis());
-                conversationData.put("lastMessage", "");
-                
-                // Store member names for proper display
-                java.util.Map<String, String> memberNames = new java.util.HashMap<>();
-                memberNames.put(currentUserId, currentUserName);
-                memberNames.put(friendId, friendName);
-                conversationData.put("memberNames", memberNames);
-                
-                firestore.collection("conversations")
-                    .add(conversationData)
-                    .addOnSuccessListener(docRef -> {
-                        // Update document with its own ID
-                        docRef.update("id", docRef.getId())
-                            .addOnSuccessListener(aVoid -> callback.onSuccess(docRef.getId()))
-                            .addOnFailureListener(e -> callback.onSuccess(docRef.getId())); // Still succeed even if id update fails
-                    })
-                    .addOnFailureListener(e -> callback.onError(e.getMessage()));
-            })
-            .addOnFailureListener(e -> callback.onError("Failed to fetch user names: " + e.getMessage()));
+        // Prepare request body for REST API
+        java.util.Map<String, Object> conversationData = new java.util.HashMap<>();
+        java.util.List<String> participants = java.util.Arrays.asList(currentUserId, friendId);
+        conversationData.put("participants", participants);
+        conversationData.put("isGroup", false);
+        
+        // Call REST API instead of direct Firestore write
+        apiService.createConversation(conversationData).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String conversationId = (String) response.body().get("conversationId");
+                    android.util.Log.d("ChatRepository", "Created conversation via API: " + conversationId);
+                    callback.onSuccess(conversationId);
+                } else {
+                    String error = "HTTP " + response.code();
+                    try {
+                        if (response.errorBody() != null) {
+                            error = response.errorBody().string();
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+                    android.util.Log.e("ChatRepository", "Failed to create conversation: " + error);
+                    callback.onError("Failed to create conversation: " + error);
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                android.util.Log.e("ChatRepository", "Network error creating conversation", t);
+                callback.onError("Network error: " + t.getMessage());
+            }
+        });
     }
     
     // ===================== POLL METHODS =====================

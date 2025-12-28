@@ -370,8 +370,9 @@ public class ConversationRepository {
     }
 
     /**
-     * Legacy: Create a new conversation between two users via Firestore
+     * Legacy: Create a new conversation between two users via REST API
      * DEPRECATED: Use createConversation(List, boolean, String) instead
+     * Note: Now uses REST API internally instead of direct Firestore write
      */
     @Deprecated
     public LiveData<Resource<Conversation>> createConversation(@NonNull String currentUserId,
@@ -381,21 +382,47 @@ public class ConversationRepository {
         MutableLiveData<Resource<Conversation>> result = new MutableLiveData<>();
         result.setValue(Resource.loading());
 
-        firestoreManager.createConversation(currentUserId, currentUserName, otherUserId, otherUserName,
-                new FirestoreManager.OnConversationCreatedListener() {
-                    @Override
-                    public void onSuccess(Conversation conversation) {
-                        result.setValue(Resource.success(conversation));
-                    }
+        // Use REST API instead of direct Firestore write
+        List<String> participants = new ArrayList<>();
+        participants.add(currentUserId);
+        participants.add(otherUserId);
 
-                    @Override
-                    public void onFailure(Exception e) {
-                        String errorMessage = e.getMessage() != null
-                                ? e.getMessage()
-                                : "Failed to create conversation";
-                        result.setValue(Resource.error(errorMessage));
-                    }
-                });
+        Map<String, Object> conversationData = new HashMap<>();
+        conversationData.put("participants", participants);
+        conversationData.put("isGroup", false);
+
+        backgroundExecutor.execute(() -> {
+            try {
+                Call<Map<String, Object>> call = apiService.createConversation(conversationData);
+                Response<Map<String, Object>> response = call.execute();
+
+                if (response.isSuccessful() && response.body() != null) {
+                    String conversationId = (String) response.body().get("conversationId");
+                    
+                    // Create conversation object for compatibility
+                    Conversation conversation = new Conversation();
+                    conversation.setId(conversationId);
+                    conversation.setMemberIds(participants);
+                    conversation.setType("FRIEND");
+                    
+                    Map<String, String> memberNames = new HashMap<>();
+                    memberNames.put(currentUserId, currentUserName);
+                    memberNames.put(otherUserId, otherUserName);
+                    conversation.setMemberNames(memberNames);
+
+                    Log.d(TAG, "Created conversation via API: " + conversationId);
+                    mainHandler.post(() -> result.setValue(Resource.success(conversation)));
+                } else {
+                    String error = "HTTP " + response.code();
+                    Log.e(TAG, "Failed to create conversation: " + error);
+                    mainHandler.post(() -> result.setValue(Resource.error(error)));
+                }
+            } catch (Exception e) {
+                String error = e.getMessage() != null ? e.getMessage() : "Network error";
+                Log.e(TAG, "Network error creating conversation", e);
+                mainHandler.post(() -> result.setValue(Resource.error(error)));
+            }
+        });
 
         return result;
     }
