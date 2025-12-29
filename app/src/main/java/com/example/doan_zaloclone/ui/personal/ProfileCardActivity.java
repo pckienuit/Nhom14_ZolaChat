@@ -841,41 +841,50 @@ public class ProfileCardActivity extends AppCompatActivity {
     private void sendFriendRequest() {
         if (currentUserId == null || userId == null) return;
 
-        // Get current user's name for the friend request
-        viewModel.getCurrentUser().observe(this, resource -> {
-            if (resource != null && resource.isSuccess()) {
-                User currentUser = resource.getData();
-                if (currentUser != null) {
-                    String currentUserName = currentUser.getName() != null ?
-                            currentUser.getName() : "Người dùng";
+        // Disable button and show loading state
+        btnAddFriend.setEnabled(false);
+        btnAddFriend.setText("Đang gửi...");
 
-                    // Disable button and show loading state
-                    btnAddFriend.setEnabled(false);
-                    btnAddFriend.setText("Đang gửi...");
+        // IMPORTANT: Fetch the actual logged-in user's name (NOT the profile being viewed)
+        // viewModel.getCurrentUser() returns the profile being viewed, NOT the logged-in user
+        userRepository.getUser(currentUserId).observe(this, resource -> {
+            if (resource != null && resource.isSuccess() && resource.getData() != null) {
+                User loggedInUser = resource.getData();
+                String currentUserName = loggedInUser.getName() != null ?
+                        loggedInUser.getName() : "Người dùng";
 
-                    friendRepository.sendFriendRequest(currentUserId, userId, currentUserName)
-                            .observe(this, friendResource -> {
-                                if (friendResource != null) {
-                                    if (friendResource.isSuccess()) {
-                                        Toast.makeText(this, "Đã gửi lời mời kết bạn",
-                                                Toast.LENGTH_SHORT).show();
-                                        // Update state
-                                        hasPendingRequest = true;
-                                        btnAddFriend.setText("Đã gửi lời mời");
-                                        btnAddFriend.setEnabled(false);
-                                        btnAddFriend.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                                            ContextCompat.getColor(this, R.color.gray)));
-                                    } else if (friendResource.isError()) {
-                                        Toast.makeText(this, "Lỗi: " + friendResource.getMessage(),
-                                                Toast.LENGTH_SHORT).show();
-                                        btnAddFriend.setText("Kết bạn");
-                                        btnAddFriend.setEnabled(true);
-                                        btnAddFriend.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                                            ContextCompat.getColor(this, R.color.primary_blue)));
-                                    }
+                android.util.Log.d("ProfileCardActivity", "Sending friend request - " +
+                        "fromId: " + currentUserId + 
+                        ", fromName: " + currentUserName + 
+                        ", toId: " + userId);
+
+                friendRepository.sendFriendRequest(currentUserId, userId, currentUserName)
+                        .observe(this, friendResource -> {
+                            if (friendResource != null) {
+                                if (friendResource.isSuccess()) {
+                                    Toast.makeText(this, "Đã gửi lời mời kết bạn",
+                                            Toast.LENGTH_SHORT).show();
+                                    // Update state
+                                    hasPendingRequest = true;
+                                    btnAddFriend.setText("Đã gửi lời mời");
+                                    btnAddFriend.setEnabled(false);
+                                    btnAddFriend.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                                        ContextCompat.getColor(this, R.color.gray)));
+                                } else if (friendResource.isError()) {
+                                    Toast.makeText(this, "Lỗi: " + friendResource.getMessage(),
+                                            Toast.LENGTH_SHORT).show();
+                                    btnAddFriend.setText("Kết bạn");
+                                    btnAddFriend.setEnabled(true);
+                                    btnAddFriend.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                                        ContextCompat.getColor(this, R.color.primary_blue)));
                                 }
-                            });
-                }
+                            }
+                        });
+            } else {
+                // Error fetching user - reset button
+                Toast.makeText(this, "Không thể tải thông tin người dùng", Toast.LENGTH_SHORT).show();
+                btnAddFriend.setText("Kết bạn");
+                btnAddFriend.setEnabled(true);
             }
         });
     }
