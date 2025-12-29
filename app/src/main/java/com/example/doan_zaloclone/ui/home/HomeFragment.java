@@ -532,7 +532,10 @@ public class HomeFragment extends Fragment {
                 .document(conversationId)
                 .update(updates)
                 .addOnSuccessListener(aVoid -> {
-                    // Success - adapter will update automatically via listener
+                    // Trigger immediate UI refresh
+                    com.example.doan_zaloclone.repository.ConversationRepository.getInstance()
+                            .triggerRefreshImmediate();
+                    android.util.Log.d("HomeFragment", "🏷️ Display tag updated for: " + conversationId);
                 })
                 .addOnFailureListener(e -> {
                     if (getContext() != null) {
@@ -765,18 +768,15 @@ public class HomeFragment extends Fragment {
         // Observe conversation refresh events (new conversation, updates)
         homeViewModel.getConversationRefreshNeeded().observe(getViewLifecycleOwner(), needsRefresh -> {
             if (needsRefresh != null && needsRefresh) {
-                // DEBUG TOAST
-                // if (getContext() != null) android.widget.Toast.makeText(getContext(), "🔔 New message! Updating...", android.widget.Toast.LENGTH_SHORT).show();
-
                 // Get current user ID at the time of refresh
                 if (firebaseAuth.getCurrentUser() != null) {
                     final String userId = firebaseAuth.getCurrentUser().getUid();
                     
-                    // Delay 1s to allow Firestore to index the new message
+                    // Short delay to allow Firestore to sync (reduced from 1s to 200ms)
                     new android.os.Handler().postDelayed(() -> {
-                        android.util.Log.d("HomeFragment", "Refreshing conversations due to WebSocket event for user: " + userId);
+                        android.util.Log.d("HomeFragment", "⚡ Refreshing conversations for user: " + userId);
                         homeViewModel.refreshConversations(userId);
-                    }, 1000);
+                    }, 200);
                 } else {
                     android.util.Log.w("HomeFragment", "Cannot refresh - user not logged in");
                 }
