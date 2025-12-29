@@ -76,7 +76,8 @@ public class RoomActivity extends AppCompatActivity {
     // Message limits for non-friends (only for 1-1 chats)
     private boolean areFriends = false;
     private String otherUserId = "";
-    private String conversationType = ""; // "FRIEND" or "GROUP"
+    private String conversationType = ""; // "FRIEND" or "GROUP" or "MY_CLOUD"
+    private boolean isMyCloud = false; // Flag for "Cloud của tôi" self-chat
     private List<Message> messages = new ArrayList<>();
     // Image picker UI
     private ImageButton attachImageButton;
@@ -144,6 +145,7 @@ public class RoomActivity extends AppCompatActivity {
 
         conversationId = getIntent().getStringExtra("conversationId");
         conversationName = getIntent().getStringExtra("conversationName");
+        isMyCloud = getIntent().getBooleanExtra("isMyCloud", false);
 
         // Initialize ViewModel
         roomViewModel = new ViewModelProvider(this).get(RoomViewModel.class);
@@ -431,6 +433,12 @@ public class RoomActivity extends AppCompatActivity {
      */
     private void checkFriendshipStatusForBanner() {
         if (conversationId == null || addFriendBanner == null) return;
+        
+        // Hide banner for My Cloud (self-chat)
+        if (isMyCloud) {
+            addFriendBanner.setVisibility(View.GONE);
+            return;
+        }
         
         String currentUserId = firebaseAuth.getCurrentUser() != null ? 
             firebaseAuth.getCurrentUser().getUid() : null;
@@ -1542,6 +1550,28 @@ public class RoomActivity extends AppCompatActivity {
 
         // Set initial name
         titleTextView.setText(conversationName != null ? conversationName : "Conversation");
+        
+        // Handle "Cloud của tôi" (My Cloud) special case
+        if (isMyCloud) {
+            // Always show fixed title for My Cloud
+            titleTextView.setText("Cloud của tôi");
+            
+            // Hide subtitle (no online status for self-chat)
+            if (subtitleTextView != null) {
+                subtitleTextView.setVisibility(View.GONE);
+            }
+            
+            // Hide call buttons (can't call yourself)
+            ImageButton videoCallButton = findViewById(R.id.videoCallButton);
+            ImageButton voiceCallButton = findViewById(R.id.voiceCallButton);
+            if (videoCallButton != null) videoCallButton.setVisibility(View.GONE);
+            if (voiceCallButton != null) voiceCallButton.setVisibility(View.GONE);
+            
+            // Disable click on title (no profile for self-chat)
+            titleTextView.setClickable(false);
+            
+            return; // Skip other setup for My Cloud
+        }
 
         // Add click listener to open group info or user profile
         titleTextView.setOnClickListener(v -> {

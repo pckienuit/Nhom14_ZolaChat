@@ -2621,6 +2621,85 @@ public class ChatRepository {
     }
     
     /**
+     * Get or create "My Cloud" conversation (self-chat for saving important messages)
+     * This is a special conversation where the user chats with themselves
+     * @param userId The current user's ID
+     * @param callback Callback for success/error
+     */
+    public void getOrCreateMyCloudConversation(String userId, ConversationCallback callback) {
+        android.util.Log.d("ChatRepository", "getOrCreateMyCloudConversation - userId: " + userId);
+        
+        // Query for existing "My Cloud" conversation (type = MY_CLOUD, memberIds contains only this user)
+        firestore.collection("conversations")
+            .whereArrayContains("memberIds", userId)
+            .whereEqualTo("type", "MY_CLOUD")
+            .get()
+            .addOnSuccessListener(querySnapshot -> {
+                android.util.Log.d("ChatRepository", "Found " + querySnapshot.size() + " MY_CLOUD conversations");
+                
+                if (!querySnapshot.isEmpty()) {
+                    // Use existing My Cloud conversation
+                    String conversationId = querySnapshot.getDocuments().get(0).getId();
+                    android.util.Log.d("ChatRepository", "Using existing My Cloud conversation: " + conversationId);
+                    callback.onSuccess(conversationId);
+                } else {
+                    // Create new My Cloud conversation via REST API
+                    android.util.Log.d("ChatRepository", "Creating new My Cloud conversation");
+                    createMyCloudConversation(userId, callback);
+                }
+            })
+            .addOnFailureListener(e -> {
+                android.util.Log.e("ChatRepository", "Error querying My Cloud conversations", e);
+                callback.onError(e.getMessage());
+            });
+    }
+    
+    /**
+     * Create a new "My Cloud" conversation
+     * Uses REST API to comply with Firestore security rules
+     */
+    private void createMyCloudConversation(String userId, ConversationCallback callback) {
+        android.util.Log.d("ChatRepository", "createMyCloudConversation via REST API - userId: " + userId);
+        
+        // Prepare request body - single participant for self-chat
+        java.util.Map<String, Object> conversationData = new java.util.HashMap<>();
+        java.util.List<String> participants = java.util.Collections.singletonList(userId);
+        conversationData.put("participants", participants);
+        conversationData.put("isGroup", false);
+        conversationData.put("type", "MY_CLOUD");
+        conversationData.put("name", "Cloud của tôi");
+        
+        // Call REST API instead of direct Firestore write
+        apiService.createConversation(conversationData).enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String conversationId = (String) response.body().get("conversationId");
+                    android.util.Log.d("ChatRepository", "Created My Cloud conversation via API: " + conversationId);
+                    callback.onSuccess(conversationId);
+                } else {
+                    String error = "HTTP " + response.code();
+                    try {
+                        if (response.errorBody() != null) {
+                            error = response.errorBody().string();
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+                    android.util.Log.e("ChatRepository", "Failed to create My Cloud conversation: " + error);
+                    callback.onError("Failed to create conversation: " + error);
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                android.util.Log.e("ChatRepository", "Network error creating My Cloud conversation", t);
+                callback.onError("Network error: " + t.getMessage());
+            }
+        });
+    }
+    
+    /**
      * Stop live location sharing
      * @param sessionId Session ID to stop
      */

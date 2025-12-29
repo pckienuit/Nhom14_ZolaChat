@@ -138,10 +138,8 @@ public class PersonalFragment extends Fragment {
     }
 
     private void setupMenuItems() {
-        // Cloud của tôi
-        setupMenuItem(menuCloud, R.drawable.ic_cloud_blue,
-                "Cloud của tôi", "Lưu trữ các tin nhắn quan trọng",
-                new MyCloudFragment());
+        // Cloud của tôi - special handling to open self-chat
+        setupCloudMenuItem();
 
         // QR Wallet
         setupMenuItem(menuQrWallet, R.drawable.ic_qr_wallet_blue,
@@ -157,6 +155,64 @@ public class PersonalFragment extends Fragment {
         setupMenuItem(menuPrivacy, R.drawable.ic_privacy_blue,
                 "Quyền riêng tư", "",
                 new PrivacyFragment());
+    }
+    
+    /**
+     * Setup Cloud của tôi menu item to open self-chat RoomActivity
+     */
+    private void setupCloudMenuItem() {
+        if (menuCloud == null) return;
+        
+        ImageView icon = menuCloud.findViewById(R.id.menuIcon);
+        TextView titleView = menuCloud.findViewById(R.id.menuTitle);
+        TextView descView = menuCloud.findViewById(R.id.menuDescription);
+
+        icon.setImageResource(R.drawable.ic_cloud_blue);
+        titleView.setText("Cloud của tôi");
+        descView.setText("Lưu trữ các tin nhắn quan trọng");
+        descView.setVisibility(View.VISIBLE);
+
+        // Click to open self-chat conversation
+        menuCloud.setOnClickListener(v -> openMyCloudChat());
+    }
+    
+    /**
+     * Open "Cloud của tôi" self-chat conversation
+     */
+    private void openMyCloudChat() {
+        String currentUserId = com.google.firebase.auth.FirebaseAuth.getInstance()
+                .getCurrentUser() != null 
+                ? com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser().getUid() 
+                : null;
+        
+        if (currentUserId == null) {
+            Toast.makeText(getContext(), "Vui lòng đăng nhập", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Show loading
+        Toast.makeText(getContext(), "Đang mở Cloud của tôi...", Toast.LENGTH_SHORT).show();
+        
+        // Get or create My Cloud conversation
+        com.example.doan_zaloclone.repository.ChatRepository.getInstance()
+            .getOrCreateMyCloudConversation(currentUserId, new com.example.doan_zaloclone.repository.ChatRepository.ConversationCallback() {
+                @Override
+                public void onSuccess(String conversationId) {
+                    // Open RoomActivity with special flags for My Cloud
+                    Intent intent = new Intent(requireContext(), com.example.doan_zaloclone.ui.room.RoomActivity.class);
+                    intent.putExtra("conversationId", conversationId);
+                    intent.putExtra("conversationName", "Cloud của tôi");
+                    intent.putExtra("isMyCloud", true); // Special flag to hide online status
+                    startActivity(intent);
+                }
+
+                @Override
+                public void onError(String error) {
+                    if (getContext() != null) {
+                        Toast.makeText(getContext(), "Lỗi: " + error, Toast.LENGTH_SHORT).show();
+                    }
+                }
+            });
     }
 
     private void setupMenuItem(View menuView, int iconRes, String title, String description, Fragment targetFragment) {
