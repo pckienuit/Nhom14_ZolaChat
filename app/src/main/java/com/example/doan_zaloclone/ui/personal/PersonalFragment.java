@@ -71,6 +71,14 @@ public class PersonalFragment extends Fragment {
         // Load current user's profile
         viewModel.loadCurrentUser();
     }
+    
+    @Override
+    public void onResume() {
+        super.onResume();
+        // Reload user data when returning from ProfileCardActivity
+        // This ensures avatar/name updates are reflected immediately
+        viewModel.loadCurrentUser();
+    }
 
     private void initializeViews(View view) {
         // Compact user card views
