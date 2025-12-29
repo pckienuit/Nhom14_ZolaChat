@@ -28,7 +28,8 @@ public class CallNotificationHelper {
                     NotificationManager.IMPORTANCE_HIGH
             );
             channel.setDescription("Thông báo cuộc gọi đến");
-            channel.enableVibration(true);
+            // Disable notification channel vibration (we handle vibration manually in service)
+            channel.enableVibration(false);
 
             NotificationManager manager = context.getSystemService(NotificationManager.class);
             manager.createNotificationChannel(channel);
@@ -80,6 +81,8 @@ public class CallNotificationHelper {
                 .setFullScreenIntent(fullScreenPendingIntent, true)
                 .setAutoCancel(true)
                 .setOngoing(true)
+                .setVibrate(new long[]{0})  // Disable notification vibration (handled by service)
+                .setSound(null)  // Disable notification sound (handled by service)
                 .addAction(R.drawable.ic_close, "Từ chối", rejectPendingIntent)
                 .addAction(R.drawable.ic_call, "Chấp nhận", acceptPendingIntent);
 

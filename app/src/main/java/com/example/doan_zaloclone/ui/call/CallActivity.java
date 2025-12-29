@@ -241,10 +241,12 @@ public class CallActivity extends AppCompatActivity {
             callerName.setText(callerNameStr);
         }
         
-        // Cancel incoming call notification since user is now viewing the call screen
+        // Cancel the full-screen notification since the CallActivity is now visible
+        // But keep IncomingCallService running so ringtone/vibration continues until accept/reject
         if (isIncoming) {
+            // Only cancel the notification UI (to avoid duplicates), but keep service for ringtone/vibration
             com.example.doan_zaloclone.utils.CallNotificationHelper.cancelNotification(this, 1001);
-            Log.d(TAG, "Cancelled incoming call notification - user is viewing call screen");
+            Log.d(TAG, "Cancelled notification UI, but ringtone/vibration continues until accept/reject");
         }
 
         // Check permissions
@@ -525,6 +527,19 @@ public class CallActivity extends AppCompatActivity {
         Log.d(TAG, "Accepting call: " + callId);
         Log.d(TAG, "receiverId: " + receiverId);
         Log.d(TAG, "isVideo: " + isVideo);
+        
+        // Cancel incoming call notification and stop service immediately
+        com.example.doan_zaloclone.utils.CallNotificationHelper.cancelNotification(
+                this, 
+                com.example.doan_zaloclone.utils.CallNotificationHelper.getIncomingCallNotificationId()
+        );
+        
+        // Stop IncomingCallService to stop ringtone and vibration
+        Intent stopServiceIntent = new Intent(this, com.example.doan_zaloclone.services.IncomingCallService.class);
+        stopServiceIntent.setAction("ACTION_CANCEL_CALL");
+        startService(stopServiceIntent);
+        
+        Log.d(TAG, "✅ Cancelled notification and stopped IncomingCallService on accept");
 
         if (callId == null) {
             Log.e(TAG, "ERROR: callId is null!");
@@ -555,13 +570,23 @@ public class CallActivity extends AppCompatActivity {
     private void rejectCall() {
         Log.d(TAG, "Rejecting call");
         Log.d(TAG, "conversationId: " + conversationId);
+        
+        // Stop IncomingCallService to stop ringtone and vibration
+        com.example.doan_zaloclone.utils.CallNotificationHelper.cancelNotification(
+                this, 
+                com.example.doan_zaloclone.utils.CallNotificationHelper.getIncomingCallNotificationId()
+        );
+        Intent stopServiceIntent = new Intent(this, com.example.doan_zaloclone.services.IncomingCallService.class);
+        stopServiceIntent.setAction("ACTION_CANCEL_CALL");
+        startService(stopServiceIntent);
+        Log.d(TAG, "✅ Stopped IncomingCallService on reject");
 
         if (callId != null) {
             callViewModel.rejectCall(callId);
 
             // Log call history as MISSED from receiver's perspective
             if (conversationId != null) {
-                Log.d(TAG, "========== REJECT CALL - LOGGING ==========="  );
+                Log.d(TAG, "========== REJECT CALL - LOGGING ===========");
                 Log.d(TAG, "Logging MISSED call history (rejected by receiver)");
                 Log.d(TAG, "isIncoming (should be TRUE): " + isIncoming);
                 Log.d(TAG, "conversationId: " + conversationId);
