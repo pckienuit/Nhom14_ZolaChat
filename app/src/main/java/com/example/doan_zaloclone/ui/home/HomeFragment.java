@@ -701,6 +701,11 @@ public class HomeFragment extends Fragment {
              socketManager.connect();
         }
         
+        // Force adapter to refresh to update avatars
+        if (conversationAdapter != null) {
+            conversationAdapter.notifyDataSetChanged();
+        }
+        
         // Refresh conversations to update badge when returning from another activity (e.g., RoomActivity)
         if (firebaseAuth.getCurrentUser() != null) {
             String userId = firebaseAuth.getCurrentUser().getUid();
