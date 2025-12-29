@@ -34,7 +34,7 @@ import retrofit2.Response;
 public class ConversationRepository {
 
     private static final String TAG = "ConversationRepo";
-    private static final long REFRESH_DEBOUNCE_MS = 1500; // Debounce time for refresh events
+    private static final long REFRESH_DEBOUNCE_MS = 500; // Debounce time for refresh events (reduced for faster updates)
 
     // Singleton instance
     private static ConversationRepository instance;
@@ -204,8 +204,22 @@ public class ConversationRepository {
         };
         
         // If last refresh was recent, delay more; otherwise refresh sooner
-        long delay = (now - lastRefreshTriggerTime < REFRESH_DEBOUNCE_MS) ? REFRESH_DEBOUNCE_MS : 500;
+        long delay = (now - lastRefreshTriggerTime < REFRESH_DEBOUNCE_MS) ? REFRESH_DEBOUNCE_MS : 200;
         mainHandler.postDelayed(pendingRefreshRunnable, delay);
+    }
+    
+    /**
+     * Trigger refresh immediately without debounce
+     * Use for user-initiated actions like pin/unpin/tag updates
+     */
+    public void triggerRefreshImmediate() {
+        Log.d(TAG, "⚡ Triggering immediate refresh");
+        // Cancel any pending debounced refresh
+        if (pendingRefreshRunnable != null) {
+            mainHandler.removeCallbacks(pendingRefreshRunnable);
+        }
+        mainHandler.post(() -> conversationRefreshNeeded.setValue(true));
+        lastRefreshTriggerTime = System.currentTimeMillis();
     }
 
     /**
@@ -443,7 +457,10 @@ public class ConversationRepository {
                 new FirestoreManager.OnGroupUpdatedListener() {
                     @Override
                     public void onSuccess() {
+                        Log.d(TAG, "📌 Conversation pinned: " + conversationId);
                         result.setValue(Resource.success(null));
+                        // Trigger immediate UI refresh
+                        triggerRefreshImmediate();
                     }
 
                     @Override
@@ -474,7 +491,10 @@ public class ConversationRepository {
                 new FirestoreManager.OnGroupUpdatedListener() {
                     @Override
                     public void onSuccess() {
+                        Log.d(TAG, "📌 Conversation unpinned: " + conversationId);
                         result.setValue(Resource.success(null));
+                        // Trigger immediate UI refresh
+                        triggerRefreshImmediate();
                     }
 
                     @Override
@@ -507,7 +527,10 @@ public class ConversationRepository {
                 new FirestoreManager.OnGroupUpdatedListener() {
                     @Override
                     public void onSuccess() {
+                        Log.d(TAG, "🏷️ Conversation tags updated: " + conversationId);
                         result.setValue(Resource.success(null));
+                        // Trigger immediate UI refresh
+                        triggerRefreshImmediate();
                     }
 
                     @Override

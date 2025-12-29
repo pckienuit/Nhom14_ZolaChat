@@ -166,7 +166,7 @@ public class IncomingCallService extends Service {
                     .setContentTitle("Cuộc gọi đang đến...")
                     .setOngoing(true)
                     .setSound(null)  // No sound
-                    .setVibrate(null)  // No vibration
+                    .setVibrate(new long[]{0})  // No vibration (use proper API)
                     .setPriority(android.app.Notification.PRIORITY_MIN)
                     .build();
             
@@ -231,6 +231,10 @@ public class IncomingCallService extends Service {
 
     private void acceptCall() {
         stopRingtoneAndVibration();
+        
+        // Cancel notification immediately to stop ringing/vibration
+        CallNotificationHelper.cancelNotification(this, NOTIFICATION_ID);
+        Log.d(TAG, "✅ Cancelled incoming call notification immediately on accept");
 
         // Open CallActivity
         Intent callIntent = new Intent(this, CallActivity.class);

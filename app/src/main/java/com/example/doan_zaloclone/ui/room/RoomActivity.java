@@ -308,6 +308,14 @@ public class RoomActivity extends AppCompatActivity {
             chatRepository.markAsRead(conversationId, currentUserId);
         }
     }
+    
+    /**
+     * Get current conversation ID
+     * Used by MessageAdapter to check if already in the same conversation
+     */
+    public String getConversationId() {
+        return conversationId;
+    }
 
     private void checkNetworkConnectivity() {
         if (!com.example.doan_zaloclone.utils.NetworkUtils.isNetworkAvailable(this)) {
@@ -457,7 +465,16 @@ public class RoomActivity extends AppCompatActivity {
                 
                 String type = documentSnapshot.getString("type");
                 
-                // Only show for 1-1 conversations
+                // Check if this is "Cloud của tôi" (My Cloud) conversation
+                if ("MY_CLOUD".equalsIgnoreCase(type)) {
+                    isMyCloud = true;
+                    addFriendBanner.setVisibility(View.GONE);
+                    hideCallButtonsAndStatus();
+                    android.util.Log.d("RoomActivity", "✅ Detected MY_CLOUD conversation type");
+                    return;
+                }
+                
+                // Hide for group conversations
                 if ("group".equalsIgnoreCase(type)) {
                     addFriendBanner.setVisibility(View.GONE);
                     return;
@@ -476,6 +493,30 @@ public class RoomActivity extends AppCompatActivity {
                     return;
                 }
                 
+                // Check if this is a self-chat (My Cloud)
+                // If both participants are the same user, it's My Cloud
+                boolean isSelfChat = participantIds.size() == 2 && 
+                                    participantIds.get(0).equals(participantIds.get(1)) &&
+                                    participantIds.get(0).equals(currentUserId);
+                
+                // Or if we only have current user repeated
+                long currentUserCount = participantIds.stream()
+                    .filter(id -> id.equals(currentUserId))
+                    .count();
+                    
+                if (currentUserCount == 2) {
+                    isSelfChat = true;
+                }
+                
+                if (isSelfChat) {
+                    // This is My Cloud - auto-detect and set flag
+                    isMyCloud = true;
+                    addFriendBanner.setVisibility(View.GONE);
+                    // Also hide call buttons and status for My Cloud
+                    hideCallButtonsAndStatus();
+                    return;
+                }
+                
                 String otherUserId = null;
                 for (String participantId : participantIds) {
                     if (!participantId.equals(currentUserId)) {
@@ -485,7 +526,10 @@ public class RoomActivity extends AppCompatActivity {
                 }
                 
                 if (otherUserId == null) {
+                    // No other user means self-chat
+                    isMyCloud = true;
                     addFriendBanner.setVisibility(View.GONE);
+                    hideCallButtonsAndStatus();
                     return;
                 }
                 
@@ -602,6 +646,30 @@ public class RoomActivity extends AppCompatActivity {
                         });
                 }
             });
+    }
+    
+    /**
+     * Hide call buttons and online status for My Cloud (self-chat)
+     */
+    private void hideCallButtonsAndStatus() {
+        // Hide subtitle (online status)
+        if (subtitleTextView != null) {
+            subtitleTextView.setVisibility(View.GONE);
+        }
+        
+        // Hide call buttons
+        ImageButton videoCallButton = findViewById(R.id.videoCallButton);
+        ImageButton voiceCallButton = findViewById(R.id.voiceCallButton);
+        if (videoCallButton != null) videoCallButton.setVisibility(View.GONE);
+        if (voiceCallButton != null) voiceCallButton.setVisibility(View.GONE);
+        
+        // Fix title to "Cloud của tôi"
+        if (titleTextView != null) {
+            titleTextView.setText("Cloud của tôi");
+            titleTextView.setClickable(false);
+        }
+        
+        android.util.Log.d("RoomActivity", "✅ Hidden call buttons and status for My Cloud");
     }
     
     // Phase 4A, 4B, 4C & 4D-1/4D-2/4D-3: Voice Record - Full Implementation with Editor

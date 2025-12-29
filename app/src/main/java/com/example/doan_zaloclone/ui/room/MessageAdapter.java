@@ -104,6 +104,15 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
 
         android.widget.PopupMenu popup = new android.widget.PopupMenu(view.getContext(), view);
 
+        // Add copy option for text messages only
+        String messageType = message.getType();
+        boolean isTextMessage = messageType == null || 
+                Message.TYPE_TEXT.equals(messageType) || 
+                messageType.isEmpty();
+        if (isTextMessage && message.getContent() != null && !message.getContent().isEmpty()) {
+            popup.getMenu().add(0, 6, 0, "📋 Sao chép");
+        }
+
         // Add reply option
         popup.getMenu().add(0, 3, 0, "↩️ Trả lời");
 
@@ -138,6 +147,17 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                 return true;
             } else if (itemId == 5 && forwardListener != null) {
                 forwardListener.onForwardMessage(message);
+                return true;
+            } else if (itemId == 6) {
+                // Copy message content to clipboard
+                android.content.ClipboardManager clipboard = 
+                        (android.content.ClipboardManager) view.getContext()
+                                .getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+                android.content.ClipData clip = android.content.ClipData.newPlainText(
+                        "message", message.getContent());
+                clipboard.setPrimaryClip(clip);
+                android.widget.Toast.makeText(view.getContext(), 
+                        "Đã sao chép tin nhắn", android.widget.Toast.LENGTH_SHORT).show();
                 return true;
             }
             return false;
@@ -878,6 +898,19 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             this.recallListener = recallListener;
             this.currentUserId = currentUserId;
             messageTextView.setText(message.getContent());
+            
+            // Make links, phone numbers, emails clickable
+            // Use autoLink mask and custom movement method to allow both link clicks and long press
+            android.text.util.Linkify.addLinks(messageTextView, android.text.util.Linkify.WEB_URLS | android.text.util.Linkify.PHONE_NUMBERS | android.text.util.Linkify.EMAIL_ADDRESSES);
+            messageTextView.setLinksClickable(true);
+            messageTextView.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
+            
+            // Set long click on messageTextView to show context menu (works alongside links)
+            messageTextView.setOnLongClickListener(v -> {
+                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, editListener, deleteListener, isPinned, currentUserId);
+                return true;
+            });
+            
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
 
             // Debug log for reply data
@@ -956,6 +989,18 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
             this.recallListener = recallListener;
             this.currentUserId = currentUserId;
             messageTextView.setText(message.getContent());
+            
+            // Make links, phone numbers, emails clickable
+            android.text.util.Linkify.addLinks(messageTextView, android.text.util.Linkify.WEB_URLS | android.text.util.Linkify.PHONE_NUMBERS | android.text.util.Linkify.EMAIL_ADDRESSES);
+            messageTextView.setLinksClickable(true);
+            messageTextView.setMovementMethod(android.text.method.LinkMovementMethod.getInstance());
+            
+            // Set long click on messageTextView to show context menu (works alongside links)
+            messageTextView.setOnLongClickListener(v -> {
+                showMessageContextMenu(v, message, listener, replyListener, recallListener, forwardListener, editListener, deleteListener, isPinned, currentUserId);
+                return true;
+            });
+            
             timestampTextView.setText(TIMESTAMP_FORMAT.format(new Date(message.getTimestamp())));
 
             // Bind reply preview if this is a reply message
@@ -1940,6 +1985,21 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                         new com.example.doan_zaloclone.repository.ChatRepository.ConversationCallback() {
                             @Override
                             public void onSuccess(String conversationId) {
+                                // Check if already in this conversation to prevent infinite loop
+                                android.content.Context ctx = itemView.getContext();
+                                if (ctx instanceof com.example.doan_zaloclone.ui.room.RoomActivity) {
+                                    com.example.doan_zaloclone.ui.room.RoomActivity currentRoom = 
+                                            (com.example.doan_zaloclone.ui.room.RoomActivity) ctx;
+                                    String currentConvId = currentRoom.getConversationId();
+                                    if (conversationId != null && conversationId.equals(currentConvId)) {
+                                        // Already in this conversation - just show toast
+                                        android.widget.Toast.makeText(ctx,
+                                                "Bạn đang ở trong cuộc trò chuyện này",
+                                                android.widget.Toast.LENGTH_SHORT).show();
+                                        return;
+                                    }
+                                }
+                                
                                 // Navigate to conversation
                                 android.content.Intent intent = new android.content.Intent(
                                         itemView.getContext(),

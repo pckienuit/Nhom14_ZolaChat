@@ -134,6 +134,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
         private final TextView memberCountTextView;
         private final TextView timestampTextView;
         private final TextView badgeTextView;
+        private final android.widget.ImageView avatarImageView;
         private final android.widget.ImageView groupIconImageView;
         private final android.widget.ImageView pinIndicator;
         private final android.widget.ImageView muteIndicator;
@@ -146,6 +147,7 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
             memberCountTextView = itemView.findViewById(R.id.memberCountTextView);
             timestampTextView = itemView.findViewById(R.id.timestampTextView);
             badgeTextView = itemView.findViewById(R.id.badgeTextView);
+            avatarImageView = itemView.findViewById(R.id.avatarImageView);
             groupIconImageView = itemView.findViewById(R.id.groupIconImageView);
             pinIndicator = itemView.findViewById(R.id.pinIndicator);
             muteIndicator = itemView.findViewById(R.id.muteIndicator);
@@ -170,6 +172,56 @@ public class ConversationAdapter extends RecyclerView.Adapter<ConversationAdapte
                     memberCountTextView.setVisibility(View.VISIBLE);
                 } else {
                     memberCountTextView.setVisibility(View.GONE);
+                }
+            }
+            
+            // Load avatar
+            if (avatarImageView != null) {
+                if (isGroupChat) {
+                    // For group chat - use group icon or first letter
+                    avatarImageView.setImageResource(R.drawable.ic_avatar);
+                    
+                    // Try to load group avatar if available
+                    String groupAvatarUrl = conversation.getAvatarUrl();
+                    if (groupAvatarUrl != null && !groupAvatarUrl.isEmpty()) {
+                        com.bumptech.glide.Glide.with(itemView.getContext())
+                                .load(groupAvatarUrl)
+                                .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
+                                .skipMemoryCache(true)
+                                .circleCrop()
+                                .placeholder(R.drawable.ic_avatar)
+                                .into(avatarImageView);
+                    }
+                } else {
+                    // For 1-on-1 conversation - load other user's avatar
+                    avatarImageView.setImageResource(R.drawable.ic_avatar); // Default
+                    
+                    if (conversation.getMemberIds() != null && conversation.getMemberIds().size() == 2) {
+                        for (String memberId : conversation.getMemberIds()) {
+                            if (!memberId.equals(currentUserId)) {
+                                // Fetch other user's avatar
+                                com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                        .collection("users")
+                                        .document(memberId)
+                                        .get()
+                                        .addOnSuccessListener(doc -> {
+                                            if (doc.exists()) {
+                                                String avatarUrl = doc.getString("avatarUrl");
+                                                if (avatarUrl != null && !avatarUrl.isEmpty()) {
+                                                    com.bumptech.glide.Glide.with(itemView.getContext())
+                                                            .load(avatarUrl)
+                                                            .diskCacheStrategy(com.bumptech.glide.load.engine.DiskCacheStrategy.NONE)
+                                                            .skipMemoryCache(true)
+                                                            .circleCrop()
+                                                            .placeholder(R.drawable.ic_avatar)
+                                                            .into(avatarImageView);
+                                                }
+                                            }
+                                        });
+                                break;
+                            }
+                        }
+                    }
                 }
             }
 
