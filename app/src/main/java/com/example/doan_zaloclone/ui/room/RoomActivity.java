@@ -308,6 +308,14 @@ public class RoomActivity extends AppCompatActivity {
             chatRepository.markAsRead(conversationId, currentUserId);
         }
     }
+    
+    /**
+     * Get current conversation ID
+     * Used by MessageAdapter to check if already in the same conversation
+     */
+    public String getConversationId() {
+        return conversationId;
+    }
 
     private void checkNetworkConnectivity() {
         if (!com.example.doan_zaloclone.utils.NetworkUtils.isNetworkAvailable(this)) {

@@ -1940,6 +1940,21 @@ public class MessageAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder
                         new com.example.doan_zaloclone.repository.ChatRepository.ConversationCallback() {
                             @Override
                             public void onSuccess(String conversationId) {
+                                // Check if already in this conversation to prevent infinite loop
+                                android.content.Context ctx = itemView.getContext();
+                                if (ctx instanceof com.example.doan_zaloclone.ui.room.RoomActivity) {
+                                    com.example.doan_zaloclone.ui.room.RoomActivity currentRoom = 
+                                            (com.example.doan_zaloclone.ui.room.RoomActivity) ctx;
+                                    String currentConvId = currentRoom.getConversationId();
+                                    if (conversationId != null && conversationId.equals(currentConvId)) {
+                                        // Already in this conversation - just show toast
+                                        android.widget.Toast.makeText(ctx,
+                                                "Bạn đang ở trong cuộc trò chuyện này",
+                                                android.widget.Toast.LENGTH_SHORT).show();
+                                        return;
+                                    }
+                                }
+                                
                                 // Navigate to conversation
                                 android.content.Intent intent = new android.content.Intent(
                                         itemView.getContext(),
